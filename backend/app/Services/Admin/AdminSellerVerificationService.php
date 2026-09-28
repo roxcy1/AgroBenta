@@ -35,9 +35,11 @@ class AdminSellerVerificationService
                 'admin_note' => $adminNote,
             ]);
 
-            $verification->seller->update([
+            // Authority field: server-derived, so it bypasses mass assignment
+            // guards on purpose. It is only ever set from this trusted path.
+            $verification->seller->forceFill([
                 'seller_capability' => SellerCapability::Seller,
-            ]);
+            ])->save();
 
             return $verification->fresh(['seller:id,name,email', 'reviewer:id,name']);
         });

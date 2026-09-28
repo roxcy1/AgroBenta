@@ -1,0 +1,17 @@
+# Integration tests talk to a real API and are therefore not part of the
+# hermetic default suite. Each one declares `@Tags(['integration'])` and gates
+# itself on an explicit opt-in, e.g.
+#
+#   flutter test --dart-define=RUN_API_SMOKE=true \
+#                --dart-define=API_BASE_URL=http://localhost:8001/api \
+#                test/integration/auth_api_smoke_test.dart
+#
+# Run the hermetic suite alone with:
+#
+#   flutter test --exclude-tags integration
+#
+# Declaring the tag here is what keeps `flutter test` from warning about an
+# unknown tag. The skip decision belongs to each test, because it has to be
+# switchable by a dart-define.
+tags:
+  integration:

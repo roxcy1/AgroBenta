@@ -34,14 +34,16 @@ class AdminSeeder extends Seeder
         }
 
         if ($admin === null) {
-            User::create([
+            // Authority fields are not mass assignable; the seeder is a trusted
+            // server-side path, so it sets them explicitly.
+            (new User)->forceFill([
                 'name' => $name,
                 'email' => $email,
                 'password' => $password,
                 'role' => UserRole::Admin,
                 'seller_capability' => SellerCapability::Buyer,
                 'email_verified_at' => now(),
-            ]);
+            ])->save();
 
             return;
         }
