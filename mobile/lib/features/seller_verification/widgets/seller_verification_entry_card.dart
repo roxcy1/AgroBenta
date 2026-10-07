@@ -33,7 +33,8 @@ class SellerVerificationEntryCard extends StatefulWidget {
       _SellerVerificationEntryCardState();
 }
 
-class _SellerVerificationEntryCardState extends State<SellerVerificationEntryCard> {
+class _SellerVerificationEntryCardState
+    extends State<SellerVerificationEntryCard> {
   late final SellerVerificationController _controller;
 
   @override
@@ -131,10 +132,7 @@ class _SellerVerificationEntryCardState extends State<SellerVerificationEntryCar
         ),
         const SizedBox(width: AppSpacing.xs),
         Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
         ),
       ],
     );

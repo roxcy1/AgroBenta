@@ -146,7 +146,10 @@ DateTime? readNullableDateTime(Map<String, dynamic> json, String key) {
 ///
 /// Guards against a nested resource arriving as a list or a scalar, which
 /// would otherwise surface as an unhelpful cast error deep in a model.
-Map<String, dynamic>? readNullableObject(Map<String, dynamic> json, String key) {
+Map<String, dynamic>? readNullableObject(
+  Map<String, dynamic> json,
+  String key,
+) {
   final Object? value = json[key];
   if (value == null) {
     return null;
@@ -198,15 +201,17 @@ List<String> readStringList(Map<String, dynamic> json, String key) {
     return const <String>[];
   }
   if (value is List) {
-    return value.map((Object? item) {
-      if (item is String) {
-        return item;
-      }
-      throw FormatException(
-        'Expected every item in "$key" to be a String, got ${item.runtimeType}.',
-        json.toString(),
-      );
-    }).toList(growable: false);
+    return value
+        .map((Object? item) {
+          if (item is String) {
+            return item;
+          }
+          throw FormatException(
+            'Expected every item in "$key" to be a String, got ${item.runtimeType}.',
+            json.toString(),
+          );
+        })
+        .toList(growable: false);
   }
   throw FormatException(
     'Expected field "$key" to be a list of strings, got ${value.runtimeType}.',
@@ -218,7 +223,10 @@ List<String> readStringList(Map<String, dynamic> json, String key) {
 ///
 /// An absent key yields an empty list rather than throwing, so a list endpoint
 /// that legitimately returns no records does not need a special case.
-List<Map<String, dynamic>> readObjectList(Map<String, dynamic> json, String key) {
+List<Map<String, dynamic>> readObjectList(
+  Map<String, dynamic> json,
+  String key,
+) {
   final Object? value = json[key];
   if (value == null) {
     return const <Map<String, dynamic>>[];

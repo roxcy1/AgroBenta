@@ -57,21 +57,27 @@ void main() {
       // asking_price and total_amount are decimal columns serialised as
       // strings. Precision must survive parsing.
       expect(
-        readDecimalString(<String, dynamic>{'asking_price': '12500.00'}, 'asking_price'),
+        readDecimalString(<String, dynamic>{
+          'asking_price': '12500.00',
+        }, 'asking_price'),
         '12500.00',
       );
     });
 
     test('accepts a JSON number defensively', () {
       expect(
-        readDecimalString(<String, dynamic>{'asking_price': 12500}, 'asking_price'),
+        readDecimalString(<String, dynamic>{
+          'asking_price': 12500,
+        }, 'asking_price'),
         '12500',
       );
     });
 
     test('throws when the value is null', () {
       expect(
-        () => readDecimalString(<String, dynamic>{'asking_price': null}, 'asking_price'),
+        () => readDecimalString(<String, dynamic>{
+          'asking_price': null,
+        }, 'asking_price'),
         throwsFormatException,
       );
     });
@@ -79,17 +85,18 @@ void main() {
 
   group('readDateTime', () {
     test('parses an ISO-8601 timestamp', () {
-      final DateTime parsed = readDateTime(
-        <String, dynamic>{'created_at': '2026-09-20T12:00:00.000000Z'},
-        'created_at',
-      );
+      final DateTime parsed = readDateTime(<String, dynamic>{
+        'created_at': '2026-09-20T12:00:00.000000Z',
+      }, 'created_at');
 
       expect(parsed.year, 2026);
     });
 
     test('throws on a malformed timestamp', () {
       expect(
-        () => readDateTime(<String, dynamic>{'created_at': '20/09/2026'}, 'created_at'),
+        () => readDateTime(<String, dynamic>{
+          'created_at': '20/09/2026',
+        }, 'created_at'),
         throwsFormatException,
       );
     });
@@ -140,10 +147,7 @@ void main() {
 
   group('readNullableObject', () {
     test('returns null when absent', () {
-      expect(
-        readNullableObject(<String, dynamic>{}, 'reviewer'),
-        isNull,
-      );
+      expect(readNullableObject(<String, dynamic>{}, 'reviewer'), isNull);
     });
 
     test('returns the nested object', () {

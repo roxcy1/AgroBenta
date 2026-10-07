@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/seller_verification.dart';
+import '../../../widgets/detail_row.dart';
+import '../../../widgets/notice_banner.dart';
 
 /// The frame every verification status is presented in.
 ///
@@ -73,71 +75,11 @@ class SellerVerificationStatusCard extends StatelessWidget {
   }
 }
 
-/// A labelled detail row, for dates and other record metadata.
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(
-            width: 120,
-            child: Text(label, style: theme.textTheme.labelMedium),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(value, style: theme.textTheme.bodyMedium),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// The administrator's note on a rejected application.
 ///
 /// Quoted rather than paraphrased, and omitted entirely when there is none —
 /// [SellerVerification.adminNote] being `null` is normal, and inventing a reason
 /// would be inventing a decision nobody made.
-class _AdminNote extends StatelessWidget {
-  const _AdminNote({required this.note});
-
-  final String note;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(6),
-        border: const Border(
-          left: BorderSide(color: AppColors.error, width: 3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text('Reason given', style: theme.textTheme.labelMedium),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(note, style: theme.textTheme.bodyMedium),
-        ],
-      ),
-    );
-  }
-}
 
 /// Never applied. The entry point into the flow.
 class SellerVerificationNotSubmittedView extends StatelessWidget {
@@ -191,9 +133,9 @@ class SellerVerificationAwaitingReviewView extends StatelessWidget {
           'once it is approved. You cannot send another application while this '
           'one is being reviewed.',
       children: <Widget>[
-        _DetailRow(label: 'Business', value: verification.businessName),
+        DetailRow(label: 'Business', value: verification.businessName),
         if (verification.submittedAt != null)
-          _DetailRow(
+          DetailRow(
             label: 'Submitted',
             value: AppFormatters.formatDateTime(verification.submittedAt),
           ),
@@ -232,12 +174,17 @@ class SellerVerificationRejectedView extends StatelessWidget {
         child: const Text('Resubmit Verification'),
       ),
       children: <Widget>[
-        _DetailRow(label: 'Business', value: verification.businessName),
+        DetailRow(label: 'Business', value: verification.businessName),
         if (verification.adminNote != null &&
             verification.adminNote!.trim().isNotEmpty)
-          _AdminNote(note: verification.adminNote!.trim()),
+          NoticeBanner(
+            accent: AppColors.error,
+            title: 'Reason given',
+            message: verification.adminNote!.trim(),
+            backgroundColor: AppColors.background,
+          ),
         if (verification.reviewedAt != null)
-          _DetailRow(
+          DetailRow(
             label: 'Reviewed',
             value: AppFormatters.formatDateTime(verification.reviewedAt),
           ),
@@ -252,10 +199,7 @@ class SellerVerificationRejectedView extends StatelessWidget {
 /// the account — this screen does not grant it and must not imply it did. The
 /// capability chip on Home is refreshed from `/auth/me` when this status is read.
 class SellerVerificationApprovedView extends StatelessWidget {
-  const SellerVerificationApprovedView({
-    required this.verification,
-    super.key,
-  });
+  const SellerVerificationApprovedView({required this.verification, super.key});
 
   final SellerVerification verification;
 
@@ -269,9 +213,9 @@ class SellerVerificationApprovedView extends StatelessWidget {
           'Your seller verification was approved, so your account now has seller '
           'capability. Account type is shown on your Home screen.',
       children: <Widget>[
-        _DetailRow(label: 'Business', value: verification.businessName),
+        DetailRow(label: 'Business', value: verification.businessName),
         if (verification.reviewedAt != null)
-          _DetailRow(
+          DetailRow(
             label: 'Approved',
             value: AppFormatters.formatDateTime(verification.reviewedAt),
           ),
@@ -317,10 +261,7 @@ class SellerVerificationErrorState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.lg),
-            OutlinedButton(
-              onPressed: onRetry,
-              child: const Text('Try again'),
-            ),
+            OutlinedButton(onPressed: onRetry, child: const Text('Try again')),
           ],
         ),
       ),
@@ -341,30 +282,10 @@ class SellerVerificationConflictNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(6),
-        border: const Border(
-          left: BorderSide(color: AppColors.warning, width: 3),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Icon(
-            Icons.info_outline,
-            size: 20,
-            color: AppColors.warning,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(child: Text(message, style: theme.textTheme.bodySmall)),
-        ],
-      ),
+    return NoticeBanner(
+      accent: AppColors.warning,
+      icon: Icons.info_outline,
+      message: message,
     );
   }
 }

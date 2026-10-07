@@ -10,13 +10,17 @@ import 'features/auth/view/auth_gate.dart';
 import 'features/buyer_shell/view/buyer_shell.dart';
 import 'features/marketplace/state/marketplace_controller.dart';
 import 'features/marketplace/state/marketplace_scope.dart';
+import 'features/seller_listings/state/seller_listing_controller.dart';
+import 'features/seller_listings/state/seller_listing_scope.dart';
 import 'features/seller_verification/state/seller_verification_controller.dart';
 import 'features/seller_verification/state/seller_verification_scope.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/marketplace_repository.dart';
+import 'repositories/seller_listing_repository.dart';
 import 'repositories/seller_verification_repository.dart';
 import 'services/auth_service.dart';
 import 'services/marketplace_service.dart';
+import 'services/seller_listing_service.dart';
 import 'services/seller_verification_service.dart';
 
 /// AgroBenta mobile client — application entry point.
@@ -32,6 +36,12 @@ import 'services/seller_verification_service.dart';
 /// installed in a [MarketplaceScope] above the signed-in shell, which is also
 /// how the listing detail screen, pushed on top of the shell, reaches the
 /// repository.
+///
+/// The seller listing graph follows the same shape, for the same reasons and one
+/// more: My Listings, the create/edit form and the detail screen are all pushed
+/// routes, and a scope installed inside `home` would be invisible to every one of
+/// them. Its controller is session-scoped too, so the created, edited, submitted
+/// and deleted records it holds are not lost by navigating away and back.
 ///
 /// See `mobile/AGENTS.md` for the development rules, `mobile/DESIGN.md` for the
 /// visual rules, and the API gap register for what the backend does not expose
@@ -74,6 +84,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final SellerVerificationService _sellerVerificationService;
   late final SellerVerificationRepository _sellerVerificationRepository;
   late final SellerVerificationController _sellerVerificationController;
+  late final SellerListingService _sellerListingService;
+  late final SellerListingRepository _sellerListingRepository;
+  late final SellerListingController _sellerListingController;
 
   @override
   void initState() {
@@ -102,6 +115,16 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
       // capability is server-owned: this is the app asking, not deciding.
       onCapabilityMayHaveChanged: _authController.refreshUser,
     );
+
+    // Built for every account, not only for sellers. The scope is unconditional
+    // so the widget tree does not change shape when a verification is approved
+    // mid-session, and the gate is on the requests themselves: the server answers
+    // `403` for a non-seller. Nothing here decides who is allowed to sell.
+    _sellerListingService = SellerListingService(_apiClient);
+    _sellerListingRepository = SellerListingRepository(_sellerListingService);
+    _sellerListingController = SellerListingController(
+      _sellerListingRepository,
+    );
   }
 
   @override
@@ -111,6 +134,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _authController.dispose();
     _marketplaceController.dispose();
     _sellerVerificationController.dispose();
+    _sellerListingController.dispose();
     _apiClient.close();
     super.dispose();
   }
@@ -136,11 +160,19 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
         child: SellerVerificationScope(
           repository: _sellerVerificationRepository,
           controller: _sellerVerificationController,
-          child: MaterialApp(
-            title: 'AgroBenta',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light(),
-            home: AuthGate(authenticatedView: _buildBuyerShell),
+          // Sibling of the other scopes, not nested inside one of them, for the
+          // same reason each of them sits above `MaterialApp`: My Listings and
+          // the form are pushed routes and need to reach this from a route
+          // pushed by a widget that is a descendant of the shell.
+          child: SellerListingScope(
+            repository: _sellerListingRepository,
+            controller: _sellerListingController,
+            child: MaterialApp(
+              title: 'AgroBenta',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light(),
+              home: AuthGate(authenticatedView: _buildBuyerShell),
+            ),
           ),
         ),
       ),

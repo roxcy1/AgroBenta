@@ -118,23 +118,25 @@ void main() {
       expect(find.text('Clear search and filters'), findsNothing);
     });
 
-    testWidgets('blames the query, not the marketplace, when a search finds nothing',
-        (WidgetTester tester) async {
-      await MarketplaceHarness.pump(
-        tester,
-        tokenStore: tokenStore,
-        handler: (_) async => marketplaceListResponse(
-          listings: <Map<String, dynamic>>[],
-          total: 0,
-        ),
-      );
+    testWidgets(
+      'blames the query, not the marketplace, when a search finds nothing',
+      (WidgetTester tester) async {
+        await MarketplaceHarness.pump(
+          tester,
+          tokenStore: tokenStore,
+          handler: (_) async => marketplaceListResponse(
+            listings: <Map<String, dynamic>>[],
+            total: 0,
+          ),
+        );
 
-      await tester.enterText(find.byType(TextField), 'nothing here');
-      await settleMarketplace(tester, frames: 12);
+        await tester.enterText(find.byType(TextField), 'nothing here');
+        await settleMarketplace(tester, frames: 12);
 
-      expect(find.text('No listings match'), findsOneWidget);
-      expect(find.text('Clear search and filters'), findsOneWidget);
-    });
+        expect(find.text('No listings match'), findsOneWidget);
+        expect(find.text('Clear search and filters'), findsOneWidget);
+      },
+    );
 
     testWidgets('offers a retry that re-requests after a failure', (
       WidgetTester tester,
@@ -164,13 +166,13 @@ void main() {
   });
 
   group('pull to refresh', () {
-    /// Drags the list down far enough to trip [RefreshIndicator].
+    /// Drags the list down far enough to trip the [RefreshIndicator].
+    ///
+    /// A deliberate fling rather than a small drag: the taller image-on-top
+    /// card leaves less empty scroll extent, so the pull needs enough distance
+    /// and velocity to arm the indicator reliably.
     Future<void> pullToRefresh(WidgetTester tester) async {
-      await tester.fling(
-        find.byType(ListView),
-        const Offset(0, 320),
-        1000,
-      );
+      await tester.fling(find.byType(ListView), const Offset(0, 600), 1200);
       await settleMarketplace(tester, frames: 12);
     }
 
@@ -315,7 +317,10 @@ void main() {
 
       expect(find.text('Filters'), findsOneWidget);
 
-      await tester.enterText(find.widgetWithText(TextField, 'Min price'), '10000');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Min price'),
+        '10000',
+      );
       await tester.tap(find.text('Apply filters'));
       await settleMarketplace(tester, frames: 12);
 
@@ -336,8 +341,14 @@ void main() {
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
 
-      await tester.enterText(find.widgetWithText(TextField, 'Min price'), '50000');
-      await tester.enterText(find.widgetWithText(TextField, 'Max price'), '10000');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Min price'),
+        '50000',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Max price'),
+        '10000',
+      );
       await tester.tap(find.text('Apply filters'));
       await settleMarketplace(tester);
 
@@ -363,7 +374,10 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.enterText(find.widgetWithText(TextField, 'Livestock type'), 'Cattle');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Livestock type'),
+        'Cattle',
+      );
       await tester.tap(find.text('Apply filters'));
       await settleMarketplace(tester, frames: 12);
 
@@ -382,7 +396,10 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.enterText(find.widgetWithText(TextField, 'Livestock type'), 'Cattle');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Livestock type'),
+        'Cattle',
+      );
       await tester.tap(find.text('Apply filters'));
       await settleMarketplace(tester, frames: 12);
 
@@ -391,7 +408,10 @@ void main() {
       await tester.tap(find.text('Clear all'));
       await settleMarketplace(tester, frames: 12);
 
-      expect(harness.recorded.last.query.containsKey('livestock_type'), isFalse);
+      expect(
+        harness.recorded.last.query.containsKey('livestock_type'),
+        isFalse,
+      );
     });
   });
 
@@ -503,30 +523,32 @@ void main() {
       expect(find.text('₱42,500.00'), findsOneWidget);
     });
 
-    testWidgets('re-fetches the listing on open rather than reusing the card data',
-        (WidgetTester tester) async {
-      final harness = await MarketplaceHarness.pump(
-        tester,
-        tokenStore: tokenStore,
-        handler: (RecordedRequest request) async {
-          if (request.apiPath == '/listings') {
-            return marketplaceListResponse(
-              listings: <Map<String, dynamic>>[listingJson(id: 12)],
-            );
-          }
-          return listingDetailResponse();
-        },
-      );
+    testWidgets(
+      're-fetches the listing on open rather than reusing the card data',
+      (WidgetTester tester) async {
+        final harness = await MarketplaceHarness.pump(
+          tester,
+          tokenStore: tokenStore,
+          handler: (RecordedRequest request) async {
+            if (request.apiPath == '/listings') {
+              return marketplaceListResponse(
+                listings: <Map<String, dynamic>>[listingJson(id: 12)],
+              );
+            }
+            return listingDetailResponse();
+          },
+        );
 
-      await tester.tap(find.byType(ListingCard));
-      await settleMarketplace(tester, frames: 12);
+        await tester.tap(find.byType(ListingCard));
+        await settleMarketplace(tester, frames: 12);
 
-      expect(
-        harness.recorded.map((RecordedRequest r) => r.apiPath),
-        containsAllInOrder(<String>['/listings', '/listings/12']),
-        reason: 'a listing can go inactive between the two requests',
-      );
-    });
+        expect(
+          harness.recorded.map((RecordedRequest r) => r.apiPath),
+          containsAllInOrder(<String>['/listings', '/listings/12']),
+          reason: 'a listing can go inactive between the two requests',
+        );
+      },
+    );
 
     testWidgets('a listing that went inactive renders the unavailable notice', (
       WidgetTester tester,
@@ -547,10 +569,7 @@ void main() {
       await tester.tap(find.byType(ListingCard));
       await settleMarketplace(tester, frames: 12);
 
-      expect(
-        find.text('This listing is no longer available'),
-        findsOneWidget,
-      );
+      expect(find.text('This listing is no longer available'), findsOneWidget);
       expect(
         find.textContaining('not found'),
         findsNothing,

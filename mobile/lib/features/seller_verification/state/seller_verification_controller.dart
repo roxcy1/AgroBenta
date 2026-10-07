@@ -89,7 +89,12 @@ class SellerVerificationController extends ChangeNotifier {
     _loading = true;
 
     final int generation = ++_generation;
-    _set(_state.copyWith(status: SellerVerificationUiStatus.loading, clearError: true));
+    _set(
+      _state.copyWith(
+        status: SellerVerificationUiStatus.loading,
+        clearError: true,
+      ),
+    );
 
     try {
       final SellerVerification? verification = await _repository.current();
@@ -229,10 +234,9 @@ class SellerVerificationController extends ChangeNotifier {
           _set(
             _state.copyWith(
               status: _statusBeforeSubmit(),
-              errorMessage:
-                  error.message.isEmpty
-                      ? 'This account is already an approved seller.'
-                      : error.message,
+              errorMessage: error.message.isEmpty
+                  ? 'This account is already an approved seller.'
+                  : error.message,
             ),
           );
         default:
@@ -324,7 +328,9 @@ class SellerVerificationController extends ChangeNotifier {
   /// [SellerVerificationUiStatus], and an exhaustive switch over the former is
   /// what makes adding a fifth server state a compile error here rather than a
   /// silent fallthrough.
-  static SellerVerificationUiStatus _statusFor(SellerVerification verification) {
+  static SellerVerificationUiStatus _statusFor(
+    SellerVerification verification,
+  ) {
     return switch (verification.status) {
       SellerVerificationStatus.submitted ||
       SellerVerificationStatus.pendingReview =>

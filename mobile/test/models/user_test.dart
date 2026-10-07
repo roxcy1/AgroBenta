@@ -80,10 +80,7 @@ void main() {
     });
 
     test('rejects a non-integer id', () {
-      expect(
-        () => User.fromJson(userJson(id: 'seven')),
-        throwsFormatException,
-      );
+      expect(() => User.fromJson(userJson(id: 'seven')), throwsFormatException);
     });
   });
 }

@@ -34,14 +34,19 @@ abstract final class AppSpacing {
 /// AgroBenta uses moderate radius. Do not make cards excessively rounded, and
 /// do not reach for fully circular pills except for genuine status chips.
 abstract final class AppRadius {
-  /// 6dp — small controls, inputs.
-  static const double sm = 6;
+  /// 8dp — inputs, primary/secondary buttons, chips. (DESIGN: fields and
+  /// buttons 8–10.)
+  static const double sm = 8;
 
-  /// 8dp — medium controls, list tiles.
-  static const double md = 8;
+  /// 10dp — list tiles, image containers, the navigation indicator. (DESIGN:
+  /// image containers 10–12.)
+  static const double md = 10;
 
-  /// 12dp — cards. This is the default for surfaces.
+  /// 12dp — cards. This is the default for surfaces. (DESIGN: cards 10–12.)
   static const double lg = 12;
+
+  /// 16dp — dialogs and bottom sheets. (DESIGN: dialogs 12–16.)
+  static const double xl = 16;
 }
 
 /// Sizing tokens.

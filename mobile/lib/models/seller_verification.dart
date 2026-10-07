@@ -46,7 +46,8 @@ enum SellerVerificationStatus {
 
   /// Parses the API value, failing loudly on an unknown one.
   static SellerVerificationStatus fromValue(String value) {
-    for (final SellerVerificationStatus status in SellerVerificationStatus.values) {
+    for (final SellerVerificationStatus status
+        in SellerVerificationStatus.values) {
       if (status.value == value) {
         return status;
       }
@@ -110,9 +111,7 @@ class SellerVerification {
       businessLocation: readNullableString(json, 'business_location'),
       businessDescription: readNullableString(json, 'business_description'),
       idDocumentRef: readNullableString(json, 'id_document_ref'),
-      status: SellerVerificationStatus.fromValue(
-        readString(json, 'status'),
-      ),
+      status: SellerVerificationStatus.fromValue(readString(json, 'status')),
       adminNote: readNullableString(json, 'admin_note'),
       submittedAt: readNullableDateTime(json, 'submitted_at'),
       reviewedAt: readNullableDateTime(json, 'reviewed_at'),
@@ -174,5 +173,6 @@ class SellerVerification {
   bool get canResubmit => isRejected;
 
   @override
-  String toString() => 'SellerVerification($id, $businessName, ${status.value})';
+  String toString() =>
+      'SellerVerification($id, $businessName, ${status.value})';
 }

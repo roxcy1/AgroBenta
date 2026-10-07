@@ -20,10 +20,7 @@ void main() {
   });
 
   /// A controller over a handler, plus a record of every notification.
-  ({
-    MarketplaceController controller,
-    List<MarketplaceState> states,
-  }) build(
+  ({MarketplaceController controller, List<MarketplaceState> states}) build(
     Future<http.Response> Function(RecordedRequest request) handler,
   ) {
     final MarketplaceController controller = buildMarketplaceController(
@@ -78,23 +75,26 @@ void main() {
       );
     });
 
-    test('does not send a second request when called twice back to back',
-        () async {
-      final (:controller, :states) = build(
-        (_) async => marketplaceListResponse(),
-      );
+    test(
+      'does not send a second request when called twice back to back',
+      () async {
+        final (:controller, :states) = build(
+          (_) async => marketplaceListResponse(),
+        );
 
-      final Future<void> first = controller.loadInitial();
-      final Future<void> second = controller.loadInitial();
-      await Future.wait<void>(<Future<void>>[first, second]);
+        final Future<void> first = controller.loadInitial();
+        final Future<void> second = controller.loadInitial();
+        await Future.wait<void>(<Future<void>>[first, second]);
 
-      expect(
-        recorded,
-        hasLength(1),
-        reason: 'a duplicate initial load is the redundant call mobile/AGENTS.md '
-            'warns about',
-      );
-    });
+        expect(
+          recorded,
+          hasLength(1),
+          reason:
+              'a duplicate initial load is the redundant call mobile/AGENTS.md '
+              'warns about',
+        );
+      },
+    );
   });
 
   group('empty results', () {
@@ -132,34 +132,38 @@ void main() {
   });
 
   group('errors', () {
-    test('publishes a displayable message and a retryable failed state',
-        () async {
-      final (:controller, :states) = build(
-        (_) async => throw http.ClientException('connection refused'),
-      );
+    test(
+      'publishes a displayable message and a retryable failed state',
+      () async {
+        final (:controller, :states) = build(
+          (_) async => throw http.ClientException('connection refused'),
+        );
 
-      await controller.loadInitial();
+        await controller.loadInitial();
 
-      expect(controller.state.status, MarketplaceStatus.failed);
-      expect(controller.state.errorMessage, isNotNull);
-      expect(controller.state.errorMessage, isNotEmpty);
-    });
+        expect(controller.state.status, MarketplaceStatus.failed);
+        expect(controller.state.errorMessage, isNotNull);
+        expect(controller.state.errorMessage, isNotEmpty);
+      },
+    );
 
-    test('surfaces a 401 as a failure without pretending it is a list problem',
-        () async {
-      final (:controller, :states) = build(
-        (_) async => unauthorizedResponse(),
-      );
+    test(
+      'surfaces a 401 as a failure without pretending it is a list problem',
+      () async {
+        final (:controller, :states) = build(
+          (_) async => unauthorizedResponse(),
+        );
 
-      await controller.loadInitial();
+        await controller.loadInitial();
 
-      expect(controller.state.status, MarketplaceStatus.failed);
-      expect(
-        tokenStore.token,
-        isNull,
-        reason: 'the client clears it; the app leaves through the auth gate',
-      );
-    });
+        expect(controller.state.status, MarketplaceStatus.failed);
+        expect(
+          tokenStore.token,
+          isNull,
+          reason: 'the client clears it; the app leaves through the auth gate',
+        );
+      },
+    );
 
     test('retry re-requests page one and can succeed', () async {
       int attempt = 0;
@@ -311,25 +315,27 @@ void main() {
   });
 
   group('filters', () {
-    test('applies livestock type and price bounds as documented query keys',
-        () async {
-      final (:controller, :states) = build(
-        (_) async => marketplaceListResponse(),
-      );
+    test(
+      'applies livestock type and price bounds as documented query keys',
+      () async {
+        final (:controller, :states) = build(
+          (_) async => marketplaceListResponse(),
+        );
 
-      await controller.applyFilters(
-        const ListingFilters(
-          livestockType: 'Cattle',
-          minPrice: '10000',
-          maxPrice: '50000',
-        ),
-      );
+        await controller.applyFilters(
+          const ListingFilters(
+            livestockType: 'Cattle',
+            minPrice: '10000',
+            maxPrice: '50000',
+          ),
+        );
 
-      final Map<String, String> query = recorded.single.query;
-      expect(query['livestock_type'], 'Cattle');
-      expect(query['min_price'], '10000');
-      expect(query['max_price'], '50000');
-    });
+        final Map<String, String> query = recorded.single.query;
+        expect(query['livestock_type'], 'Cattle');
+        expect(query['min_price'], '10000');
+        expect(query['max_price'], '50000');
+      },
+    );
 
     test('resets to page one when filters change', () async {
       // The pagination the server echoes back has to match the page that was
@@ -349,7 +355,9 @@ void main() {
       await controller.loadMore();
       expect(controller.state.currentPage, 2);
 
-      await controller.applyFilters(const ListingFilters(livestockType: 'Goat'));
+      await controller.applyFilters(
+        const ListingFilters(livestockType: 'Goat'),
+      );
 
       expect(controller.state.currentPage, 1);
       expect(recorded.last.query['page'], '1');
@@ -413,21 +421,23 @@ void main() {
       expect(recorded.last.query['max_price'], '90000');
     });
 
-    test('a 422 from a rejected filter is a failure with the server message',
-        () async {
-      final (:controller, :states) = build(
-        (_) async => validationResponse(
-          errors: <String, Object>{
-            'min_price': <String>['The min price must be a number.'],
-          },
-        ),
-      );
+    test(
+      'a 422 from a rejected filter is a failure with the server message',
+      () async {
+        final (:controller, :states) = build(
+          (_) async => validationResponse(
+            errors: <String, Object>{
+              'min_price': <String>['The min price must be a number.'],
+            },
+          ),
+        );
 
-      await controller.applyFilters(const ListingFilters(minPrice: 'abc'));
+        await controller.applyFilters(const ListingFilters(minPrice: 'abc'));
 
-      expect(controller.state.status, MarketplaceStatus.failed);
-      expect(controller.state.errorMessage, isNotEmpty);
-    });
+        expect(controller.state.status, MarketplaceStatus.failed);
+        expect(controller.state.errorMessage, isNotEmpty);
+      },
+    );
   });
 
   group('pagination', () {
@@ -435,9 +445,7 @@ void main() {
       final (:controller, :states) = build((RecordedRequest request) async {
         final int page = int.parse(request.query['page']!);
         return marketplaceListResponse(
-          listings: <Map<String, dynamic>>[
-            listingJson(id: 20 - page),
-          ],
+          listings: <Map<String, dynamic>>[listingJson(id: 20 - page)],
           currentPage: page,
           lastPage: 3,
           perPage: 1,
@@ -455,7 +463,8 @@ void main() {
 
     test('does not request past the last page', () async {
       final (:controller, :states) = build(
-        (_) async => marketplaceListResponse(currentPage: 1, lastPage: 1, total: 1),
+        (_) async =>
+            marketplaceListResponse(currentPage: 1, lastPage: 1, total: 1),
       );
 
       await controller.loadInitial();
@@ -488,7 +497,8 @@ void main() {
       expect(
         calls,
         2,
-        reason: 'the end of the list can fire loadMore repeatedly; it must not '
+        reason:
+            'the end of the list can fire loadMore repeatedly; it must not '
             'fetch page 2 twice',
       );
 
@@ -605,9 +615,11 @@ void main() {
       expect(harness.controller.state.showsBlockingState, isFalse);
 
       completer.complete(
-        marketplaceListResponse(listings: <Map<String, dynamic>>[
-          listingJson(id: 2, breed: 'Fresher result'),
-        ]),
+        marketplaceListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 2, breed: 'Fresher result'),
+          ],
+        ),
       );
       await pending;
 
@@ -665,26 +677,34 @@ void main() {
       await pending;
     });
 
-    test('falls back to a blocking load when there is nothing to keep', () async {
-      final Completer<http.Response> completer = Completer<http.Response>();
-      final ({MarketplaceController controller, List<MarketplaceState> states})
-      harness = build((RecordedRequest request) => completer.future);
+    test(
+      'falls back to a blocking load when there is nothing to keep',
+      () async {
+        final Completer<http.Response> completer = Completer<http.Response>();
+        final ({
+          MarketplaceController controller,
+          List<MarketplaceState> states,
+        })
+        harness = build((RecordedRequest request) => completer.future);
 
-      final Future<void> pending = harness.controller.refresh();
-      await pumpEventQueue();
+        final Future<void> pending = harness.controller.refresh();
+        await pumpEventQueue();
 
-      // Nothing was ever loaded, so a refresh is an ordinary first load.
-      expect(harness.controller.state.status, MarketplaceStatus.loading);
+        // Nothing was ever loaded, so a refresh is an ordinary first load.
+        expect(harness.controller.state.status, MarketplaceStatus.loading);
 
-      completer.complete(marketplaceListResponse());
-      await pending;
-    });
+        completer.complete(marketplaceListResponse());
+        await pending;
+      },
+    );
   });
 
   group('clearing search and filters together', () {
     test('widens the query in a single request', () async {
       final ({MarketplaceController controller, List<MarketplaceState> states})
-      harness = build((RecordedRequest request) async => marketplaceListResponse());
+      harness = build(
+        (RecordedRequest request) async => marketplaceListResponse(),
+      );
 
       await harness.controller.loadInitial();
       await harness.controller.applyFilters(
@@ -697,17 +717,20 @@ void main() {
 
       // One request, not one per cleared field.
       expect(recorded, hasLength(4));
-      expect(recorded.last.query.keys, <String>{
-        'page',
-        'per_page',
-      }, reason: 'the widened query sends no search or filter');
+      expect(
+        recorded.last.query.keys,
+        <String>{'page', 'per_page'},
+        reason: 'the widened query sends no search or filter',
+      );
       expect(harness.controller.state.searchText, isEmpty);
       expect(harness.controller.state.filters, ListingFilters.none);
     });
 
     test('is a no-op when there is nothing to clear', () async {
       final ({MarketplaceController controller, List<MarketplaceState> states})
-      harness = build((RecordedRequest request) async => marketplaceListResponse());
+      harness = build(
+        (RecordedRequest request) async => marketplaceListResponse(),
+      );
 
       await harness.controller.loadInitial();
       await harness.controller.clearSearchAndFilters();

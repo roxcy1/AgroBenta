@@ -44,9 +44,9 @@ abstract final class ApiConstants {
 /// buyer read-only surface and are entirely separate from `/admin/listings*`,
 /// which is the Admin Web's flow and is not part of this app's contract.
 ///
-/// Both require a `mobile`-ability Sanctum token. There is no seller listing
-/// group here: listing creation and management are a later phase (GAP-09), and
-/// `/api/livestock` is **not** a path this app ever calls.
+/// Both require a `mobile`-ability Sanctum token. The seller listing surface is
+/// a separate group below ([SellerListingEndpoints]), and `/api/livestock` is
+/// **not** a path this app ever calls.
 abstract final class MarketplaceEndpoints {
   /// `GET` — browse active listings. 200, paginated envelope.
   ///
@@ -117,6 +117,111 @@ abstract final class SellerVerificationEndpoints {
     'business_description',
     'id_document_ref',
   ];
+}
+
+/// Seller listing management endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `seller` middleware group. Beyond the `mobile`-ability token they require
+/// `User::isApprovedSeller()`, so a buyer is answered `403` — which is why the
+/// entry point is gated on the caller's own capability rather than assumed.
+///
+/// No path here takes a seller id. The scope is the token, resolved server-side,
+/// so there is no way for a client to name somebody else's inventory. There is
+/// also no `activate`, no `deactivate` and no `sold` path: `active` is an
+/// administrator decision, `active → inactive` is too, and a sold listing is a
+/// transaction. The seller lifecycle ends at `pending` and this group reflects
+/// that by having no route for going further.
+abstract final class SellerListingEndpoints {
+  /// `GET` — the caller's own listings, in every status. 200, paginated
+  /// envelope.
+  ///
+  /// Unlike [MarketplaceEndpoints.browse], `status` **is** a permitted filter: a
+  /// seller needs to find their drafts and their listings awaiting review, which
+  /// are exactly the records the marketplace never returns. `seller_id` is
+  /// rejected server-side and is not built here.
+  static const String mine = '/seller/listings';
+
+  /// `POST` — create a draft. 201, plain envelope.
+  ///
+  /// Creates a `draft` and nothing else. The response carries the stored listing
+  /// so the client does not need a second request to populate its list.
+  static const String create = '/seller/listings';
+
+  /// `PATCH` — edit a listing the caller owns. 200, plain envelope.
+  ///
+  /// A true PATCH: absent fields are left alone, and the server permits it only
+  /// while the listing is a `draft` or `active`.
+  static String update(int id) => '/seller/listings/$id';
+
+  /// `POST` — submit a draft for review. 200, plain envelope.
+  ///
+  /// [id] is appended. This is the only lifecycle transition a seller can make,
+  /// and it is one-way: the server answers `409` for a listing that is not a
+  /// draft.
+  static String submit(int id) => '/seller/listings/$id/submit';
+
+  /// `DELETE` — destroy a draft or withdrawn listing. 200.
+  ///
+  /// [id] is appended. Permitted by the server for a `draft` or `inactive`
+  /// listing and `409` for anything else. It is a real deletion, not a
+  /// deactivation: nothing here takes a live listing out of sale.
+  static String destroy(int id) => '/seller/listings/$id';
+
+  /// The field names the create and update requests may contain.
+  ///
+  /// Listed as an explicit allow-list, and used by `SellerListingService` to
+  /// build the body, so a server-owned field cannot be added to the request by a
+  /// later change to a model. `status` and `seller_id` are absent **by
+  /// construction**: the server marks both `prohibited` and answers `422`, and
+  /// no code path in this app can put them in a body.
+  ///
+  /// `photos` is deliberately absent from the write surface even though the
+  /// server accepts the array. D-10 leaves both the upload mechanism and the
+  /// stored representation undecided, so a text box asking a seller to type
+  /// photo URLs would invent a scheme the contract has not chosen. The mobile
+  /// client sends no photos until that decision is made.
+  static const List<String> writableFields = <String>[
+    'livestock_type',
+    'breed',
+    'age_value',
+    'age_unit',
+    'gender',
+    'weight_value',
+    'weight_unit',
+    'quantity',
+    'asking_price',
+    'location',
+    'health_status',
+    'vaccination',
+    'short_description',
+    'additional_notes',
+  ];
+
+  /// The fields the create request requires.
+  ///
+  /// A subset of [writableFields]. The contract requires these four, so a draft
+  /// is a complete-but-unpublished record rather than a half-filled one.
+  static const List<String> requiredFields = <String>[
+    'livestock_type',
+    'location',
+    'asking_price',
+    'quantity',
+  ];
+
+  /// Page size used when the caller does not ask for a specific one.
+  ///
+  /// Matches the server default and [MarketplaceEndpoints.defaultPerPage]: the
+  /// first request is an ordinary one rather than a request that happens to
+  /// agree with the default.
+  static const int defaultPerPage = 15;
+
+  /// Largest page the server will serve.
+  ///
+  /// `IndexSellerListingRequest` validates `per_page` with `between:1,50`, so
+  /// anything above this is rejected with a `422`. The repository clamps to this
+  /// rather than letting a screen discover the limit by provoking an error.
+  static const int maxPerPage = 50;
 }
 
 /// Mobile authentication endpoints, relative to the API root.

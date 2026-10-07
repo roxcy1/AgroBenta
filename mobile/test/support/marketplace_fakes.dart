@@ -118,25 +118,29 @@ http.Response marketplaceListResponse({
 );
 
 /// A successful `GET /api/listings/{id}` HTTP response.
-http.Response listingDetailResponse({Map<String, dynamic>? listing, int statusCode = 200}) =>
-    http.Response(
-      jsonEncode(successEnvelope(data: listing ?? listingJson())),
-      statusCode,
-      headers: <String, String>{'content-type': 'application/json'},
-    );
+http.Response listingDetailResponse({
+  Map<String, dynamic>? listing,
+  int statusCode = 200,
+}) => http.Response(
+  jsonEncode(successEnvelope(data: listing ?? listingJson())),
+  statusCode,
+  headers: <String, String>{'content-type': 'application/json'},
+);
 
 /// The `404` a hidden listing produces, with Laravel's `abort(404, ...)`
 /// bare-JSON-string body.
-http.Response listingNotFoundResponse({String message = 'Listing not found.'}) =>
-    http.Response(jsonEncode(message), 404);
+http.Response listingNotFoundResponse({
+  String message = 'Listing not found.',
+}) => http.Response(jsonEncode(message), 404);
 
 /// A `401`, as the API answers an unauthenticated or revoked request.
 http.Response unauthorizedResponse({String message = 'Unauthenticated.'}) =>
     http.Response(jsonEncode(message), 401);
 
 /// A `403`, as the API answers a token without the `mobile` ability.
-http.Response forbiddenResponse({String message = 'This action is unauthorized.'}) =>
-    http.Response(jsonEncode(message), 403);
+http.Response forbiddenResponse({
+  String message = 'This action is unauthorized.',
+}) => http.Response(jsonEncode(message), 403);
 
 /// A `422` with per-field errors, as `IndexListingRequest` produces.
 http.Response validationResponse({
@@ -188,8 +192,11 @@ MarketplaceController controllerReturning(List<Map<String, dynamic>> listings) {
   final ApiClient client = ApiClient(
     tokenStorage: FakeTokenStore('token'),
     httpClient: MockClient(
-      (http.Request request) async => marketplaceListResponse(listings: listings),
+      (http.Request request) async =>
+          marketplaceListResponse(listings: listings),
     ),
   );
-  return MarketplaceController(MarketplaceRepository(MarketplaceService(client)));
+  return MarketplaceController(
+    MarketplaceRepository(MarketplaceService(client)),
+  );
 }

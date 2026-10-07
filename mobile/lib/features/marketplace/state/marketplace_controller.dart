@@ -214,6 +214,7 @@ class MarketplaceController extends ChangeNotifier {
       final MarketplacePage page = await _repository.browse(
         search: _state.searchText,
         livestockType: _state.filters.livestockType,
+        location: _state.filters.location,
         minPrice: _state.filters.minPrice,
         maxPrice: _state.filters.maxPrice,
         page: _state.currentPage + 1,
@@ -278,7 +279,8 @@ class MarketplaceController extends ChangeNotifier {
   /// that changes the response and nothing that does not.
   String get _firstPageQuery =>
       '${_state.searchText}|${_state.filters.livestockType}|'
-      '${_state.filters.minPrice}|${_state.filters.maxPrice}|1';
+      '${_state.filters.location}|${_state.filters.minPrice}|'
+      '${_state.filters.maxPrice}|1';
 
   /// Requests page 1 and replaces everything on screen with the result.
   ///
@@ -313,6 +315,7 @@ class MarketplaceController extends ChangeNotifier {
       final MarketplacePage page = await _repository.browse(
         search: _state.searchText,
         livestockType: _state.filters.livestockType,
+        location: _state.filters.location,
         minPrice: _state.filters.minPrice,
         maxPrice: _state.filters.maxPrice,
         page: 1,

@@ -10,6 +10,8 @@ import '../state/listing_detail_state.dart';
 import '../state/marketplace_scope.dart';
 import '../widgets/listing_photo.dart';
 import '../widgets/marketplace_state_views.dart';
+import '../../../widgets/detail_row.dart';
+import '../../../widgets/section_card.dart';
 
 /// One listing's detail, from `GET /listings/{listing}`.
 ///
@@ -52,7 +54,9 @@ class _ListingDetailBodyState extends State<_ListingDetailBody> {
     // list controller's state. The screen is pushed above the shell but still
     // under the `MarketplaceScope` that `main.dart` installs, so the lookup
     // resolves the same way it would from the list.
-    final MarketplaceRepository repository = MarketplaceScope.readOf(context).repository;
+    final MarketplaceRepository repository = MarketplaceScope.readOf(
+      context,
+    ).repository;
     _controller = ListingDetailController(repository, widget.listingId);
     _controller.load();
   }
@@ -121,10 +125,7 @@ class _DetailContent extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
       children: <Widget>[
-        SizedBox(
-          height: 220,
-          child: ListingPhoto(listing: listing),
-        ),
+        SizedBox(height: 220, child: ListingPhoto(listing: listing)),
         Padding(
           padding: const EdgeInsets.all(AppSpacing.screenGutter),
           child: Column(
@@ -137,18 +138,18 @@ class _DetailContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.xxs),
-              Text(
-                listing.title,
-                style: theme.textTheme.headlineSmall,
-              ),
+              Text(listing.title, style: theme.textTheme.headlineSmall),
               const SizedBox(height: AppSpacing.md),
               // The exact amount, to the cent. A card rounds for space; here
               // there is room, and this is the figure the buyer is deciding on.
+              // Kept within the 15–18sp price band, and one step above the
+              // card's 15sp so the hierarchy still reads.
               Text(
                 AppFormatters.formatMoney(listing.askingPrice) ??
                     listing.askingPrice,
-                style: theme.textTheme.headlineMedium?.copyWith(
+                style: theme.textTheme.titleLarge?.copyWith(
                   color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               if (listing.quantity > 0) ...<Widget>[
@@ -160,45 +161,53 @@ class _DetailContent extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
-              _DetailCard(
+              SectionCard(
                 title: 'Details',
-                rows: <_DetailRow>[
-                  _DetailRow('Location', listing.location),
+                children: <Widget>[
+                  DetailRow(label: 'Location', value: listing.location),
                   if (listing.ageLabel != null)
-                    _DetailRow('Age', listing.ageLabel!),
+                    DetailRow(label: 'Age', value: listing.ageLabel!),
                   if (listing.weightLabel != null)
-                    _DetailRow('Weight', listing.weightLabel!),
+                    DetailRow(label: 'Weight', value: listing.weightLabel!),
                   if (listing.gender != null)
-                    _DetailRow('Gender', _titleCase(listing.gender!)),
+                    DetailRow(
+                      label: 'Gender',
+                      value: _titleCase(listing.gender!),
+                    ),
                   if (listing.healthStatus != null)
-                    _DetailRow('Health', listing.healthStatus!),
+                    DetailRow(label: 'Health', value: listing.healthStatus!),
                   if (listing.vaccination != null)
-                    _DetailRow('Vaccination', listing.vaccination!),
+                    DetailRow(
+                      label: 'Vaccination',
+                      value: listing.vaccination!,
+                    ),
                 ],
               ),
               if (listing.shortDescription.trim().isNotEmpty) ...<Widget>[
                 const SizedBox(height: AppSpacing.md),
-                _DetailCard(
+                SectionCard(
                   title: 'Description',
-                  rows: <_DetailRow>[
-                    _DetailRow.body(listing.shortDescription),
+                  children: <Widget>[
+                    DetailRow.body(listing.shortDescription),
                   ],
                 ),
               ],
               if (listing.additionalNotes != null &&
                   listing.additionalNotes!.trim().isNotEmpty) ...<Widget>[
                 const SizedBox(height: AppSpacing.md),
-                _DetailCard(
+                SectionCard(
                   title: 'Seller’s notes',
-                  rows: <_DetailRow>[
-                    _DetailRow.body(listing.additionalNotes!),
+                  children: <Widget>[
+                    DetailRow.body(listing.additionalNotes!),
                   ],
                 ),
               ],
               const SizedBox(height: AppSpacing.md),
-              _DetailCard(
+              SectionCard(
                 title: 'Seller',
-                rows: <_DetailRow>[_DetailRow('Name', listing.seller.name)],
+                children: <Widget>[
+                  DetailRow(label: 'Name', value: listing.seller.name),
+                ],
               ),
               const SizedBox(height: AppSpacing.lg),
               Row(
@@ -220,76 +229,6 @@ class _DetailContent extends StatelessWidget {
             ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-/// A titled group of rows.
-///
-/// Rows whose value is absent are omitted by the caller rather than rendered
-/// as a dash, so an unrecorded field does not look like a recorded "none".
-class _DetailCard extends StatelessWidget {
-  const _DetailCard({required this.title, required this.rows});
-
-  final String title;
-  final List<_DetailRow> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: theme.textTheme.titleSmall),
-            const SizedBox(height: AppSpacing.sm),
-            for (final _DetailRow row in rows)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                child: row.build(context),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One label-value pair, or a paragraph when no label is given.
-class _DetailRow {
-  const _DetailRow(this.label, [this.value]) : body = null;
-
-  const _DetailRow.body(String this.body) : label = null, value = null;
-
-  final String? label;
-  final String? value;
-
-  /// Paragraph form, for description and notes.
-  final String? body;
-
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final String? paragraph = body;
-
-    if (paragraph != null) {
-      return Text(paragraph, style: theme.textTheme.bodyMedium);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label!,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(value!, style: theme.textTheme.bodyLarge),
       ],
     );
   }

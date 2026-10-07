@@ -6,7 +6,10 @@ import '../support/seller_verification_fakes.dart';
 void main() {
   group('SellerVerificationStatus', () {
     test('parses every status the contract allows', () {
-      expect(SellerVerificationStatus.fromValue('submitted'), SellerVerificationStatus.submitted);
+      expect(
+        SellerVerificationStatus.fromValue('submitted'),
+        SellerVerificationStatus.submitted,
+      );
       expect(
         SellerVerificationStatus.fromValue('pending_review'),
         SellerVerificationStatus.pendingReview,
@@ -31,12 +34,15 @@ void main() {
       );
     });
 
-    test('treats submitted and pending_review as open, matching the server', () {
-      expect(SellerVerificationStatus.submitted.isOpen, isTrue);
-      expect(SellerVerificationStatus.pendingReview.isOpen, isTrue);
-      expect(SellerVerificationStatus.approved.isOpen, isFalse);
-      expect(SellerVerificationStatus.rejected.isOpen, isFalse);
-    });
+    test(
+      'treats submitted and pending_review as open, matching the server',
+      () {
+        expect(SellerVerificationStatus.submitted.isOpen, isTrue);
+        expect(SellerVerificationStatus.pendingReview.isOpen, isTrue);
+        expect(SellerVerificationStatus.approved.isOpen, isFalse);
+        expect(SellerVerificationStatus.rejected.isOpen, isFalse);
+      },
+    );
   });
 
   group('SellerVerification.fromJson', () {

@@ -40,9 +40,7 @@ class ListingDetailController extends ChangeNotifier {
     }
 
     _inFlight = true;
-    _set(
-      const ListingDetailState(status: ListingDetailStatus.loading),
-    );
+    _set(const ListingDetailState(status: ListingDetailStatus.loading));
 
     try {
       final Listing listing = await _repository.detail(listingId);
@@ -50,10 +48,7 @@ class ListingDetailController extends ChangeNotifier {
         return;
       }
       _set(
-        ListingDetailState(
-          status: ListingDetailStatus.ready,
-          listing: listing,
-        ),
+        ListingDetailState(status: ListingDetailStatus.ready, listing: listing),
       );
     } on ApiException catch (error) {
       if (_disposed) {

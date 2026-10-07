@@ -10,14 +10,13 @@ use App\Http\Controllers\Api\Admin\SettingsController;
 use App\Http\Controllers\Api\Admin\TransactionController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
+use App\Http\Controllers\Api\CurrentUserController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
+use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
 
 Route::post('/admin/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');
@@ -67,12 +66,43 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification
     Route::post('/', [MobileSellerVerificationController::class, 'store']);
 });
 
+// Seller listing management, for the caller's own account. `seller` is the
+// capability gate: `auth:sanctum` + `ability:mobile` proves the token is a mobile
+// one, and `seller` proves `isApprovedSeller()`. A buyer is refused with 403.
+//
+// No route here takes a seller id. Ownership is derived from the token inside the
+// repository, so there is no parameter that could widen a seller's list to
+// somebody else's, and no id that could redirect a write at a foreign row.
+//
+// `submit` and `destroy` are declared before `/seller/listings/{listing}` for the
+// same reason `/me` is declared before its group: a static segment must never be
+// swallowed by a parameter. Neither is a deactivation — `active -> inactive` is an
+// administrator action [D-02 rule 4] and is not exposed to sellers.
+Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/listings')->group(function (): void {
+    Route::get('/', [SellerListingController::class, 'index']);
+    Route::post('/', [SellerListingController::class, 'store']);
+    Route::post('/{listing}/submit', [SellerListingController::class, 'submit']);
+    Route::patch('/{listing}', [SellerListingController::class, 'update']);
+    Route::delete('/{listing}', [SellerListingController::class, 'destroy']);
+});
+
 Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->group(function (): void {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/listings', [ListingController::class, 'index']);
+    // Listing moderation. [D-02 rule 8] makes administrator approval the only
+    // route to `active`, and the transition table reserves `pending -> inactive`
+    // and `active -> inactive` to an administrator as well, so all three land
+    // here. Each is a named action rather than a parameterised status update, so
+    // a client cannot name a transition at all: `draft -> active`,
+    // `sold -> active` and `inactive -> active` have no route that could express
+    // them. No reactivation route exists, because [D-02] defines no path back to
+    // `active` (A-02 / OQ-16).
+    Route::post('/listings/{listing}/approve', [ListingController::class, 'approve']);
+    Route::post('/listings/{listing}/reject', [ListingController::class, 'reject']);
+    Route::post('/listings/{listing}/deactivate', [ListingController::class, 'deactivate']);
     Route::get('/seller-verifications', [SellerVerificationController::class, 'index']);
     Route::get('/seller-verifications/{sellerVerification}', [SellerVerificationController::class, 'show']);
     Route::post('/seller-verifications/{sellerVerification}/approve', [SellerVerificationController::class, 'approve']);

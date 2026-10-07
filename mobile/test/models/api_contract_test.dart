@@ -6,14 +6,11 @@ void main() {
   group('ApiEnvelope', () {
     test('parses the Laravel envelope shape', () {
       final ApiEnvelope<Map<String, dynamic>> envelope =
-          ApiEnvelope<Map<String, dynamic>>.fromJson(
-            <String, dynamic>{
-              'success': true,
-              'message': 'Logged in successfully.',
-              'data': <String, dynamic>{'id': 1},
-            },
-            (Object? data) => data! as Map<String, dynamic>,
-          );
+          ApiEnvelope<Map<String, dynamic>>.fromJson(<String, dynamic>{
+            'success': true,
+            'message': 'Logged in successfully.',
+            'data': <String, dynamic>{'id': 1},
+          }, (Object? data) => data! as Map<String, dynamic>);
 
       expect(envelope.success, isTrue);
       expect(envelope.message, 'Logged in successfully.');
@@ -34,30 +31,29 @@ void main() {
 
     test('throws when success is missing', () {
       expect(
-        () => ApiEnvelope<Object?>.fromJson(
-          <String, dynamic>{'data': null},
-          (Object? data) => data,
-        ),
+        () => ApiEnvelope<Object?>.fromJson(<String, dynamic>{
+          'data': null,
+        }, (Object? data) => data),
         throwsFormatException,
       );
     });
 
     test('throws when data is missing', () {
       expect(
-        () => ApiEnvelope<Object?>.fromJson(
-          <String, dynamic>{'success': true},
-          (Object? data) => data,
-        ),
+        () => ApiEnvelope<Object?>.fromJson(<String, dynamic>{
+          'success': true,
+        }, (Object? data) => data),
         throwsFormatException,
       );
     });
 
     test('throws when message is not a string', () {
       expect(
-        () => ApiEnvelope<Object?>.fromJson(
-          <String, dynamic>{'success': true, 'message': 5, 'data': null},
-          (Object? data) => data,
-        ),
+        () => ApiEnvelope<Object?>.fromJson(<String, dynamic>{
+          'success': true,
+          'message': 5,
+          'data': null,
+        }, (Object? data) => data),
         throwsFormatException,
       );
     });
@@ -90,28 +86,24 @@ void main() {
     });
 
     test('reports no next page on the last page', () {
-      final Pagination pagination = Pagination.fromJson(
-        <String, dynamic>{
-          'current_page': 5,
-          'last_page': 5,
-          'per_page': 15,
-          'total': 68,
-        },
-      );
+      final Pagination pagination = Pagination.fromJson(<String, dynamic>{
+        'current_page': 5,
+        'last_page': 5,
+        'per_page': 15,
+        'total': 68,
+      });
 
       expect(pagination.hasNextPage, isFalse);
       expect(pagination.hasPreviousPage, isTrue);
     });
 
     test('reports a single page when there are no records', () {
-      final Pagination pagination = Pagination.fromJson(
-        <String, dynamic>{
-          'current_page': 1,
-          'last_page': 1,
-          'per_page': 15,
-          'total': 0,
-        },
-      );
+      final Pagination pagination = Pagination.fromJson(<String, dynamic>{
+        'current_page': 1,
+        'last_page': 1,
+        'per_page': 15,
+        'total': 0,
+      });
 
       expect(pagination.hasPreviousPage, isFalse);
       expect(pagination.hasNextPage, isFalse);

@@ -38,6 +38,15 @@ class MarketplaceHarness {
     final MarketplaceController controller = MarketplaceController(repository);
     addTearDown(controller.dispose);
 
+    // The default test surface is 800x600 logical, which is only a couple of
+    // image-on-top results cards tall — too short for the load-more footer or a
+    // second card to be built by the lazy list, hiding them from finders. A
+    // taller portrait surface makes the assertions about a page of results mean
+    // something.
+    tester.view.physicalSize = const Size(800, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(
       // The scope sits **above** `MaterialApp`, exactly as `main.dart` does it.
       // A pushed route is a sibling of the home route inside the navigator's

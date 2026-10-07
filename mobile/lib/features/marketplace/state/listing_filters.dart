@@ -20,6 +20,7 @@ import '../../../core/utils/app_formatters.dart';
 class ListingFilters {
   const ListingFilters({
     this.livestockType = '',
+    this.location = '',
     this.minPrice = '',
     this.maxPrice = '',
   });
@@ -38,6 +39,14 @@ class ListingFilters {
   /// the filter silently return nothing.
   final String livestockType;
 
+  /// Seller-entered location, free text.
+  ///
+  /// `listings.location` is a plain string that the server matches exactly, the
+  /// same way as [livestockType] — so this is a text field too, until a
+  /// controlled vocabulary exists (**OQ-04**). Anything else would be a guess
+  /// about seller wording that a buyer cannot see.
+  final String location;
+
   /// Lowest acceptable asking price, as typed. Empty means no lower bound.
   final String minPrice;
 
@@ -47,6 +56,7 @@ class ListingFilters {
   /// Whether any filter is set.
   bool get isActive =>
       livestockType.trim().isNotEmpty ||
+      location.trim().isNotEmpty ||
       minPrice.trim().isNotEmpty ||
       maxPrice.trim().isNotEmpty;
 
@@ -58,6 +68,9 @@ class ListingFilters {
   int get activeCount {
     int count = 0;
     if (livestockType.trim().isNotEmpty) {
+      count++;
+    }
+    if (location.trim().isNotEmpty) {
       count++;
     }
     if (minPrice.trim().isNotEmpty) {
@@ -88,7 +101,7 @@ class ListingFilters {
     return min > max;
   }
 
-  /// A short human summary for the filter control, e.g. `Cattle · ₱10,000+`.
+  /// A short human summary for the filter control, e.g. `Cattle · Pampanga`.
   ///
   /// Empty when nothing is applied, so the button can fall back to its own
   /// label instead of showing a meaningless summary.
@@ -100,16 +113,20 @@ class ListingFilters {
       parts.add(type);
     }
 
+    final String locationText = location.trim();
+    if (locationText.isNotEmpty) {
+      parts.add(locationText);
+    }
+
     final double? min = minPriceAmount;
     final double? max = maxPriceAmount;
     if (min != null && max != null) {
       final String low = AppFormatters.formatMoneyCompact(min.toString()) ?? '';
-      final String high = AppFormatters.formatMoneyCompact(max.toString()) ?? '';
+      final String high =
+          AppFormatters.formatMoneyCompact(max.toString()) ?? '';
       parts.add('$low – $high');
     } else if (min != null) {
-      parts.add(
-        '${AppFormatters.formatMoneyCompact(min.toString()) ?? ''}+',
-      );
+      parts.add('${AppFormatters.formatMoneyCompact(min.toString()) ?? ''}+');
     } else if (max != null) {
       parts.add(
         'up to ${AppFormatters.formatMoneyCompact(max.toString()) ?? ''}',
@@ -121,9 +138,15 @@ class ListingFilters {
 
   /// A copy with the given fields replaced. Blank [clear] arguments are ignored,
   /// so callers only name what they are changing.
-  ListingFilters copyWith({String? livestockType, String? minPrice, String? maxPrice}) {
+  ListingFilters copyWith({
+    String? livestockType,
+    String? location,
+    String? minPrice,
+    String? maxPrice,
+  }) {
     return ListingFilters(
       livestockType: livestockType ?? this.livestockType,
+      location: location ?? this.location,
       minPrice: minPrice ?? this.minPrice,
       maxPrice: maxPrice ?? this.maxPrice,
     );
@@ -137,14 +160,15 @@ class ListingFilters {
       identical(this, other) ||
       other is ListingFilters &&
           other.livestockType == livestockType &&
+          other.location == location &&
           other.minPrice == minPrice &&
           other.maxPrice == maxPrice;
 
   @override
-  int get hashCode => Object.hash(livestockType, minPrice, maxPrice);
+  int get hashCode => Object.hash(livestockType, location, minPrice, maxPrice);
 
   @override
   String toString() =>
-      'ListingFilters(livestockType: "$livestockType", minPrice: "$minPrice", '
-      'maxPrice: "$maxPrice")';
+      'ListingFilters(livestockType: "$livestockType", location: "$location", '
+      'minPrice: "$minPrice", maxPrice: "$maxPrice")';
 }

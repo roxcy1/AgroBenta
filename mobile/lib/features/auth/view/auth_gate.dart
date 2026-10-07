@@ -87,9 +87,10 @@ class _AuthGateState extends State<AuthGate> {
     return switch (state.status) {
       AuthStatus.restoring => const RestoringSessionScreen(),
       AuthStatus.restoreFailed => RestoreFailedScreen(state: state),
-      AuthStatus.signedOut => _showRegistration
-          ? RegisterScreen(onSignIn: _showSignIn)
-          : SignInScreen(onRegister: _showRegister),
+      AuthStatus.signedOut =>
+        _showRegistration
+            ? RegisterScreen(onSignIn: _showSignIn)
+            : SignInScreen(onRegister: _showRegister),
       AuthStatus.signedIn => widget.authenticatedView(context),
     };
   }

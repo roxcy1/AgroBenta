@@ -62,9 +62,8 @@ class MarketplaceService {
         'page': page,
         'per_page': perPage,
       },
-      parse: (Object? data) => MarketplacePage.fromJson(
-        _asObject(data, 'GET /listings'),
-      ),
+      parse: (Object? data) =>
+          MarketplacePage.fromJson(_asObject(data, 'GET /listings')),
     );
   }
 
@@ -82,11 +81,13 @@ class MarketplaceService {
   Future<Listing> detail(int id) {
     return _apiClient.get<Listing>(
       MarketplaceEndpoints.detail(id),
-      parse: (Object? data) => Listing.fromJson(_asObject(data, 'GET /listings/$id')),
+      parse: (Object? data) =>
+          Listing.fromJson(_asObject(data, 'GET /listings/$id')),
     );
   }
 
-  static bool _present(String? value) => value != null && value.trim().isNotEmpty;
+  static bool _present(String? value) =>
+      value != null && value.trim().isNotEmpty;
 
   /// Casts an unwrapped `data` payload to a JSON object with a message that
   /// names the endpoint, instead of a bare cast error. A `FormatException` here

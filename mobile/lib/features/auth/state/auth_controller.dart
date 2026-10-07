@@ -169,7 +169,13 @@ class AuthController extends ChangeNotifier {
       return false;
     }
 
-    _set(_state.copyWith(isSubmitting: true, clearError: true, validationErrors: const {}));
+    _set(
+      _state.copyWith(
+        isSubmitting: true,
+        clearError: true,
+        validationErrors: const {},
+      ),
+    );
 
     try {
       final User user = await action();

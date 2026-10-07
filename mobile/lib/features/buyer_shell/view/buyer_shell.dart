@@ -42,7 +42,8 @@ class _BuyerShellState extends State<BuyerShell> {
         index: _index,
         children: <Widget>[
           BuyerHomeScreen(
-            onBrowseMarketplace: () => setState(() => _index = _marketplaceIndex),
+            onBrowseMarketplace: () =>
+                setState(() => _index = _marketplaceIndex),
           ),
           const MarketplaceScreen(),
         ],

@@ -10,9 +10,10 @@ enum ApiErrorKind {
   /// The device could not reach the server at all: no connectivity, DNS
   /// failure, TLS failure, or the request timed out.
   ///
-  /// On an Android emulator this is frequently a wrong base URL — check
-  /// `AppConfig.apiBaseUrl` and the `10.0.2.2` rule before assuming the
-  /// network is down.
+  /// Before assuming the network is down, check `AppConfig.apiBaseUrl` and the
+  /// `ANDROID_RUN_TARGET` rule — `10.0.2.2` only exists on the Android
+  /// emulator, and a physical device build must resolve to the machine's LAN
+  /// address.
   network,
 
   /// 401. The token is missing, malformed, revoked, or expired.
@@ -76,14 +77,12 @@ class ApiException implements Exception {
     : this(kind: ApiErrorKind.network, message: message, cause: cause);
 
   /// Convenience constructor for [ApiErrorKind.malformedResponse].
-  const ApiException.malformedResponse({
-    required String message,
-    Object? cause,
-  }) : this(
-         kind: ApiErrorKind.malformedResponse,
-         message: message,
-         cause: cause,
-       );
+  const ApiException.malformedResponse({required String message, Object? cause})
+    : this(
+        kind: ApiErrorKind.malformedResponse,
+        message: message,
+        cause: cause,
+      );
 
   final ApiErrorKind kind;
 

@@ -128,10 +128,9 @@ SellerVerificationRepository buildSellerVerificationRepository(
   FakeTokenStore tokenStore,
   Future<http.Response> Function(RecordedRequest request) handler, {
   List<RecordedRequest>? recorded,
-}) =>
-    SellerVerificationRepository(
-      buildSellerVerificationService(tokenStore, handler, recorded: recorded),
-    );
+}) => SellerVerificationRepository(
+  buildSellerVerificationService(tokenStore, handler, recorded: recorded),
+);
 
 /// The whole seller verification stack over a mock transport, which is what most
 /// tests want: real service, real repository, real controller, fake HTTP.
@@ -159,10 +158,9 @@ SellerVerificationController controllerReturning(
   final ApiClient client = ApiClient(
     tokenStorage: FakeTokenStore('token'),
     httpClient: MockClient(
-      (http.Request request) async =>
-          verification == null
-              ? sellerVerificationNotFoundResponse()
-              : sellerVerificationResponse(verification: verification),
+      (http.Request request) async => verification == null
+          ? sellerVerificationNotFoundResponse()
+          : sellerVerificationResponse(verification: verification),
     ),
   );
   return SellerVerificationController(

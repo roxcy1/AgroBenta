@@ -12,7 +12,11 @@ import '../../../core/theme/app_spacing.dart';
 /// the useful response. Saying the wrong one is the standard way an empty state
 /// becomes a dead end.
 class MarketplaceEmptyState extends StatelessWidget {
-  const MarketplaceEmptyState({required this.isFiltered, this.onClear, super.key});
+  const MarketplaceEmptyState({
+    required this.isFiltered,
+    this.onClear,
+    super.key,
+  });
 
   /// Whether a search or filter is currently narrowing the results.
   final bool isFiltered;
@@ -94,11 +98,7 @@ class MarketplaceErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(
-              Icons.error_outline,
-              size: 40,
-              color: AppColors.error,
-            ),
+            const Icon(Icons.error_outline, size: 40, color: AppColors.error),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Could not load listings',
@@ -163,7 +163,10 @@ class LoadMoreFooter extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.xs),
-            OutlinedButton(onPressed: onLoadMore, child: const Text('Try again')),
+            OutlinedButton(
+              onPressed: onLoadMore,
+              child: const Text('Try again'),
+            ),
           ],
         ),
       );
@@ -241,9 +244,7 @@ class RefreshFailedNotice extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.text,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.text),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),

@@ -139,13 +139,13 @@ class _SellerVerificationScreenState extends State<SellerVerificationScreen> {
         SellerVerificationNotSubmittedView(
           onStart: () => _openForm(isResubmission: false),
         ),
-      SellerVerificationUiStatus.rejected =>
-        SellerVerificationRejectedView(
-          verification: verification,
-          onResubmit: () => _openForm(isResubmission: true),
-        ),
-      SellerVerificationUiStatus.approved =>
-        SellerVerificationApprovedView(verification: verification),
+      SellerVerificationUiStatus.rejected => SellerVerificationRejectedView(
+        verification: verification,
+        onResubmit: () => _openForm(isResubmission: true),
+      ),
+      SellerVerificationUiStatus.approved => SellerVerificationApprovedView(
+        verification: verification,
+      ),
       _ => SellerVerificationAwaitingReviewView(verification: verification),
     };
   }

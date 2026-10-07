@@ -127,12 +127,15 @@ void main() {
       expect(recorded.single.query['livestock_type'], 'Cattle');
     });
 
-    test('sends no status, seller_id or role filter, so none can be forged', () {
-      // A compile-time guarantee restated as a test: the only query keys the
-      // service can emit are the ones in its allow-list, so a client-side
-      // "show me sold listings" is not expressible.
-      expect(MarketplaceEndpoints.browse, '/listings');
-    });
+    test(
+      'sends no status, seller_id or role filter, so none can be forged',
+      () {
+        // A compile-time guarantee restated as a test: the only query keys the
+        // service can emit are the ones in its allow-list, so a client-side
+        // "show me sold listings" is not expressible.
+        expect(MarketplaceEndpoints.browse, '/listings');
+      },
+    );
 
     test('parses the listings and pagination out of the envelope', () async {
       final MarketplaceService service = buildService(
@@ -154,28 +157,30 @@ void main() {
       expect(page.hasMore, isTrue);
     });
 
-    test('translates a 401 into an unauthorized ApiException and clears the token',
-        () async {
-      final MarketplaceService service = buildService(
-        (_) async => unauthorizedResponse(),
-      );
+    test(
+      'translates a 401 into an unauthorized ApiException and clears the token',
+      () async {
+        final MarketplaceService service = buildService(
+          (_) async => unauthorizedResponse(),
+        );
 
-      await expectLater(
-        service.browse(),
-        throwsA(
-          isA<ApiException>().having(
-            (ApiException e) => e.kind,
-            'kind',
-            ApiErrorKind.unauthorized,
+        await expectLater(
+          service.browse(),
+          throwsA(
+            isA<ApiException>().having(
+              (ApiException e) => e.kind,
+              'kind',
+              ApiErrorKind.unauthorized,
+            ),
           ),
-        ),
-      );
-      expect(
-        tokenStore.token,
-        isNull,
-        reason: 'a 401 must clear the stored token so nothing retries it',
-      );
-    });
+        );
+        expect(
+          tokenStore.token,
+          isNull,
+          reason: 'a 401 must clear the stored token so nothing retries it',
+        );
+      },
+    );
 
     test('translates a 403 into a forbidden ApiException', () async {
       final MarketplaceService service = buildService(
@@ -194,45 +199,47 @@ void main() {
       );
     });
 
-    test('translates a 422 into a validation ApiException with field errors',
-        () async {
-      final MarketplaceService service = buildService(
-        (_) async => validationResponse(),
-      );
+    test(
+      'translates a 422 into a validation ApiException with field errors',
+      () async {
+        final MarketplaceService service = buildService(
+          (_) async => validationResponse(),
+        );
 
-      try {
-        await service.browse(perPage: 500);
-        fail('expected an ApiException');
-      } on ApiException catch (error) {
-        expect(error.kind, ApiErrorKind.validation);
-        expect(error.validationErrors.keys, contains('per_page'));
-      }
-    });
+        try {
+          await service.browse(perPage: 500);
+          fail('expected an ApiException');
+        } on ApiException catch (error) {
+          expect(error.kind, ApiErrorKind.validation);
+          expect(error.validationErrors.keys, contains('per_page'));
+        }
+      },
+    );
 
-    test('translates a non-JSON 200 into a malformedResponse ApiException',
-        () async {
-      final MarketplaceService service = buildService(
-        (_) async => http.Response('<html>gateway timeout</html>', 200),
-      );
+    test(
+      'translates a non-JSON 200 into a malformedResponse ApiException',
+      () async {
+        final MarketplaceService service = buildService(
+          (_) async => http.Response('<html>gateway timeout</html>', 200),
+        );
 
-      await expectLater(
-        service.browse(),
-        throwsA(
-          isA<ApiException>().having(
-            (ApiException e) => e.kind,
-            'kind',
-            ApiErrorKind.malformedResponse,
+        await expectLater(
+          service.browse(),
+          throwsA(
+            isA<ApiException>().having(
+              (ApiException e) => e.kind,
+              'kind',
+              ApiErrorKind.malformedResponse,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('translates a 200 whose data is not an object', () async {
       final MarketplaceService service = buildService(
-        (_) async => http.Response(
-          '{"success":true,"message":"ok","data":"nope"}',
-          200,
-        ),
+        (_) async =>
+            http.Response('{"success":true,"message":"ok","data":"nope"}', 200),
       );
 
       await expectLater(
@@ -331,18 +338,20 @@ void main() {
       Future<http.Response> Function(RecordedRequest request) handler,
     ) => MarketplaceRepository(buildService(handler));
 
-    test('clamps a page size above the server cap instead of provoking a 422',
-        () async {
-      // `IndexListingRequest` rejects per_page > 50 with a 422. Clamping here
-      // means a screen asking for 200 gets 50 listings, not an error.
-      final MarketplaceRepository repository = buildRepository(
-        (_) async => marketplaceListResponse(),
-      );
+    test(
+      'clamps a page size above the server cap instead of provoking a 422',
+      () async {
+        // `IndexListingRequest` rejects per_page > 50 with a 422. Clamping here
+        // means a screen asking for 200 gets 50 listings, not an error.
+        final MarketplaceRepository repository = buildRepository(
+          (_) async => marketplaceListResponse(),
+        );
 
-      await repository.browse(perPage: 200);
+        await repository.browse(perPage: 200);
 
-      expect(recorded.single.query['per_page'], '50');
-    });
+        expect(recorded.single.query['per_page'], '50');
+      },
+    );
 
     test('clamps a page size below one to one', () async {
       final MarketplaceRepository repository = buildRepository(
@@ -375,33 +384,38 @@ void main() {
       expect(recorded.single.query['page'], '1');
     });
 
-    test('passes a page size inside the allowed range through unchanged',
-        () async {
-      final MarketplaceRepository repository = buildRepository(
-        (_) async => marketplaceListResponse(),
-      );
+    test(
+      'passes a page size inside the allowed range through unchanged',
+      () async {
+        final MarketplaceRepository repository = buildRepository(
+          (_) async => marketplaceListResponse(),
+        );
 
-      await repository.browse(perPage: 25);
+        await repository.browse(perPage: 25);
 
-      expect(recorded.single.query['per_page'], '25');
-    });
+        expect(recorded.single.query['per_page'], '25');
+      },
+    );
 
-    test('propagates an ApiException rather than translating it again', () async {
-      final MarketplaceRepository repository = buildRepository(
-        (_) async => unauthorizedResponse(),
-      );
+    test(
+      'propagates an ApiException rather than translating it again',
+      () async {
+        final MarketplaceRepository repository = buildRepository(
+          (_) async => unauthorizedResponse(),
+        );
 
-      await expectLater(
-        repository.browse(),
-        throwsA(
-          isA<ApiException>().having(
-            (ApiException e) => e.kind,
-            'kind',
-            ApiErrorKind.unauthorized,
+        await expectLater(
+          repository.browse(),
+          throwsA(
+            isA<ApiException>().having(
+              (ApiException e) => e.kind,
+              'kind',
+              ApiErrorKind.unauthorized,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('forwards a detail request and its notFound outcome', () async {
       final MarketplaceRepository repository = buildRepository(

@@ -143,5 +143,7 @@ AuthRepository buildAuthRepository(
 /// A [User] built from the canonical fixture.
 User fixtureUser({int id = 7, String name = 'Ana Reyes'}) =>
     AuthSession.fromJson(
-      authSessionJson(user: userJson(id: id, name: name)),
+      authSessionJson(
+        user: userJson(id: id, name: name),
+      ),
     ).user;

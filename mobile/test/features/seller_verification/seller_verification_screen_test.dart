@@ -38,17 +38,22 @@ void main() {
       await SellerVerificationHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler:
-            (_) async => sellerVerificationResponse(
-              verification: sellerVerificationJson(status: 'pending_review'),
-            ),
+        handler: (_) async => sellerVerificationResponse(
+          verification: sellerVerificationJson(status: 'pending_review'),
+        ),
       );
 
       expect(find.text('Under review'), findsOneWidget);
       // No way to start another application: the server answers that with a 409,
       // so offering the form here would walk the user into a dead end.
-      expect(find.widgetWithText(FilledButton, 'Start seller verification'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Resubmit Verification'), findsNothing);
+      expect(
+        find.widgetWithText(FilledButton, 'Start seller verification'),
+        findsNothing,
+      );
+      expect(
+        find.widgetWithText(FilledButton, 'Resubmit Verification'),
+        findsNothing,
+      );
     });
 
     testWidgets('shows the reason for a rejection and offers a resubmission', (
@@ -57,13 +62,12 @@ void main() {
       await SellerVerificationHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler:
-            (_) async => sellerVerificationResponse(
-              verification: sellerVerificationJson(
-                status: 'rejected',
-                adminNote: 'Business name does not match the reference.',
-              ),
-            ),
+        handler: (_) async => sellerVerificationResponse(
+          verification: sellerVerificationJson(
+            status: 'rejected',
+            adminNote: 'Business name does not match the reference.',
+          ),
+        ),
       );
 
       expect(find.text('Not approved'), findsOneWidget);
@@ -83,13 +87,12 @@ void main() {
       await SellerVerificationHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler:
-            (_) async => sellerVerificationResponse(
-              verification: sellerVerificationJson(
-                status: 'rejected',
-                adminNote: null,
-              ),
-            ),
+        handler: (_) async => sellerVerificationResponse(
+          verification: sellerVerificationJson(
+            status: 'rejected',
+            adminNote: null,
+          ),
+        ),
       );
 
       expect(find.text('Not approved'), findsOneWidget);
@@ -102,28 +105,33 @@ void main() {
       await SellerVerificationHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler:
-            (_) async => sellerVerificationResponse(
-              verification: sellerVerificationJson(status: 'approved'),
-            ),
+        handler: (_) async => sellerVerificationResponse(
+          verification: sellerVerificationJson(status: 'approved'),
+        ),
       );
 
       expect(find.text('Approved — you are a seller'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Start seller verification'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Resubmit Verification'), findsNothing);
+      expect(
+        find.widgetWithText(FilledButton, 'Start seller verification'),
+        findsNothing,
+      );
+      expect(
+        find.widgetWithText(FilledButton, 'Resubmit Verification'),
+        findsNothing,
+      );
     });
 
     testWidgets('re-reads the account when an approval is shown', (
       WidgetTester tester,
     ) async {
-      final SellerVerificationHarness harness = await SellerVerificationHarness.pump(
-        tester,
-        tokenStore: tokenStore,
-        handler:
-            (_) async => sellerVerificationResponse(
+      final SellerVerificationHarness harness =
+          await SellerVerificationHarness.pump(
+            tester,
+            tokenStore: tokenStore,
+            handler: (_) async => sellerVerificationResponse(
               verification: sellerVerificationJson(status: 'approved'),
             ),
-      );
+          );
 
       // The capability lives on the account, so the app asks `/auth/me` again
       // rather than deciding from the application record.
@@ -195,11 +203,12 @@ void main() {
     testWidgets('requires a business name before sending anything', (
       WidgetTester tester,
     ) async {
-      final SellerVerificationHarness harness = await SellerVerificationHarness.pump(
-        tester,
-        tokenStore: tokenStore,
-        handler: (_) async => sellerVerificationNotFoundResponse(),
-      );
+      final SellerVerificationHarness harness =
+          await SellerVerificationHarness.pump(
+            tester,
+            tokenStore: tokenStore,
+            handler: (_) async => sellerVerificationNotFoundResponse(),
+          );
       await openSellerVerificationForm(tester, resubmission: false);
 
       await tester.tap(find.widgetWithText(FilledButton, 'Submit application'));
@@ -216,15 +225,14 @@ void main() {
     testWidgets('submits and returns to the under-review status', (
       WidgetTester tester,
     ) async {
-      final SellerVerificationHarness harness = await SellerVerificationHarness.pump(
-        tester,
-        tokenStore: tokenStore,
-        handler:
-            (RecordedRequest request) async =>
-                request.method == 'POST'
-                    ? sellerVerificationCreatedResponse()
-                    : sellerVerificationNotFoundResponse(),
-      );
+      final SellerVerificationHarness harness =
+          await SellerVerificationHarness.pump(
+            tester,
+            tokenStore: tokenStore,
+            handler: (RecordedRequest request) async => request.method == 'POST'
+                ? sellerVerificationCreatedResponse()
+                : sellerVerificationNotFoundResponse(),
+          );
       await openSellerVerificationForm(tester, resubmission: false);
 
       await tester.enterText(
@@ -240,7 +248,9 @@ void main() {
       expect(find.byType(SellerVerificationScreen), findsOneWidget);
       expect(find.text('Under review'), findsOneWidget);
       expect(
-        harness.recorded.singleWhere((RecordedRequest r) => r.method == 'POST').body,
+        harness.recorded
+            .singleWhere((RecordedRequest r) => r.method == 'POST')
+            .body,
         containsPair('business_name', 'Rizal Farms'),
       );
     });
@@ -251,15 +261,15 @@ void main() {
       await SellerVerificationHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler:
-            (RecordedRequest request) async =>
-                request.method == 'POST'
-                    ? sellerVerificationValidationResponse(
-                      errors: <String, Object>{
-                        'business_name': <String>['The business name field is required.'],
-                      },
-                    )
-                    : sellerVerificationNotFoundResponse(),
+        handler: (RecordedRequest request) async => request.method == 'POST'
+            ? sellerVerificationValidationResponse(
+                errors: <String, Object>{
+                  'business_name': <String>[
+                    'The business name field is required.',
+                  ],
+                },
+              )
+            : sellerVerificationNotFoundResponse(),
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
@@ -285,18 +295,19 @@ void main() {
       await SellerVerificationHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler:
-            (RecordedRequest request) async {
-              if (request.method == 'POST') {
-                return sellerVerificationConflictResponse();
-              }
-              reads++;
-              return reads == 1
-                  ? sellerVerificationNotFoundResponse()
-                  : sellerVerificationResponse(
-                    verification: sellerVerificationJson(status: 'pending_review'),
-                  );
-            },
+        handler: (RecordedRequest request) async {
+          if (request.method == 'POST') {
+            return sellerVerificationConflictResponse();
+          }
+          reads++;
+          return reads == 1
+              ? sellerVerificationNotFoundResponse()
+              : sellerVerificationResponse(
+                  verification: sellerVerificationJson(
+                    status: 'pending_review',
+                  ),
+                );
+        },
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
@@ -326,11 +337,9 @@ void main() {
       await SellerVerificationHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler:
-            (RecordedRequest request) async =>
-                request.method == 'POST'
-                    ? gate.future
-                    : sellerVerificationNotFoundResponse(),
+        handler: (RecordedRequest request) async => request.method == 'POST'
+            ? gate.future
+            : sellerVerificationNotFoundResponse(),
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
@@ -370,15 +379,14 @@ void main() {
       await SellerVerificationHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler:
-            (_) async => sellerVerificationResponse(
-              verification: sellerVerificationJson(
-                status: 'rejected',
-                businessName: 'Santos Cattle Co.',
-                businessLocation: 'Mabalacat, Pampanga',
-                adminNote: 'Name does not match the reference.',
-              ),
-            ),
+        handler: (_) async => sellerVerificationResponse(
+          verification: sellerVerificationJson(
+            status: 'rejected',
+            businessName: 'Santos Cattle Co.',
+            businessLocation: 'Mabalacat, Pampanga',
+            adminNote: 'Name does not match the reference.',
+          ),
+        ),
       );
       await openSellerVerificationForm(tester, resubmission: true);
 

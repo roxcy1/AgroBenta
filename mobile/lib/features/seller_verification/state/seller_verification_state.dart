@@ -107,12 +107,11 @@ class SellerVerificationState {
   /// False while one is open, once it is approved, and while a request of our own
   /// is in flight — the last of which is what stops a double tap from creating
   /// two applications.
-  bool get canSubmit =>
-      switch (status) {
-        SellerVerificationUiStatus.notSubmitted => true,
-        SellerVerificationUiStatus.rejected => true,
-        _ => false,
-      };
+  bool get canSubmit => switch (status) {
+    SellerVerificationUiStatus.notSubmitted => true,
+    SellerVerificationUiStatus.rejected => true,
+    _ => false,
+  };
 
   /// Whether the screen is waiting on a request of ours.
   bool get isBusy =>

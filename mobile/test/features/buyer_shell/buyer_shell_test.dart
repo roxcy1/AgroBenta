@@ -46,10 +46,8 @@ void main() {
     final AuthController authController = AuthController(
       buildAuthRepository(
         tokenStore,
-        (_) async => http.Response(
-          jsonEncode(successEnvelope(data: userJson())),
-          200,
-        ),
+        (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
       ),
     );
     addTearDown(authController.dispose);
@@ -93,17 +91,16 @@ void main() {
     );
 
     expect(
-      bar.destinations
-          .cast<Widget>()
-          .whereType<NavigationDestination>()
-          .map((NavigationDestination d) => d.label),
+      bar.destinations.cast<Widget>().whereType<NavigationDestination>().map(
+        (NavigationDestination d) => d.label,
+      ),
       <String>['Home', 'Marketplace'],
     );
   });
 
   testWidgets('adds no placeholder destinations for later phases', (
     WidgetTester tester,
-    ) async {
+  ) async {
     await pumpShell(tester);
 
     // Transactions, Notifications and Profile are M3+. A disabled or "coming
@@ -178,7 +175,8 @@ void main() {
     expect(
       listCalls,
       1,
-      reason: 'the shell keeps both tabs alive, so returning must not re-fetch '
+      reason:
+          'the shell keeps both tabs alive, so returning must not re-fetch '
           'page 1 and throw away what the buyer had',
     );
     expect(find.text('Kept'), findsOneWidget);

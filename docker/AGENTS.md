@@ -61,3 +61,43 @@ After Docker changes:
 * Confirm existing services were not unintentionally broken.
 
 Any significant Docker architecture change must be clearly reported before completion.
+
+## Laravel bootstrap caching (performance)
+
+The Laravel container runs with cached configuration, events, views and routes to
+avoid re-booting the framework on every request over the Windows bind mount. On a
+low-RAM Windows host this is the difference between sub-second and multi-second
+API responses.
+
+Refresh the caches after changing anything they bake in — `.env`, `config/`,
+`routes/`, composer package additions, or blade views:
+
+```sh
+docker compose exec php php artisan optimize
+```
+
+The `.env` file in particular is baked into the config cache: an `.env` change is
+**ignored** until `optimize` is re-run.
+
+Clear them again for fully dynamic development (or before debugger/coverage runs
+that read annotations) with:
+
+```sh
+docker compose exec php php artisan optimize:clear
+```
+
+`backend/routes/api.php` deliberately declares no route closures (a closure
+cannot be serialized into the route cache) — new routes must use controller or
+invokable-controller classes.
+
+While the config cache exists, Laravel skips loading `.env`, so runtime
+`env(...)` calls (e.g. the `AdminSeeder`, which reads `ADMIN_EMAIL` /
+`ADMIN_PASSWORD`) return `null` and fall back to `CHANGE_THIS_*` placeholders.
+Seeding after a `migrate:fresh` therefore silently creates a placeholder admin
+that cannot log in. Seed with the caches cleared, then re-apply them:
+
+```sh
+docker compose exec php php artisan optimize:clear
+docker compose exec php php artisan db:seed --force
+docker compose exec php php artisan optimize
+```

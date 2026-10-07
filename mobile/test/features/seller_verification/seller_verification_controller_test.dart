@@ -29,16 +29,14 @@ void main() {
 
   group('load()', () {
     test('reports "never submitted" for a 404, not a failure', () async {
-      final SellerVerificationController controller =
-          build((_) async => sellerVerificationNotFoundResponse());
+      final SellerVerificationController controller = build(
+        (_) async => sellerVerificationNotFoundResponse(),
+      );
       addTearDown(controller.dispose);
 
       await controller.load();
 
-      expect(
-        controller.state.status,
-        SellerVerificationUiStatus.notSubmitted,
-      );
+      expect(controller.state.status, SellerVerificationUiStatus.notSubmitted);
       expect(controller.state.verification, isNull);
       expect(controller.state.errorMessage, isNull);
       expect(controller.state.canSubmit, isTrue);
@@ -46,11 +44,11 @@ void main() {
 
     test('collapses submitted and pending_review into awaiting review', () async {
       for (final String status in <String>['submitted', 'pending_review']) {
-        final SellerVerificationController controller =
-            build(
-              (_) async =>
-                  sellerVerificationResponse(verification: sellerVerificationJson(status: status)),
-            );
+        final SellerVerificationController controller = build(
+          (_) async => sellerVerificationResponse(
+            verification: sellerVerificationJson(status: status),
+          ),
+        );
         addTearDown(controller.dispose);
 
         await controller.load();
@@ -66,15 +64,14 @@ void main() {
     });
 
     test('reports a rejection and permits a resubmission', () async {
-      final SellerVerificationController controller =
-          build(
-            (_) async => sellerVerificationResponse(
-              verification: sellerVerificationJson(
-                status: 'rejected',
-                adminNote: 'Name does not match the reference.',
-              ),
-            ),
-          );
+      final SellerVerificationController controller = build(
+        (_) async => sellerVerificationResponse(
+          verification: sellerVerificationJson(
+            status: 'rejected',
+            adminNote: 'Name does not match the reference.',
+          ),
+        ),
+      );
       addTearDown(controller.dispose);
 
       await controller.load();
@@ -85,12 +82,11 @@ void main() {
     });
 
     test('reports an approval and stops offering the form', () async {
-      final SellerVerificationController controller =
-          build(
-            (_) async => sellerVerificationResponse(
-              verification: sellerVerificationJson(status: 'approved'),
-            ),
-          );
+      final SellerVerificationController controller = build(
+        (_) async => sellerVerificationResponse(
+          verification: sellerVerificationJson(status: 'approved'),
+        ),
+      );
       addTearDown(controller.dispose);
 
       await controller.load();
@@ -101,13 +97,12 @@ void main() {
 
     test('keeps the previous record visible when a reload fails', () async {
       var shouldFail = false;
-      final SellerVerificationController controller =
-          build((_) async {
-            if (shouldFail) {
-              throw http.ClientException('connection refused');
-            }
-            return sellerVerificationResponse();
-          });
+      final SellerVerificationController controller = build((_) async {
+        if (shouldFail) {
+          throw http.ClientException('connection refused');
+        }
+        return sellerVerificationResponse();
+      });
       addTearDown(controller.dispose);
 
       await controller.load();
@@ -123,11 +118,10 @@ void main() {
 
     test('ignores a second read while one is in flight', () async {
       var calls = 0;
-      final SellerVerificationController controller =
-          build((_) async {
-            calls++;
-            return sellerVerificationResponse();
-          });
+      final SellerVerificationController controller = build((_) async {
+        calls++;
+        return sellerVerificationResponse();
+      });
       addTearDown(controller.dispose);
 
       final Future<void> first = controller.load();
@@ -139,16 +133,15 @@ void main() {
 
     test('re-reads the account once after an approval', () async {
       final List<String> refreshes = <String>[];
-      final SellerVerificationController controller =
-          build(
-            (_) async => sellerVerificationResponse(
-              verification: sellerVerificationJson(status: 'approved'),
-            ),
-            onCapabilityMayHaveChanged: () async {
-              refreshes.add('refreshed');
-              return true;
-            },
-          );
+      final SellerVerificationController controller = build(
+        (_) async => sellerVerificationResponse(
+          verification: sellerVerificationJson(status: 'approved'),
+        ),
+        onCapabilityMayHaveChanged: () async {
+          refreshes.add('refreshed');
+          return true;
+        },
+      );
       addTearDown(controller.dispose);
 
       await controller.load();
@@ -160,14 +153,13 @@ void main() {
 
     test('does not refresh the account for a non-approval', () async {
       final List<String> refreshes = <String>[];
-      final SellerVerificationController controller =
-          build(
-            (_) async => sellerVerificationResponse(),
-            onCapabilityMayHaveChanged: () async {
-              refreshes.add('refreshed');
-              return true;
-            },
-          );
+      final SellerVerificationController controller = build(
+        (_) async => sellerVerificationResponse(),
+        onCapabilityMayHaveChanged: () async {
+          refreshes.add('refreshed');
+          return true;
+        },
+      );
       addTearDown(controller.dispose);
 
       await controller.load();
@@ -179,8 +171,9 @@ void main() {
       // Filing an application cannot make anybody a seller. The state carries a
       // verification and nothing else — there is no capability field to set, by
       // construction.
-      final SellerVerificationController controller =
-          build((_) async => sellerVerificationCreatedResponse());
+      final SellerVerificationController controller = build(
+        (_) async => sellerVerificationCreatedResponse(),
+      );
       addTearDown(controller.dispose);
 
       await controller.load();
@@ -188,7 +181,10 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(created, isTrue);
-      expect(controller.state.status, SellerVerificationUiStatus.awaitingReview);
+      expect(
+        controller.state.status,
+        SellerVerificationUiStatus.awaitingReview,
+      );
       expect(
         recorded.where((RecordedRequest r) => r.method == 'POST'),
         hasLength(1),
@@ -198,12 +194,11 @@ void main() {
 
   group('submit()', () {
     test('publishes the record the server created', () async {
-      final SellerVerificationController controller =
-          build(
-            (_) async => sellerVerificationCreatedResponse(
-              verification: sellerVerificationJson(id: 12, status: 'submitted'),
-            ),
-          );
+      final SellerVerificationController controller = build(
+        (_) async => sellerVerificationCreatedResponse(
+          verification: sellerVerificationJson(id: 12, status: 'submitted'),
+        ),
+      );
       addTearDown(controller.dispose);
       await controller.load();
 
@@ -220,14 +215,15 @@ void main() {
     test('a second tap while submitting does not reach the network', () async {
       final Completer<http.Response> gate = Completer<http.Response>();
       var posts = 0;
-      final SellerVerificationController controller =
-          build((RecordedRequest request) async {
-            if (request.method == 'POST') {
-              posts++;
-              return gate.future;
-            }
-            return sellerVerificationResponse();
-          });
+      final SellerVerificationController controller = build((
+        RecordedRequest request,
+      ) async {
+        if (request.method == 'POST') {
+          posts++;
+          return gate.future;
+        }
+        return sellerVerificationResponse();
+      });
       addTearDown(controller.dispose);
       await controller.load();
 
@@ -249,17 +245,17 @@ void main() {
       // A first application: nothing on file, so a `422` is the ordinary
       // "something in that form is wrong" case and the screen must stay on the
       // form the user was filling in.
-      final SellerVerificationController controller =
-          build(
-            (RecordedRequest request) async =>
-                request.method == 'POST'
-                    ? sellerVerificationValidationResponse(
-                      errors: <String, Object>{
-                        'business_name': <String>['The business name field is required.'],
-                      },
-                    )
-                    : sellerVerificationNotFoundResponse(),
-          );
+      final SellerVerificationController controller = build(
+        (RecordedRequest request) async => request.method == 'POST'
+            ? sellerVerificationValidationResponse(
+                errors: <String, Object>{
+                  'business_name': <String>[
+                    'The business name field is required.',
+                  ],
+                },
+              )
+            : sellerVerificationNotFoundResponse(),
+      );
       addTearDown(controller.dispose);
       await controller.load();
 
@@ -272,55 +268,48 @@ void main() {
       );
       // Back to the state the form was opened from, so the user keeps their
       // place instead of staring at a spinner.
-      expect(
-        controller.state.status,
-        SellerVerificationUiStatus.notSubmitted,
-      );
+      expect(controller.state.status, SellerVerificationUiStatus.notSubmitted);
     });
 
-    test('a 422 after a rejection stays on the rejection, not the form', () async {
-      // The other half of the same rule: a resubmission that fails must return to
-      // the rejected state, so the reason stays on screen next to the retry.
-      final SellerVerificationController controller =
-          build(
-            (RecordedRequest request) async =>
-                request.method == 'POST'
-                    ? sellerVerificationValidationResponse()
-                    : sellerVerificationResponse(
-                      verification: sellerVerificationJson(
-                        status: 'rejected',
-                        adminNote: 'Name does not match the reference.',
-                      ),
-                    ),
-          );
-      addTearDown(controller.dispose);
-      await controller.load();
+    test(
+      'a 422 after a rejection stays on the rejection, not the form',
+      () async {
+        // The other half of the same rule: a resubmission that fails must return to
+        // the rejected state, so the reason stays on screen next to the retry.
+        final SellerVerificationController controller = build(
+          (RecordedRequest request) async => request.method == 'POST'
+              ? sellerVerificationValidationResponse()
+              : sellerVerificationResponse(
+                  verification: sellerVerificationJson(
+                    status: 'rejected',
+                    adminNote: 'Name does not match the reference.',
+                  ),
+                ),
+        );
+        addTearDown(controller.dispose);
+        await controller.load();
 
-      await controller.submit(businessName: '');
+        await controller.submit(businessName: '');
 
-      expect(
-        controller.state.status,
-        SellerVerificationUiStatus.rejected,
-      );
-      expect(controller.state.verification!.adminNote, isNotNull);
-    });
+        expect(controller.state.status, SellerVerificationUiStatus.rejected);
+        expect(controller.state.verification!.adminNote, isNotNull);
+      },
+    );
 
     test('treats a 409 as information and re-reads the real state', () async {
       var reads = 0;
-      final SellerVerificationController controller =
-          build((RecordedRequest request) async {
-            if (request.method == 'POST') {
-              return sellerVerificationConflictResponse();
-            }
-            reads++;
-            // The server says one is already open; the follow-up read proves it.
-            return sellerVerificationResponse(
-              verification: sellerVerificationJson(
-                id: 3,
-                status: 'pending_review',
-              ),
-            );
-          });
+      final SellerVerificationController controller = build((
+        RecordedRequest request,
+      ) async {
+        if (request.method == 'POST') {
+          return sellerVerificationConflictResponse();
+        }
+        reads++;
+        // The server says one is already open; the follow-up read proves it.
+        return sellerVerificationResponse(
+          verification: sellerVerificationJson(id: 3, status: 'pending_review'),
+        );
+      });
       addTearDown(controller.dispose);
       await controller.load();
 
@@ -338,13 +327,11 @@ void main() {
     });
 
     test('reports a 403 as a form-level error, not a field error', () async {
-      final SellerVerificationController controller =
-          build(
-            (RecordedRequest request) async =>
-                request.method == 'POST'
-                    ? sellerVerificationForbiddenResponse()
-                    : sellerVerificationResponse(),
-          );
+      final SellerVerificationController controller = build(
+        (RecordedRequest request) async => request.method == 'POST'
+            ? sellerVerificationForbiddenResponse()
+            : sellerVerificationResponse(),
+      );
       addTearDown(controller.dispose);
       await controller.load();
 
@@ -355,13 +342,14 @@ void main() {
     });
 
     test('clearError() drops the form-level and conflict messages', () async {
-      final SellerVerificationController controller =
-          build((RecordedRequest request) async {
-            if (request.method == 'POST') {
-              return sellerVerificationConflictResponse();
-            }
-            return sellerVerificationResponse();
-          });
+      final SellerVerificationController controller = build((
+        RecordedRequest request,
+      ) async {
+        if (request.method == 'POST') {
+          return sellerVerificationConflictResponse();
+        }
+        return sellerVerificationResponse();
+      });
       addTearDown(controller.dispose);
       await controller.load();
       await controller.submit(businessName: 'Rizal Farms');

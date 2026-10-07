@@ -34,13 +34,16 @@ void main() {
       expect(verification.status, SellerVerificationStatus.submitted);
     });
 
-    test('sends no id, because the record is resolved from the session', () async {
-      await service.current();
+    test(
+      'sends no id, because the record is resolved from the session',
+      () async {
+        await service.current();
 
-      // The path has no identifier at all. That is what makes "read your own
-      // verification" impossible to point at somebody else's record.
-      expect(recorded.single.path, isNot(contains(RegExp(r'/\d+'))));
-    });
+        // The path has no identifier at all. That is what makes "read your own
+        // verification" impossible to point at somebody else's record.
+        expect(recorded.single.path, isNot(contains(RegExp(r'/\d+'))));
+      },
+    );
 
     test('throws notFound when the user has never submitted', () async {
       service = build((_) async => sellerVerificationNotFoundResponse());
@@ -86,22 +89,25 @@ void main() {
       });
     });
 
-    test('omits blank optional fields rather than sending empty strings', () async {
-      service = build((_) async => sellerVerificationCreatedResponse());
+    test(
+      'omits blank optional fields rather than sending empty strings',
+      () async {
+        service = build((_) async => sellerVerificationCreatedResponse());
 
-      await service.submit(
-        businessName: 'Rizal Farms',
-        businessLocation: '   ',
-        businessDescription: '',
-        idDocumentRef: null,
-      );
+        await service.submit(
+          businessName: 'Rizal Farms',
+          businessLocation: '   ',
+          businessDescription: '',
+          idDocumentRef: null,
+        );
 
-      // An empty string would be stored and later read as "they said nothing"
-      // rather than "they did not say". Only the required key is sent.
-      expect(recorded.single.body, <String, dynamic>{
-        'business_name': 'Rizal Farms',
-      });
-    });
+        // An empty string would be stored and later read as "they said nothing"
+        // rather than "they did not say". Only the required key is sent.
+        expect(recorded.single.body, <String, dynamic>{
+          'business_name': 'Rizal Farms',
+        });
+      },
+    );
 
     test('trims values before sending', () async {
       service = build((_) async => sellerVerificationCreatedResponse());

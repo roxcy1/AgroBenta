@@ -146,12 +146,7 @@ class ApiClient {
     Map<String, dynamic>? query,
   }) async {
     final (response: http.Response response, authenticated: bool sentToken) =
-        await _perform(
-          method: method,
-          path: path,
-          body: body,
-          query: query,
-        );
+        await _perform(method: method, path: path, body: body, query: query);
 
     // 204 and 205 carry no body by definition. Laravel uses 204 for deletes.
     if (response.statusCode == 204 || response.statusCode == 205) {
@@ -187,8 +182,7 @@ class ApiClient {
         if (!envelope.success) {
           throw ApiException(
             kind: ApiErrorKind.server,
-            message:
-                envelope.message ?? 'The server rejected the request.',
+            message: envelope.message ?? 'The server rejected the request.',
             statusCode: response.statusCode,
             serverMessage: envelope.message,
           );
@@ -216,9 +210,7 @@ class ApiClient {
     Object? body,
     Map<String, dynamic>? query,
   }) async {
-    final Uri uri = Uri.parse(
-      AppConfig.resolve(path, query: query),
-    );
+    final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
 
     final Map<String, String> headers = <String, String>{
       'Accept': ApiConstants.acceptJson,
@@ -238,7 +230,8 @@ class ApiClient {
           '${ApiConstants.bearerPrefix} $token';
     }
 
-    final http.Request request = http.Request(method, uri)..headers.addAll(headers);
+    final http.Request request = http.Request(method, uri)
+      ..headers.addAll(headers);
 
     if (body != null) {
       request.body = jsonEncode(body);
@@ -369,7 +362,8 @@ class ApiClient {
       ),
       422 => ApiException(
         kind: ApiErrorKind.validation,
-        message: _messageFrom(decoded) ?? 'Please check the highlighted fields.',
+        message:
+            _messageFrom(decoded) ?? 'Please check the highlighted fields.',
         statusCode: 422,
         serverMessage: _messageFrom(decoded),
         validationErrors: _validationErrorsFrom(decoded),
@@ -384,8 +378,7 @@ class ApiClient {
       ),
       _ when response.statusCode >= 500 => ApiException(
         kind: ApiErrorKind.server,
-        message:
-            _messageFrom(decoded) ?? 'Something went wrong on the server.',
+        message: _messageFrom(decoded) ?? 'Something went wrong on the server.',
         statusCode: response.statusCode,
         serverMessage: _messageFrom(decoded),
       ),
@@ -400,12 +393,18 @@ class ApiClient {
 
   /// Fallback wording for a `409` that carried no message.
   ///
-  /// The only `409` in this app's contract is "a verification is already in
-  /// review", so the fallback says that rather than something generic. It exists
-  /// because the alternative — "The request failed" — is actively misleading
-  /// here: the user did nothing wrong and cannot fix it by trying again.
+  /// A `409` always means the request was well-formed but cannot be applied to
+  /// the item's current state — a verification that is already in review, a draft
+  /// that is already submitted, an active listing that cannot be deleted. The
+  /// wording is deliberately neutral so it cannot mislead on any of them, and it
+  /// exists because the alternative, "The request failed", is actively wrong: the
+  /// user did nothing wrong and retrying identically will not help.
+  ///
+  /// Every `409` this app's contract produces is raised server-side with an
+  /// explicit `abort(409, '...')` message, so this is a last resort rather than
+  /// what users normally see.
   static const String _defaultConflictMessage =
-      'A seller verification is already in review.';
+      'This action is not possible while the item is in its current state.';
 
   /// Reads the `message` field from a Laravel error body.  ///
   /// Laravel returns a bare JSON string for `abort(403, '...')`, and
@@ -444,9 +443,9 @@ class ApiClient {
         if (entry.key is String)
           entry.key as String: switch (entry.value) {
             String message => <String>[message],
-            List<dynamic> messages => messages
-                .whereType<String>()
-                .toList(growable: false),
+            List<dynamic> messages => messages.whereType<String>().toList(
+              growable: false,
+            ),
             _ => const <String>[],
           },
     };

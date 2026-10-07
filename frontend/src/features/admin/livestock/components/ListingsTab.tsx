@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { useListings } from '../api/useListings';
+import type { Listing } from '../api/useListings';
+import ListingReviewDialog from './ListingReviewDialog';
+import type { ModerationOption } from './listingModeration';
+import { moderationOptionsFor, statusLabel } from './listingModeration';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -43,6 +47,10 @@ export function ListingsTab() {
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
+  const [decision, setDecision] = useState<{
+    listing: Listing;
+    option: ModerationOption;
+  } | null>(null);
 
   const { data, isLoading, error, refetch } = useListings({
     search: search || undefined,
@@ -101,7 +109,8 @@ export function ListingsTab() {
   const pagination = data?.pagination;
 
   return (
-    <div className="lv-tab-content">
+    <>
+      <div className="lv-tab-content">
       <div className="lv-controls">
         <div className="lv-search-row">
           <div className="lv-search-wrapper">
@@ -164,6 +173,7 @@ export function ListingsTab() {
                   <th>Seller</th>
                   <th>Status</th>
                   <th>Date</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,10 +187,24 @@ export function ListingsTab() {
                     <td className="lv-seller-cell">{listing.seller.name}</td>
                     <td>
                       <span className={`lv-badge lv-badge--${listing.status}`}>
-                        {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
+                        {statusLabel(listing.status)}
                       </span>
                     </td>
                     <td className="lv-date-cell">{formatDate(listing.created_at)}</td>
+                    <td>
+                      <div className="lv-action-buttons">
+                        {moderationOptionsFor(listing.status).map((option) => (
+                          <button
+                            key={option.action}
+                            type="button"
+                            className={`lv-action-btn lv-action-btn--${option.variant}`}
+                            onClick={() => setDecision({ listing, option })}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -214,6 +238,19 @@ export function ListingsTab() {
           )}
         </>
       )}
-    </div>
+      </div>
+
+      {decision && (
+        <ListingReviewDialog
+          // Remounting per decision is what resets the note and any error: the
+          // dialog holds them as state, and a fresh key is cheaper and less
+          // error-prone than an effect that clears them after the fact.
+          key={`${decision.listing.id}-${decision.option.action}`}
+          listing={decision.listing}
+          option={decision.option}
+          onClose={() => setDecision(null)}
+        />
+      )}
+    </>
   );
 }

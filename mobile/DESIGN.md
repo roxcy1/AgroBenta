@@ -1,442 +1,1466 @@
-# AgroBenta Mobile — Design System
+# AgroBenta Mobile — DESIGN.md
 
-## 1. Scope and standing
+## 1. Purpose
 
-This file is the **visual source of truth for the Flutter mobile application
-only**. It governs `mobile/`.
+This document defines the visual and interaction design standards for the **AgroBenta Mobile Application** based on the approved mobile prototype.
 
-It does not replace the root `DESIGN.md`. That file owns the AgroBenta brand
-identity — the green, the restraint, the "this is a real product, not a design
-showcase" principle — and it stays exactly as it is.
+The mobile application follows the **Single Account Approach**:
 
-Root `DESIGN.md` §16 says *"Do not redesign the application into a completely
-different mobile-style interface."* Read that in context: it is a rule for the
-**Admin Web**, which must not collapse into a phone layout. It was not written
-as a prohibition on a native app existing. This app is mobile-first by
-definition, and it is a different client with a different job. The governing
-principle is the closing line of the root `DESIGN.md` §18 — when choosing
-between a visually impressive design and a simple, consistent one, **choose the
-simple, consistent one** — applied to a phone.
+- Every registered user starts as a buyer.
+- A user may choose **Become a Seller**.
+- Seller functionality becomes available only after seller verification and approval.
+- Buyer and seller capabilities remain under the same account.
+- The mobile application serves both **Buyer** and **Seller** experiences.
 
-The goal: **the Admin Web and this app should look like the same product
-without being identical interfaces.** Same green, same restraint, same
-typography discipline, same card and status language. Different layout,
-different navigation, different density — because they are different devices.
-
-Where this file and the root `DESIGN.md` differ, that difference is a
-deliberate, documented mobile adaptation, listed in §18. It is not a
-redefinition of the brand.
+The design target is a clean, modern, trustworthy agricultural marketplace that is easy to use on Android phones and remains practical for users with different levels of technical familiarity.
 
 ---
 
-## 2. Design direction
+# 2. Design Direction
 
-```text
-CLEAN · MODERN · PROFESSIONAL · AGRICULTURAL · MOBILE-FIRST
-```
+## 2.1 Overall Visual Style
 
-Priorities, in order:
+AgroBenta uses a:
 
-1. **Usability** — one clear way to do the obvious thing
-2. **Readability** — legible outdoors, one-handed, at arm's length
-3. **Clear navigation** — the current location is never in doubt
-4. **Touch-friendly interaction** — nothing important is small or fiddly
-5. **Consistent hierarchy** — one thing is obviously the most important thing
-6. **Agricultural identity** — credible and practical, not rustic-themed
+- Clean agricultural marketplace aesthetic
+- Professional but approachable appearance
+- Green-focused visual identity
+- White content surfaces
+- Rounded cards and form controls
+- Compact mobile layouts
+- Clear hierarchy
+- Minimal decorative elements
+- Strong use of livestock photography
+- Simple icons instead of text-heavy controls
+- Clear status indicators
+- Consistent bottom navigation
 
-A user may be standing in a field, in bright sun, on a cheap Android phone.
-Design for that.
+The interface should feel like a **real livestock marketplace application**, not a generic AI or banking application.
 
-### Avoid
+### Design Principles
 
-Excessive glassmorphism · full-screen transparency · claymorphism · neon
-colours · excessive gradients · decorative blobs · excessive animation ·
-oversized headings · excessive pill controls · futuristic UI · generic
-AI-generated dashboard styling · emoji as interface elements.
+1. **Clarity first**
+   - Users should immediately understand what they can do on each screen.
+   - Avoid unnecessary decorative elements.
 
-Subtle visual depth is welcome. Turning the whole interface into glassmorphism
-is not.
+2. **Agricultural identity**
+   - Use green as the primary brand color.
+   - Livestock photos should be prominent where appropriate.
+
+3. **Trust**
+   - Verification, seller status, transaction status, and system feedback must be visually clear.
+
+4. **Simple interaction**
+   - Use familiar controls such as search fields, chips, dropdowns, sliders, cards, buttons, and bottom navigation.
+
+5. **Consistent hierarchy**
+   - Screen title → supporting information → content → primary action.
+
+6. **Mobile-first**
+   - Designs must work comfortably on small Android screens.
+   - Avoid layouts that depend on large desktop dimensions.
 
 ---
 
-## 3. Colour
+# 3. Color System
 
-### Primary
+The prototype uses a dark agricultural green as the dominant brand color with white content surfaces and lighter green accents.
 
-**`#1B5E20`** — dark agricultural green. The AgroBenta identity.
+The following values are the implementation target and may be adjusted slightly if the existing AgroBenta branding requires exact matching.
 
-Green is the main identity and accent colour. Use it for primary actions,
-active navigation, selected states, key status indicators, and links where
-appropriate.
-
-Main content sits on white and light neutral backgrounds with subtle borders and
-restrained shadows — never on green.
-
-### Palette
-
-Defined once in `lib/core/theme/app_colors.dart`. Every value is a 1:1 mirror
-of a token already in `frontend/src/index.css` (`:root`), which is what keeps
-the two products visibly the same brand.
-
-| Token | Value | Use |
+| Purpose | Color | Hex |
 |---|---|---|
-| `primary` | `#1B5E20` | Primary actions, app bar, active nav, brand marks |
-| `primaryLight` | `#2E7D32` | Pressed states, tonal brand surfaces |
-| `primaryDark` | `#0D3B12` | Text/icons on light brand surfaces |
-| `background` | `#F5F5F5` | Screen background |
-| `surface` | `#FFFFFF` | Cards, sheets, dialogs, fields |
-| `border` | `#E0E0E0` | Hairlines, dividers, card outlines |
-| `text` | `#1A1A1A` | Body and headings |
-| `textSecondary` | `#666666` | Captions, helper copy, metadata |
-| `success` | `#2E7D32` | Approved, active, completed |
-| `warning` | `#F57F17` | Pending, awaiting review |
-| `error` | `#C62828` | Rejected, failed, invalid |
+| Primary brand | Dark agricultural green | `#006B4F` |
+| Primary action | Marketplace green | `#008A5A` |
+| Dark header | Deep green | `#005A43` |
+| Light green surface | Very light green | `#EAF7F0` |
+| Success | Green | `#168A4A` |
+| Warning | Amber | `#D98B00` |
+| Error | Red | `#C93636` |
+| Text primary | Near black | `#202124` |
+| Text secondary | Gray | `#6B7280` |
+| Border | Light gray | `#D9DEE3` |
+| Page background | Very light gray | `#F7F8F7` |
+| Card background | White | `#FFFFFF` |
 
-This list is deliberately small. **Do not grow it casually.** Adding a colour
-means answering "which existing token cannot express this?" first. If a new one
-is genuinely required, add it to `AppColors` with a comment explaining why.
+### Color Usage
 
-Never write `Color(0xFF...)` in feature code. Reach for `AppColors` or, better,
-`Theme.of(context).colorScheme`.
+- Primary green is reserved for:
+  - App bars
+  - Primary buttons
+  - Selected navigation
+  - Important actions
+  - Verification/success indicators where appropriate
 
-### Status semantics
+- White is used for:
+  - Main content surfaces
+  - Cards
+  - Forms
+  - Bottom navigation
 
-Status colour must be **semantically consistent across the whole app**. The
-backend gives us these states:
+- Light green is used for:
+  - Information panels
+  - Selected/active surfaces
+  - Seller-related highlights
+  - AI suggestion result backgrounds
 
-```text
-verification   submitted · pending_review · approved · rejected
-listing        draft · pending · active · sold · inactive
-transaction    pending · completed · cancelled
-```
+- Red and amber are used only for meaningful status conditions.
 
-Suggested mapping — confirm it once, in `widgets/`, and reuse:
-
-| State | Colour |
-|---|---|
-| `approved`, `active`, `completed` | `success` |
-| `submitted`, `pending_review`, `pending`, `draft` | `warning` |
-| `rejected`, `cancelled` | `error` |
-| `sold`, `inactive` | `textSecondary` |
-
-Status is communicated by **text plus colour**, never colour alone. A
-colour-blind user must be able to read "Pending review" without distinguishing
-amber from green. This is also a hard requirement for the Admin Web's
-parity — the same word must mean the same thing in both apps.
+Do not use gradients, neon colors, excessive shadows, or decorative color effects.
 
 ---
 
-## 4. Typography
+# 4. Typography
 
-The platform UI font — Roboto on Android, SF on iOS. This is the mobile
-equivalent of the root `DESIGN.md` §4 requirement for "a conventional
-professional UI/system font".
+Use the platform/system font unless the project already contains an approved AgroBenta font.
 
-**Do not bundle or download a display font.** No Google Fonts, no custom
-`.ttf`. `pubspec.yaml` declares no `fonts:` block and must keep it that way
-unless there is a specific, approved reason.
+Recommended hierarchy:
 
-### Scale
+| Element | Weight | Approx. Size |
+|---|---:|---:|
+| Screen title | Bold | 18–20sp |
+| Section heading | Semi-bold | 15–17sp |
+| Card title | Semi-bold | 14–16sp |
+| Body text | Regular | 13–15sp |
+| Secondary text | Regular | 11–13sp |
+| Button label | Semi-bold | 13–15sp |
+| Price | Bold | 15–18sp |
+| Small status text | Medium | 10–12sp |
 
-Defined in `AppTheme._textTheme`.
+### Typography Rules
 
-| Role | Size | Weight | Notes |
-|---|---|---|---|
-| Page title | 24 / 28 | w600 | `headlineSmall` / `headlineMedium` |
-| Section heading | 18 / 16 | w600 | `titleLarge` / `titleMedium` |
-| Card & list title | 14 | w600 | `titleSmall` |
-| Body | 16 / 15 | w400 | `bodyLarge` / `bodyMedium` |
-| Secondary | 13 | w400 | `bodySmall` |
-| Label / chip | 12 | w500 | `labelMedium` |
+- Use sentence case for normal UI text.
+- Avoid excessive ALL CAPS.
+- Keep labels short.
+- Prices should be visually prominent.
+- Supporting information should be lighter than the primary content.
+- Do not use oversized headings that consume most of the screen.
 
-### Documented deviation from the web
+---
 
-The web scale (§4 of the root file) bottoms out at a 14px body and 12–13px
-secondary. **On mobile, body text is 15px and secondary is 13px.**
+# 5. Spacing
 
-A 14px body on a desktop monitor held at arm's length is fine. The same 14px on
-a 5-inch phone, outdoors, is at the low end of comfortable — and Flutter
-logical pixels are not CSS pixels at typical device pixel ratios, so the
-apparent size is smaller still.
+Use a consistent 4/8-point spacing system.
 
-Page-title and section-heading sizes are kept **identical** to the web. The
-adjustment is limited to body copy, where legibility actually matters. This is
-the one deliberate typographic divergence, and it is small.
+Recommended values:
+
+```text
+4dp   — very small spacing
+8dp   — icon/text spacing
+12dp  — compact component spacing
+16dp  — standard screen padding
+20dp  — section separation
+24dp  — major section separation
+32dp  — large visual separation
+```
+
+### Screen Padding
+
+Default horizontal screen padding:
+
+```text
+16dp
+```
+
+Cards may use:
+
+```text
+12dp–16dp internal padding
+```
+
+Avoid tightly packed controls.
+
+---
+
+# 6. Shape and Radius
+
+The prototype uses rounded controls and cards without excessive pill styling.
+
+Recommended:
+
+```text
+Text fields:      8–10dp
+Cards:            10–12dp
+Primary buttons:  8–10dp
+Dialogs:          12–16dp
+Chips:             8–16dp
+Image containers: 10–12dp
+```
+
+Avoid making every component fully pill-shaped.
+
+Pill shapes should primarily be used for:
+
+- Filter chips
+- Status chips
+- Compact category selectors
+
+---
+
+# 7. Elevation and Borders
+
+Use subtle elevation.
+
+Recommended:
+
+```text
+Cards: 1–2dp elevation
+Dialogs: 4–8dp elevation
+Bottom navigation: subtle elevation
+```
+
+Borders may be used for:
+
+- Form fields
+- Filter controls
+- Unselected cards
+- Secondary buttons
+
+Do not use heavy shadows.
+
+---
+
+# 8. App Structure
+
+The mobile application follows the following navigation model:
+
+```text
+AgroBenta
+│
+├── Authentication
+│   ├── Register
+│   └── Login
+│
+├── Buyer
+│   ├── Home
+│   ├── Browse Livestock
+│   ├── Search
+│   ├── Filters
+│   ├── Livestock Details
+│   ├── Messages
+│   ├── Notifications
+│   └── Profile
+│
+└── Seller Capability
+    ├── Become a Seller
+    ├── Seller Information
+    ├── Verification
+    ├── Submit Seller Verification
+    ├── My Listings
+    ├── Create Listing
+    └── AI Price Suggestion
+```
+
+Seller features must not appear as active seller-management features until the account is approved.
+
+---
+
+# 9. Bottom Navigation
+
+The prototype uses a five-item mobile navigation pattern.
+
+Recommended structure:
+
+```text
+Home
+Browse
+Sell / Seller
+Notifications
+Profile
+```
+
+The exact label for the third item may adapt to account state.
+
+### Buyer State
+
+The user can see:
+
+```text
+Home
+Browse
+Become a Seller
+Notifications
+Profile
+```
+
+### Approved Seller State
+
+Seller-related entry points become available through the seller experience.
+
+The navigation must remain simple and should not introduce a separate seller account.
+
+---
+
+# 10. App Bar
+
+App bars use the AgroBenta green brand color.
+
+Typical structure:
+
+```text
+←   Screen Title                         Action
+```
+
+Examples:
+
+```text
+← Browse Livestock
+← Filter Livestock
+← Livestock Details
+← Seller Verification
+← Create Listing
+```
+
+Rules:
+
+- Use a back arrow for child screens.
+- Keep titles short.
+- Use right-side icons only when the action is useful.
+- Do not overcrowd the app bar.
+
+---
+
+# 11. Authentication Screens
+
+## 11.1 Register
+
+The prototype shows a simple registration form.
+
+Recommended structure:
+
+```text
+              AgroBenta Logo
+
+              AgroBenta
+        Buy. Sell. Grow. Together.
+
+Full Name
+Email Address
+Password
+Confirm Password
+
+☑ I agree to the Terms and Privacy Policy
+
+[ Create Account ]
+
+Already have an account? Log in
+```
 
 ### Rules
 
-* Do not make everything bold. Reserve `w600` for titles and headings.
-* Never use text alone to convey a price, status or action. Pair with layout,
-  colour, or an icon.
-* Truncate with an ellipsis rather than shrinking text to fit.
-* Prices are prominent, left-aligned, and never inside a pill.
-* Respect the OS text-size setting. Do not hard-code text scaling, and do not
-  clamp it — a fixed-height row that clips at 200% font scale is a bug.
+- Primary action uses the AgroBenta green.
+- Validation appears near the affected field.
+- Password fields must use secure input.
+- Terms and privacy acknowledgement must be clear.
+- Do not introduce seller selection during registration.
 
 ---
 
-## 5. Spacing
+# 12. Login Screen
 
-Defined in `AppSpacing`. Every gap in the app is one of these values.
-
-| Token | Value | Typical use |
-|---|---|---|
-| `xxs` | 4 | icon-to-label, badge padding |
-| `xs` | 8 | label-to-field |
-| `sm` | 12 | between related elements, list item padding |
-| `md` | 16 | **workhorse** — card padding, screen gutter |
-| `lg` | 20 | between grouped blocks |
-| `xl` | 24 | between sections |
-| `xxl` | 32 | between major page regions |
-
-* Screen gutter is **16** on both edges (`AppSpacing.screenGutter`).
-* Never invent an off-scale value like 14 or 18 to make something fit. Change
-  the token or change the layout.
-
----
-
-## 6. Shape and elevation
-
-Defined in `AppRadius` and `AppSizes`.
-
-| Token | Value | Use |
-|---|---|---|
-| `AppRadius.sm` | 6 | inputs, small buttons, chips |
-| `AppRadius.md` | 8 | list tiles, secondary surfaces |
-| `AppRadius.lg` | 12 | **cards — the default** |
-| `AppSizes.controlHeight` | 48 | inputs and buttons |
-| `AppSizes.minTouchTarget` | 48 | **minimum for anything tappable** |
-| `AppSizes.appBarHeight` | 56 | app bar |
-
-### Depth
-
-**Borders first, shadows second.**
-
-* Cards: `elevation: 0`, a 1px `AppColors.border` outline, `AppRadius.lg`.
-* The web uses a very subtle card shadow
-  (`0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06)`). On mobile,
-  where cards sit on a scrolling surface, a border alone usually separates
-  content more reliably and survives dark-mode adaptation. If a shadow is
-  needed, keep it at that same subtlety — never a large drop shadow.
-* Modals and bottom sheets may carry a stronger shadow, because they genuinely
-  float above the content.
-
-### Touch targets
-
-Every interactive element is **at least 48×48**, even when the visible icon or
-label is smaller. Use `InkWell`/`GestureDetector` with a padded `SizedBox`, or
-Material's own components, rather than shrinking the target to fit the glyph.
-
----
-
-## 7. Components
-
-### Cards
-
-The primary information container. Practical, not decorative.
-
-* White `AppColors.surface`, 1px border, 12px radius.
-* Internal padding `AppSpacing.md` (16).
-* One card = one idea. Do not nest cards inside cards.
-* No large decorative illustrations.
-* A card may be tappable as a whole, but must still expose its primary action
-  as a distinct, correctly sized target.
-
-### Buttons
-
-* **Primary** — filled `AppColors.primary`, white label. One per screen. The
-  single most important action.
-* **Secondary** — outlined, `AppColors.primary` label. Genuine alternatives.
-* **Tertiary** — text button. Low-stakes, inline, dismissible.
-* Consistent `AppSizes.controlHeight` (48) and `AppRadius.sm`.
-* Labels are verbs: "Sign in", "Submit for review", "Mark as sold".
-* Destructive actions (delete listing, cancel transaction) use `error` and must
-  confirm.
-* Avoid icon-only buttons. When an action is icon-only, it still needs a
-  tooltip and a 48px target.
-* Every async action needs a loading state and must not double-fire on tap.
-
-### Status indicators
-
-Use a restrained chip: subtle background tint, matching text colour, 6px radius,
-`labelMedium` text. The status **word** carries the meaning.
-
-Do not turn every value into a pill. Prices, names and dates are plain text.
-
-### Forms
-
-* Visible labels, always floating (`FloatingLabelBehavior.always`). Never hide a
-  label inside placeholder text — it vanishes the moment the user types.
-* 1px `AppColors.border`; 2px `AppColors.primary` on focus; `error` on invalid.
-* 48px minimum height.
-* Validation errors appear **below** the field, in `error` colour, in
-  `bodySmall`. Map them from `ApiException.validationErrors` (Laravel 422).
-* Group related fields; use `AppSpacing.xl` between groups.
-* Do not validate only on submit for things checkable immediately.
-
-### Lists
-
-* `ListTile` for rows. Generous vertical padding — a livestock listing row is
-  tappable with a thumb, not a fingertip.
-* One row per record, leading image or icon, title, secondary metadata, trailing
-  status or chevron.
-* **Infinite scroll or explicit pagination, never both.** The backend paginates
-  with `{current_page, last_page, per_page, total}` — use `Pagination`.
-* Never render a full-bleed table. There are no tables on a phone.
-
-### Images
-
-Livestock photos are the strongest signal of value in a marketplace, and the
-brief calls for strong image presentation.
-
-* Give photos real estate. A listing card leads with the image, roughly 4:3,
-  with a consistent aspect ratio so grids align.
-* Use a `BoxFit.cover` crop; never distort an animal to fill a frame.
-* Always provide a placeholder and a failed-load state. A grey box with a
-  broken image reads as a bug.
-* Respect loading state: shimmer or a neutral placeholder, nothing elaborate.
-* Do not use the first photo as the app icon or a background.
-
-**Note:** no image currently reaches the client. `listings.photos` exists as a
-JSON column but `ListingResource` does not expose it (GAP-06). Image
-presentation is designed for here so it is ready, but it cannot be built until
-the backend decides how photos are uploaded and served.
-
-### Feedback
-
-* **Loading** — a restrained `CircularProgressIndicator` in `AppColors.primary`,
-  or simple skeletons. No shimmer gradients, no pulsing, no spinner theatre.
-* **Empty** — plain, informative copy. "No listings available yet." Never
-  fabricate records to avoid an empty state (root `DESIGN.md` §14).
-* **Error** — say what happened and offer a retry. Prefer the server's
-  `message` when it is meaningful.
-* **Success** — a snackbar for lightweight confirmation. Use it for "Listing
-  submitted", not as the only record of a significant action.
-
----
-
-## 8. Navigation
-
-Desktop uses a permanent sidebar. A phone does not have room for one, and a
-sidebar that collapses into a hamburger hides the app's structure from the
-people who use it most.
-
-**Use bottom navigation for the top-level destinations** — 3 to 5 items, always
-visible, with a clear active state in `AppColors.primary`. This is the single
-biggest structural difference from the Admin Web, and it is the right one.
-
-Suggested top level, subject to what the backend actually exposes:
+Structure:
 
 ```text
-Home · Marketplace · Transactions · Notifications · Profile
+              AgroBenta Logo
+
+              Welcome Back!
+
+Email Address
+Password
+
+☑ Remember me          Forgot Password?
+
+[ Log In ]
+
+or continue with
+
+[ Google ] [ Facebook ]
+
+Don't have an account? Sign Up
 ```
 
-* Seller-only destinations (listing management, verification status) appear in
-  context — on the profile screen, or inside the marketplace for an approved
-  seller — not as permanent tabs that a buyer cannot use.
-* Secondary flows (listing detail, verification submission, message thread) are
-  pushed routes.
-* The back behaviour is the platform default. Do not trap users.
-* Every screen has an unambiguous title.
+The actual authentication options must follow the implemented backend capabilities.
 
-**Never build navigation for screens that do not exist.** The M0 app has one
-placeholder screen and no navigation at all, on purpose.
+Do not visually imply that social login works if it is not implemented.
 
 ---
 
-## 9. Screens and states
+# 13. Home Screen
 
-Every screen must handle all of these. A screen that handles only the happy
-path is unfinished.
+The prototype home screen is buyer-oriented.
 
-| State | Requirement |
-|---|---|
-| Loading | Restrained indicator; no layout jump |
-| Empty | Informative copy; no fake data |
-| Error | What happened + retry |
-| Offline / unreachable | Distinct from a server error — `ApiErrorKind.network` |
-| Unauthenticated | Route to sign-in (`ApiException.requiresReauthentication`) |
-| Forbidden | "You don't have permission", not a crash (GAP-11 seller scoping) |
-| Success | Confirmed, then return to a sensible place |
+Recommended hierarchy:
 
-Keep content reachable when the keyboard is up. Use
-`SingleChildScrollView` and `SafeArea`.
+```text
+Hello, Juan!
+Happy trading!
 
----
+[ Search livestock... ]
 
-## 10. Accessibility
+Category shortcuts
 
-Non-negotiable, not a follow-up task.
+[Cattle] [Swine] [Goat] [Carabao]
 
-* **Contrast** — body text and icons meet WCAG AA (4.5:1) against their actual
-  background. Do not assume; `AppColors.text` on `AppColors.background` passes,
-  `AppColors.textSecondary` is close to the floor — check it on tinted chips.
-* **Never colour alone** — pair every status with text or an icon.
-* **Touch targets** — 48dp minimum, per §6.
-* **Screen readers** — every image has a semantic label; icon-only controls have
-  labels; nothing meaningful is conveyed only visually.
-* **Text scaling** — the layout must survive 200% font size without clipping or
-  overlapping.
-* **Motion** — no information is conveyed by animation alone, and there is
-  nothing to reduce.
+Quality Livestock,
+Better Opportunities.
+
+Featured Listings
+────────────────────
+Livestock Card
+Livestock Card
+```
+
+### Home Screen Rules
+
+- Greeting is personalized using the authenticated user's name.
+- Search should be immediately visible.
+- Category shortcuts provide fast access.
+- Featured listings use real listing data.
+- Avoid overcrowding the home screen.
 
 ---
 
-## 11. Anti-patterns
+# 14. Livestock Cards
 
-Do not ship:
+Livestock cards are one of the most important reusable components.
 
-* Glassmorphism or blurred translucent surfaces over photography.
-* Neon, glow, or a saturated gradient background.
-* More than one accent colour competing with the green.
-* A different border radius on every component.
-* A pill for every value, including prices and dates.
-* A heading that fills the screen to announce a short title.
-* Animation on list scroll, page transitions, or status changes for their own sake.
-* Emoji as interface icons.
-* A skeleton that does not match the shape of the real content.
-* Placeholder lorem-ipsum content, or invented listings to fill a screen.
-* Icon-only buttons with no label and a target under 48dp.
-* Two ways to reach the same screen.
+Recommended structure:
 
----
+```text
+┌──────────────────────────────┐
+│        Livestock Image       │
+│                              │
+├──────────────────────────────┤
+│ Brown Cattle             ♡   │
+│ ₱45,000                     │
+│ 📍 San Isidro, Nueva Ecija  │
+│                              │
+│ Native   2 years   350 kg   │
+└──────────────────────────────┘
+```
 
-## 12. Implementation
+### Card Information
 
-* All of the above is already expressed in `lib/core/theme/`. A screen should
-  need **no local colour, radius, or text-style declarations**. If it does,
-  the token is missing — add it there rather than styling locally.
-* Reuse widgets from `lib/widgets/` once a second feature needs one.
-* Business logic does not live in `build`. See `mobile/AGENTS.md` §A.
-* `Material` conventions apply — the app is Material 3, and deviating from
-  component behaviour (ripples, focus order, semantics) costs accessibility.
+Where available:
 
----
+- Livestock image
+- Livestock type
+- Breed
+- Price
+- Location
+- Age
+- Weight
+- Gender
+- Favorite action
 
-## 13. Open items
-
-Report, do not decide unilaterally:
-
-* ~~No approved functional documentation exists~~ — **closed.** It now lives at
-  `docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`. Visual rules are documented here;
-  business rules are documented there. This file governs appearance only and must
-  never restate a business rule.
-* **No imagery reaches the client** (GAP-06), so the image direction in §7 is
-  specified but not yet buildable.
-* **`livestock_type` is free text** in the schema. The marketplace needs a
-  controlled vocabulary before filter chips can be designed. This is a business
-  rule, not a visual one.
-* **No dark mode.** Light-only is a deliberate M0 decision. Adding a dark theme
-  is real work, not a palette inversion, and should be its own phase.
+Do not display sensitive seller information such as seller email on marketplace cards.
 
 ---
 
-## 14. Summary
+# 15. Browse Livestock
 
-AgroBenta mobile should look like a well-made agricultural app: green, calm,
-legible, and obvious. A farmer should be able to find a listing, judge the
-animal from its photo, and message the seller without being taught how.
+The browse screen should emphasize search and discovery.
 
-It should look like the Admin Web the way a good mobile app looks like its
-desktop counterpart — same product, same restraint, same colour, sized for the
-device in the hand.
+Structure:
+
+```text
+Browse Livestock
+
+[ Search livestock... ]
+
+[All] [Cattle] [Swine] [Goat] [Carabao]
+
+Livestock cards
+```
+
+### Search
+
+Search should be:
+
+- Easy to locate
+- Fast to use
+- Clearable
+- Server-backed
+
+When searching, preserve the user's existing marketplace context.
+
+---
+
+# 16. Filters
+
+The prototype uses a dedicated filter screen.
+
+Recommended filters:
+
+```text
+Livestock Type
+[ Cattle ▼ ]
+
+Price
+₱0 ───────── ₱100,000
+
+Location
+[ Select Location ▼ ]
+
+Age
+[ Any ▼ ]
+
+Gender
+[ Any ▼ ]
+
+Sort By
+[ Most Recent ▼ ]
+
+[ Apply Filters ]
+
+[ Reset ]
+```
+
+### Filter Rules
+
+- Filters must have clear labels.
+- Selected values should remain visible.
+- Reset must restore default values.
+- Apply Filters should be the primary action.
+- Avoid excessive filter controls on the initial browse screen.
+
+---
+
+# 17. Livestock Details
+
+Structure:
+
+```text
+[ Large Livestock Image ]
+
+Brown Cattle
+₱45,000
+
+📍 San Isidro, Nueva Ecija
+
+Native
+2 years
+350 kg
+Male
+
+Description
+Healthy and ready for breeding.
+Complete vaccination.
+
+Seller
+[Profile] Juan Dela Cruz
+✓ Verified Seller
+
+[ Message ] [ Inquire ]
+```
+
+### Important
+
+Seller information must clearly communicate verification status when applicable.
+
+The buyer must be able to understand:
+
+- What livestock is being offered
+- Price
+- Location
+- Basic livestock information
+- Seller information
+- Available actions
+
+---
+
+# 18. Profile
+
+The prototype uses a single-account profile.
+
+Structure:
+
+```text
+[ Profile Photo ]
+
+Juan Dela Cruz
+juandc@gmail.com
+
+[ Edit ]
+
+Personal Information          >
+Address                       >
+Change Password               >
+Notification Settings         >
+
+Seller Account
+Not yet a seller?
+
+[ Become a Seller ]
+```
+
+For an approved seller:
+
+```text
+Seller Account
+✓ Verified Seller
+
+[ Manage Listings ]
+```
+
+There must be no separate seller login.
+
+---
+
+# 19. Become a Seller
+
+This screen explains the seller capability before verification.
+
+Recommended structure:
+
+```text
+Become a Seller
+
+        [Seller Illustration]
+
+Start selling your livestock
+on AgroBenta!
+
+✓ Create livestock listings
+✓ Get AI-based price suggestions
+✓ Reach more buyers
+✓ Build your trusted seller profile
+
+[ Start Seller Verification ]
+```
+
+The content should be concise and benefit-oriented.
+
+---
+
+# 20. Seller Verification
+
+The seller verification flow uses clear stages.
+
+Recommended progress indicator:
+
+```text
+① Information
+      ↓
+② Documents
+      ↓
+③ Review
+```
+
+### Verification States
+
+The UI must clearly represent:
+
+```text
+Submitted
+Pending Review
+Approved
+Rejected
+```
+
+### Approved
+
+Use a prominent success indicator:
+
+```text
+✓
+
+Verified Seller
+
+This seller has completed the
+verification process and is now
+a trusted seller on AgroBenta.
+```
+
+### Rejected
+
+Show:
+
+- Verification status
+- Admin-provided reason/note when available
+- Resubmission action
+
+Do not imply approval before the server actually confirms it.
+
+---
+
+# 21. Seller Information
+
+The seller information screen displays the authenticated user's seller-related information.
+
+Recommended structure:
+
+```text
+[Profile]
+
+Juan Dela Cruz
+✓ Verified Seller
+
+Location
+San Isidro, Nueva Ecija
+
+Seller since
+January 2024
+
+Listings
+12 active listings
+
+Rating
+4.8 (24 reviews)
+
+[ View Listings ]
+
+[ Message ]
+```
+
+Only display information that is actually available from the system.
+
+---
+
+# 22. Create Livestock Listing
+
+The prototype uses a step-based form.
+
+Recommended flow:
+
+```text
+Create Listing
+
+① Information
+② Details
+③ Review
+```
+
+Form:
+
+```text
+Upload Photos
+[ + ]
+
+Livestock Type
+[ Cattle ▼ ]
+
+Breed
+[ Native ▼ ]
+
+Age
+[ 2 years ]
+
+Weight
+[ 350 kg ]
+
+[ Next ]
+```
+
+### Listing Rules
+
+- Seller identity is derived from the authenticated account.
+- Seller must not enter or select another seller account.
+- Status must be controlled by the system.
+- Required fields must be clearly identified.
+- Photo upload UI may be shown only when the implemented storage/upload capability is available.
+
+---
+
+# 23. My Listings
+
+The prototype uses status tabs:
+
+```text
+[Active] [Pending] [Sold] [Drafts]
+```
+
+Listing card:
+
+```text
+Brown Cattle
+₱45,000
+
+[ Edit ] [ Pause ]
+```
+
+### Status Meaning
+
+```text
+Draft
+Private and incomplete.
+
+Pending
+Submitted and awaiting admin review.
+
+Active
+Approved and visible to buyers.
+
+Sold
+No longer available.
+
+Inactive
+Temporarily unavailable.
+```
+
+Seller must not directly change a listing from pending to active.
+
+---
+
+# 24. AI Price Suggestion
+
+AI price suggestion is presented as **decision support**, not automatic pricing.
+
+Input screen:
+
+```text
+AI Price Suggestion
+
+Get an estimated market price for
+your livestock listing.
+
+Livestock Type
+[ Cattle ]
+
+Breed
+[ Native ]
+
+Age
+[ 2 years ]
+
+Weight
+[ 350 kg ]
+
+[ Get Suggestion ]
+```
+
+Result:
+
+```text
+Estimated Price Range
+
+₱40,000 – ₱50,000
+
+Based on market trends,
+breed, age, weight, and
+recent listings.
+
+Confidence Level
+
+High (65%)
+
+[ Use This Price ]
+```
+
+### Important Design Rule
+
+The suggested price must never appear to automatically become the seller's final asking price.
+
+The seller remains responsible for the final asking price.
+
+---
+
+# 25. Messages
+
+The prototype uses a simple conversation list.
+
+Structure:
+
+```text
+Messages
+
+Juan Santos
+Interested in your cattle.
+10:50 AM
+
+Pedro Reyes
+Available po?
+Yesterday
+
+Ana Cruz
+Thank you!
+Jan 10
+```
+
+Rules:
+
+- Show conversation preview.
+- Show timestamp.
+- Unread messages may use stronger typography.
+- Keep message lists compact.
+
+---
+
+# 26. Transactions
+
+Transaction status is represented through tabs/chips.
+
+Recommended:
+
+```text
+[Ongoing] [Completed] [Cancelled]
+```
+
+Transaction card:
+
+```text
+TRX-001
+
+Brown Cattle
+₱45,000
+
+Ongoing
+```
+
+Status colors:
+
+- Ongoing → green/neutral
+- Completed → success green
+- Cancelled → red
+
+Use status colors consistently throughout the application.
+
+---
+
+# 27. Notifications
+
+Notifications use a chronological list.
+
+Examples:
+
+```text
+✓ Your verification has been approved.
+  2 hours ago
+
+● New message from Maria Santos
+  4 hours ago
+
+✓ Your listing has been viewed.
+  1 day ago
+
+✓ Transaction completed
+  2 days ago
+```
+
+Rules:
+
+- Unread notifications should be visually distinguishable.
+- Notification icons should communicate category.
+- Keep notification titles concise.
+
+---
+
+# 28. Buttons
+
+## Primary Button
+
+Use for the main action:
+
+```text
+[ Create Account ]
+[ Log In ]
+[ Apply Filters ]
+[ Submit ]
+[ Create New Listing ]
+[ Get Suggestion ]
+```
+
+Characteristics:
+
+- AgroBenta green background
+- White text
+- Medium weight
+- 8–10dp radius
+- Minimum comfortable touch target
+
+## Secondary Button
+
+Use for secondary actions:
+
+```text
+[ Cancel ]
+[ Reset ]
+[ Edit ]
+```
+
+Prefer outlined or light-surface treatment.
+
+## Destructive Button
+
+Use only for destructive actions.
+
+Examples:
+
+```text
+Delete Listing
+Cancel Transaction
+```
+
+Use the error color sparingly.
+
+---
+
+# 29. Form Fields
+
+Form fields should have:
+
+```text
+Label
+[ Input / Selection ]
+Optional helper or error text
+```
+
+Examples:
+
+```text
+Livestock Type
+[ Cattle                         ▼ ]
+
+Weight
+[ 350                         kg ]
+```
+
+### Validation
+
+Errors should:
+
+- Identify the affected field.
+- Explain what needs to be corrected.
+- Avoid technical backend terminology.
+
+Example:
+
+```text
+Weight
+[ -5 ]
+
+Weight must be greater than 0.
+```
+
+---
+
+# 30. Loading States
+
+Use lightweight loading indicators.
+
+For full-screen loading:
+
+```text
+CircularProgressIndicator
+```
+
+For lists:
+
+- Skeleton/loading placeholders or compact progress indicators
+- Preserve already loaded content during refresh where possible
+
+Do not block the entire screen for small background operations.
+
+---
+
+# 31. Empty States
+
+Every major list should have a meaningful empty state.
+
+Example:
+
+```text
+No livestock found
+
+Try changing your search or filters.
+
+[ Clear Filters ]
+```
+
+Seller listings:
+
+```text
+No listings yet
+
+Create your first livestock listing
+to start selling on AgroBenta.
+
+[ Create Listing ]
+```
+
+---
+
+# 32. Error States
+
+Errors should be understandable to normal users.
+
+Avoid exposing raw exceptions such as:
+
+```text
+SocketException
+DioError
+FormatException
+```
+
+Instead use:
+
+```text
+Could not reach the server.
+Please check your connection and try again.
+```
+
+For authentication:
+
+```text
+Invalid email or password.
+```
+
+For server errors:
+
+```text
+Something went wrong.
+Please try again later.
+```
+
+Technical details may be logged for development but should not be the primary user-facing message.
+
+---
+
+# 33. Success Feedback
+
+Use short confirmation messages.
+
+Examples:
+
+```text
+Listing saved successfully.
+```
+
+```text
+Seller verification submitted.
+```
+
+```text
+Changes saved.
+```
+
+```text
+Message sent.
+```
+
+Prefer SnackBars, inline confirmation, or lightweight feedback rather than unnecessary modal dialogs.
+
+---
+
+# 34. Icons
+
+Use one consistent icon family throughout the application.
+
+Recommended icon usage:
+
+- Home
+- Search
+- Filter
+- Favorite
+- Person
+- Store
+- Notifications
+- Message
+- Transaction
+- Location
+- Camera
+- Edit
+- Delete
+- Check
+- Warning
+
+Icons should support text rather than replace important labels.
+
+Avoid mixing multiple unrelated icon styles.
+
+---
+
+# 35. Images
+
+Livestock imagery is an important part of the marketplace experience.
+
+Image rules:
+
+- Use consistent aspect ratios in listing cards.
+- Use rounded image corners.
+- Maintain object-fit/cover behavior for marketplace thumbnails.
+- Avoid distorted images.
+- Use a meaningful placeholder when no photo is available.
+
+The prototype emphasizes livestock images on:
+
+- Home
+- Browse
+- Search results
+- Livestock details
+- My Listings
+
+---
+
+# 36. Accessibility
+
+The mobile UI should support:
+
+- Adequate touch targets
+- Readable text
+- Strong contrast
+- Clear labels
+- Error messages associated with fields
+- Icons with semantic labels
+- No information conveyed by color alone
+
+Interactive elements should generally provide at least approximately 44–48dp of touchable area.
+
+---
+
+# 37. Responsive Behavior
+
+The design must work across common Android phone sizes.
+
+Avoid:
+
+- Fixed-width content
+- Hardcoded screen dimensions
+- Text overflow
+- Buttons that become inaccessible on small screens
+- Horizontally scrolling forms unless necessary
+
+Use:
+
+- `SafeArea`
+- Flexible layouts
+- `Expanded`/`Flexible`
+- `ListView`/`CustomScrollView`
+- Responsive padding
+- Scrollable forms
+
+---
+
+# 38. Motion
+
+Animations should be subtle and purposeful.
+
+Allowed:
+
+- Page transitions
+- Button feedback
+- Loading transitions
+- Expand/collapse
+- Filter panel transitions
+
+Avoid:
+
+- Excessive animations
+- Decorative motion
+- Long transitions
+- Flashy effects
+
+---
+
+# 39. Design Component Hierarchy
+
+Reusable components should be preferred over duplicated screen-specific widgets.
+
+Suggested shared components:
+
+```text
+AppBar
+PrimaryButton
+SecondaryButton
+AppTextField
+AppDropdown
+StatusChip
+LivestockCard
+CategoryChip
+SearchBar
+FilterSection
+PriceDisplay
+SellerVerificationBadge
+EmptyState
+ErrorState
+LoadingState
+NotificationTile
+TransactionCard
+```
+
+Components should remain visually consistent across all features.
+
+---
+
+# 40. Screen-to-Prototype Mapping
+
+The approved prototype contains the following mobile screens:
+
+| # | Screen |
+|---:|---|
+| 1 | Register Account |
+| 2 | Login |
+| 3 | Home |
+| 4 | Become a Seller |
+| 5 | Profile |
+| 6 | Browse Livestock |
+| 7 | Search Livestock |
+| 8 | Filter Livestock |
+| 9 | Livestock Details |
+| 10 | Seller Information |
+| 11 | Verification Status |
+| 12 | Submit Seller Verification |
+| 13 | Create Livestock Listing |
+| 14 | Manage My Listings |
+| 15 | AI Price Suggestion |
+| 16 | View AI Suggestion |
+| 17 | Messages |
+| 18 | Transactions |
+| 19 | Notifications |
+
+These screens should use the same design system rather than introducing separate visual styles per feature.
+
+---
+
+# 41. Single Account UX Rule
+
+This is a critical AgroBenta design requirement.
+
+Do **not** create:
+
+```text
+Buyer Account
+Seller Account
+Switch to Seller Account
+Seller Login
+```
+
+Instead:
+
+```text
+One Account
+     │
+     ├── Buyer capabilities
+     │
+     └── Become a Seller
+             │
+             └── Verification
+                     │
+                     └── Approved Seller Capability
+```
+
+The user's account remains the same before and after seller approval.
+
+---
+
+# 42. Seller Verification UX Rule
+
+Seller verification controls seller capability.
+
+The UI must reflect the server state:
+
+```text
+buyer
+   ↓
+Become a Seller
+   ↓
+Verification Submitted
+   ↓
+Pending Review
+   ├── Approved → Seller capability
+   └── Rejected → Resubmit
+```
+
+The client must not independently mark a user as verified.
+
+---
+
+# 43. AI UX Rule
+
+AI price suggestion is informational.
+
+The correct interaction is:
+
+```text
+Seller enters livestock information
+            ↓
+      Request estimate
+            ↓
+     AI price suggestion
+            ↓
+Seller reviews suggestion
+            ↓
+Seller chooses final asking price
+```
+
+The system must not present the AI estimate as a guaranteed market price.
+
+---
+
+# 44. Design Do / Don't
+
+## Do
+
+- Use AgroBenta green consistently.
+- Keep screens clean.
+- Use livestock imagery prominently.
+- Use cards for marketplace content.
+- Use clear status indicators.
+- Keep primary actions obvious.
+- Use bottom navigation consistently.
+- Keep forms easy to scan.
+- Use simple agricultural visual language.
+- Preserve the single-account experience.
+
+## Don't
+
+- Don't use neon colors.
+- Don't use glassmorphism.
+- Don't use excessive gradients.
+- Don't use oversized headings.
+- Don't use decorative blobs.
+- Don't use excessive animation.
+- Don't use too many pill-shaped controls.
+- Don't create separate buyer and seller accounts.
+- Don't expose seller email unnecessarily.
+- Don't allow the client to decide verification or listing approval status.
+- Don't make AI suggestions look like guaranteed prices.
+
+---
+
+# 45. Implementation Priority
+
+When implementing or refining the mobile UI, use this priority order:
+
+1. Functional correctness
+2. Navigation consistency
+3. Readability
+4. Form usability
+5. Marketplace card consistency
+6. Status visibility
+7. Responsive behavior
+8. Accessibility
+9. Visual polish
+10. Animation
+
+Functionality must never be sacrificed for visual effects.
+
+---
+
+# 46. Final Visual Target
+
+The supplied AgroBenta prototype is the visual reference for the mobile implementation.
+
+The implementation should preserve these recognizable characteristics:
+
+```text
+Dark AgroBenta green
+        ↓
+White content surfaces
+        ↓
+Rounded cards and controls
+        ↓
+Livestock photography
+        ↓
+Compact information hierarchy
+        ↓
+Green primary actions
+        ↓
+Clear status indicators
+        ↓
+Simple bottom navigation
+        ↓
+Professional agricultural marketplace feel
+```
+
+The objective is to make the implemented Flutter application visually consistent with the approved prototype while keeping the UI practical, responsive, accessible, and aligned with the actual backend functionality.

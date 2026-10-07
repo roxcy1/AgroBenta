@@ -359,50 +359,60 @@ nothing to cache or manage until photos are actually fetchable, so
 The backend runs in Docker. Laravel is served by Nginx on
 **`http://localhost:8001`**, API under `/api`.
 
-### The Android emulator rule
+### The Android address rule
 
-**Android emulator → host machine is `10.0.2.2`.**
+**The default Android target is a physical device → the machine's LAN IP.**
 
-The emulator sits behind a virtual network bridge, so `localhost` inside it is
-the emulator itself, not your development machine. Code that works on the iOS
-simulator will fail on Android if it uses `localhost`.
+A real phone cannot reach the host through the emulator loopback alias
+`10.0.2.2` (that address exists only inside an Android emulator). The emulator
+sits behind a virtual network bridge, so `localhost` inside it is the emulator
+itself, not your development machine.
 
 | Where the app runs | Base URL to use |
 |---|---|
-| Android emulator | `http://10.0.2.2:8001/api` |
+| Android — physical device (same Wi-Fi) | `http://192.168.1.8:8001/api` (**the default**) |
+| Android — emulator | `http://10.0.2.2:8001/api` (opt in with `ANDROID_RUN_TARGET=emulator`) |
 | iOS simulator | `http://localhost:8001/api` |
-| Physical device (same Wi-Fi) | `http://<your-LAN-IP>:8001/api` |
 | Staging / production | `https://…/api` |
 
-`AppConfig.apiBaseUrl` already resolves the first two rows per platform.
+`AppConfig.apiBaseUrl` already resolves this per platform. The address in
+`AppConfig.physicalAndroidApiBaseUrl` is this development machine's LAN IP
+(flagged `CHANGE_THIS_DEV_LAN_IP`); update it if the machine's IP ever changes.
 
 ### Never scatter URLs
 
-`AppConfig` is the only place a base URL is defined. Override per build:
+`AppConfig` is the only place a base URL is defined. Choose the Android target
+and override per build:
 
 ```sh
-# Android emulator (this is already the default)
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8001/api
+# Physical device (default, no flag needed)
+flutter run
 
-# Physical device on the same network
-flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8001/api
+# Android emulator — explicit opt-in to the 10.0.2.2 host alias
+flutter run --dart-define=ANDROID_RUN_TARGET=emulator
 
-# Staging
+# Point anywhere explicitly
 flutter run --dart-define=API_BASE_URL=https://api.staging.example.test/api
 ```
 
-`API_BASE_URL` is the single canonical name. Do not introduce a second spelling
-for the same value. (The Admin Web has exactly this bug: `lib/api.ts` reads
-`VITE_API_URL` while `vite-env.d.ts` declares `VITE_API_BASE_URL`. Do not
-reproduce it.)
+`API_BASE_URL` is the single canonical name for the URL. `ANDROID_RUN_TARGET`
+only chooses between the two built-in Android defaults and must be `emulator`
+to yield the host alias; any other value is a physical-device build, so a
+physical build can never silently fall back to `10.0.2.2`. Do not introduce a
+second spelling for `API_BASE_URL`. (The Admin Web has exactly this bug:
+`lib/api.ts` reads `VITE_API_URL` while `vite-env.d.ts` declares
+`VITE_API_BASE_URL`. Do not reproduce it.)
 
 ### Android cleartext traffic
 
-`android/app/src/main/res/xml/network_security_config.xml` denies cleartext by
-default and permits it **only** for `10.0.2.2`, `localhost` and `127.0.0.1`.
-That is a development allowance. Production must be HTTPS. If a staging host
-cannot serve TLS, add it there explicitly with a comment — never flip the
-base config to `true`.
+Debug builds allow plain HTTP broadly via
+`android/app/src/debug/res/xml/network_security_config.xml` — that is the only
+reason a phone on the LAN can reach the plain-HTTP Docker stack. The main
+config (`android/app/src/main/res/xml/network_security_config.xml`) stays
+strict: it denies cleartext by default and permits it **only** for `10.0.2.2`,
+`localhost` and `127.0.0.1`. That is a development allowance. Production must be
+HTTPS. If a staging host cannot serve TLS, add it to the main config explicitly
+with a comment — never flip the base config to `true`.
 
 The main `AndroidManifest.xml` declares `android.permission.INTERNET`. The
 `debug` and `profile` manifests also declare it, but those are not merged into

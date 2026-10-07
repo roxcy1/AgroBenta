@@ -28,10 +28,7 @@ import 'seller_verification_views.dart';
 /// as "attach your ID" and a seller who cannot read the field description may
 /// reasonably look for a camera button that does not exist.
 class SellerVerificationFormScreen extends StatefulWidget {
-  const SellerVerificationFormScreen({
-    required this.isResubmission,
-    super.key,
-  });
+  const SellerVerificationFormScreen({required this.isResubmission, super.key});
 
   /// Whether this is a resubmission after a rejection.
   ///
@@ -136,7 +133,9 @@ class _SellerVerificationFormScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isResubmission ? 'Resubmit verification' : 'Become a Seller'),
+        title: Text(
+          widget.isResubmission ? 'Resubmit verification' : 'Become a Seller',
+        ),
       ),
       body: SafeArea(
         child: ListenableBuilder(
@@ -198,7 +197,8 @@ class _SellerVerificationFormScreenState
                                 enabled: !isSubmitting,
                                 decoration: const InputDecoration(
                                   labelText: 'Business location',
-                                  helperText: 'Optional. Town, city or province.',
+                                  helperText:
+                                      'Optional. Town, city or province.',
                                 ),
                                 validator: (String? value) =>
                                     validateBusinessLocation(value) ??
@@ -207,7 +207,8 @@ class _SellerVerificationFormScreenState
                               const SizedBox(height: AppSpacing.md),
                               TextFormField(
                                 controller: _businessDescription,
-                                textCapitalization: TextCapitalization.sentences,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
                                 keyboardType: TextInputType.multiline,
                                 minLines: 3,
                                 maxLines: 6,
@@ -252,20 +253,19 @@ class _SellerVerificationFormScreenState
                           // tap; the guard stops the request that is already on
                           // its way from being followed by another.
                           onPressed: isSubmitting ? null : _submit,
-                          child:
-                              isSubmitting
-                                  ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                  : Text(
-                                    widget.isResubmission
-                                        ? 'Resubmit verification'
-                                        : 'Submit application',
+                          child: isSubmitting
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
                                   ),
+                                )
+                              : Text(
+                                  widget.isResubmission
+                                      ? 'Resubmit verification'
+                                      : 'Submit application',
+                                ),
                         ),
                       ],
                     ),

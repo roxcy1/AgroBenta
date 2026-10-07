@@ -14,10 +14,10 @@ import 'listing_photo.dart';
 /// belong on the detail screen, and a card that lists everything is a card
 /// nobody can scan.
 ///
-/// Layout is a fixed-aspect thumbnail beside the text rather than a photo on
-/// top. On a phone held one-handed, a leading image keeps the title and price on
-/// the left where the thumb is not covering them, and it keeps every card the
-/// same height regardless of how much text a seller wrote.
+/// Layout is the photo on top and the facts below, per `mobile/DESIGN.md` §14:
+/// the image is the first thing a buyer scanning livestock wants to see, so it
+/// leads the card at a fixed aspect ratio instead of squeezing beside the text
+/// as a small square.
 ///
 /// Tappable as a whole. The [onTap] target is the full card, comfortably past
 /// the 48dp minimum, and the card is the only interactive element inside it —
@@ -37,72 +37,70 @@ class ListingCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              SizedBox(
-                width: 108,
-                height: 108,
-                child: ListingPhoto(listing: listing),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    // Species first and in a label style: it is the broadest
-                    // thing a buyer scanning for "cattle" is looking for, and
-                    // the title below narrows it.
-                    Text(
-                      listing.livestockType,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            // The photo takes the whole card width at a fixed aspect ratio, so
+            // every card has the same-shaped image band and the list stays
+            // scannable when sellers write very different amounts of text.
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: ListingPhoto(listing: listing),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  // Species first and in a label style: it is the broadest
+                  // thing a buyer scanning for "cattle" is looking for, and
+                  // the title below narrows it.
+                  Text(
+                    listing.livestockType,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: AppColors.textSecondary,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    listing.title,
+                    style: theme.textTheme.titleSmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  // Price, left-aligned and outside a pill, per the type
+                  // rules. Never the only thing carrying the value: the peso
+                  // symbol is part of the formatted string, so it reads
+                  // without colour.
+                  Text(
+                    AppFormatters.formatMoneyCompact(listing.askingPrice) ??
+                        listing.askingPrice,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: AppColors.primary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  _MetaRow(
+                    icon: Icons.place_outlined,
+                    text: listing.location,
+                  ),
+                  if (listing.weightLabel != null ||
+                      listing.quantity > 0) ...<Widget>[
                     const SizedBox(height: AppSpacing.xxs),
-                    Text(
-                      listing.title,
-                      style: theme.textTheme.titleSmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    // Price, left-aligned and outside a pill, per the type
-                    // rules. Never the only thing carrying the value: the peso
-                    // symbol is part of the formatted string, so it reads
-                    // without colour.
-                    Text(
-                      AppFormatters.formatMoneyCompact(listing.askingPrice) ??
-                          listing.askingPrice,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: AppColors.primary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
                     _MetaRow(
-                      icon: Icons.place_outlined,
-                      text: listing.location,
+                      icon: Icons.scale_outlined,
+                      text: _physicalSummary(),
                     ),
-                    if (listing.weightLabel != null ||
-                        listing.quantity > 0) ...<Widget>[
-                      const SizedBox(height: AppSpacing.xxs),
-                      _MetaRow(
-                        icon: Icons.scale_outlined,
-                        text: _physicalSummary(),
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

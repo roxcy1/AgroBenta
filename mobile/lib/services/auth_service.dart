@@ -48,9 +48,8 @@ class AuthService {
         if (deviceName != null && deviceName.isNotEmpty)
           'device_name': deviceName,
       },
-      parse: (Object? data) => AuthSession.fromJson(
-        _asObject(data, 'register'),
-      ),
+      parse: (Object? data) =>
+          AuthSession.fromJson(_asObject(data, 'register')),
     );
   }
 
@@ -59,10 +58,7 @@ class AuthService {
   /// A `401` means the email or password was wrong; the backend does not
   /// distinguish between the two, and neither does this app. A `403` means the
   /// account is an administrator, which may not use the mobile app.
-  Future<AuthSession> login({
-    required String email,
-    required String password,
-  }) {
+  Future<AuthSession> login({required String email, required String password}) {
     return _apiClient.post<AuthSession>(
       AuthEndpoints.login,
       body: <String, dynamic>{'email': email, 'password': password},

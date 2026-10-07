@@ -46,21 +46,25 @@ Project-wide rules live in the repository root: `../AGENTS.md`, `../DESIGN.md`,
 ```sh
 flutter pub get
 
-# Android emulator — 10.0.2.2 is the default on Android, no flag needed
+# Physical device (default) — resolves to http://192.168.1.8:8001/api
 flutter run
+
+# Android emulator — opt into the host alias explicitly
+flutter run --dart-define=ANDROID_RUN_TARGET=emulator
 
 # iOS simulator
 flutter run -d <ios-device-id>
 ```
 
-The base URL is resolved by `lib/core/config/app_config.dart`. Override it per
-build rather than editing source:
+The base URL is resolved by `lib/core/config/app_config.dart`. A native Android
+build defaults to the **physical-device** address — `http://192.168.1.8:8001/api`,
+this machine's LAN IP. The emulator's `10.0.2.2` alias is chosen **only** with
+`--dart-define=ANDROID_RUN_TARGET=emulator`, so a physical build can never
+silently fall back to it. Override the URL per build rather than editing
+source:
 
 ```sh
-# Physical device on the same Wi-Fi network
-flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8001/api
-
-# Staging
+# Point anywhere explicitly (staging, another machine, etc.)
 flutter run --dart-define=API_BASE_URL=https://api.staging.example.test/api
 ```
 
@@ -68,10 +72,10 @@ flutter run --dart-define=API_BASE_URL=https://api.staging.example.test/api
 > behind a virtual network bridge, so `localhost` refers to the emulator
 > itself. See AGENTS.md §G.
 
-Cleartext HTTP is denied by default on Android and permitted only for
-`10.0.2.2`, `localhost` and `127.0.0.1` — see
-`android/app/src/main/res/xml/network_security_config.xml`. Production must be
-HTTPS.
+Cleartext HTTP is denied by default on Android. Debug builds allow it broadly
+(`android/app/src/debug/res/xml/network_security_config.xml`) so a phone on the
+LAN can reach the plain-HTTP Docker stack; `src/main` stays strict and permits
+it only for `10.0.2.2`, `localhost` and `127.0.0.1`. Production must be HTTPS.
 
 ## Validation
 

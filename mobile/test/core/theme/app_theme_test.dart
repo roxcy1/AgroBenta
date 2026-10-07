@@ -9,13 +9,15 @@ void main() {
 
   group('palette', () {
     test('primary is the AgroBenta brand green', () {
-      // #1B5E20 — the value named in the M0 brief and already used by
-      // `frontend/src/index.css` as --color-primary.
-      expect(AppColors.primary, const Color(0xFF1B5E20));
+      // #006B4F — the dark agricultural green in `mobile/DESIGN.md` §3.
+      expect(AppColors.primary, const Color(0xFF006B4F));
     });
 
     test('exposes every semantic token the design system requires', () {
       expect(AppColors.primary, isA<Color>());
+      expect(AppColors.primaryLight, isA<Color>());
+      expect(AppColors.primaryDark, isA<Color>());
+      expect(AppColors.primarySurface, isA<Color>());
       expect(AppColors.background, isA<Color>());
       expect(AppColors.surface, isA<Color>());
       expect(AppColors.text, isA<Color>());
@@ -39,8 +41,10 @@ void main() {
     });
 
     test('uses white for on-brand surfaces', () {
-      expect(AppColors.primary.computeLuminance(),
-          lessThan(AppColors.surface.computeLuminance()));
+      expect(
+        AppColors.primary.computeLuminance(),
+        lessThan(AppColors.surface.computeLuminance()),
+      );
     });
   });
 
@@ -114,17 +118,17 @@ void main() {
   });
 
   group('type scale', () {
-    test('keeps page titles in the 24-28px band from DESIGN.md', () {
-      expect(theme.textTheme.headlineSmall?.fontSize, inInclusiveRange(24, 28));
+    test('keeps screen titles in the 18-20sp band from mobile DESIGN.md', () {
+      expect(theme.textTheme.headlineSmall?.fontSize, inInclusiveRange(18, 20));
       expect(
         theme.textTheme.headlineMedium?.fontSize,
-        inInclusiveRange(24, 28),
+        inInclusiveRange(18, 20),
       );
     });
 
-    test('keeps section headings in the 16-18px band', () {
-      expect(theme.textTheme.titleLarge?.fontSize, inInclusiveRange(16, 18));
-      expect(theme.textTheme.titleMedium?.fontSize, inInclusiveRange(16, 18));
+    test('keeps section headings in the 15-17sp band', () {
+      expect(theme.textTheme.titleLarge?.fontSize, inInclusiveRange(15, 17));
+      expect(theme.textTheme.titleMedium?.fontSize, inInclusiveRange(15, 17));
     });
 
     test('does not make all text bold', () {

@@ -45,10 +45,9 @@ void main() {
     final SellerVerificationController verificationController =
         buildSellerVerificationController(
           tokenStore,
-          (_) async =>
-              verification == null
-                  ? sellerVerificationNotFoundResponse()
-                  : sellerVerificationResponse(verification: verification),
+          (_) async => verification == null
+              ? sellerVerificationNotFoundResponse()
+              : sellerVerificationResponse(verification: verification),
         );
     addTearDown(verificationController.dispose);
 
@@ -82,7 +81,7 @@ void main() {
   ) async {
     await pumpSignedIn(tester);
 
-    expect(find.text('Welcome, Ana Reyes'), findsOneWidget);
+    expect(find.text('Hello, Ana Reyes!'), findsOneWidget);
     expect(find.text('ana@example.test'), findsOneWidget);
   });
 
@@ -96,10 +95,7 @@ void main() {
   testWidgets('reflects a server-granted seller capability', (
     WidgetTester tester,
   ) async {
-    await pumpSignedIn(
-      tester,
-      user: userJson(sellerCapability: 'seller'),
-    );
+    await pumpSignedIn(tester, user: userJson(sellerCapability: 'seller'));
 
     expect(find.text('Seller'), findsOneWidget);
   });
@@ -122,7 +118,10 @@ void main() {
       await pumpSignedIn(tester);
 
       expect(find.text('Sell on AgroBenta'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Become a Seller'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Become a Seller'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('opens the verification status screen', (
@@ -208,8 +207,34 @@ void main() {
         verification: sellerVerificationJson(status: 'rejected'),
       );
 
-      expect(find.widgetWithText(FilledButton, 'Resubmit Verification'), findsNothing);
+      expect(
+        find.widgetWithText(FilledButton, 'Resubmit Verification'),
+        findsNothing,
+      );
       expect(find.text('Seller'), findsOneWidget);
+    });
+  });
+
+  group('seller listings entry', () {
+    testWidgets('is hidden for a buyer', (WidgetTester tester) async {
+      await pumpSignedIn(tester);
+
+      expect(find.text('My Listings'), findsNothing);
+      expect(
+        find.widgetWithText(FilledButton, 'Manage my listings'),
+        findsNothing,
+        reason: 'a buyer would be answered 403 by every request behind it',
+      );
+    });
+
+    testWidgets('appears for a seller', (WidgetTester tester) async {
+      await pumpSignedIn(tester, user: userJson(sellerCapability: 'seller'));
+
+      expect(find.text('My Listings'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Manage my listings'),
+        findsOneWidget,
+      );
     });
   });
 
@@ -230,10 +255,8 @@ void main() {
     final AuthController controller = AuthController(
       buildAuthRepository(
         tokenStore,
-        (_) async => http.Response(
-          jsonEncode(successEnvelope(data: userJson())),
-          200,
-        ),
+        (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
       ),
     );
     addTearDown(controller.dispose);
@@ -245,9 +268,7 @@ void main() {
       AuthScope(
         controller: controller,
         child: NeverSubmittedVerificationScope(
-          child: MaterialApp(
-            home: BuyerHomeScreen(onBrowseMarketplace: () {}),
-          ),
+          child: MaterialApp(home: BuyerHomeScreen(onBrowseMarketplace: () {})),
         ),
       ),
     );
@@ -276,7 +297,10 @@ void main() {
         if (entry.apiPath == '/auth/logout') {
           throw http.ClientException('connection refused');
         }
-        return http.Response(jsonEncode(successEnvelope(data: userJson())), 200);
+        return http.Response(
+          jsonEncode(successEnvelope(data: userJson())),
+          200,
+        );
       }),
     );
     addTearDown(controller.dispose);
@@ -297,7 +321,7 @@ void main() {
     await settleAuth(tester, frames: 12);
 
     expect(find.byType(BuyerHomeScreen), findsOneWidget);
-    expect(find.text('Welcome, Ana Reyes'), findsOneWidget);
+    expect(find.text('Hello, Ana Reyes!'), findsOneWidget);
     expect(
       tokenStore.token,
       'stored-token',

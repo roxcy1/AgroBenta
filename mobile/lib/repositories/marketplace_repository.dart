@@ -32,6 +32,7 @@ class MarketplaceRepository {
   Future<MarketplacePage> browse({
     String? search,
     String? livestockType,
+    String? location,
     String? minPrice,
     String? maxPrice,
     int page = 1,
@@ -40,6 +41,7 @@ class MarketplaceRepository {
     return _service.browse(
       search: search,
       livestockType: livestockType,
+      location: location,
       minPrice: minPrice,
       maxPrice: maxPrice,
       // A page below 1 is meaningless to Laravel, which treats it as page 1.

@@ -88,10 +88,8 @@ void main() {
       tokenStore.token = 'stored-token';
 
       final User? user = await repository(
-        (_) async => http.Response(
-          jsonEncode(successEnvelope(data: userJson())),
-          200,
-        ),
+        (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
       ).restoreSession();
 
       expect(user, isNotNull);

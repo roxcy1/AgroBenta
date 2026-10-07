@@ -22,7 +22,8 @@ void main() {
       await AuthTestHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler: (_) async => fail('the API must not be called when signed out'),
+        handler: (_) async =>
+            fail('the API must not be called when signed out'),
       );
 
       expect(find.byType(SignInScreen), findsOneWidget);
@@ -37,10 +38,8 @@ void main() {
       final AuthTestHarness harness = await AuthTestHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler: (_) async => http.Response(
-          jsonEncode(successEnvelope(data: userJson())),
-          200,
-        ),
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
       );
 
       expect(find.byType(BuyerHomeScreen), findsOneWidget);
@@ -60,7 +59,8 @@ void main() {
       await AuthTestHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler: (_) async => http.Response(jsonEncode('Unauthenticated.'), 401),
+        handler: (_) async =>
+            http.Response(jsonEncode('Unauthenticated.'), 401),
       );
 
       expect(find.byType(SignInScreen), findsOneWidget);
@@ -143,10 +143,8 @@ void main() {
       await AuthTestHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler: (_) async => http.Response(
-          jsonEncode('Invalid credentials.'),
-          401,
-        ),
+        handler: (_) async =>
+            http.Response(jsonEncode('Invalid credentials.'), 401),
       );
 
       await tester.enterText(
@@ -227,14 +225,8 @@ void main() {
         find.byType(TextFormField).at(1),
         'ana@example.test',
       );
-      await tester.enterText(
-        find.byType(TextFormField).at(2),
-        'correct horse',
-      );
-      await tester.enterText(
-        find.byType(TextFormField).at(3),
-        'correct horse',
-      );
+      await tester.enterText(find.byType(TextFormField).at(2), 'correct horse');
+      await tester.enterText(find.byType(TextFormField).at(3), 'correct horse');
       await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
       await settleAuth(tester);
 
@@ -278,14 +270,8 @@ void main() {
         find.byType(TextFormField).at(1),
         'taken@example.test',
       );
-      await tester.enterText(
-        find.byType(TextFormField).at(2),
-        'correct horse',
-      );
-      await tester.enterText(
-        find.byType(TextFormField).at(3),
-        'correct horse',
-      );
+      await tester.enterText(find.byType(TextFormField).at(2), 'correct horse');
+      await tester.enterText(find.byType(TextFormField).at(3), 'correct horse');
       await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
       await settleAuth(tester);
 
@@ -310,10 +296,7 @@ void main() {
         find.byType(TextFormField).at(1),
         'ana@example.test',
       );
-      await tester.enterText(
-        find.byType(TextFormField).at(2),
-        'correct horse',
-      );
+      await tester.enterText(find.byType(TextFormField).at(2), 'correct horse');
       await tester.enterText(
         find.byType(TextFormField).at(3),
         'battery staple',
@@ -331,7 +314,8 @@ void main() {
       final AuthTestHarness harness = await AuthTestHarness.pump(
         tester,
         tokenStore: tokenStore,
-        handler: (_) async => fail('the API must not be called on a short password'),
+        handler: (_) async =>
+            fail('the API must not be called on a short password'),
       );
 
       await tester.tap(find.widgetWithText(TextButton, 'Create an account'));
@@ -363,7 +347,9 @@ void main() {
       await settleAuth(tester);
       expect(find.byType(RegisterScreen), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(TextButton, 'I already have an account'));
+      await tester.tap(
+        find.widgetWithText(TextButton, 'I already have an account'),
+      );
       await settleAuth(tester);
 
       expect(find.byType(SignInScreen), findsOneWidget);
@@ -389,7 +375,10 @@ void main() {
               200,
             );
           }
-          return http.Response(jsonEncode(successEnvelope(data: userJson())), 200);
+          return http.Response(
+            jsonEncode(successEnvelope(data: userJson())),
+            200,
+          );
         },
       );
 

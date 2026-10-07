@@ -107,8 +107,7 @@ class MarketplaceState {
 
   /// Loaded, but with no listings. The screen distinguishes this from
   /// [MarketplaceStatus.failed] and from a first load still in progress.
-  bool get isEmpty =>
-      status == MarketplaceStatus.ready && listings.isEmpty;
+  bool get isEmpty => status == MarketplaceStatus.ready && listings.isEmpty;
 
   /// Whether this list is narrowed by a search or a filter.
   ///

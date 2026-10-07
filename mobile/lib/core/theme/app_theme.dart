@@ -17,20 +17,19 @@ abstract final class AppTheme {
   /// Build the light theme. The app is light-only for now; a dark theme is a
   /// separate decision and should not be introduced incidentally.
   static ThemeData light() {
-    final ColorScheme colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-    ).copyWith(
-      primary: AppColors.primary,
-      onPrimary: Colors.white,
-      secondary: AppColors.primaryLight,
-      onSecondary: Colors.white,
-      error: AppColors.error,
-      onError: Colors.white,
-      surface: AppColors.surface,
-      onSurface: AppColors.text,
-      outline: AppColors.border,
-      outlineVariant: AppColors.border,
-    );
+    final ColorScheme colorScheme =
+        ColorScheme.fromSeed(seedColor: AppColors.primary).copyWith(
+          primary: AppColors.primary,
+          onPrimary: Colors.white,
+          secondary: AppColors.primaryLight,
+          onSecondary: Colors.white,
+          error: AppColors.error,
+          onError: Colors.white,
+          surface: AppColors.surface,
+          onSurface: AppColors.text,
+          outline: AppColors.border,
+          outlineVariant: AppColors.border,
+        );
 
     const TextTheme textTheme = _textTheme;
 
@@ -64,6 +63,28 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
           side: const BorderSide(color: AppColors.border),
+        ),
+      ),
+
+      // Modals use the mobile design's recommended elevations and radii rather
+      // than Material's defaults, which tint from the seed colour.
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+        ),
+      ),
+
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 1,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
+          ),
         ),
       ),
 
@@ -216,49 +237,49 @@ abstract final class AppTheme {
     );
   }
 
-  /// Mobile type scale.
+  /// Mobile type scale, per `mobile/DESIGN.md` §4.
   ///
-  /// This is a deliberate, documented adaptation of the type scale in the root
-  /// `DESIGN.md` (§4), not a replacement of it. The web scale bottoms out at a
-  /// 14px body; on a phone, held at arm's length in daylight, 14px is at the
-  /// low end of comfortable. Body text is therefore 15px and secondary text is
-  /// 13px, while the page-title and section-heading sizes are kept identical to
-  /// the web so the two products still read as the same system.
+  /// The mobile design has its own compact hierarchy (18–20sp screen titles,
+  /// 15–17sp section headings, 13–15sp body) that is deliberately smaller than
+  /// the root `DESIGN.md`'s web scale. On a phone a 24–28px heading consumes
+  /// most of the screen; the prototype keeps titles restrained so content and
+  /// livestock imagery stay dominant.
   ///
   /// Font family is deliberately unset: Flutter uses the platform UI font
   /// (Roboto on Android, SF on iOS), which is the mobile equivalent of the
   /// "conventional professional system font" the root `DESIGN.md` requires. Do
   /// not add a bundled or downloaded display font.
   static const TextTheme _textTheme = TextTheme(
-    // Page title — matches web 24–28px band, at the lower bound for mobile.
-    headlineSmall: TextStyle(
-      fontSize: 24,
-      height: 1.25,
-      fontWeight: FontWeight.w600,
+    // Screen title — 18–20sp bold. Top of the band keeps it present without
+    // swallowing the screen.
+    headlineMedium: TextStyle(
+      fontSize: 20,
+      height: 1.3,
+      fontWeight: FontWeight.w700,
       color: AppColors.text,
     ),
-    headlineMedium: TextStyle(
-      fontSize: 28,
-      height: 1.25,
-      fontWeight: FontWeight.w600,
+    headlineSmall: TextStyle(
+      fontSize: 19,
+      height: 1.3,
+      fontWeight: FontWeight.w700,
       color: AppColors.text,
     ),
 
-    // Section heading — matches web 16–18px band.
+    // Section heading — 15–17sp semibold.
     titleLarge: TextStyle(
-      fontSize: 18,
+      fontSize: 17,
       height: 1.35,
       fontWeight: FontWeight.w600,
       color: AppColors.text,
     ),
     titleMedium: TextStyle(
-      fontSize: 16,
+      fontSize: 15,
       height: 1.35,
       fontWeight: FontWeight.w600,
       color: AppColors.text,
     ),
 
-    // Card title / list item title.
+    // Card title — 14–16sp semibold.
     titleSmall: TextStyle(
       fontSize: 14,
       height: 1.4,
@@ -266,21 +287,21 @@ abstract final class AppTheme {
       color: AppColors.text,
     ),
 
-    // Body.
+    // Body — 13–15sp regular.
     bodyLarge: TextStyle(
-      fontSize: 16,
-      height: 1.5,
-      fontWeight: FontWeight.w400,
-      color: AppColors.text,
-    ),
-    bodyMedium: TextStyle(
       fontSize: 15,
       height: 1.5,
       fontWeight: FontWeight.w400,
       color: AppColors.text,
     ),
+    bodyMedium: TextStyle(
+      fontSize: 14,
+      height: 1.5,
+      fontWeight: FontWeight.w400,
+      color: AppColors.text,
+    ),
 
-    // Secondary text — matches web 12–13px band, at the upper bound.
+    // Secondary — 11–13sp regular. Supporting copy is lighter than primary.
     bodySmall: TextStyle(
       fontSize: 13,
       height: 1.45,

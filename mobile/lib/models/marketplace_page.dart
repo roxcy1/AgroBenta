@@ -21,14 +21,22 @@ import 'pagination.dart';
 /// endpoint-specific across the API (`users`, `transactions`, …) and must not be
 /// generalised, which is why this is a named model rather than a generic
 /// `PagedResponse<T>`.
+///
+/// ## Shared with the seller listing list
+///
+/// `GET /api/seller/listings` returns the same `{listings, pagination}` shape
+/// with the same four pagination keys, so it is parsed by this same model rather
+/// than a near-identical second one. Two models that must be kept in step because
+/// the wire format must be kept in step is the wrong kind of duplication.
 class MarketplacePage {
   const MarketplacePage({required this.listings, required this.pagination});
 
   factory MarketplacePage.fromJson(Map<String, dynamic> json) {
     return MarketplacePage(
-      listings: readObjectList(json, 'listings')
-          .map(Listing.fromJson)
-          .toList(growable: false),
+      listings: readObjectList(
+        json,
+        'listings',
+      ).map(Listing.fromJson).toList(growable: false),
       pagination: Pagination.fromJson(readObject(json, 'pagination')),
     );
   }

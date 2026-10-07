@@ -46,15 +46,16 @@ void main() {
       );
 
       expect(listing.seller.name, 'Rizal Farms');
-      expect(
-        listing.seller.toString(),
-        isNot(contains('seller@example.test')),
-      );
+      expect(listing.seller.toString(), isNot(contains('seller@example.test')));
     });
 
     test('reads decimal columns as strings, the way MySQL sends them', () {
       final Listing listing = Listing.fromJson(
-        listingJson(askingPrice: '42500.00', ageValue: '18.0', weightValue: '320.50'),
+        listingJson(
+          askingPrice: '42500.00',
+          ageValue: '18.0',
+          weightValue: '320.50',
+        ),
       );
 
       expect(listing.askingPrice, '42500.00');
@@ -113,15 +114,14 @@ void main() {
 
     test('treats an absent or null photos column as an empty list', () {
       expect(Listing.fromJson(listingJson(photos: null)).photos, isEmpty);
-      expect(
-        Listing.fromJson(listingJson()..remove('photos')).photos,
-        isEmpty,
-      );
+      expect(Listing.fromJson(listingJson()..remove('photos')).photos, isEmpty);
     });
 
     test('keeps stored photo paths exactly as the server sent them', () {
       final Listing listing = Listing.fromJson(
-        listingJson(photos: <Object?>['listings/12/front.jpg', 'listings/12/side.jpg']),
+        listingJson(
+          photos: <Object?>['listings/12/front.jpg', 'listings/12/side.jpg'],
+        ),
       );
 
       expect(listing.photos, <String>[
@@ -186,8 +186,14 @@ void main() {
     test('treats a storage-relative path as not loadable', () {
       // There is no upload endpoint and no agreed URL scheme (OQ-09), so the
       // values in flight are not fetchable and must not be handed to a loader.
-      expect(Listing.isDirectlyLoadablePhotoUrl('listings/12/front.jpg'), isFalse);
-      expect(Listing.isDirectlyLoadablePhotoUrl('/storage/listings/12.jpg'), isFalse);
+      expect(
+        Listing.isDirectlyLoadablePhotoUrl('listings/12/front.jpg'),
+        isFalse,
+      );
+      expect(
+        Listing.isDirectlyLoadablePhotoUrl('/storage/listings/12.jpg'),
+        isFalse,
+      );
     });
 
     test('accepts an absolute http or https URL as loadable', () {
@@ -195,12 +201,21 @@ void main() {
         Listing.isDirectlyLoadablePhotoUrl('https://api.test/storage/a.jpg'),
         isTrue,
       );
-      expect(Listing.isDirectlyLoadablePhotoUrl('http://api.test/a.jpg'), isTrue);
+      expect(
+        Listing.isDirectlyLoadablePhotoUrl('http://api.test/a.jpg'),
+        isTrue,
+      );
     });
 
     test('rejects a non-http scheme', () {
-      expect(Listing.isDirectlyLoadablePhotoUrl('ftp://api.test/a.jpg'), isFalse);
-      expect(Listing.isDirectlyLoadablePhotoUrl('javascript:alert(1)'), isFalse);
+      expect(
+        Listing.isDirectlyLoadablePhotoUrl('ftp://api.test/a.jpg'),
+        isFalse,
+      );
+      expect(
+        Listing.isDirectlyLoadablePhotoUrl('javascript:alert(1)'),
+        isFalse,
+      );
     });
 
     test('hasLoadablePhoto is false when only relative paths are present', () {
@@ -284,10 +299,7 @@ void main() {
       final DateTime now = DateTime(2026, 9, 28, 12);
 
       expect(
-        AppFormatters.formatRelative(
-          DateTime(2026, 9, 28, 9),
-          now: now,
-        ),
+        AppFormatters.formatRelative(DateTime(2026, 9, 28, 9), now: now),
         '3 hours ago',
       );
       expect(

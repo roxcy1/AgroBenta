@@ -148,7 +148,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   void _openListing(Listing listing) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => ListingDetailScreen(listingId: listing.id),
+        builder: (BuildContext context) =>
+            ListingDetailScreen(listingId: listing.id),
       ),
     );
   }
@@ -215,7 +216,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           0,
         ),
         itemCount:
-            state.listings.length + 1 + (state.refreshErrorMessage != null ? 1 : 0),
+            state.listings.length +
+            1 +
+            (state.refreshErrorMessage != null ? 1 : 0),
         separatorBuilder: (BuildContext context, int index) =>
             const SizedBox(height: AppSpacing.sm),
         itemBuilder: (BuildContext context, int index) {

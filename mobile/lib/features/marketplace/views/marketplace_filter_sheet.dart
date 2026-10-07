@@ -19,7 +19,8 @@ Future<ListingFilters?> showMarketplaceFilterSheet({
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (BuildContext context) => _MarketplaceFilterSheet(filters: filters),
+    builder: (BuildContext context) =>
+        _MarketplaceFilterSheet(filters: filters),
   );
 }
 
@@ -37,12 +38,16 @@ class _MarketplaceFilterSheet extends StatefulWidget {
   final ListingFilters filters;
 
   @override
-  State<_MarketplaceFilterSheet> createState() => _MarketplaceFilterSheetState();
+  State<_MarketplaceFilterSheet> createState() =>
+      _MarketplaceFilterSheetState();
 }
 
 class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
   late final TextEditingController _livestockType = TextEditingController(
     text: widget.filters.livestockType,
+  );
+  late final TextEditingController _location = TextEditingController(
+    text: widget.filters.location,
   );
   late final TextEditingController _minPrice = TextEditingController(
     text: widget.filters.minPrice,
@@ -58,6 +63,7 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
   @override
   void dispose() {
     _livestockType.dispose();
+    _location.dispose();
     _minPrice.dispose();
     _maxPrice.dispose();
     super.dispose();
@@ -70,6 +76,7 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
   /// value disagreeing after an edit.
   ListingFilters get _current => ListingFilters(
     livestockType: _livestockType.text.trim(),
+    location: _location.text.trim(),
     minPrice: _minPrice.text.trim(),
     maxPrice: _maxPrice.text.trim(),
   );
@@ -102,9 +109,7 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
       // Lifts the sheet above the keyboard, which matters as soon as the price
       // fields are focused — without it the Apply row sits under the keyboard
       // and the form is unusable.
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
@@ -141,6 +146,22 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
                 style: theme.textTheme.labelSmall,
               ),
               const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _location,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Location',
+                  hintText: 'e.g. Nueva Ecija',
+                  prefixIcon: Icon(Icons.place_outlined),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'An exact match on the seller’s location, so partial names are '
+                'best left blank.',
+                style: theme.textTheme.labelSmall,
+              ),
+              const SizedBox(height: AppSpacing.md),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -150,9 +171,7 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      inputFormatters: <TextInputFormatter>[
-                        _decimalOnly,
-                      ],
+                      inputFormatters: <TextInputFormatter>[_decimalOnly],
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
                         labelText: 'Min price',
@@ -168,9 +187,7 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      inputFormatters: <TextInputFormatter>[
-                        _decimalOnly,
-                      ],
+                      inputFormatters: <TextInputFormatter>[_decimalOnly],
                       textInputAction: TextInputAction.done,
                       onSubmitted: (String _) => _apply(),
                       decoration: const InputDecoration(
@@ -192,7 +209,10 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
                 ),
               ],
               const SizedBox(height: AppSpacing.xl),
-              FilledButton(onPressed: _apply, child: const Text('Apply filters')),
+              FilledButton(
+                onPressed: _apply,
+                child: const Text('Apply filters'),
+              ),
               if (widget.filters.isActive) ...<Widget>[
                 const SizedBox(height: AppSpacing.xs),
                 TextButton(

@@ -161,10 +161,7 @@ void main() {
         recorded: recorded,
       );
 
-      await service.login(
-        email: 'ana@example.test',
-        password: 'correct horse',
-      );
+      await service.login(email: 'ana@example.test', password: 'correct horse');
 
       expect(recorded.single.method, 'POST');
       expect(recorded.single.apiPath, '/auth/login');
@@ -220,9 +217,7 @@ void main() {
       final AuthService service = buildAuthService(
         tokenStore,
         (_) async => http.Response(
-          jsonEncode(
-            'This account may not sign in to the mobile application.',
-          ),
+          jsonEncode('This account may not sign in to the mobile application.'),
           403,
         ),
       );
@@ -251,10 +246,8 @@ void main() {
       tokenStore.token = 'stored-token';
       final AuthService service = buildAuthService(
         tokenStore,
-        (_) async => http.Response(
-          jsonEncode(successEnvelope(data: userJson())),
-          200,
-        ),
+        (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
         recorded: recorded,
       );
 

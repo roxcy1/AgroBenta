@@ -53,10 +53,8 @@ void main() {
     test('a stored token loads the current user', () async {
       tokenStore.token = 'stored-token';
       final AuthController controller = controllerFor(
-        (_) async => http.Response(
-          jsonEncode(successEnvelope(data: userJson())),
-          200,
-        ),
+        (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
       );
 
       await controller.restoreSession();
@@ -100,7 +98,10 @@ void main() {
         if (!reachable) {
           throw http.ClientException('connection refused');
         }
-        return http.Response(jsonEncode(successEnvelope(data: userJson())), 200);
+        return http.Response(
+          jsonEncode(successEnvelope(data: userJson())),
+          200,
+        );
       });
 
       await controller.restoreSession();
@@ -135,21 +136,24 @@ void main() {
       expect(tokenStore.token, '1|test-mobile-token');
     });
 
-    test('bad credentials surface the server message and stay signed out', () async {
-      final AuthController controller = controllerFor(
-        (_) async => http.Response(jsonEncode('Invalid credentials.'), 401),
-      );
+    test(
+      'bad credentials surface the server message and stay signed out',
+      () async {
+        final AuthController controller = controllerFor(
+          (_) async => http.Response(jsonEncode('Invalid credentials.'), 401),
+        );
 
-      final bool ok = await controller.signIn(
-        email: 'ana@example.test',
-        password: 'wrong',
-      );
+        final bool ok = await controller.signIn(
+          email: 'ana@example.test',
+          password: 'wrong',
+        );
 
-      expect(ok, isFalse);
-      expect(controller.state.status, AuthStatus.signedOut);
-      expect(controller.state.isSubmitting, isFalse);
-      expect(controller.state.errorMessage, 'Invalid credentials.');
-    });
+        expect(ok, isFalse);
+        expect(controller.state.status, AuthStatus.signedOut);
+        expect(controller.state.isSubmitting, isFalse);
+        expect(controller.state.errorMessage, 'Invalid credentials.');
+      },
+    );
 
     test('an admin account is told the app is not for it', () async {
       final AuthController controller = controllerFor(
@@ -185,7 +189,11 @@ void main() {
       await controller.signIn(email: 'ana@example.test', password: 'nope');
 
       expect(controller.state.status, AuthStatus.signedOut);
-      expect(controller.state.errorMessage, contains('10.0.2.2'));
+      // The network error names the actual configured host — on the default
+      // physical-device Android build that is the machine's LAN address, never
+      // the emulator alias.
+      expect(controller.state.errorMessage, contains('192.168.1.8'));
+      expect(controller.state.errorMessage, isNot(contains('10.0.2.2')));
     });
 
     test('field errors are available to the form', () async {
@@ -257,7 +265,9 @@ void main() {
   group('sign out', () {
     test('revokes the session and returns to the sign-in form', () async {
       tokenStore.token = 'stored-token';
-      final AuthController controller = controllerFor((RecordedRequest entry) async {
+      final AuthController controller = controllerFor((
+        RecordedRequest entry,
+      ) async {
         return http.Response(
           jsonEncode(
             successEnvelope(
@@ -285,11 +295,16 @@ void main() {
 
     test('a failed sign-out keeps the session and shows why', () async {
       tokenStore.token = 'stored-token';
-      final AuthController controller = controllerFor((RecordedRequest entry) async {
+      final AuthController controller = controllerFor((
+        RecordedRequest entry,
+      ) async {
         if (entry.apiPath == '/auth/logout') {
           throw http.ClientException('connection refused');
         }
-        return http.Response(jsonEncode(successEnvelope(data: userJson())), 200);
+        return http.Response(
+          jsonEncode(successEnvelope(data: userJson())),
+          200,
+        );
       });
 
       await controller.restoreSession();

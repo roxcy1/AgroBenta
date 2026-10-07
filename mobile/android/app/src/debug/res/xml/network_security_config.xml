@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AgroBenta DEBUG-ONLY network security configuration.
+
+  This file deliberately shadows src/main/res/xml/network_security_config.xml in
+  debug builds only, so that a physical Android device on the same Wi-Fi as the
+  development machine can reach the plain-HTTP Docker stack:
+
+      flutter run, with the API_BASE_URL dart-define set to
+      http://PC-LAN-IP:8001/api
+
+  ## Why the main config is not enough
+
+  src/main/res/xml/network_security_config.xml permits cleartext for exactly
+  three hosts, 10.0.2.2 (emulator), localhost and 127.0.0.1, and denies it
+  everywhere else. A physical phone is none of those, so Android blocks the
+  request before it leaves the device and the app reports
+  "Could not reach the server" for what is really a cleartext-policy refusal.
+
+  ## Why cleartext is allowed broadly here, and only here
+
+  Android's <domain> elements match hostnames and IP literals. There is no CIDR
+  or subnet syntax, so "any private LAN address" cannot be expressed, and the
+  development machine's LAN IP is assigned by DHCP and changes from session to
+  session. Hard-coding one IP into the main config would break on the next
+  ipconfig run, which is why the main config is left strict instead.
+
+  Rather than track a dynamic address, the permission is granted for the whole
+  debug build type, which is the only build type that ever talks to a
+  developer-controlled LAN over plain HTTP. Debug APKs are never distributed.
+
+  This is NOT a production posture. Release and profile builds keep resolving
+  @xml/network_security_config to src/main/res/xml/network_security_config.xml,
+  which is deny-by-default, so production must be HTTPS. If a staging host
+  genuinely cannot serve TLS, add it to the main config's <domain-config>
+  with cleartextTrafficPermitted="true" and a comment saying so.
+
+  See mobile/AGENTS.md and mobile/lib/core/config/app_config.dart.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

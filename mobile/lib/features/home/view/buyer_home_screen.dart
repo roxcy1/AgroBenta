@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/user.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../auth/state/auth_state.dart';
 import '../../auth/widgets/auth_error_banner.dart';
+import '../../seller_listings/widgets/seller_listings_entry_card.dart';
 import '../../seller_verification/widgets/seller_verification_entry_card.dart';
 
 /// The authenticated landing screen.
@@ -12,10 +14,15 @@ import '../../seller_verification/widgets/seller_verification_entry_card.dart';
 /// A shell, and honestly so. The buyer shell's bottom navigation carries the app
 /// between Home and the Marketplace; this screen states what the account is, says
 /// where the account is in the seller verification flow, and offers a way into
-/// the marketplace. Listing creation, transactions, notifications and messaging
-/// are later phases, and `mobile/DESIGN.md` is explicit that navigation must not
-/// be built for screens that do not exist — so nothing here points at them, and
-/// no placeholder listings are invented to fill the space.
+/// the marketplace. Transactions, notifications and messaging are later phases,
+/// and `mobile/DESIGN.md` is explicit that navigation must not be built for
+/// screens that do not exist — so nothing here points at them, and no placeholder
+/// listings are invented to fill the space.
+///
+/// Listing management is here for sellers only, as a card in this screen's
+/// scroll rather than a tab in the bottom navigation: the navigation is shared
+/// with every buyer, and a tab that leads to a screen the buyer cannot use is
+/// exactly what the design rules forbid.
 class BuyerHomeScreen extends StatelessWidget {
   const BuyerHomeScreen({this.onBrowseMarketplace, super.key});
 
@@ -84,8 +91,15 @@ class BuyerHomeScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Text(
-                    'Welcome, ${user.name}',
+                    'Hello, ${user.name}!',
                     style: theme.textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    'Happy trading!',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   if (state.errorMessage != null) ...<Widget>[
@@ -113,6 +127,14 @@ class BuyerHomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   SellerVerificationEntryCard(user: user),
+                  // Seller-only, and only when `/auth/me` says the account is a
+                  // seller. A buyer never sees it, which is also why My Listings
+                  // is not a tab in the bottom navigation: the tab would exist
+                  // for them and lead to a screen whose every request is a 403.
+                  if (user.isSeller) ...<Widget>[
+                    const SizedBox(height: AppSpacing.lg),
+                    SellerListingsEntryCard(user: user),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   Card(
                     child: Padding(

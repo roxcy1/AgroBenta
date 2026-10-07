@@ -175,8 +175,7 @@ void main() {
 
     test('throws malformedResponse for non-JSON bodies', () async {
       final ApiClient client = buildClient(
-        (http.Request request) async =>
-            http.Response('<html>500</html>', 200),
+        (http.Request request) async => http.Response('<html>500</html>', 200),
       );
 
       await expectLater(
@@ -241,16 +240,18 @@ void main() {
       }
     }
 
-    test('401 is unauthorized, requires re-auth, and clears the token', () async {
-      final ApiException error = await captureStatus(
-        401,
-        <String, dynamic>{'message': 'Unauthenticated.'},
-      );
+    test(
+      '401 is unauthorized, requires re-auth, and clears the token',
+      () async {
+        final ApiException error = await captureStatus(401, <String, dynamic>{
+          'message': 'Unauthenticated.',
+        });
 
-      expect(error.kind, ApiErrorKind.unauthorized);
-      expect(error.requiresReauthentication, isTrue);
-      expect(tokenStore.token, isNull);
-    });
+        expect(error.kind, ApiErrorKind.unauthorized);
+        expect(error.requiresReauthentication, isTrue);
+        expect(tokenStore.token, isNull);
+      },
+    );
 
     test('a 401 while signed out reads as a rejected password', () async {
       // With no token stored, a 401 can only be about the submitted
@@ -315,8 +316,9 @@ void main() {
 
     test('404 is notFound', () async {
       expect(
-        (await captureStatus(404, <String, dynamic>{'message': 'Not found.'}))
-            .kind,
+        (await captureStatus(404, <String, dynamic>{
+          'message': 'Not found.',
+        })).kind,
         ApiErrorKind.notFound,
       );
     });
@@ -361,11 +363,14 @@ void main() {
       );
     });
 
-    test('falls back to a default message when the body carries none', () async {
-      final ApiException error = await captureStatus(403, '');
+    test(
+      'falls back to a default message when the body carries none',
+      () async {
+        final ApiException error = await captureStatus(403, '');
 
-      expect(error.message, isNotEmpty);
-    });
+        expect(error.message, isNotEmpty);
+      },
+    );
 
     test('maps by status code when the error body is not JSON', () async {
       // Regression test. Nginx returns an HTML error page when the PHP

@@ -28,15 +28,13 @@ void main() {
     });
 
     test('rejects a payload with no token', () {
-      final Map<String, dynamic> json = authSessionJson()
-        ..remove('token');
+      final Map<String, dynamic> json = authSessionJson()..remove('token');
 
       expect(() => AuthSession.fromJson(json), throwsFormatException);
     });
 
     test('rejects a payload with no token_type', () {
-      final Map<String, dynamic> json = authSessionJson()
-        ..remove('token_type');
+      final Map<String, dynamic> json = authSessionJson()..remove('token_type');
 
       expect(() => AuthSession.fromJson(json), throwsFormatException);
     });

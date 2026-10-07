@@ -90,10 +90,7 @@ class User {
       id: readInt(json, 'id'),
       name: readString(json, 'name'),
       email: readString(json, 'email'),
-      role: _readEnum(
-        readNullableString(json, 'role'),
-        UserRole.fromValue,
-      ),
+      role: _readEnum(readNullableString(json, 'role'), UserRole.fromValue),
       sellerCapability: _readEnum(
         readNullableString(json, 'seller_capability'),
         SellerCapability.fromValue,

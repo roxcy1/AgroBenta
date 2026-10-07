@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 /// Canonical AgroBenta colour palette.
 ///
-/// Every value here is a 1:1 mirror of a design token that already exists in
-/// `frontend/src/index.css` (`:root`). Keeping the two in sync is what makes the
-/// Admin Web and this app read as one product rather than two.
+/// The hex values are the mobile design targets in `mobile/DESIGN.md` §3.
+/// They are intentionally **not** a mirror of the Admin Web tokens in
+/// `frontend/src/index.css`: the web palette uses darker, Material-derived
+/// greens, while this list is the approved mobile prototype palette. Keeping
+/// the two aligned in accent and proportion is what makes the products read as
+/// one system; the exact values differ by platform.
 ///
 /// Rules for using this palette:
 ///  * Do not add ad-hoc `Color(0xFF...)` literals in feature code. If a new
@@ -18,44 +21,49 @@ import 'package:flutter/material.dart';
 abstract final class AppColors {
   // --- Brand ---------------------------------------------------------------
 
-  /// Primary brand green. The main identity and accent colour of AgroBenta.
-  static const Color primary = Color(0xFF1B5E20);
+  /// Primary brand green. App bars, primary buttons, selected navigation,
+  /// links and important actions. (`#006B4F`)
+  static const Color primary = Color(0xFF006B4F);
 
-  /// Lighter brand green. Used for pressed/hovered states and tonal surfaces
-  /// derived from [primary].
-  static const Color primaryLight = Color(0xFF2E7D32);
+  /// Primary-action green ("marketplace green"). Brighter accent used for
+  /// pressed/hovered brand states and tonal highlights. (`#008A5A`)
+  static const Color primaryLight = Color(0xFF008A5A);
 
-  /// Darkest brand green. Used for pressed states and for text/icons that must
-  /// sit on a light brand surface.
-  static const Color primaryDark = Color(0xFF0D3B12);
+  /// Darkest brand green — the "dark header" deep green, for header bands and
+  /// brand surfaces that must read darker than [primary]. (`#005A43`)
+  static const Color primaryDark = Color(0xFF005A43);
+
+  /// Very light green surface. Information panels, selected/active surfaces,
+  /// seller-related highlights and AI suggestion backgrounds. (`#EAF7F0`)
+  static const Color primarySurface = Color(0xFFEAF7F0);
 
   // --- Semantic status -----------------------------------------------------
 
-  /// Success, and semantically "approved / active / completed".
-  static const Color success = Color(0xFF2E7D32);
+  /// Success, and semantically "approved / active / completed". (`#168A4A`)
+  static const Color success = Color(0xFF168A4A);
 
-  /// Warning, and semantically "pending / awaiting review".
-  static const Color warning = Color(0xFFF57F17);
+  /// Warning, and semantically "pending / awaiting review". (`#D98B00`)
+  static const Color warning = Color(0xFFD98B00);
 
-  /// Error, and semantically "rejected / failed / invalid".
-  static const Color error = Color(0xFFC62828);
+  /// Error, and semantically "rejected / failed / invalid". (`#C93636`)
+  static const Color error = Color(0xFFC93636);
 
   // --- Surfaces ------------------------------------------------------------
 
   /// Screen background. Light neutral, not white, so cards can sit on top.
-  static const Color background = Color(0xFFF5F5F5);
+  static const Color background = Color(0xFFF7F8F7);
 
   /// Card, sheet and dialog surface.
   static const Color surface = Color(0xFFFFFFFF);
 
   /// Hairline borders and dividers. Prefer this over shadows for separation.
-  static const Color border = Color(0xFFE0E0E0);
+  static const Color border = Color(0xFFD9DEE3);
 
   // --- Text ----------------------------------------------------------------
 
   /// Primary body and heading text.
-  static const Color text = Color(0xFF1A1A1A);
+  static const Color text = Color(0xFF202124);
 
   /// Secondary text: captions, helper copy, metadata.
-  static const Color textSecondary = Color(0xFF666666);
+  static const Color textSecondary = Color(0xFF6B7280);
 }

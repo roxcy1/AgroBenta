@@ -272,10 +272,7 @@ class Listing {
     return uri.scheme == 'http' || uri.scheme == 'https';
   }
 
-  static String? _readNullableDecimal(
-    Map<String, dynamic> json,
-    String key,
-  ) {
+  static String? _readNullableDecimal(Map<String, dynamic> json, String key) {
     final Object? value = json[key];
     if (value == null) {
       return null;

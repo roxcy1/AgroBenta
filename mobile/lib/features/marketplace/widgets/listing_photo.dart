@@ -70,8 +70,9 @@ class ListingPhoto extends StatelessWidget {
               // A failed load must not leave a broken-image glyph. Falling back
               // to the same placeholder is indistinguishable from "no photo",
               // which is the truth from the buyer's point of view.
-              errorBuilder: (BuildContext context, Object error, StackTrace? _) =>
-                  _Placeholder(hasPhotos: true),
+              errorBuilder:
+                  (BuildContext context, Object error, StackTrace? _) =>
+                      _Placeholder(hasPhotos: true),
               loadingBuilder:
                   (
                     BuildContext context,

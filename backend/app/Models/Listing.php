@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'seller_id', 'livestock_type', 'breed', 'age_value', 'age_unit',
     'gender', 'weight_value', 'weight_unit', 'quantity', 'asking_price',
     'location', 'health_status', 'vaccination', 'short_description',
-    'additional_notes', 'photos', 'status',
+    'additional_notes', 'photos', 'status', 'admin_note',
 ])]
 class Listing extends Model
 {
@@ -27,6 +27,8 @@ class Listing extends Model
             'status' => ListingStatus::class,
             'photos' => 'array',
             'quantity' => 'integer',
+            'age_value' => 'decimal:1',
+            'weight_value' => 'decimal:2',
             'asking_price' => 'decimal:2',
         ];
     }

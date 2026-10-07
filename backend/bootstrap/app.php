@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\EnsureUserIsApprovedSeller;
 use App\Http\Middleware\ForceJsonResponse;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -27,6 +28,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
             'admin' => EnsureUserIsAdmin::class,
+            // The seller-side counterpart of `admin`. Named for the capability
+            // rather than the role, because under the single-account model a
+            // seller is still `role = user`; what gates the routes is
+            // `seller_capability = seller`.
+            'seller' => EnsureUserIsApprovedSeller::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -94,7 +94,8 @@ class SellerVerificationService {
     );
   }
 
-  static bool _present(String? value) => value != null && value.trim().isNotEmpty;
+  static bool _present(String? value) =>
+      value != null && value.trim().isNotEmpty;
 
   /// Casts an unwrapped `data` payload to a JSON object with a message that
   /// names the endpoint, instead of a bare cast error. A [FormatException] here

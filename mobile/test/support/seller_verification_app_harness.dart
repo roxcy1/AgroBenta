@@ -19,11 +19,10 @@ import 'seller_verification_fakes.dart';
 SellerVerificationRepository unusedRepository() =>
     buildSellerVerificationRepository(
       FakeTokenStore('unused'),
-      (RecordedRequest request) async =>
-          throw StateError(
-            'The test did not expect a seller verification request to '
-            '${request.method} ${request.apiPath}.',
-          ),
+      (RecordedRequest request) async => throw StateError(
+        'The test did not expect a seller verification request to '
+        '${request.method} ${request.apiPath}.',
+      ),
     );
 
 /// Wraps [child] in a [SellerVerificationScope], as `main.dart` does.
@@ -79,8 +78,7 @@ class _NeverSubmittedVerificationScopeState
     super.initState();
     _controller = buildSellerVerificationController(
       FakeTokenStore('unused'),
-      (RecordedRequest request) async =>
-          sellerVerificationNotFoundResponse(),
+      (RecordedRequest request) async => sellerVerificationNotFoundResponse(),
     );
   }
 
@@ -153,7 +151,11 @@ class SellerVerificationHarness {
     );
     await settleSellerVerification(tester);
 
-    return SellerVerificationHarness._(controller, recorded, capabilityRefreshes);
+    return SellerVerificationHarness._(
+      controller,
+      recorded,
+      capabilityRefreshes,
+    );
   }
 }
 
@@ -187,7 +189,10 @@ Future<void> openSellerVerificationForm(
 /// the form after a successful submission takes ~300ms, so too few frames leaves
 /// the form mid-transition and still in the tree, and an assertion about where
 /// the user ended up would then be reading a frame that never existed.
-Future<void> settleSellerVerification(WidgetTester tester, {int frames = 12}) async {
+Future<void> settleSellerVerification(
+  WidgetTester tester, {
+  int frames = 12,
+}) async {
   for (int frame = 0; frame < frames; frame++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
