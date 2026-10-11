@@ -46,6 +46,29 @@ class SellerVerificationTest extends TestCase
         ], $overrides));
     }
 
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function verificationFor(User $seller, array $overrides = []): SellerVerification
+    {
+        return SellerVerification::create(array_merge([
+            'user_id' => $seller->id,
+            'business_name' => 'Test Livestock Farm',
+            'business_location' => 'Bukidnon',
+            'business_description' => 'A test livestock farm',
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now(),
+        ], $overrides));
+    }
+
+    private function applicant(): User
+    {
+        return User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+    }
+
     public function test_guest_cannot_access_verifications(): void
     {
         $response = $this->getJson('/api/admin/seller-verifications');
@@ -287,7 +310,9 @@ class SellerVerificationTest extends TestCase
         ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
-            ->postJson("/api/admin/seller-verifications/{$verification->id}/reject");
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/reject", [
+                'admin_note' => 'Incomplete documentation.',
+            ]);
 
         $response->assertStatus(200);
 
@@ -302,7 +327,9 @@ class SellerVerificationTest extends TestCase
         $verification = $this->createVerification();
 
         $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
-            ->postJson("/api/admin/seller-verifications/{$verification->id}/reject");
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/reject", [
+                'admin_note' => 'Incomplete documentation.',
+            ]);
 
         $response->assertStatus(200);
 
@@ -317,7 +344,9 @@ class SellerVerificationTest extends TestCase
         $verification = $this->createVerification();
 
         $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
-            ->postJson("/api/admin/seller-verifications/{$verification->id}/reject");
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/reject", [
+                'admin_note' => 'Incomplete documentation.',
+            ]);
 
         $response->assertStatus(200);
 
@@ -381,5 +410,247 @@ class SellerVerificationTest extends TestCase
         $data = $response->json('data');
         $this->assertEquals(1, $data['pagination']['total']);
         $this->assertEquals('rejected', $data['verifications'][0]['status']);
+    }
+
+    public function test_rejection_requires_an_admin_note(): void
+    {
+        $verification = $this->createVerification();
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/reject");
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('admin_note');
+
+        // Refused, not applied: the record is still awaiting review.
+        $this->assertEquals(SellerVerificationStatus::Submitted, $verification->fresh()->status);
+    }
+
+    public function test_rejection_revokes_seller_capability(): void
+    {
+        $seller = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Seller,
+        ]);
+
+        // An approved applicant who is re-reviewed and rejected must lose the
+        // capability the earlier approval granted (F-09b).
+        $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDays(10),
+            'reviewed_at' => now()->subDays(9),
+        ]);
+        $current = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now(),
+        ]);
+
+        $this->assertSame(SellerCapability::Seller, $seller->fresh()->seller_capability);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$current->id}/reject", [
+                'admin_note' => 'Rejected on re-review.',
+            ]);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $seller->id,
+            'seller_capability' => 'buyer',
+        ]);
+    }
+
+    public function test_stale_record_cannot_be_approved(): void
+    {
+        $seller = $this->applicant();
+
+        $stale = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now()->subDays(5),
+        ]);
+        $latest = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$stale->id}/approve");
+
+        $response->assertStatus(409);
+
+        $this->assertSame(SellerCapability::Buyer, $seller->fresh()->seller_capability);
+        $this->assertEquals(SellerVerificationStatus::Submitted, $stale->fresh()->status);
+        $this->assertEquals(SellerVerificationStatus::Submitted, $latest->fresh()->status);
+    }
+
+    public function test_stale_record_cannot_be_rejected(): void
+    {
+        $seller = $this->applicant();
+
+        $stale = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now()->subDays(5),
+        ]);
+        $latest = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$stale->id}/reject", [
+                'admin_note' => 'Intended for the older record.',
+            ]);
+
+        $response->assertStatus(409);
+
+        $this->assertEquals(SellerVerificationStatus::Submitted, $stale->fresh()->status);
+        $this->assertEquals(SellerVerificationStatus::Submitted, $latest->fresh()->status);
+    }
+
+    public function test_stale_approval_cannot_regrant_capability_after_a_newer_rejection(): void
+    {
+        $seller = $this->applicant();
+
+        $stale = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now()->subDays(10),
+        ]);
+        $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Rejected,
+            'admin_note' => 'Newer rejection stands.',
+            'submitted_at' => now(),
+            'reviewed_at' => now(),
+        ]);
+
+        // Approving the stale record would silently re-grant selling after the
+        // newer rejection. It must be refused (F-09).
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$stale->id}/approve");
+
+        $response->assertStatus(409);
+
+        $this->assertSame(SellerCapability::Buyer, $seller->fresh()->seller_capability);
+        $this->assertEquals(SellerVerificationStatus::Submitted, $stale->fresh()->status);
+    }
+
+    public function test_already_reviewed_record_cannot_be_reviewed_again(): void
+    {
+        $verification = $this->createVerification([
+            'status' => SellerVerificationStatus::Approved,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/approve");
+
+        $response->assertStatus(409);
+    }
+
+    public function test_list_shows_only_the_latest_record_per_applicant(): void
+    {
+        $seller = $this->applicant();
+
+        $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now()->subDays(5),
+        ]);
+        $current = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Rejected,
+            'admin_note' => 'Rejected.',
+            'submitted_at' => now(),
+            'reviewed_at' => now(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/seller-verifications');
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('data.pagination.total'));
+        $this->assertEquals($current->id, $response->json('data.verifications.0.id'));
+        $this->assertEquals('rejected', $response->json('data.verifications.0.status'));
+
+        // The stale older record must not surface under its own status filter.
+        $filtered = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/seller-verifications?status=submitted');
+
+        $this->assertEquals(0, $filtered->json('data.pagination.total'));
+    }
+
+    public function test_latest_record_ties_are_broken_by_id(): void
+    {
+        $seller = $this->applicant();
+        $at = now();
+
+        $first = $this->verificationFor($seller, ['submitted_at' => $at]);
+        $second = $this->verificationFor($seller, ['submitted_at' => $at]);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$first->id}/approve")
+            ->assertStatus(409);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$second->id}/approve")
+            ->assertStatus(200);
+    }
+
+    public function test_show_returns_prior_submissions_as_history(): void
+    {
+        $seller = $this->applicant();
+
+        $older = $this->verificationFor($seller, [
+            'business_name' => 'First attempt',
+            'submitted_at' => now()->subDays(5),
+        ]);
+        $current = $this->verificationFor($seller, [
+            'business_name' => 'Second attempt',
+            'submitted_at' => now(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/seller-verifications/{$current->id}");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.id', $current->id);
+        $response->assertJsonCount(1, 'history');
+        $response->assertJsonPath('history.0.id', $older->id);
+    }
+
+    public function test_admin_surface_requires_the_admin_ability(): void
+    {
+        $admin = User::factory()->create([
+            'role' => UserRole::Admin,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+        $verification = $this->createVerification();
+
+        // A mobile-scoped token owned by an admin must still be refused.
+        $token = $admin->createToken('mobile', ['mobile'])->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/approve")
+            ->assertStatus(403);
+    }
+
+    public function test_rejection_note_reaches_the_applicant(): void
+    {
+        $seller = $this->applicant();
+        $verification = $this->verificationFor($seller);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/reject", [
+                'admin_note' => 'The ID reference could not be verified.',
+            ])
+            ->assertStatus(200);
+
+        // Sanctum caches the resolved user across requests in one test, so the
+        // guard is forgotten before authenticating as a different principal.
+        $this->app['auth']->forgetGuards();
+
+        $token = $seller->createToken('mobile', ['mobile'])->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/seller-verification/me')
+            ->assertStatus(200)
+            ->assertJsonPath('data.status', SellerVerificationStatus::Rejected->value)
+            ->assertJsonPath('data.admin_note', 'The ID reference could not be verified.');
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListSellerVerificationsRequest;
+use App\Http\Requests\Admin\RejectSellerVerificationRequest;
 use App\Http\Requests\Admin\ReviewSellerVerificationRequest;
 use App\Http\Resources\SellerVerificationResource;
 use App\Models\SellerVerification;
@@ -43,7 +44,8 @@ class SellerVerificationController extends Controller
     }
 
     /**
-     * Show a single seller verification request.
+     * Show a single seller verification request, with the applicant's prior
+     * submissions so the full review history is visible.
      */
     public function show(SellerVerification $sellerVerification): JsonResponse
     {
@@ -52,6 +54,9 @@ class SellerVerificationController extends Controller
         return response()->json([
             'success' => true,
             'data' => new SellerVerificationResource($sellerVerification),
+            'history' => SellerVerificationResource::collection(
+                $this->verifications->historyFor($sellerVerification),
+            ),
         ], 200);
     }
 
@@ -76,7 +81,7 @@ class SellerVerificationController extends Controller
     /**
      * Reject a seller verification request.
      */
-    public function reject(SellerVerification $sellerVerification, ReviewSellerVerificationRequest $request): JsonResponse
+    public function reject(SellerVerification $sellerVerification, RejectSellerVerificationRequest $request): JsonResponse
     {
         $result = $this->verifications->reject(
             $sellerVerification,
