@@ -194,7 +194,7 @@ class TransactionTest extends TestCase
     {
         $listing = $this->createListing();
 
-        Transaction::create([
+        Transaction::forceCreate([
             'buyer_id' => $this->buyer->id,
             'seller_id' => $this->seller->id,
             'listing_id' => $listing->id,
@@ -204,7 +204,7 @@ class TransactionTest extends TestCase
             'created_at' => now()->subDays(10),
         ]);
 
-        Transaction::create([
+        Transaction::forceCreate([
             'buyer_id' => $this->buyer->id,
             'seller_id' => $this->seller->id,
             'listing_id' => $listing->id,
@@ -227,12 +227,16 @@ class TransactionTest extends TestCase
     {
         $listing = $this->createListing();
 
-        Transaction::factory()->count(24)->create([
-            'buyer_id' => $this->buyer->id,
-            'seller_id' => $this->seller->id,
-            'listing_id' => $listing->id,
-            'status' => TransactionStatus::Pending,
-        ]);
+        for ($i = 0; $i < 25; $i++) {
+            Transaction::create([
+                'buyer_id' => $this->buyer->id,
+                'seller_id' => $this->seller->id,
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+                'total_amount' => 50000.00,
+                'status' => TransactionStatus::Pending,
+            ]);
+        }
 
         $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
             ->getJson('/api/admin/transactions?per_page=10&page=1');
@@ -338,5 +342,50 @@ class TransactionTest extends TestCase
         $data = $response->json('data');
         $this->assertEquals($second->id, $data['transactions'][0]['id']);
         $this->assertEquals($first->id, $data['transactions'][1]['id']);
+    }
+
+    public function test_results_with_equal_created_at_are_ordered_by_id_desc(): void
+    {
+        $listing = $this->createListing();
+        $timestamp = now()->subDay();
+
+        $first = Transaction::create([
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 1,
+            'total_amount' => 50000.00,
+            'status' => TransactionStatus::Completed,
+            'created_at' => $timestamp,
+        ]);
+
+        $second = Transaction::create([
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 1,
+            'total_amount' => 50000.00,
+            'status' => TransactionStatus::Pending,
+            'created_at' => $timestamp,
+        ]);
+
+        $third = Transaction::create([
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 1,
+            'total_amount' => 50000.00,
+            'status' => TransactionStatus::Cancelled,
+            'created_at' => $timestamp,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/transactions');
+
+        $response->assertStatus(200);
+
+        $ids = array_column($response->json('data.transactions'), 'id');
+
+        $this->assertSame([$third->id, $second->id, $first->id], $ids);
     }
 }
