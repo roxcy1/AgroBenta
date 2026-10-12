@@ -26,12 +26,17 @@ function formatDate(dateString: string): string {
 export function TransactionsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [appliedDates, setAppliedDates] = useState<{ date_from?: string; date_to?: string }>({});
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
 
   const { data, isLoading, error, refetch } = useTransactions({
     search: search || undefined,
     status: statusFilter || undefined,
+    date_from: appliedDates.date_from,
+    date_to: appliedDates.date_to,
     page,
     per_page: 15,
   });
@@ -49,6 +54,21 @@ export function TransactionsPage() {
 
   const handleStatusChange = (value: string) => {
     setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handleApplyDates = () => {
+    const filters: { date_from?: string; date_to?: string } = {};
+    if (dateFrom) filters.date_from = dateFrom;
+    if (dateTo) filters.date_to = dateTo;
+    setAppliedDates(filters);
+    setPage(1);
+  };
+
+  const handleClearDates = () => {
+    setDateFrom('');
+    setDateTo('');
+    setAppliedDates({});
     setPage(1);
   };
 
@@ -109,6 +129,45 @@ export function TransactionsPage() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <div className="reports-filter-row">
+          <div className="reports-filter-group">
+            <label className="reports-filter-label" htmlFor="transactions-date-from">
+              From Date
+            </label>
+            <input
+              id="transactions-date-from"
+              type="date"
+              className="reports-filter-input"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+
+          <div className="reports-filter-group">
+            <label className="reports-filter-label" htmlFor="transactions-date-to">
+              To Date
+            </label>
+            <input
+              id="transactions-date-to"
+              type="date"
+              className="reports-filter-input"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+
+          <div className="reports-filter-actions">
+            <button type="button" className="lv-search-button" onClick={handleApplyDates}>
+              Apply
+            </button>
+            {(dateFrom || dateTo) && (
+              <button type="button" className="reports-clear-button" onClick={handleClearDates}>
+                Clear
+              </button>
+            )}
           </div>
         </div>
       </div>
