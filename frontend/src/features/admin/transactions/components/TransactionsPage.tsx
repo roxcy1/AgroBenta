@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useTransactions } from '../api/useTransactions';
+import { useTransactions, fetchAllTransactions } from '../api/useTransactions';
 import type { Transaction } from '../api/useTransactions';
+import { buildTransactionsCsv, buildTransactionsFilename, downloadCsv } from '../csv';
 import TransactionDetailDialog from './TransactionDetailDialog';
 
 const STATUS_OPTIONS = [
@@ -34,6 +35,8 @@ export function TransactionsPage() {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useTransactions({
     search: search || undefined,
@@ -77,6 +80,27 @@ export function TransactionsPage() {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
+  };
+
+  const handleExportCsv = async () => {
+    if (isExporting) return;
+
+    setIsExporting(true);
+    setExportError(null);
+
+    try {
+      const transactionsToExport = await fetchAllTransactions({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        date_from: appliedDates.date_from,
+        date_to: appliedDates.date_to,
+      });
+      downloadCsv(buildTransactionsFilename(), buildTransactionsCsv(transactionsToExport));
+    } catch {
+      setExportError('Failed to export transactions. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (isLoading) {
@@ -133,6 +157,15 @@ export function TransactionsPage() {
               ))}
             </select>
           </div>
+
+          <button
+            type="button"
+            className="reports-clear-button"
+            onClick={handleExportCsv}
+            disabled={isExporting}
+          >
+            {isExporting ? 'Exporting…' : 'Export CSV'}
+          </button>
         </div>
 
         <div className="reports-filter-row">
@@ -174,6 +207,8 @@ export function TransactionsPage() {
           </div>
         </div>
       </div>
+
+      {exportError && <p className="lv-error-text">{exportError}</p>}
 
       {transactions.length === 0 ? (
         <div className="lv-empty">
