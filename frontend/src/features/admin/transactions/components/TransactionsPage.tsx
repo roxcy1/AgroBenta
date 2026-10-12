@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { useTransactions } from '../api/useTransactions';
+import { useTransactions, fetchAllTransactions } from '../api/useTransactions';
+import type { Transaction } from '../api/useTransactions';
+import { buildTransactionsCsv, buildTransactionsFilename, downloadCsv } from '../csv';
+import TransactionDetailDialog from './TransactionDetailDialog';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -26,12 +29,20 @@ function formatDate(dateString: string): string {
 export function TransactionsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [appliedDates, setAppliedDates] = useState<{ date_from?: string; date_to?: string }>({});
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useTransactions({
     search: search || undefined,
     status: statusFilter || undefined,
+    date_from: appliedDates.date_from,
+    date_to: appliedDates.date_to,
     page,
     per_page: 15,
   });
@@ -52,8 +63,44 @@ export function TransactionsPage() {
     setPage(1);
   };
 
+  const handleApplyDates = () => {
+    const filters: { date_from?: string; date_to?: string } = {};
+    if (dateFrom) filters.date_from = dateFrom;
+    if (dateTo) filters.date_to = dateTo;
+    setAppliedDates(filters);
+    setPage(1);
+  };
+
+  const handleClearDates = () => {
+    setDateFrom('');
+    setDateTo('');
+    setAppliedDates({});
+    setPage(1);
+  };
+
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
+  };
+
+  const handleExportCsv = async () => {
+    if (isExporting) return;
+
+    setIsExporting(true);
+    setExportError(null);
+
+    try {
+      const transactionsToExport = await fetchAllTransactions({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        date_from: appliedDates.date_from,
+        date_to: appliedDates.date_to,
+      });
+      downloadCsv(buildTransactionsFilename(), buildTransactionsCsv(transactionsToExport));
+    } catch {
+      setExportError('Failed to export transactions. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (isLoading) {
@@ -110,8 +157,58 @@ export function TransactionsPage() {
               ))}
             </select>
           </div>
+
+          <button
+            type="button"
+            className="reports-clear-button"
+            onClick={handleExportCsv}
+            disabled={isExporting}
+          >
+            {isExporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div>
+
+        <div className="reports-filter-row">
+          <div className="reports-filter-group">
+            <label className="reports-filter-label" htmlFor="transactions-date-from">
+              From Date
+            </label>
+            <input
+              id="transactions-date-from"
+              type="date"
+              className="reports-filter-input"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+
+          <div className="reports-filter-group">
+            <label className="reports-filter-label" htmlFor="transactions-date-to">
+              To Date
+            </label>
+            <input
+              id="transactions-date-to"
+              type="date"
+              className="reports-filter-input"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+
+          <div className="reports-filter-actions">
+            <button type="button" className="lv-search-button" onClick={handleApplyDates}>
+              Apply
+            </button>
+            {(dateFrom || dateTo) && (
+              <button type="button" className="reports-clear-button" onClick={handleClearDates}>
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {exportError && <p className="lv-error-text">{exportError}</p>}
 
       {transactions.length === 0 ? (
         <div className="lv-empty">
@@ -131,6 +228,7 @@ export function TransactionsPage() {
                   <th>Total Amount</th>
                   <th>Status</th>
                   <th>Date</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -148,6 +246,17 @@ export function TransactionsPage() {
                       </span>
                     </td>
                     <td className="lv-date-cell">{formatDate(tx.created_at)}</td>
+                    <td>
+                      <div className="lv-action-buttons">
+                        <button
+                          type="button"
+                          className="lv-action-btn lv-action-btn--view"
+                          onClick={() => setSelectedTransaction(tx)}
+                        >
+                          View
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -180,6 +289,13 @@ export function TransactionsPage() {
             </div>
           )}
         </>
+      )}
+
+      {selectedTransaction && (
+        <TransactionDetailDialog
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+        />
       )}
     </div>
   );

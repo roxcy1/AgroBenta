@@ -833,9 +833,14 @@ input {
   transition: background 0.18s, border-color 0.18s;
 }
 
-.reports-clear-button:hover {
+.reports-clear-button:hover:not(:disabled) {
   background: var(--color-bg);
   border-color: var(--color-primary);
+}
+
+.reports-clear-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Users Page */
@@ -1178,6 +1183,9 @@ input {
 }
 
 .lv-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -1227,8 +1235,13 @@ input {
   transition: background 0.18s;
 }
 
-.lv-search-button:hover {
+.lv-search-button:hover:not(:disabled) {
   background: var(--color-primary-light);
+}
+
+.lv-search-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .lv-filters {
@@ -1396,6 +1409,17 @@ input {
 
 .lv-action-btn--reject:hover:not(:disabled) {
   background: #FFCDD2;
+}
+
+.lv-action-btn--view {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.lv-action-btn--view:hover:not(:disabled) {
+  background: var(--color-bg);
+  border-color: var(--color-primary);
 }
 
 .lv-action-btn:disabled {

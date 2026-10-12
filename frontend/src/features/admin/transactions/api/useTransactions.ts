@@ -73,6 +73,28 @@ async function fetchTransactions(params: TransactionsParams): Promise<Transactio
   return response.data.data;
 }
 
+/**
+ * Fetches every transaction matching the given filters, walking all pages.
+ *
+ * The backend caps `per_page` at 100, so each page is requested at that size and
+ * iteration continues until the reported `last_page` is reached. Results are
+ * returned in the same order the API serves them.
+ */
+export async function fetchAllTransactions(
+  params: Omit<TransactionsParams, 'page' | 'per_page'>,
+): Promise<Transaction[]> {
+  const firstPage = await fetchTransactions({ ...params, page: 1, per_page: 100 });
+  const all: Transaction[] = [...firstPage.transactions];
+  const lastPage = firstPage.pagination.last_page;
+
+  for (let page = 2; page <= lastPage; page += 1) {
+    const nextPage = await fetchTransactions({ ...params, page, per_page: 100 });
+    all.push(...nextPage.transactions);
+  }
+
+  return all;
+}
+
 export function useTransactions(params: TransactionsParams) {
   return useQuery({
     queryKey: ['admin', 'transactions', params],
