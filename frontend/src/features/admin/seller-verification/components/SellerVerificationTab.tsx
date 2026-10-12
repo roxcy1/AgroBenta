@@ -68,6 +68,7 @@ export function SellerVerificationTab() {
 
   const handleConfirmAction = () => {
     if (!actionTarget) return;
+    if (actionTarget.action === 'reject' && actionNote.trim() === '') return;
 
     if (actionTarget.action === 'approve') {
       approveMutation.mutate(
@@ -154,11 +155,11 @@ export function SellerVerificationTab() {
             <p className="lv-action-modal-desc">
               {actionTarget.action === 'approve'
                 ? 'This will grant the applicant seller capability on the platform.'
-                : 'This will reject the verification request. The applicant will remain a buyer.'}
+                : 'This will reject the verification request and revoke seller capability, returning the applicant to a buyer.'}
             </p>
             <div className="lv-action-modal-field">
               <label className="lv-action-modal-label" htmlFor="admin-note">
-                Admin Note (optional)
+                {actionTarget.action === 'approve' ? 'Admin Note (optional)' : 'Admin Note (required)'}
               </label>
               <textarea
                 id="admin-note"
@@ -182,7 +183,7 @@ export function SellerVerificationTab() {
                 type="button"
                 className={`lv-action-confirm lv-action-confirm--${actionTarget.action}`}
                 onClick={handleConfirmAction}
-                disabled={isProcessing}
+                disabled={isProcessing || (actionTarget.action === 'reject' && actionNote.trim() === '')}
               >
                 {isProcessing
                   ? 'Processing...'

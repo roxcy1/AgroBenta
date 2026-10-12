@@ -6,6 +6,8 @@ use App\Enums\SellerVerificationStatus;
 use App\Models\SellerVerification;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 
 class AdminSellerVerificationRepository
 {
@@ -16,11 +18,13 @@ class AdminSellerVerificationRepository
     ): LengthAwarePaginator {
         $query = SellerVerification::with(['seller:id,name,email', 'reviewer:id,name']);
 
+        $this->onlyLatestPerUser($query);
         $this->applySearch($query, $search);
         $this->applyFilters($query, $status);
 
         return $query
-            ->orderByDesc('created_at')
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
             ->paginate($perPage);
     }
 
@@ -28,6 +32,52 @@ class AdminSellerVerificationRepository
     {
         return SellerVerification::with(['seller:id,name,email', 'reviewer:id,name'])
             ->find($id);
+    }
+
+    /**
+     * Resolve the applicant's most recent record. A record is "most recent"
+     * when it scores highest on `submitted_at desc, id desc`.
+     */
+    public function latestForUser(int $userId): ?SellerVerification
+    {
+        return SellerVerification::query()
+            ->where('user_id', $userId)
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Prior records for the same applicant, newest first.
+     */
+    public function historyFor(int $userId, int $excludeId): Collection
+    {
+        return SellerVerification::with(['seller:id,name,email', 'reviewer:id,name'])
+            ->where('user_id', $userId)
+            ->whereKeyNot($excludeId)
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
+     * Keep only the most recent record per applicant so a stale older record
+     * is never shown as the applicant's current state.
+     */
+    private function onlyLatestPerUser(Builder $query): void
+    {
+        $query->whereNotExists(function (QueryBuilder $sub): void {
+            $sub->selectRaw('1')
+                ->from('seller_verifications as later')
+                ->whereColumn('later.user_id', 'seller_verifications.user_id')
+                ->where(function (QueryBuilder $later): void {
+                    $later->whereColumn('later.submitted_at', '>', 'seller_verifications.submitted_at')
+                        ->orWhere(function (QueryBuilder $tie): void {
+                            $tie->whereColumn('later.submitted_at', '=', 'seller_verifications.submitted_at')
+                                ->whereColumn('later.id', '>', 'seller_verifications.id');
+                        });
+                });
+        });
     }
 
     private function applySearch(Builder $query, ?string $search): void
