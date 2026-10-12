@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useTransactions } from '../api/useTransactions';
+import type { Transaction } from '../api/useTransactions';
+import TransactionDetailDialog from './TransactionDetailDialog';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -31,6 +33,7 @@ export function TransactionsPage() {
   const [appliedDates, setAppliedDates] = useState<{ date_from?: string; date_to?: string }>({});
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
   const { data, isLoading, error, refetch } = useTransactions({
     search: search || undefined,
@@ -190,6 +193,7 @@ export function TransactionsPage() {
                   <th>Total Amount</th>
                   <th>Status</th>
                   <th>Date</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -207,6 +211,17 @@ export function TransactionsPage() {
                       </span>
                     </td>
                     <td className="lv-date-cell">{formatDate(tx.created_at)}</td>
+                    <td>
+                      <div className="lv-action-buttons">
+                        <button
+                          type="button"
+                          className="lv-action-btn lv-action-btn--view"
+                          onClick={() => setSelectedTransaction(tx)}
+                        >
+                          View
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -239,6 +254,13 @@ export function TransactionsPage() {
             </div>
           )}
         </>
+      )}
+
+      {selectedTransaction && (
+        <TransactionDetailDialog
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+        />
       )}
     </div>
   );

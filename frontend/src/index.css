@@ -1401,6 +1401,17 @@ input {
   background: #FFCDD2;
 }
 
+.lv-action-btn--view {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.lv-action-btn--view:hover:not(:disabled) {
+  background: var(--color-bg);
+  border-color: var(--color-primary);
+}
+
 .lv-action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
