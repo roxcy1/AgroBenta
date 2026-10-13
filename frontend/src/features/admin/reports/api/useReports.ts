@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 
 export interface ReportOverview {
@@ -123,6 +123,7 @@ export function useReports(params: ReportParams = {}) {
   return useQuery({
     queryKey: ['admin', 'reports', params],
     queryFn: () => fetchReports(params),
+    placeholderData: keepPreviousData,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     retry: 1,

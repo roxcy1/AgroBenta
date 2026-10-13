@@ -1,32 +1,49 @@
-import { ArrowLeftRight, Package, Store, Users as UsersIcon } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  ArrowLeftRight,
+  ArrowRight,
+  Clock,
+  PackageCheck,
+  Store,
+  Users as UsersIcon,
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
 import { useDashboard } from '../api/useDashboard';
-import { Header } from './Header';
+import { useReports } from '../reports/api/useReports';
+import { formatDate } from './dashboardFormat';
+import { RecentListingsTable } from './RecentListingsTable';
+import { RecentTransactionsTable } from './RecentTransactionsTable';
+import { TopNavBar } from './TopNavBar';
 
 const PIE_COLORS = ['#1B5E20', '#2E7D32', '#4CAF50', '#66BB6A', '#81C784', '#A5D6A7', '#C8E6C9'];
 
-function formatCurrency(value: number): string {
-  if (value === 0) return '₱0';
-  return `₱${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 export function Dashboard() {
+  const [search, setSearch] = useState('');
   const { data, isLoading, error, refetch } = useDashboard();
+  const {
+    data: reportsData,
+    isLoading: reportsLoading,
+    error: reportsError,
+    refetch: refetchReports,
+  } = useReports({});
 
   if (isLoading) {
     return (
       <>
-        <Header title="Dashboard" subtitle="Welcome, Administrator" />
+        <TopNavBar search={search} onSearchChange={setSearch} />
         <div className="dashboard-content">
           <div className="dashboard-loading">
             <div className="loading-spinner" />
@@ -40,7 +57,7 @@ export function Dashboard() {
   if (error) {
     return (
       <>
-        <Header title="Dashboard" subtitle="Welcome, Administrator" />
+        <TopNavBar search={search} onSearchChange={setSearch} />
         <div className="dashboard-content">
           <div className="dashboard-error">
             <p className="dashboard-error-text">Failed to load dashboard data.</p>
@@ -56,7 +73,7 @@ export function Dashboard() {
   if (!data) {
     return (
       <>
-        <Header title="Dashboard" subtitle="Welcome, Administrator" />
+        <TopNavBar search={search} onSearchChange={setSearch} />
         <div className="dashboard-content">
           <div className="dashboard-empty">
             <p>No dashboard data available.</p>
@@ -66,11 +83,43 @@ export function Dashboard() {
     );
   }
 
-  const { summary, listings, transactions, transaction_trend, livestock_distribution, recent_activities } = data;
+  const {
+    summary,
+    listings,
+    transactions,
+    transaction_trend,
+    livestock_distribution,
+    recent_activities,
+    recent_listings = [],
+    recent_transactions = [],
+  } = data;
+
+  const now = new Date();
+  const currentMonthIndex = now.getMonth();
+  const currentMonthLabel = now.toLocaleDateString('en-PH', {
+    month: 'short',
+    year: 'numeric',
+  });
+  const transactionsThisMonth = transaction_trend[currentMonthIndex]?.count ?? 0;
+
+  const listingStatusData = [
+    { status: 'Draft', count: listings.draft, color: '#9E9E9E' },
+    { status: 'Pending', count: listings.pending, color: '#F57F17' },
+    { status: 'Active', count: listings.active, color: '#1B5E20' },
+    { status: 'Sold', count: listings.sold, color: '#1565C0' },
+    { status: 'Inactive', count: listings.inactive, color: '#BDBDBD' },
+  ];
+
+  const approvedVerifications = reportsData?.seller_verifications.approved ?? 0;
+  const rejectedVerifications = reportsData?.seller_verifications.rejected ?? 0;
+  const verificationOutcomeData = [
+    { outcome: 'Approved', count: approvedVerifications, color: '#2E7D32' },
+    { outcome: 'Rejected', count: rejectedVerifications, color: '#C62828' },
+  ];
 
   return (
     <>
-      <Header title="Dashboard" subtitle="Welcome, Administrator" />
+      <TopNavBar search={search} onSearchChange={setSearch} />
 
       <div className="dashboard-content">
         <div className="dashboard-welcome">
@@ -79,7 +128,7 @@ export function Dashboard() {
           </p>
         </div>
 
-        <div className="dashboard-stats-grid">
+        <div className="dashboard-stats-grid dashboard-stats-grid--five">
           <div className="dashboard-stat-card">
             <div className="dashboard-stat-icon dashboard-stat-icon--users">
               <UsersIcon className="dashboard-stat-icon-svg" aria-hidden="true" />
@@ -91,8 +140,18 @@ export function Dashboard() {
           </div>
 
           <div className="dashboard-stat-card">
+            <div className="dashboard-stat-icon dashboard-stat-icon--sellers">
+              <Store className="dashboard-stat-icon-svg" aria-hidden="true" />
+            </div>
+            <div className="dashboard-stat-info">
+              <span className="dashboard-stat-value">{summary.approved_sellers}</span>
+              <span className="dashboard-stat-label">Active Sellers</span>
+            </div>
+          </div>
+
+          <div className="dashboard-stat-card">
             <div className="dashboard-stat-icon dashboard-stat-icon--listings">
-              <Package className="dashboard-stat-icon-svg" aria-hidden="true" />
+              <PackageCheck className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
             <div className="dashboard-stat-info">
               <span className="dashboard-stat-value">{summary.active_listings}</span>
@@ -100,23 +159,31 @@ export function Dashboard() {
             </div>
           </div>
 
+          <Link
+            to="/seller-verification"
+            className="dashboard-stat-card dashboard-stat-card--pending dashboard-stat-card--link"
+          >
+            <div className="dashboard-stat-icon dashboard-stat-icon--pending">
+              <Clock className="dashboard-stat-icon-svg" aria-hidden="true" />
+            </div>
+            <div className="dashboard-stat-info">
+              <span className="dashboard-stat-value">{summary.pending_verifications ?? 0}</span>
+              <span className="dashboard-stat-label">Pending Verifications</span>
+              <span className="dashboard-stat-pending-action">
+                Review queue
+                <ArrowRight className="dashboard-stat-pending-arrow" aria-hidden="true" />
+              </span>
+            </div>
+          </Link>
+
           <div className="dashboard-stat-card">
             <div className="dashboard-stat-icon dashboard-stat-icon--transactions">
               <ArrowLeftRight className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
             <div className="dashboard-stat-info">
-              <span className="dashboard-stat-value">{summary.total_transactions}</span>
-              <span className="dashboard-stat-label">Transactions</span>
-            </div>
-          </div>
-
-          <div className="dashboard-stat-card">
-            <div className="dashboard-stat-icon dashboard-stat-icon--sellers">
-              <Store className="dashboard-stat-icon-svg" aria-hidden="true" />
-            </div>
-            <div className="dashboard-stat-info">
-              <span className="dashboard-stat-value">{summary.approved_sellers}</span>
-              <span className="dashboard-stat-label">Approved Sellers</span>
+              <span className="dashboard-stat-value">{transactionsThisMonth}</span>
+              <span className="dashboard-stat-label">Transactions This Month</span>
+              <span className="dashboard-stat-sublabel">{currentMonthLabel}</span>
             </div>
           </div>
         </div>
@@ -124,22 +191,88 @@ export function Dashboard() {
         <div className="dashboard-section">
           <h2 className="dashboard-section-title">Marketplace Overview</h2>
 
-          <div className="dashboard-charts-grid">
+          <div className="dashboard-charts-grid dashboard-charts-grid--flow">
             <div className="dashboard-chart-card">
-              <h3 className="dashboard-chart-title">Transaction Trend ({new Date().getFullYear()})</h3>
+              <h3 className="dashboard-chart-title">Listings by Status</h3>
+              {listings.total > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart
+                    data={listingStatusData}
+                    layout="vertical"
+                    margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
+                    <YAxis type="category" dataKey="status" width={82} tick={{ fontSize: 12 }} stroke="#666666" />
+                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={{ fontSize: 13 }} />
+                    <Bar dataKey="count" radius={[0, 2, 2, 0]} name="Listings">
+                      {listingStatusData.map((entry) => (
+                        <Cell key={entry.status} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="dashboard-chart-empty">
+                  <p>No listing data available.</p>
+                </div>
+              )}
+              <p className="dashboard-chart-caption">
+                Current counts by status. Administrator approval is the only path from
+                Pending to Active (D-02) — this shows current totals, not a transition history.
+              </p>
+            </div>
+
+            <div className="dashboard-chart-card">
+              <h3 className="dashboard-chart-title">Verifications by Outcome</h3>
+              {reportsLoading ? (
+                <div className="dashboard-chart-empty">
+                  <div className="loading-spinner" />
+                </div>
+              ) : reportsError ? (
+                <div className="dashboard-chart-empty">
+                  <p>Failed to load verification data.</p>
+                  <button type="button" className="dashboard-retry-button" onClick={() => refetchReports()}>
+                    Retry
+                  </button>
+                </div>
+              ) : approvedVerifications + rejectedVerifications > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart
+                    data={verificationOutcomeData}
+                    margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
+                    <XAxis dataKey="outcome" tick={{ fontSize: 12 }} stroke="#666666" />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
+                    <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={{ fontSize: 13 }} />
+                    <Bar dataKey="count" radius={[2, 2, 0, 0]} name="Verifications">
+                      {verificationOutcomeData.map((entry) => (
+                        <Cell key={entry.outcome} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="dashboard-chart-empty">
+                  <p>No decided verifications yet.</p>
+                </div>
+              )}
+              <p className="dashboard-chart-caption">
+                Approved versus rejected outcomes to date. Rejected applications may require
+                seller follow-up.
+              </p>
+            </div>
+
+            <div className="dashboard-chart-card">
+              <h3 className="dashboard-chart-title">Transactions Over Time (Monthly, {now.getFullYear()})</h3>
               {transaction_trend.some(item => item.count > 0) ? (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={transaction_trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#666666" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="#666666" />
-                    <Tooltip
-                      formatter={(value, name) => [
-                        name === 'count' ? String(value) : formatCurrency(Number(value ?? 0)),
-                        name === 'count' ? 'Transactions' : 'Revenue',
-                      ]}
-                      contentStyle={{ fontSize: 13 }}
-                    />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
+                    <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={{ fontSize: 13 }} />
                     <Bar dataKey="count" fill="#1B5E20" radius={[2, 2, 0, 0]} name="Transactions" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -148,12 +281,16 @@ export function Dashboard() {
                   <p>No transaction data for this year.</p>
                 </div>
               )}
+              <p className="dashboard-chart-caption">
+                Monthly buckets for the current calendar year — not a rolling 30-day total,
+                and not a measure of completed payments.
+              </p>
             </div>
 
             <div className="dashboard-chart-card">
-              <h3 className="dashboard-chart-title">Livestock Distribution</h3>
+              <h3 className="dashboard-chart-title">Livestock Listings Overview</h3>
               {livestock_distribution.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
                     <Pie
                       data={livestock_distribution}
@@ -182,6 +319,28 @@ export function Dashboard() {
               )}
             </div>
           </div>
+        </div>
+
+        <div className="dashboard-section">
+          <div className="dashboard-section-header">
+            <h2 className="dashboard-section-title">Recent Livestock Listings</h2>
+            <Link to="/livestock" className="dashboard-view-all">View all</Link>
+          </div>
+
+          <RecentListingsTable listings={recent_listings} filter={search} />
+        </div>
+
+        <div className="dashboard-section">
+          <div className="dashboard-section-header">
+            <h2 className="dashboard-section-title">Recent Transactions</h2>
+            <Link to="/transactions" className="dashboard-view-all">View all</Link>
+          </div>
+          <p className="dashboard-section-caption">
+            Amounts shown are recorded arrangement values — not revenue, earnings, or payments
+            processed by AgroBenta.
+          </p>
+
+          <RecentTransactionsTable transactions={recent_transactions} filter={search} />
         </div>
 
         <div className="dashboard-section">
