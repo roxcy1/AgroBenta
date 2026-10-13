@@ -104,3 +104,43 @@ export function useTransactions(params: TransactionsParams) {
     retry: 1,
   });
 }
+
+export interface TransactionStatusCounts {
+  total: number;
+  pending: number;
+  completed: number;
+  cancelled: number;
+}
+
+/**
+ * Aggregate transaction counts for the status cards.
+ *
+ * The list endpoint already reports `pagination.total` for the query it ran,
+ * which is the server's `count(*)` rather than the size of the returned page.
+ * Requesting one row per status therefore yields exact totals without adding a
+ * counting endpoint. The four requests share a single query key so the cards
+ * have one loading state.
+ */
+export function useTransactionCounts() {
+  return useQuery({
+    queryKey: ['admin', 'transactions', 'counts'],
+    queryFn: async (): Promise<TransactionStatusCounts> => {
+      const [all, pending, completed, cancelled] = await Promise.all([
+        fetchTransactions({ per_page: 1 }),
+        fetchTransactions({ status: 'pending', per_page: 1 }),
+        fetchTransactions({ status: 'completed', per_page: 1 }),
+        fetchTransactions({ status: 'cancelled', per_page: 1 }),
+      ]);
+
+      return {
+        total: all.pagination.total,
+        pending: pending.pagination.total,
+        completed: completed.pagination.total,
+        cancelled: cancelled.pagination.total,
+      };
+    },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}

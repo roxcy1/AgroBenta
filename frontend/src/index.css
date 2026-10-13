@@ -1331,9 +1331,19 @@ input {
   color: #E65100;
 }
 
+.lv-stat-icon--completed {
+  background: #E8F5E9;
+  color: #1B5E20;
+}
+
 .lv-stat-icon--active {
   background: #E8F5E9;
   color: #1B5E20;
+}
+
+.lv-stat-icon--cancelled {
+  background: #FFEBEE;
+  color: #C62828;
 }
 
 .lv-stat-icon--inactive {
