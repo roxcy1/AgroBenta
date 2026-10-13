@@ -10,6 +10,8 @@ use App\Repositories\Admin\AdminSellerVerificationRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Notifications\SellerVerificationApproved;
+use App\Notifications\SellerVerificationRejected;
 
 class AdminSellerVerificationService
 {
@@ -92,11 +94,26 @@ class AdminSellerVerificationService
             // guards on purpose. It is only ever set from this trusted path.
             // Approval grants selling; rejection revokes it, so a previously
             // approved applicant who is later rejected is no longer a seller.
-            $applicant->forceFill([
+                      $applicant->forceFill([
                 'seller_capability' => $to === SellerVerificationStatus::Approved
                     ? SellerCapability::Seller
                     : SellerCapability::Buyer,
             ])->save();
+
+            // Fire the applicant's notification. Inside the transaction, on
+            // purpose: if the notification write fails, the whole decision
+            // rolls back and the admin sees the error. A silently un-notified
+            // approval is worse than a failed one, because the applicant would
+            // be a seller without knowing it.
+            //
+            // Laravel's `database` channel is what `via()` returns, so the write
+            // is a plain INSERT into `notifications` — no queue worker, no
+            // external service, nothing that could be unavailable.
+            $notification = $to === SellerVerificationStatus::Approved
+                ? new SellerVerificationApproved($latest->fresh())
+                : new SellerVerificationRejected($latest->fresh());
+
+            $applicant->notify($notification);
 
             return $latest->fresh(['seller:id,name,email', 'reviewer:id,name']);
         });
