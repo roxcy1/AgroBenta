@@ -1323,6 +1323,9 @@ input {
 }
 
 .lv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 12px 24px;
   background: none;
   border: none;
@@ -1341,6 +1344,26 @@ input {
 .lv-tab--active {
   color: var(--color-primary);
   border-bottom-color: var(--color-primary);
+}
+
+.lv-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
+
+.lv-tab--active .lv-tab-count {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .lv-tab-content {

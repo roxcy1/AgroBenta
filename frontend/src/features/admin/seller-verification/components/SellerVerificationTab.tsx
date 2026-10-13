@@ -1,21 +1,18 @@
 import { useState } from 'react';
+import type { SellerVerification } from '../api/useSellerVerifications';
 import {
+  useSellerVerificationCounts,
   useSellerVerifications,
-  useApproveVerification,
-  useRejectVerification,
 } from '../api/useSellerVerifications';
-
-const STATUS_OPTIONS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'pending_review', label: 'Pending Review' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-] as const;
+import type { VerificationActionConfig, VerificationStatus } from './verificationModeration';
+import { VERIFICATION_TABS, statusLabel, verificationActionsFor } from './verificationModeration';
+import VerificationDetailsDialog from './VerificationDetailsDialog';
+import VerificationReviewDialog from './VerificationReviewDialog';
 
 function formatDate(dateString: string | null): string {
-  if (!dateString) return '—';
+  if (!dateString) return '\u2014';
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '\u2014';
   return date.toLocaleDateString('en-PH', {
     year: 'numeric',
     month: 'short',
@@ -24,22 +21,29 @@ function formatDate(dateString: string | null): string {
 }
 
 export function SellerVerificationTab() {
+  const [activeStatus, setActiveStatus] = useState<VerificationStatus>('submitted');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
-  const [actionNote, setActionNote] = useState('');
-  const [actionTarget, setActionTarget] = useState<{ id: number; action: 'approve' | 'reject' } | null>(null);
+  const [page, setPage] = useState(1);
+  const [detailsId, setDetailsId] = useState<number | null>(null);
+  const [decision, setDecision] = useState<{
+    verification: SellerVerification;
+    action: VerificationActionConfig;
+  } | null>(null);
 
   const { data, isLoading, error, refetch } = useSellerVerifications({
     search: search || undefined,
-    status: statusFilter || undefined,
+    status: activeStatus,
     page,
     per_page: 15,
   });
 
-  const approveMutation = useApproveVerification();
-  const rejectMutation = useRejectVerification();
+  const { data: counts } = useSellerVerificationCounts();
+
+  const handleTabSelect = (status: VerificationStatus) => {
+    setActiveStatus(status);
+    setPage(1);
+  };
 
   const handleSearch = () => {
     setSearch(searchInput);
@@ -52,68 +56,44 @@ export function SellerVerificationTab() {
     }
   };
 
-  const handleStatusChange = (value: string) => {
-    setStatusFilter(value);
-    setPage(1);
-  };
-
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleActionClick = (id: number, action: 'approve' | 'reject') => {
-    setActionTarget({ id, action });
-    setActionNote('');
-  };
-
-  const handleConfirmAction = () => {
-    if (!actionTarget) return;
-    if (actionTarget.action === 'reject' && actionNote.trim() === '') return;
-
-    if (actionTarget.action === 'approve') {
-      approveMutation.mutate(
-        { id: actionTarget.id, adminNote: actionNote || undefined },
-        { onSettled: () => setActionTarget(null) },
-      );
-    } else {
-      rejectMutation.mutate(
-        { id: actionTarget.id, adminNote: actionNote || undefined },
-        { onSettled: () => setActionTarget(null) },
-      );
+  const handleRowKeyDown = (
+    e: React.KeyboardEvent<HTMLTableRowElement>,
+    verification: SellerVerification,
+  ) => {
+    // Only the row itself should open the details view: a keypress on one of the
+    // action buttons inside it bubbles here too, and would otherwise open the
+    // details dialog behind the review dialog.
+    if (e.key === 'Enter' && e.target === e.currentTarget) {
+      setDetailsId(verification.id);
     }
   };
 
-  const handleCancelAction = () => {
-    setActionTarget(null);
-    setActionNote('');
-  };
-
-  if (isLoading) {
-    return (
-      <div className="lv-loading">
-        <div className="loading-spinner" />
-        <span>Loading verification requests...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="lv-error">
-        <p className="lv-error-text">Failed to load verification requests.</p>
-        <button type="button" className="lv-retry-button" onClick={() => refetch()}>
-          Retry
-        </button>
-      </div>
-    );
-  }
-
   const verifications = data?.verifications ?? [];
   const pagination = data?.pagination;
-  const isProcessing = approveMutation.isPending || rejectMutation.isPending;
 
   return (
     <div className="lv-tab-content">
+      <div className="lv-tabs" role="tablist" aria-label="Verification status">
+        {VERIFICATION_TABS.map((tab) => {
+          const isActive = tab.value === activeStatus;
+          const count = counts?.[tab.value];
+
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={`lv-tab${isActive ? ' lv-tab--active' : ''}`}
+              onClick={() => handleTabSelect(tab.value)}
+            >
+              {tab.label}
+              {count !== undefined && <span className="lv-tab-count">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="lv-controls">
         <div className="lv-search-row">
           <div className="lv-search-wrapper">
@@ -129,74 +109,22 @@ export function SellerVerificationTab() {
               Search
             </button>
           </div>
-
-          <div className="lv-filters">
-            <select
-              className="lv-filter-select"
-              value={statusFilter}
-              onChange={(e) => handleStatusChange(e.target.value)}
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
       </div>
 
-      {actionTarget && (
-        <div className="lv-action-modal-overlay">
-          <div className="lv-action-modal">
-            <h3 className="lv-action-modal-title">
-              {actionTarget.action === 'approve' ? 'Approve Verification' : 'Reject Verification'}
-            </h3>
-            <p className="lv-action-modal-desc">
-              {actionTarget.action === 'approve'
-                ? 'This will grant the applicant seller capability on the platform.'
-                : 'This will reject the verification request and revoke seller capability, returning the applicant to a buyer.'}
-            </p>
-            <div className="lv-action-modal-field">
-              <label className="lv-action-modal-label" htmlFor="admin-note">
-                {actionTarget.action === 'approve' ? 'Admin Note (optional)' : 'Admin Note (required)'}
-              </label>
-              <textarea
-                id="admin-note"
-                className="lv-action-modal-textarea"
-                rows={3}
-                value={actionNote}
-                onChange={(e) => setActionNote(e.target.value)}
-                placeholder="Add a note for this decision..."
-              />
-            </div>
-            <div className="lv-action-modal-buttons">
-              <button
-                type="button"
-                className="lv-action-cancel"
-                onClick={handleCancelAction}
-                disabled={isProcessing}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={`lv-action-confirm lv-action-confirm--${actionTarget.action}`}
-                onClick={handleConfirmAction}
-                disabled={isProcessing || (actionTarget.action === 'reject' && actionNote.trim() === '')}
-              >
-                {isProcessing
-                  ? 'Processing...'
-                  : actionTarget.action === 'approve'
-                    ? 'Approve'
-                    : 'Reject'}
-              </button>
-            </div>
-          </div>
+      {isLoading ? (
+        <div className="lv-loading">
+          <div className="loading-spinner" />
+          <span>Loading verification requests...</span>
         </div>
-      )}
-
-      {verifications.length === 0 ? (
+      ) : error ? (
+        <div className="lv-error">
+          <p className="lv-error-text">Failed to load verification requests.</p>
+          <button type="button" className="lv-retry-button" onClick={() => refetch()}>
+            Retry
+          </button>
+        </div>
+      ) : verifications.length === 0 ? (
         <div className="lv-empty">
           <p>No seller verification requests found.</p>
         </div>
@@ -216,41 +144,41 @@ export function SellerVerificationTab() {
                 </tr>
               </thead>
               <tbody>
-                {verifications.map((v) => (
-                  <tr key={v.id}>
-                    <td className="lv-name-cell">{v.seller.name}</td>
-                    <td>{v.business_name}</td>
-                    <td>{v.business_location ?? '—'}</td>
+                {verifications.map((verification) => (
+                  <tr
+                    key={verification.id}
+                    className="lv-listings-row"
+                    tabIndex={0}
+                    aria-label={`View details for ${verification.seller?.name ?? 'applicant'}`}
+                    onClick={() => setDetailsId(verification.id)}
+                    onKeyDown={(event) => handleRowKeyDown(event, verification)}
+                  >
+                    <td className="lv-name-cell">{verification.seller?.name ?? '\u2014'}</td>
+                    <td>{verification.business_name}</td>
+                    <td>{verification.business_location ?? '\u2014'}</td>
                     <td>
-                      <span className={`lv-badge lv-badge--${v.status}`}>
-                        {v.status === 'pending_review'
-                          ? 'Pending Review'
-                          : v.status.charAt(0).toUpperCase() + v.status.slice(1)}
+                      <span className={`lv-badge lv-badge--${verification.status}`}>
+                        {statusLabel(verification.status)}
                       </span>
                     </td>
-                    <td className="lv-date-cell">{formatDate(v.submitted_at)}</td>
-                    <td className="lv-date-cell">{formatDate(v.reviewed_at)}</td>
+                    <td className="lv-date-cell">{formatDate(verification.submitted_at)}</td>
+                    <td className="lv-date-cell">{formatDate(verification.reviewed_at)}</td>
                     <td>
-                      {(v.status === 'submitted' || v.status === 'pending_review') && (
-                        <div className="lv-action-buttons">
+                      <div
+                        className="lv-action-buttons"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {verificationActionsFor(verification.status).map((action) => (
                           <button
+                            key={action.action}
                             type="button"
-                            className="lv-action-btn lv-action-btn--approve"
-                            onClick={() => handleActionClick(v.id, 'approve')}
-                            disabled={isProcessing}
+                            className={`lv-action-btn lv-action-btn--${action.variant}`}
+                            onClick={() => setDecision({ verification, action })}
                           >
-                            Approve
+                            {action.label}
                           </button>
-                          <button
-                            type="button"
-                            className="lv-action-btn lv-action-btn--reject"
-                            onClick={() => handleActionClick(v.id, 'reject')}
-                            disabled={isProcessing}
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
+                        ))}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -264,7 +192,7 @@ export function SellerVerificationTab() {
                 type="button"
                 className="lv-page-button"
                 disabled={pagination.current_page <= 1}
-                onClick={() => handlePageChange(pagination.current_page - 1)}
+                onClick={() => setPage(pagination.current_page - 1)}
               >
                 Previous
               </button>
@@ -277,13 +205,29 @@ export function SellerVerificationTab() {
                 type="button"
                 className="lv-page-button"
                 disabled={pagination.current_page >= pagination.last_page}
-                onClick={() => handlePageChange(pagination.current_page + 1)}
+                onClick={() => setPage(pagination.current_page + 1)}
               >
                 Next
               </button>
             </div>
           )}
         </>
+      )}
+
+      {decision && (
+        <VerificationReviewDialog
+          key={`${decision.verification.id}-${decision.action.action}`}
+          verification={decision.verification}
+          action={decision.action}
+          onClose={() => setDecision(null)}
+        />
+      )}
+
+      {detailsId !== null && (
+        <VerificationDetailsDialog
+          verificationId={detailsId}
+          onClose={() => setDetailsId(null)}
+        />
       )}
     </div>
   );
