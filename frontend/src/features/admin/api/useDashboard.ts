@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
+import type { ListingStatus } from '../livestock/components/listingModeration';
 
 export interface DashboardSummary {
   total_users: number;
   buyer_accounts: number;
   approved_sellers: number;
+  pending_verifications: number;
   total_listings: number;
   active_listings: number;
   total_transactions: number;
@@ -50,6 +52,33 @@ export interface DashboardActivity {
   user: DashboardActivityUser | null;
 }
 
+export interface DashboardRecentListing {
+  id: number;
+  livestock_type: string;
+  breed: string;
+  asking_price: string;
+  status: ListingStatus;
+  seller: DashboardActivityUser | null;
+  created_at: string;
+}
+
+export interface DashboardTransactionListing {
+  id: number;
+  livestock_type: string;
+  breed: string;
+}
+
+export interface DashboardRecentTransaction {
+  id: number;
+  buyer: DashboardActivityUser | null;
+  seller: DashboardActivityUser | null;
+  listing: DashboardTransactionListing | null;
+  quantity: number;
+  total_amount: string;
+  status: 'pending' | 'completed' | 'cancelled';
+  created_at: string;
+}
+
 export interface DashboardData {
   summary: DashboardSummary;
   listings: DashboardListings;
@@ -57,6 +86,8 @@ export interface DashboardData {
   transaction_trend: TransactionTrendItem[];
   livestock_distribution: LivestockDistributionItem[];
   recent_activities: DashboardActivity[];
+  recent_listings: DashboardRecentListing[];
+  recent_transactions: DashboardRecentTransaction[];
 }
 
 interface DashboardResponse {

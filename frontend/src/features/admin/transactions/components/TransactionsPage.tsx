@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useTransactions, fetchAllTransactions } from '../api/useTransactions';
+import { useTransactions, useTransactionCounts, fetchAllTransactions } from '../api/useTransactions';
 import type { Transaction } from '../api/useTransactions';
 import { buildTransactionsCsv, buildTransactionsFilename, downloadCsv } from '../csv';
 import TransactionDetailDialog from './TransactionDetailDialog';
+import TransactionStatsCards from './TransactionStatsCards';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -47,6 +48,8 @@ export function TransactionsPage() {
     per_page: 15,
   });
 
+  const { data: counts } = useTransactionCounts();
+
   const handleSearch = () => {
     setSearch(searchInput);
     setPage(1);
@@ -60,6 +63,11 @@ export function TransactionsPage() {
 
   const handleStatusChange = (value: string) => {
     setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handleStatusCardSelect = (status: string) => {
+    setStatusFilter((current) => (current === status ? '' : status));
     setPage(1);
   };
 
@@ -103,190 +111,192 @@ export function TransactionsPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="lv-loading">
-        <div className="loading-spinner" />
-        <span>Loading transactions...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="lv-error">
-        <p className="lv-error-text">Failed to load transactions.</p>
-        <button type="button" className="lv-retry-button" onClick={() => refetch()}>
-          Retry
-        </button>
-      </div>
-    );
-  }
-
   const transactions = data?.transactions ?? [];
   const pagination = data?.pagination;
 
   return (
     <div className="lv-tab-content">
-      <div className="lv-controls">
-        <div className="lv-search-row">
-          <div className="lv-search-wrapper">
-            <input
-              type="text"
-              className="lv-search-input"
-              placeholder="Search by ID, buyer, seller, or livestock..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-            />
-            <button type="button" className="lv-search-button" onClick={handleSearch}>
-              Search
-            </button>
-          </div>
+      <TransactionStatsCards
+        counts={counts}
+        activeStatus={statusFilter}
+        onSelect={handleStatusCardSelect}
+      />
 
-          <div className="lv-filters">
-            <select
-              className="lv-filter-select"
-              value={statusFilter}
-              onChange={(e) => handleStatusChange(e.target.value)}
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            type="button"
-            className="reports-clear-button"
-            onClick={handleExportCsv}
-            disabled={isExporting}
-          >
-            {isExporting ? 'Exporting…' : 'Export CSV'}
+      {isLoading ? (
+        <div className="lv-loading">
+          <div className="loading-spinner" />
+          <span>Loading transactions...</span>
+        </div>
+      ) : error ? (
+        <div className="lv-error">
+          <p className="lv-error-text">Failed to load transactions.</p>
+          <button type="button" className="lv-retry-button" onClick={() => refetch()}>
+            Retry
           </button>
-        </div>
-
-        <div className="reports-filter-row">
-          <div className="reports-filter-group">
-            <label className="reports-filter-label" htmlFor="transactions-date-from">
-              From Date
-            </label>
-            <input
-              id="transactions-date-from"
-              type="date"
-              className="reports-filter-input"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
-          </div>
-
-          <div className="reports-filter-group">
-            <label className="reports-filter-label" htmlFor="transactions-date-to">
-              To Date
-            </label>
-            <input
-              id="transactions-date-to"
-              type="date"
-              className="reports-filter-input"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </div>
-
-          <div className="reports-filter-actions">
-            <button type="button" className="lv-search-button" onClick={handleApplyDates}>
-              Apply
-            </button>
-            {(dateFrom || dateTo) && (
-              <button type="button" className="reports-clear-button" onClick={handleClearDates}>
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {exportError && <p className="lv-error-text">{exportError}</p>}
-
-      {transactions.length === 0 ? (
-        <div className="lv-empty">
-          <p>No transactions found.</p>
         </div>
       ) : (
         <>
-          <div className="lv-table-container">
-            <table className="lv-table">
-              <thead>
-                <tr>
-                  <th>Transaction ID</th>
-                  <th>Buyer</th>
-                  <th>Seller</th>
-                  <th>Livestock</th>
-                  <th>Qty</th>
-                  <th>Total Amount</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx) => (
-                  <tr key={tx.id}>
-                    <td className="lv-name-cell">#{tx.id}</td>
-                    <td className="lv-seller-cell">{tx.buyer.name}</td>
-                    <td className="lv-seller-cell">{tx.seller.name}</td>
-                    <td>{tx.listing.livestock_type} / {tx.listing.breed}</td>
-                    <td>{tx.quantity}</td>
-                    <td className="lv-price-cell">{formatCurrency(tx.total_amount)}</td>
-                    <td>
-                      <span className={`lv-badge lv-badge--${tx.status}`}>
-                        {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="lv-date-cell">{formatDate(tx.created_at)}</td>
-                    <td>
-                      <div className="lv-action-buttons">
-                        <button
-                          type="button"
-                          className="lv-action-btn lv-action-btn--view"
-                          onClick={() => setSelectedTransaction(tx)}
-                        >
-                          View
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <div className="lv-controls">
+            <div className="lv-search-row">
+              <div className="lv-search-wrapper">
+                <input
+                  type="text"
+                  className="lv-search-input"
+                  placeholder="Search by ID, buyer, seller, or livestock..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                />
+                <button type="button" className="lv-search-button" onClick={handleSearch}>
+                  Search
+                </button>
+              </div>
 
-          {pagination && pagination.last_page > 1 && (
-            <div className="lv-pagination">
+              <div className="lv-filters">
+                <select
+                  className="lv-filter-select"
+                  value={statusFilter}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <button
                 type="button"
-                className="lv-page-button"
-                disabled={pagination.current_page <= 1}
-                onClick={() => handlePageChange(pagination.current_page - 1)}
+                className="reports-clear-button"
+                onClick={handleExportCsv}
+                disabled={isExporting}
               >
-                Previous
-              </button>
-              <span className="lv-page-info">
-                Page {pagination.current_page} of {pagination.last_page}
-                {' '}
-                <span className="lv-page-total">({pagination.total} transactions)</span>
-              </span>
-              <button
-                type="button"
-                className="lv-page-button"
-                disabled={pagination.current_page >= pagination.last_page}
-                onClick={() => handlePageChange(pagination.current_page + 1)}
-              >
-                Next
+                {isExporting ? 'Exporting…' : 'Export CSV'}
               </button>
             </div>
+
+            <div className="reports-filter-row">
+              <div className="reports-filter-group">
+                <label className="reports-filter-label" htmlFor="transactions-date-from">
+                  From Date
+                </label>
+                <input
+                  id="transactions-date-from"
+                  type="date"
+                  className="reports-filter-input"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </div>
+
+              <div className="reports-filter-group">
+                <label className="reports-filter-label" htmlFor="transactions-date-to">
+                  To Date
+                </label>
+                <input
+                  id="transactions-date-to"
+                  type="date"
+                  className="reports-filter-input"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </div>
+
+              <div className="reports-filter-actions">
+                <button type="button" className="lv-search-button" onClick={handleApplyDates}>
+                  Apply
+                </button>
+                {(dateFrom || dateTo) && (
+                  <button type="button" className="reports-clear-button" onClick={handleClearDates}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {exportError && <p className="lv-error-text">{exportError}</p>}
+
+          {transactions.length === 0 ? (
+            <div className="lv-empty">
+              <p>No transactions found.</p>
+            </div>
+          ) : (
+            <>
+              <div className="lv-table-container">
+                <table className="lv-table">
+                  <thead>
+                    <tr>
+                      <th>Transaction ID</th>
+                      <th>Buyer</th>
+                      <th>Seller</th>
+                      <th>Livestock</th>
+                      <th>Qty</th>
+                      <th>Total Amount</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.map((tx) => (
+                      <tr key={tx.id}>
+                        <td className="lv-name-cell">#{tx.id}</td>
+                        <td className="lv-seller-cell">{tx.buyer.name}</td>
+                        <td className="lv-seller-cell">{tx.seller.name}</td>
+                        <td>{tx.listing.livestock_type} / {tx.listing.breed}</td>
+                        <td>{tx.quantity}</td>
+                        <td className="lv-price-cell">{formatCurrency(tx.total_amount)}</td>
+                        <td>
+                          <span className={`lv-badge lv-badge--${tx.status}`}>
+                            {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="lv-date-cell">{formatDate(tx.created_at)}</td>
+                        <td>
+                          <div className="lv-action-buttons">
+                            <button
+                              type="button"
+                              className="lv-action-btn lv-action-btn--view"
+                              onClick={() => setSelectedTransaction(tx)}
+                            >
+                              View
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {pagination && pagination.last_page > 1 && (
+                <div className="lv-pagination">
+                  <button
+                    type="button"
+                    className="lv-page-button"
+                    disabled={pagination.current_page <= 1}
+                    onClick={() => handlePageChange(pagination.current_page - 1)}
+                  >
+                    Previous
+                  </button>
+                  <span className="lv-page-info">
+                    Page {pagination.current_page} of {pagination.last_page}
+                    {' '}
+                    <span className="lv-page-total">({pagination.total} transactions)</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="lv-page-button"
+                    disabled={pagination.current_page >= pagination.last_page}
+                    onClick={() => handlePageChange(pagination.current_page + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

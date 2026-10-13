@@ -31,10 +31,27 @@ export function ReportsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [appliedFilters, setAppliedFilters] = useState<{ date_from?: string; date_to?: string }>({});
+  const [validationError, setValidationError] = useState('');
 
-  const { data, isLoading, error, refetch } = useReports(appliedFilters);
+  const { data, isLoading, isFetching, error, refetch } = useReports(appliedFilters);
+
+  const today = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
 
   const handleApplyFilters = () => {
+    if (dateFrom && dateTo && dateTo < dateFrom) {
+      setValidationError('Date To must be on or after Date From.');
+      return;
+    }
+    if (dateFrom && dateFrom > today) {
+      setValidationError('Date From cannot be in the future.');
+      return;
+    }
+
+    setValidationError('');
+
     const filters: { date_from?: string; date_to?: string } = {};
     if (dateFrom) filters.date_from = dateFrom;
     if (dateTo) filters.date_to = dateTo;
@@ -44,12 +61,77 @@ export function ReportsPage() {
   const handleClearFilters = () => {
     setDateFrom('');
     setDateTo('');
+    setValidationError('');
     setAppliedFilters({});
   };
 
-  if (isLoading) {
+  const hasActiveFilter = Boolean(appliedFilters.date_from || appliedFilters.date_to);
+  const appliedRangeText = appliedFilters.date_from && appliedFilters.date_to
+    ? `Showing ${appliedFilters.date_from} to ${appliedFilters.date_to}`
+    : appliedFilters.date_from
+      ? `Showing from ${appliedFilters.date_from}`
+      : appliedFilters.date_to
+        ? `Showing up to ${appliedFilters.date_to}`
+        : 'Showing all-time data';
+
+  const filtersPanel = (
+    <div className="reports-filters">
+      <div className="reports-filter-row">
+        <div className="reports-filter-group">
+          <label className="reports-filter-label" htmlFor="date-from">Date From</label>
+          <input
+            id="date-from"
+            type="date"
+            className="reports-filter-input"
+            value={dateFrom}
+            max={today}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+        </div>
+        <div className="reports-filter-group">
+          <label className="reports-filter-label" htmlFor="date-to">Date To</label>
+          <input
+            id="date-to"
+            type="date"
+            className="reports-filter-input"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+        </div>
+        <div className="reports-filter-actions">
+          <button type="button" className="dashboard-retry-button" onClick={handleApplyFilters}>
+            Apply Filters
+          </button>
+          {(dateFrom || dateTo || hasActiveFilter) && (
+            <button type="button" className="reports-clear-button" onClick={handleClearFilters}>
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {validationError && (
+        <p className="reports-filter-error" role="alert">{validationError}</p>
+      )}
+
+      <div className="reports-filter-meta">
+        <span className="reports-active-filters">{appliedRangeText}</span>
+        {isFetching && data && <span className="reports-updating">Updating…</span>}
+      </div>
+
+      <p className="reports-coverage-note">
+        Date range applies to transactions, seller verifications, activities, listing
+        totals and price statistics, and registration trends. User totals and listing
+        status counts are all-time.
+      </p>
+    </div>
+  );
+
+  if (isLoading && !data) {
     return (
       <div className="dashboard-content">
+        {filtersPanel}
         <div className="dashboard-loading">
           <div className="loading-spinner" />
           <span>Loading report data...</span>
@@ -61,6 +143,7 @@ export function ReportsPage() {
   if (error) {
     return (
       <div className="dashboard-content">
+        {filtersPanel}
         <div className="dashboard-error">
           <p className="dashboard-error-text">Failed to load report data.</p>
           <button type="button" className="dashboard-retry-button" onClick={() => refetch()}>
@@ -74,6 +157,7 @@ export function ReportsPage() {
   if (!data) {
     return (
       <div className="dashboard-content">
+        {filtersPanel}
         <div className="dashboard-empty">
           <p>No report data available.</p>
         </div>
@@ -85,40 +169,7 @@ export function ReportsPage() {
 
   return (
     <div className="dashboard-content">
-      <div className="reports-filters">
-        <div className="reports-filter-row">
-          <div className="reports-filter-group">
-            <label className="reports-filter-label" htmlFor="date-from">Date From</label>
-            <input
-              id="date-from"
-              type="date"
-              className="reports-filter-input"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
-          </div>
-          <div className="reports-filter-group">
-            <label className="reports-filter-label" htmlFor="date-to">Date To</label>
-            <input
-              id="date-to"
-              type="date"
-              className="reports-filter-input"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </div>
-          <div className="reports-filter-actions">
-            <button type="button" className="dashboard-retry-button" onClick={handleApplyFilters}>
-              Apply Filters
-            </button>
-            {(dateFrom || dateTo) && (
-              <button type="button" className="reports-clear-button" onClick={handleClearFilters}>
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      {filtersPanel}
 
       <div className="dashboard-section">
         <h2 className="dashboard-section-title">Marketplace Overview</h2>
@@ -343,10 +394,7 @@ export function ReportsPage() {
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#666666" />
                   <YAxis tick={{ fontSize: 12 }} stroke="#666666" />
                   <Tooltip
-                    formatter={(value, name) => [
-                      name === 'count' ? String(value) : formatCurrency(Number(value ?? 0)),
-                      name === 'count' ? 'Transactions' : 'Revenue',
-                    ]}
+                    formatter={(value) => [String(value ?? 0), 'Transactions']}
                     contentStyle={{ fontSize: 13 }}
                   />
                   <Line type="monotone" dataKey="count" stroke="#1B5E20" strokeWidth={2} dot={{ r: 3 }} name="Transactions" />
@@ -390,10 +438,10 @@ export function ReportsPage() {
 
         <div className="dashboard-breakdown-grid" style={{ marginTop: '20px' }}>
           <div className="dashboard-breakdown-card">
-            <h4 className="dashboard-breakdown-title">Revenue Summary</h4>
+            <h4 className="dashboard-breakdown-title">Transaction Amounts</h4>
             <ul className="dashboard-breakdown-list">
               <li>
-                <span className="dashboard-breakdown-label">Total Revenue</span>
+                <span className="dashboard-breakdown-label">Recorded Arrangement Value</span>
                 <span className="dashboard-breakdown-value">{formatCurrency(transactions.total_revenue)}</span>
               </li>
               <li>
@@ -401,6 +449,9 @@ export function ReportsPage() {
                 <span className="dashboard-breakdown-value">{formatCurrency(transactions.avg_amount)}</span>
               </li>
             </ul>
+            <p className="dashboard-chart-caption">
+              Recorded arrangement values, not revenue, earnings, or payments processed by AgroBenta.
+            </p>
           </div>
 
           <div className="dashboard-breakdown-card">
