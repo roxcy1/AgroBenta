@@ -152,3 +152,45 @@ export function useDeactivateListing() {
     onSuccess: invalidateListings,
   });
 }
+
+export interface ListingStatusCounts {
+  total: number;
+  pending: number;
+  active: number;
+  inactive: number;
+}
+
+/**
+ * Aggregate listing counts for the status cards.
+ *
+ * There is no counting endpoint, and one is not needed: `GET /admin/listings`
+ * already reports `pagination.total` for the query it ran, which is the server's
+ * `count(*)`, not the size of the page it returned. Asking it once per status
+ * with `per_page=1` therefore yields exact totals without a new backend surface.
+ *
+ * All four requests share one query key, so the cards have a single loading
+ * state and the moderation mutations — which invalidate the `['admin',
+ * 'listings']` prefix — refresh the counts along with the table.
+ */
+export function useListingCounts() {
+  return useQuery({
+    queryKey: ['admin', 'listings', 'counts'],
+    queryFn: async (): Promise<ListingStatusCounts> => {
+      const [all, pending, active, inactive] = await Promise.all([
+        fetchListings({ per_page: 1 }),
+        fetchListings({ status: 'pending', per_page: 1 }),
+        fetchListings({ status: 'active', per_page: 1 }),
+        fetchListings({ status: 'inactive', per_page: 1 }),
+      ]);
+
+      return {
+        total: all.pagination.total,
+        pending: pending.pagination.total,
+        active: active.pagination.total,
+        inactive: inactive.pagination.total,
+      };
+    },
+    staleTime: 30_000,
+  });
+}
+
