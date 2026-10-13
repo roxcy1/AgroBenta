@@ -72,7 +72,7 @@ export function SellerVerificationTab() {
   const pagination = data?.pagination;
 
   return (
-    <div className="lv-tab-content">
+    <div className="lv-tab-content verification-panel">
       <div className="lv-tabs" role="tablist" aria-label="Verification status">
         {VERIFICATION_TABS.map((tab) => {
           const isActive = tab.value === activeStatus;
