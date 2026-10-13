@@ -127,6 +127,13 @@ export default function VerificationDetailsDialog({
           ],
         },
         {
+          title: 'Record',
+          rows: [
+            ['Created', formatDateTime(verification.created_at)],
+            ['Updated', formatDateTime(verification.updated_at)],
+          ],
+        },
+        {
           title: 'Review history',
           wide: true,
           content: historyTable(history),

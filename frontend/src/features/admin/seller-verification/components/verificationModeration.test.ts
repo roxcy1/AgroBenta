@@ -107,6 +107,22 @@ describe('verificationActionsFor', () => {
   });
 });
 
+describe('review safeguards copy', () => {
+  it('states that approval grants selling capability', () => {
+    const [approve] = verificationActionsFor('submitted');
+
+    expect(approve.confirmMessage).toMatch(/seller capability/i);
+    expect(approve.confirmMessage).toMatch(/sell/i);
+  });
+
+  it('warns that rejection revokes capability even for an already-approved seller', () => {
+    const [, reject] = verificationActionsFor('submitted');
+
+    expect(reject.confirmMessage).toMatch(/revoke/i);
+    expect(reject.confirmMessage).toMatch(/already an approved seller/i);
+  });
+});
+
 describe('verificationErrorMessage', () => {
 
   const axiosError = (status: number) => ({ response: { status } });

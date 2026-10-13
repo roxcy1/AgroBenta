@@ -77,7 +77,8 @@ const ACTION_CONFIGS: Record<VerificationAction, VerificationActionConfig> = {
     label: 'Approve',
     variant: 'approve',
     confirmTitle: 'Approve Verification',
-    confirmMessage: 'This will grant the applicant seller capability on the platform.',
+    confirmMessage:
+      'This will approve the verification and grant the applicant seller capability, allowing them to list and sell on the platform.',
     confirmLabel: 'Approve',
     noteRequired: false,
   },
@@ -87,7 +88,7 @@ const ACTION_CONFIGS: Record<VerificationAction, VerificationActionConfig> = {
     variant: 'reject',
     confirmTitle: 'Reject Verification',
     confirmMessage:
-      'This will reject the verification request and revoke seller capability, returning the applicant to a buyer.',
+      'This will reject the verification and revoke seller capability. If the applicant is already an approved seller, they will be returned to a buyer and can no longer sell or list.',
     confirmLabel: 'Reject',
     noteRequired: true,
   },
