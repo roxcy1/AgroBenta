@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../home/view/buyer_home_screen.dart';
 import '../../marketplace/views/marketplace_screen.dart';
+import '../../profile/view/profile_screen.dart';
 
 /// The signed-in shell: bottom navigation over the buyer-facing destinations.
-///
+///s
 /// ## Two destinations, not five
 ///
 /// `mobile/DESIGN.md` asks for 3–5 bottom-nav items across the app's life, and
@@ -45,7 +46,8 @@ class _BuyerShellState extends State<BuyerShell> {
             onBrowseMarketplace: () =>
                 setState(() => _index = _marketplaceIndex),
           ),
-          const MarketplaceScreen(),
+                   const MarketplaceScreen(),
+          const ProfileScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -57,10 +59,15 @@ class _BuyerShellState extends State<BuyerShell> {
             selectedIcon: Icon(Icons.home),
             label: 'Home',
           ),
-          NavigationDestination(
+                   NavigationDestination(
             icon: Icon(Icons.storefront_outlined),
             selectedIcon: Icon(Icons.storefront),
             label: 'Marketplace',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
       ),

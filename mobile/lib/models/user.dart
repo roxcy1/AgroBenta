@@ -73,6 +73,14 @@ enum SellerCapability {
 /// omitted. Every field except `id`, `name` and `email` is nullable because
 /// `UserResource` serialises them with `?->`, so a column that is `null` in
 /// the database arrives as JSON `null` rather than being absent.
+///
+/// ## The four profile fields
+///
+/// `phone`, `location`, `avatar_url` and `bio` were added by the
+/// `add_profile_fields_to_users_table` migration. They are the only fields the
+/// mobile app can write through `PUT /api/profile`, and they arrive as JSON
+/// `null` until the user fills them in — which is why they are nullable here
+/// rather than carrying a default.
 class User {
   const User({
     required this.id,
@@ -83,6 +91,10 @@ class User {
     required this.emailVerifiedAt,
     required this.createdAt,
     required this.updatedAt,
+    this.phone,
+    this.location,
+    this.avatarUrl,
+    this.bio,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -98,6 +110,10 @@ class User {
       emailVerifiedAt: readNullableDateTime(json, 'email_verified_at'),
       createdAt: readNullableDateTime(json, 'created_at'),
       updatedAt: readNullableDateTime(json, 'updated_at'),
+      phone: readNullableString(json, 'phone'),
+      location: readNullableString(json, 'location'),
+      avatarUrl: readNullableString(json, 'avatar_url'),
+      bio: readNullableString(json, 'bio'),
     );
   }
 
@@ -123,6 +139,26 @@ class User {
 
   final DateTime? updatedAt;
 
+  /// Optional contact number. `null` until the user fills it in.
+  ///
+  /// Written through `PUT /api/profile`; the server accepts an empty string as
+  /// a real "clear this field" value, so an empty string is not the same as
+  /// `null` here.
+  final String? phone;
+
+  /// Optional town/city/province. `null` until the user fills it in.
+  final String? location;
+
+  /// Optional URL to an avatar image. `null` until the user sets one.
+  ///
+  /// A URL rather than an uploaded file: the backend has no upload endpoint
+  /// (D-10 is still open), so the mobile client sends a link and the image is
+  /// served by whatever the user hosted it on.
+  final String? avatarUrl;
+
+  /// Optional short biography. `null` until the user fills it in.
+  final String? bio;
+
   /// Whether this account is an administrator.
   ///
   /// The backend already refuses an admin a mobile token, so a `true` here
@@ -136,6 +172,38 @@ class User {
   /// Until seller verification is built (GAP-07/GAP-08) this is `false` for
   /// every account this app can create.
   bool get isSeller => sellerCapability == SellerCapability.seller;
+
+  /// Returns a copy with the given fields replaced.
+  ///
+  /// A named argument left out is left alone; passing `null` explicitly is the
+  /// same as leaving it out, because the profile fields legitimately start as
+  /// `null` and a "clear this field" is represented by sending an empty string
+  /// to the server, not by nulling the local copy. Clearing is therefore the
+  /// controller's job, and this method's job is only to merge a server
+  /// response with what is already on screen.
+  User copyWith({
+    String? name,
+    String? email,
+    String? phone,
+    String? location,
+    String? avatarUrl,
+    String? bio,
+  }) {
+    return User(
+      id: id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      role: role,
+      sellerCapability: sellerCapability,
+      emailVerifiedAt: emailVerifiedAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      phone: phone ?? this.phone,
+      location: location ?? this.location,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      bio: bio ?? this.bio,
+    );
+  }
 
   /// Parses an optional enum column, tolerating `null` but rejecting an
   /// unrecognised value.
