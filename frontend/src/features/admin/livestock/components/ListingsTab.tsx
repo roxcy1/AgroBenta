@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useListings } from '../api/useListings';
 import type { Listing } from '../api/useListings';
+import ListingDetailsDialog from './ListingDetailsDialog';
 import ListingReviewDialog from './ListingReviewDialog';
 import type { ModerationOption } from './listingModeration';
 import { moderationOptionsFor, statusLabel } from './listingModeration';
@@ -47,6 +48,7 @@ export function ListingsTab() {
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
+  const [details, setDetails] = useState<Listing | null>(null);
   const [decision, setDecision] = useState<{
     listing: Listing;
     option: ModerationOption;
@@ -68,6 +70,17 @@ export function ListingsTab() {
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleSearch();
+    }
+  };
+
+  const handleRowKeyDown = (
+    e: React.KeyboardEvent<HTMLTableRowElement>,
+    listing: Listing,
+  ) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setDetails(listing);
     }
   };
 
@@ -178,7 +191,14 @@ export function ListingsTab() {
               </thead>
               <tbody>
                 {listings.map((listing) => (
-                  <tr key={listing.id}>
+                  <tr
+                    key={listing.id}
+                    className="lv-listings-row"
+                    tabIndex={0}
+                    aria-label={`View details for ${listing.livestock_type} listing`}
+                    onClick={() => setDetails(listing)}
+                    onKeyDown={(event) => handleRowKeyDown(event, listing)}
+                  >
                     <td className="lv-name-cell">{listing.livestock_type}</td>
                     <td>{listing.breed}</td>
                     <td>{listing.quantity}</td>
@@ -192,7 +212,10 @@ export function ListingsTab() {
                     </td>
                     <td className="lv-date-cell">{formatDate(listing.created_at)}</td>
                     <td>
-                      <div className="lv-action-buttons">
+                      <div
+                        className="lv-action-buttons"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         {moderationOptionsFor(listing.status).map((option) => (
                           <button
                             key={option.action}
@@ -250,6 +273,10 @@ export function ListingsTab() {
           option={decision.option}
           onClose={() => setDecision(null)}
         />
+      )}
+
+      {details && (
+        <ListingDetailsDialog listing={details} onClose={() => setDetails(null)} />
       )}
     </>
   );
