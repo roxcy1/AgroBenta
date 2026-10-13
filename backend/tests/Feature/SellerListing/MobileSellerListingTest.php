@@ -103,14 +103,35 @@ class MobileSellerListingTest extends TestCase
 
     // ---------------------------------------------------------------- access
 
-    #[Test]
-    public function a_buyer_cannot_manage_listings(): void
+    /**
+     * Every route in the seller group, as a method/URI pair.
+     *
+     * A provider rather than two hand-picked calls: the capability gate must
+     * refuse all five routes before any controller or Form Request logic runs,
+     * and "the middleware is on the group" is an assumption until every row has
+     * been asserted.
+     *
+     * @return array<string, array{string, string}>
+     */
+    public static function sellerRoutes(): array
     {
-        $this->store([], $this->mobileToken($this->buyer))
-            ->assertForbidden();
+        return [
+            'index' => ['GET', '/api/seller/listings'],
+            'store' => ['POST', '/api/seller/listings'],
+            'update' => ['PATCH', '/api/seller/listings/{listing}'],
+            'submit' => ['POST', '/api/seller/listings/{listing}/submit'],
+            'destroy' => ['DELETE', '/api/seller/listings/{listing}'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('sellerRoutes')]
+    public function a_buyer_cannot_manage_listings(string $method, string $uri): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
-            ->getJson('/api/seller/listings')
+            ->json($method, str_replace('{listing}', (string) $listing->id, $uri))
             ->assertForbidden();
     }
 
@@ -411,9 +432,8 @@ class MobileSellerListingTest extends TestCase
             ->patchJson('/api/seller/listings/'.$listing->id, ['age_value' => 30])
             ->assertOk()
             // The unit is the point of this assertion. `age_value` is deliberately
-            // not asserted by value: the column is uncast, so it reads back as
-            // `30` on SQLite and `30.0` on MySQL, which is the divergence the
-            // mobile model already handles.
+            // not asserted by value: the model's `decimal:1` cast reads it back
+            // as the string "30.0", which the mobile model already handles.
             ->assertJsonPath('data.age_unit', null);
 
         // The pair invariant is enforced where the contract says it is: a listing
@@ -556,7 +576,87 @@ class MobileSellerListingTest extends TestCase
         ]);
     }
 
+    #[Test]
+    public function a_submit_cannot_carry_a_status(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit', ['status' => 'active'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_submit_cannot_carry_a_seller_id(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit', [
+                'seller_id' => $this->otherSeller->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('seller_id');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_submit_rejects_any_body_field_because_its_allow_list_is_empty(): void
+    {
+        // Contract §6.2: the client may set *none* and every field present is
+        // rejected — not just the two dangerous names. A body on this route is
+        // a client bug whichever key it carries, and silently dropping it is
+        // what the security rule forbids.
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit', ['breed' => 'Angus'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('breed');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
     // ---------------------------------------------------------------- delete
+
+    #[Test]
+    public function a_delete_cannot_carry_a_status_or_seller_id(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->deleteJson('/api/seller/listings/'.$listing->id, ['status' => 'inactive'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->deleteJson('/api/seller/listings/'.$listing->id, [
+                'seller_id' => $this->otherSeller->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('seller_id');
+
+        // Rejected, not applied: both refusals happened before the controller,
+        // so the draft is still there, still the caller's.
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'seller_id' => $this->seller->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
 
     #[Test]
     public function a_draft_can_be_deleted(): void

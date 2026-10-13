@@ -158,7 +158,15 @@ class SellerListingService
             [
                 'livestock_type' => $listing->livestock_type,
                 'breed' => $listing->breed,
-                'age_value' => $listing->age_value,
+                // The `decimal:1` cast on the model turns a whole stored age into
+                // the string "2.0", which the contract's `integer` rule would
+                // reject even though nothing is wrong with the listing. An
+                // integral value is therefore normalised back to an int before
+                // validation; a genuinely fractional one is left exactly as it
+                // is, so a row written outside this API with an age of 2.5 still
+                // fails the rule instead of being silently truncated into
+                // submittability.
+                'age_value' => $this->wholeNumberOrNull($listing->age_value),
                 'age_unit' => $listing->age_unit,
                 'gender' => $listing->gender,
                 'weight_value' => $listing->weight_value,
@@ -184,6 +192,27 @@ class SellerListingService
             [ListingStatus::Draft],
             'Only a draft listing can be submitted for review.',
         );
+    }
+
+    /**
+     * Normalise a stored numeric value to int, but only when it is a whole
+     * number.
+     *
+     * Null, a fraction, or a non-numeric string is returned unchanged, so the
+     * `integer` rule keeps rejecting those; only the cast artefact ("2.0" for
+     * a perfectly integral age) is repaired.
+     */
+    private function wholeNumberOrNull(mixed $value): mixed
+    {
+        if ($value === null || ! is_numeric($value)) {
+            return $value;
+        }
+
+        $numeric = (float) $value;
+
+        // Loose comparison on purpose: the question is numeric equality with
+        // its integer self, not type identity.
+        return (int) $numeric == $numeric ? (int) $numeric : $value;
     }
 
     /**

@@ -473,9 +473,10 @@ by design, so listing existence is not disclosed — the app renders a single
 by the app; it is admin-only and returns seller fields the marketplace must not
 expose.
 
-**Still open below.** GAP-01 to GAP-05, GAP-07, GAP-08 and GAP-16 are `CLOSED` —
-implemented in the backend and consumed by the app. GAP-06 is narrowed but not
-closed. Everything from GAP-09 onwards is unchanged and still blocks its phase.
+**Still open below.** GAP-01 to GAP-05, GAP-07, GAP-08, GAP-09 and GAP-16 are
+`CLOSED` — implemented in the backend and consumed by the app. GAP-06 is
+narrowed but not closed. Everything from GAP-10 onwards is unchanged and still
+blocks its phase.
 
 Status: `CLOSED` = implemented. `OPEN` = does not exist. Nothing open here has
 been worked around in the app.
@@ -490,7 +491,7 @@ been worked around in the app.
 | GAP-06 | Listing photo delivery | **NARROWED, still `OPEN`.** `MobileListingResource` now returns the `listings.photos` column as a flat list of strings, so the client receives the stored values. But there is still no upload endpoint, no storage disk bound to the column, and no agreed URL scheme, so those values are storage-relative paths such as `listings/1/front.jpg`, not fetchable URLs. The app renders a placeholder for any value that is not already an absolute `http`/`https` URL and must not synthesise a base URL. | Listing management |
 | GAP-07 | Seller verification submission | **CLOSED.** `POST /api/seller-verification` (`routes/api.php`) with `Api/SellerVerification/SellerVerificationController@store` and `SellerVerificationService`. Creates a `submitted` record; **grants no capability** — `seller_capability` is still written only by the admin approval endpoint. A second submission while one is `submitted`/`pending_review` is `409`; an approved seller is `403`; a rejected record may be resubmitted as a new row. `SubmitSellerVerificationRequest` allow-lists the four client fields and rejects server-owned ones with `422`. Deliberately **unthrottled** — see D-09. | — |
 | GAP-08 | Own verification status retrieval | **CLOSED.** `GET /api/seller-verification/me` with `MobileSellerVerificationController@me`, returning the caller's latest record by `submitted_at DESC, id DESC` through `MobileSellerVerificationResource` (omits `seller`, `reviewer`, `user_id`, timestamps). `404` when the caller has never applied, which the app reads as "not submitted" rather than as an error. No route takes an id, so one buyer cannot read another's record. | — |
-| GAP-09 | Seller listing CRUD, own listings only | No create/update/delete/publish route for sellers. `ListingsTab` is read-only in the Admin Web. `OPEN`. | Listing management |
+| GAP-09 | Seller listing CRUD, own listings only | **CLOSED.** Five routes in `routes/api.php` under `auth:sanctum` + `ability:mobile` + the `seller` capability gate, served by `Api/SellerListing/SellerListingController` → `SellerListingRequest`s → `SellerListingService` → `SellerListingRepository`, returned through `MobileListingResource`. `GET` lists the owner's own listings in all five statuses (`?status`, `?search`, paginated; scope always server-derived — a `seller_id` filter is `422`). `POST` creates a `draft`; a client-sent `status` or `seller_id` is `422`, never silently dropped. `POST /{id}/submit` moves `draft → pending` only, re-validating the stored listing (invalid → `422`, not queued); its body allow-list is empty, so *any* body field is `422`. `PATCH` edits `draft`/`active` only (D-24). `DELETE` removes `draft`/`inactive` only (D-12/D-25). Non-owner → `404`, buyer → `403`, and no seller path reaches `active` (D-02 rules 6–8). Tests: `backend/tests/Feature/SellerListing/MobileSellerListingTest.php`. | — |
 | GAP-10 | AI price suggestion | `AiPriceEstimate` model and `ai_price_estimates` table exist. No controller, service, route or job. No pricing algorithm in the repository. `OPEN`. | AI price suggestion |
 | GAP-11 | Transactions | `GET /admin/transactions` only. No buyer view, seller view, creation, or status transition. `OPEN`. | Transactions |
 | GAP-12 | Notifications | `notifications` table exists (standard Laravel, **UUID** primary key). No `Notification` model, no `NotificationResource`, no route. `OPEN`. | Notifications |
