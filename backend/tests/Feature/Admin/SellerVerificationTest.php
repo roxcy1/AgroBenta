@@ -172,6 +172,30 @@ class SellerVerificationTest extends TestCase
         $this->assertEquals('Green Valley Farm', $data['verifications'][0]['business_name']);
     }
 
+    public function test_id_document_ref_is_exposed_in_the_admin_resource(): void
+    {
+        // The admin review UI renders the ID reference as plain text, so the
+        // admin resource must carry it — unlike the mobile projection, which
+        // already includes it but strips the applicant's identity fields (F-08).
+        $withReference = $this->createVerification(['id_document_ref' => 'ID-777888']);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/seller-verifications/{$withReference->id}");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.id_document_ref', 'ID-777888');
+
+        // The field is optional, so it must render as an explicit null rather
+        // than being dropped from the payload.
+        $withoutReference = $this->createVerification();
+
+        $nullable = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/seller-verifications/{$withoutReference->id}");
+
+        $nullable->assertStatus(200);
+        $nullable->assertJsonPath('data.id_document_ref', null);
+    }
+
     public function test_filter_by_status(): void
     {
         $this->createVerification(['status' => SellerVerificationStatus::Submitted]);

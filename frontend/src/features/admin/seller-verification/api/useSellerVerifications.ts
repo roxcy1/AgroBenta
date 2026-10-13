@@ -18,6 +18,7 @@ export interface SellerVerification {
   business_name: string;
   business_location: string | null;
   business_description: string | null;
+  id_document_ref: string | null;
   status: 'submitted' | 'pending_review' | 'approved' | 'rejected';
   admin_note: string | null;
   submitted_at: string | null;
