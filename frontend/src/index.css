@@ -1323,6 +1323,9 @@ input {
 }
 
 .lv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 12px 24px;
   background: none;
   border: none;
@@ -1341,6 +1344,26 @@ input {
 .lv-tab--active {
   color: var(--color-primary);
   border-bottom-color: var(--color-primary);
+}
+
+.lv-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
+
+.lv-tab--active .lv-tab-count {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .lv-tab-content {
@@ -1782,6 +1805,54 @@ input {
 .lv-action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Seller Verification — verification panel section styling.
+   Scoped to the verification tab root so the shared .lv-* rules used by the
+   Livestock, Activities and Transactions pages are unaffected. */
+.verification-panel .lv-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.verification-panel .lv-tab {
+  padding: 9px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.verification-panel .lv-tab:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.verification-panel .lv-tab--active,
+.verification-panel .lv-tab--active:hover {
+  background: #E8F5E9;
+  color: var(--color-primary);
+}
+
+.verification-panel .lv-tab--active .lv-tab-count {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+}
+
+.verification-panel .lv-controls {
+  margin-bottom: 20px;
+}
+
+.verification-panel .lv-table th,
+.verification-panel .lv-table td {
+  vertical-align: middle;
 }
 
 .lv-action-modal-overlay {

@@ -24,6 +24,7 @@ class SellerVerificationResource extends JsonResource
             'business_name' => $this->business_name,
             'business_location' => $this->business_location,
             'business_description' => $this->business_description,
+            'id_document_ref' => $this->id_document_ref,
             'status' => $this->status?->value,
             'admin_note' => $this->admin_note,
             'submitted_at' => $this->submitted_at?->toISOString(),
