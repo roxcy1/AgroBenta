@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
+use App\Http\Controllers\Api\Notification\NotificationController;
 use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
@@ -41,7 +42,7 @@ Route::prefix('auth')->group(function (): void {
 // `ability:mobile` is the authorisation boundary, so a mobile token reaches
 // this group and an admin token does not, in the same direction enforced for
 // the auth group above. Visibility is enforced in the query, and `status` is
-// not an accepted parameter �?" see IndexListingRequest.
+// not an accepted parameter — see IndexListingRequest.
 Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
     Route::get('/listings', [MarketplaceListingController::class, 'index']);
     Route::get('/listings/{listing}', [MarketplaceListingController::class, 'show']);
@@ -100,6 +101,24 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('profile')->group(fu
     Route::get('/', [ProfileController::class, 'show']);
     Route::put('/', [ProfileController::class, 'update']);
     Route::put('/password', [ProfileController::class, 'changePassword']);
+});
+
+// Notifications — the caller's own notification feed.
+//
+// No route here takes a user id. The record is resolved from the token, so
+// one account cannot read or mark another account's notifications. The route
+// group is deliberately flat rather than nested under `/users/me`, matching
+// how `/profile` is exposed.
+//
+// `read-all` is declared before `{id}` so a literal segment cannot be
+// swallowed by the parameter. The controller's `{id}` type is `string`
+// because Laravel notifications use UUID keys, not integers.
+Route::middleware('auth:sanctum', 'ability:mobile')->prefix('notifications')->group(function (): void {
+    Route::get('/', [NotificationController::class, 'index']);
+    Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::delete('/{id}', [NotificationController::class, 'destroy']);
 });
 
 Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->group(function (): void {
