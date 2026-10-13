@@ -161,7 +161,24 @@ export interface SellerVerificationCounts {
  * status with `per_page=1` therefore yields exact totals without a new backend
  * surface. Because the list is deduplicated to the latest record per applicant,
  * each record is counted under exactly one status.
- *
+ */
+export async function fetchVerificationCounts(): Promise<SellerVerificationCounts> {
+  const [submitted, pendingReview, approved, rejected] = await Promise.all([
+    fetchVerifications({ status: 'submitted', per_page: 1 }),
+    fetchVerifications({ status: 'pending_review', per_page: 1 }),
+    fetchVerifications({ status: 'approved', per_page: 1 }),
+    fetchVerifications({ status: 'rejected', per_page: 1 }),
+  ]);
+
+  return {
+    submitted: submitted.pagination.total,
+    pending_review: pendingReview.pagination.total,
+    approved: approved.pagination.total,
+    rejected: rejected.pagination.total,
+  };
+}
+
+/**
  * The query key shares the `['admin', 'seller-verifications']` prefix, so the
  * approve/reject mutations — which invalidate that prefix — refresh the counts
  * along with the list and any open detail view.
@@ -169,21 +186,7 @@ export interface SellerVerificationCounts {
 export function useSellerVerificationCounts() {
   return useQuery({
     queryKey: ['admin', 'seller-verifications', 'counts'],
-    queryFn: async (): Promise<SellerVerificationCounts> => {
-      const [submitted, pendingReview, approved, rejected] = await Promise.all([
-        fetchVerifications({ status: 'submitted', per_page: 1 }),
-        fetchVerifications({ status: 'pending_review', per_page: 1 }),
-        fetchVerifications({ status: 'approved', per_page: 1 }),
-        fetchVerifications({ status: 'rejected', per_page: 1 }),
-      ]);
-
-      return {
-        submitted: submitted.pagination.total,
-        pending_review: pendingReview.pagination.total,
-        approved: approved.pagination.total,
-        rejected: rejected.pagination.total,
-      };
-    },
+    queryFn: fetchVerificationCounts,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     refetchInterval: verificationPollingInterval,
