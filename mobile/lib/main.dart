@@ -10,16 +10,20 @@ import 'features/auth/view/auth_gate.dart';
 import 'features/buyer_shell/view/buyer_shell.dart';
 import 'features/marketplace/state/marketplace_controller.dart';
 import 'features/marketplace/state/marketplace_scope.dart';
+import 'features/profile/state/profile_controller.dart';
+import 'features/profile/state/profile_scope.dart';
 import 'features/seller_listings/state/seller_listing_controller.dart';
 import 'features/seller_listings/state/seller_listing_scope.dart';
 import 'features/seller_verification/state/seller_verification_controller.dart';
 import 'features/seller_verification/state/seller_verification_scope.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/marketplace_repository.dart';
+import 'repositories/profile_repository.dart';
 import 'repositories/seller_listing_repository.dart';
 import 'repositories/seller_verification_repository.dart';
 import 'services/auth_service.dart';
 import 'services/marketplace_service.dart';
+import 'services/profile_service.dart';
 import 'services/seller_listing_service.dart';
 import 'services/seller_verification_service.dart';
 
@@ -42,6 +46,12 @@ import 'services/seller_verification_service.dart';
 /// routes, and a scope installed inside `home` would be invisible to every one of
 /// them. Its controller is session-scoped too, so the created, edited, submitted
 /// and deleted records it holds are not lost by navigating away and back.
+///
+/// The profile graph follows the same shape again. The scope is installed above
+/// `MaterialApp` because the Edit Profile and Change Password screens are pushed
+/// routes and would not see a scope installed inside `home`. The controller is
+/// session-scoped so the profile loaded once is not re-fetched every time the
+/// user taps the Profile tab.
 ///
 /// See `mobile/AGENTS.md` for the development rules, `mobile/DESIGN.md` for the
 /// visual rules, and the API gap register for what the backend does not expose
@@ -87,6 +97,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final SellerListingService _sellerListingService;
   late final SellerListingRepository _sellerListingRepository;
   late final SellerListingController _sellerListingController;
+  late final ProfileService _profileService;
+  late final ProfileRepository _profileRepository;
+  late final ProfileController _profileController;
 
   @override
   void initState() {
@@ -125,6 +138,14 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _sellerListingController = SellerListingController(
       _sellerListingRepository,
     );
+
+    // Profile. Session-scoped like the others so the profile loaded once is not
+    // re-fetched every time the user taps the Profile tab. Installed above
+    // `MaterialApp` so the pushed Edit Profile and Change Password screens can
+    // reach it.
+    _profileService = ProfileService(_apiClient);
+    _profileRepository = ProfileRepository(_profileService);
+    _profileController = ProfileController(_profileRepository);
   }
 
   @override
@@ -135,6 +156,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _marketplaceController.dispose();
     _sellerVerificationController.dispose();
     _sellerListingController.dispose();
+    _profileController.dispose();
     _apiClient.close();
     super.dispose();
   }
@@ -167,11 +189,19 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
           child: SellerListingScope(
             repository: _sellerListingRepository,
             controller: _sellerListingController,
-            child: MaterialApp(
-              title: 'AgroBenta',
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.light(),
-              home: AuthGate(authenticatedView: _buildBuyerShell),
+            // Profile sits as a sibling of the other scopes, above
+            // `MaterialApp`, for the same reason each of them does: the
+            // profile screens are pushed routes and a scope installed inside
+            // `home` would be invisible to them.
+            child: ProfileScope(
+              repository: _profileRepository,
+              controller: _profileController,
+              child: MaterialApp(
+                title: 'AgroBenta',
+                debugShowCheckedModeBanner: false,
+                theme: AppTheme.light(),
+                home: AuthGate(authenticatedView: _buildBuyerShell),
+              ),
             ),
           ),
         ),

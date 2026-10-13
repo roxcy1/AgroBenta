@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
+use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use Illuminate\Support\Facades\Route;
@@ -84,6 +85,21 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     Route::post('/{listing}/submit', [SellerListingController::class, 'submit']);
     Route::patch('/{listing}', [SellerListingController::class, 'update']);
     Route::delete('/{listing}', [SellerListingController::class, 'destroy']);
+});
+
+// Profile — the caller's own account details and credentials.
+//
+// No route here takes an id. The record is always resolved from the token, the
+// same design as the seller-verification group, so one account cannot read or
+// write another's profile.
+//
+// `PUT` rather than `PATCH`: the Form Request guards every field with
+// `sometimes`, so a partial body is already a patch in effect, and one verb
+// for the update is simpler than exposing both.
+Route::middleware('auth:sanctum', 'ability:mobile')->prefix('profile')->group(function (): void {
+    Route::get('/', [ProfileController::class, 'show']);
+    Route::put('/', [ProfileController::class, 'update']);
+    Route::put('/password', [ProfileController::class, 'changePassword']);
 });
 
 Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->group(function (): void {

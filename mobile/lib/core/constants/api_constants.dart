@@ -5,8 +5,8 @@
 /// exposed nothing mobile-facing then, and writing a path for an endpoint that
 /// does not exist is how invented contracts start. The mobile authentication
 /// routes are implemented (`backend/routes/api.php`), and so are the buyer
-/// marketplace and seller verification routes, so those three groups exist
-/// below — and nothing else.
+/// marketplace, seller verification, seller listing and profile routes, so
+/// those groups exist below — and nothing else.
 library;
 
 abstract final class ApiConstants {
@@ -222,6 +222,51 @@ abstract final class SellerListingEndpoints {
   /// anything above this is rejected with a `422`. The repository clamps to this
   /// rather than letting a screen discover the limit by provoking an error.
   static const int maxPerPage = 50;
+}
+
+/// Profile endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` for the
+/// caller's own account details and credentials. No path takes an id: the
+/// record is always resolved from the token, so one account cannot read or
+/// write another's profile.
+///
+/// All three require a `mobile`-ability Sanctum token. `show` and `update`
+/// are the caller's own resource; `changePassword` proves the current password
+/// before accepting a new one.
+abstract final class ProfileEndpoints {
+  /// `GET` — the caller's own profile. 200, plain envelope.
+  static const String show = '/profile';
+
+  /// `PUT` — update the caller's own profile. 200, plain envelope.
+  ///
+  /// The Form Request guards every field with `sometimes`, so a partial body
+  /// is already a patch in effect. An empty string is a real value — it clears
+  /// the column — while an absent key leaves it alone.
+  static const String update = '/profile';
+
+  /// `PUT` — change the caller's password. 200, message-only envelope.
+  ///
+  /// Refused with a `422` when `current_password` does not match, and with a
+  /// `422` when the new password fails the policy. The response carries no
+  /// `data`; the caller only needs to know the request succeeded.
+  static const String changePassword = '/profile/password';
+
+  /// The field names the update request accepts.
+  ///
+  /// Listed as an explicit allow-list so a service body is visibly exactly this
+  /// set. `role`, `seller_capability` and `id` are absent by construction: the
+  /// server marks none of them `prohibited` in a way that would answer 422, but
+  /// they are not fillable on the model, so sending them is a no-op — which is
+  /// worse than a refusal. The allow-list is what keeps them out.
+  static const List<String> writableFields = <String>[
+    'name',
+    'email',
+    'phone',
+    'location',
+    'avatar_url',
+    'bio',
+  ];
 }
 
 /// Mobile authentication endpoints, relative to the API root.
