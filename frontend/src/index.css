@@ -1267,6 +1267,116 @@ input {
   box-shadow: 0 0 0 3px var(--ring-primary);
 }
 
+.lv-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.lv-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 20px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.lv-stat-card:hover {
+  border-color: #D2D5DA;
+  box-shadow: var(--shadow-card-hover);
+}
+
+.lv-stat-card:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--ring-primary);
+}
+
+.lv-stat-card--active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--ring-primary);
+}
+
+.lv-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+}
+
+.lv-stat-icon-svg {
+  width: 22px;
+  height: 22px;
+}
+
+.lv-stat-icon--total {
+  background: #E3F2FD;
+  color: #1565C0;
+}
+
+.lv-stat-icon--pending {
+  background: #FFF3E0;
+  color: #E65100;
+}
+
+.lv-stat-icon--completed {
+  background: #E8F5E9;
+  color: #1B5E20;
+}
+
+.lv-stat-icon--cancelled {
+  background: #FFEBEE;
+  color: #C62828;
+}
+
+.lv-stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lv-stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.lv-stat-label {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 1024px) {
+  .lv-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .lv-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lv-stat-value {
+    font-size: 26px;
+  }
+}
+
 .lv-table-container {
   background: var(--color-surface);
   border-radius: var(--radius-md);
