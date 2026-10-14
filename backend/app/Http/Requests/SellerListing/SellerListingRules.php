@@ -3,6 +3,7 @@
 namespace App\Http\Requests\SellerListing;
 
 use App\Enums\ListingStatus;
+use App\Models\Listing;
 
 /**
  * The field rules for seller listing creation and update.
@@ -70,14 +71,17 @@ trait SellerListingRules
             'short_description' => ['nullable', 'string', 'max:255'],
             'additional_notes' => ['nullable', 'string', 'max:2000'],
 
-            // A JSON column of stored values, exposed by the mobile API because
-            // the marketplace must be able to show them (contract §8.2). How a
-            // photo is *added* is still undecided — D-10 leaves the upload
-            // mechanism and URL scheme open — so this endpoint accepts whatever
-            // strings it is given and never invents one. The mobile client sends
-            // no `photos` at all until D-10 is answered.
-            'photos' => ['array'],
-            'photos.*' => ['string'],
+            // The JSON column holds bare photo filenames; the API hands clients
+            // absolute URLs built from them (functional documentation §4.5,
+            // D-10). Uploads go through POST `/{id}/photos`, so this field on
+            // create/update is the *set-at-once* path — and it carries the same
+            // 10-per-listing ceiling as the upload path, because a client that
+            // could create an 11-photo listing would defeat the limit the upload
+            // endpoint enforces. The model mutator normalises every entry to a
+            // filename, so a URL echoed back from a GET collapses to the same
+            // stored form.
+            'photos' => ['array', 'max:'.Listing::PHOTO_LIMIT],
+            'photos.*' => ['string', 'max:2048'],
         ];
     }
 

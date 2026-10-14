@@ -86,6 +86,13 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     Route::post('/{listing}/submit', [SellerListingController::class, 'submit']);
     Route::patch('/{listing}', [SellerListingController::class, 'update']);
     Route::delete('/{listing}', [SellerListingController::class, 'destroy']);
+
+    // Listing photos (functional documentation §4.5, contract D-10). Multipart
+    // upload and removal by the name the client was served, both scoped to the
+    // caller's own listings by the same ownership lookup as everything above —
+    // another seller's id is a 404 here, never a 403 that confirms it exists.
+    Route::post('/{listing}/photos', [SellerListingController::class, 'storePhotos']);
+    Route::delete('/{listing}/photos', [SellerListingController::class, 'destroyPhoto']);
 });
 
 // Profile — the caller's own account details and credentials.

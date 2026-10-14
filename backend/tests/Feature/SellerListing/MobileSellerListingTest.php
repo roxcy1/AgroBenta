@@ -816,6 +816,11 @@ class MobileSellerListingTest extends TestCase
                 'POST api/seller/listings/{listing}/submit',
                 'PATCH api/seller/listings/{listing}',
                 'DELETE api/seller/listings/{listing}',
+                // Listing photos (functional documentation §4.5, D-10): file
+                // upload and removal, scoped to the caller's own listings like
+                // everything above. They change no listing status.
+                'POST api/seller/listings/{listing}/photos',
+                'DELETE api/seller/listings/{listing}/photos',
             ],
             $sellerRoutes,
         );

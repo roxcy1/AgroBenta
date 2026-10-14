@@ -842,14 +842,21 @@ class MarketplaceListingTest extends TestCase
     }
 
     #[Test]
-    public function photos_are_returned_as_stored(): void
+    public function photos_are_returned_as_absolute_urls(): void
     {
-        $this->createListing($this->seller, [
-            'photos' => ['listings/1/front.jpg', 'listings/1/side.jpg'],
+        // D-10: the column stores filenames; the API serves absolute URLs
+        // built from them. The stored form never leaves the model.
+        $listing = $this->createListing($this->seller, [
+            'photos' => ['front.jpg', 'side.jpg'],
         ]);
 
+        $base = (string) config('filesystems.disks.listing-photos.url');
+
         $this->browse()->assertOk()
-            ->assertJsonPath('data.listings.0.photos', ['listings/1/front.jpg', 'listings/1/side.jpg']);
+            ->assertJsonPath('data.listings.0.photos', [
+                $base.'/'.$listing->id.'/front.jpg',
+                $base.'/'.$listing->id.'/side.jpg',
+            ]);
     }
 
     #[Test]
@@ -863,27 +870,32 @@ class MarketplaceListingTest extends TestCase
     }
 
     #[Test]
-    public function non_string_photo_entries_are_not_surfaced_to_the_client(): void
+    public function malformed_photo_entries_never_reach_the_client(): void
     {
-        // The write contract is a list of strings. A malformed entry is dropped
-        // rather than handed to a client that has to defend against it.
-        $this->createListing($this->seller, [
-            'photos' => ['listings/1/front.jpg', 42, null, ['url' => 'nope']],
+        // The write contract is a list of strings; the model's mutator drops
+        // the rest at the column, so the client is handed exactly the one
+        // photo that is real — as an absolute URL.
+        $listing = $this->createListing($this->seller, [
+            'photos' => ['front.jpg', 42, null, ['url' => 'nope']],
         ]);
 
+        $base = (string) config('filesystems.disks.listing-photos.url');
+
         $this->browse()->assertOk()
-            ->assertJsonPath('data.listings.0.photos', ['listings/1/front.jpg']);
+            ->assertJsonPath('data.listings.0.photos', [$base.'/'.$listing->id.'/front.jpg']);
     }
 
     #[Test]
     public function photos_are_returned_by_the_detail_endpoint_too(): void
     {
-        $listing = $this->createListing($this->seller, ['photos' => ['listings/9/only.jpg']]);
+        $listing = $this->createListing($this->seller, ['photos' => ['only.jpg']]);
+
+        $base = (string) config('filesystems.disks.listing-photos.url');
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken(User::factory()->create()))
             ->getJson("/api/listings/{$listing->id}")
             ->assertOk()
-            ->assertJsonPath('data.photos', ['listings/9/only.jpg']);
+            ->assertJsonPath('data.photos', [$base.'/'.$listing->id.'/only.jpg']);
     }
 
     #[Test]
