@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
@@ -9,15 +10,24 @@ import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controll
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/marketplace_screen.dart';
 import 'package:agrobenta_mobile/features/marketplace/widgets/listing_card.dart';
+import 'package:agrobenta_mobile/features/profile/state/profile_controller.dart';
+import 'package:agrobenta_mobile/features/profile/state/profile_scope.dart';
+import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
+import 'package:agrobenta_mobile/features/transactions/views/transactions_screen.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
+import 'package:agrobenta_mobile/repositories/profile_repository.dart';
+import 'package:agrobenta_mobile/repositories/transaction_repository.dart';
+import 'package:agrobenta_mobile/services/profile_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 import '../../support/auth_fakes.dart';
 import '../../support/marketplace_fakes.dart';
 import '../../support/marketplace_app_harness.dart';
 import '../../support/seller_verification_app_harness.dart';
+import '../../support/transaction_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -28,14 +38,41 @@ void main() {
     recorded = <RecordedRequest>[];
   });
 
-  /// Pumps the shell over a mock marketplace transport.
+  /// A `GET /profile` response — the `UserResource` the profile screen loads
+  /// from its `initState`.
+  http.Response profileResponse() => http.Response(
+    jsonEncode(successEnvelope(data: userJson())),
+    200,
+    headers: <String, String>{'content-type': 'application/json'},
+  );
+
+  /// Pumps the shell over a mock transport.
   Future<MarketplaceController> pumpShell(
     WidgetTester tester, {
     Future<http.Response> Function(RecordedRequest request)? handler,
   }) async {
+    // One transport answers for the shell's data-holding screens: the
+    // marketplace keeps its configurable handler, while the transactions tab
+    // and the profile screen — both of which the shell builds eagerly in its
+    // `IndexedStack` — get their own canonical fixtures. They must answer
+    // successfully, because the scopes `main.dart` installs sit above the
+    // shell and their screens load on mount.
+    Future<http.Response> transport(RecordedRequest request) {
+      switch (request.apiPath) {
+        case '/transactions':
+          return Future<http.Response>.value(transactionListResponse());
+        case '/profile':
+          return Future<http.Response>.value(profileResponse());
+        default:
+          return handler != null
+              ? handler(request)
+              : Future<http.Response>.value(marketplaceListResponse());
+      }
+    }
+
     final MarketplaceRepository repository = buildMarketplaceRepository(
       tokenStore,
-      handler ?? (_) async => marketplaceListResponse(),
+      transport,
       recorded: recorded,
     );
     final MarketplaceController controller = MarketplaceController(repository);
@@ -54,6 +91,27 @@ void main() {
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
 
+    // Profile and transactions each load from their screen's `initState`, so
+    // their scopes — and their controllers — are part of the shell's real
+    // environment, exactly as `main.dart` installs them above `MaterialApp`.
+    final ProfileRepository profileRepository = ProfileRepository(
+      ProfileService(
+        ApiClient(
+          tokenStorage: tokenStore,
+          httpClient: MockClient(
+            (http.Request request) => transport(RecordedRequest(request)),
+          ),
+        ),
+      ),
+    );
+    final ProfileController profileController = ProfileController(
+      profileRepository,
+    );
+    addTearDown(profileController.dispose);
+
+    final TransactionRepository transactionRepository =
+        buildTransactionRepository(tokenStore, transport);
+
     await tester.pumpWidget(
       // Scopes above `MaterialApp`, matching `main.dart`: a route pushed onto
       // the navigator is a sibling of `home`, so a scope inside `home` would
@@ -64,13 +122,20 @@ void main() {
           repository: repository,
           controller: controller,
           // The Home tab's seller card reads the seller verification scope, so
-          // the shell harness carries all three scopes `main.dart` installs.
+          // the shell harness carries the scopes `main.dart` installs.
           // Answered with "never submitted" — this test is about navigation, and
           // the card must not need a transport to render.
           child: NeverSubmittedVerificationScope(
-            child: MaterialApp(
-              theme: AppTheme.light(),
-              home: const BuyerShell(),
+            child: ProfileScope(
+              repository: profileRepository,
+              controller: profileController,
+              child: TransactionScope(
+                repository: transactionRepository,
+                child: MaterialApp(
+                  theme: AppTheme.light(),
+                  home: const BuyerShell(),
+                ),
+              ),
             ),
           ),
         ),
@@ -94,7 +159,7 @@ void main() {
       bar.destinations.cast<Widget>().whereType<NavigationDestination>().map(
         (NavigationDestination d) => d.label,
       ),
-      <String>['Home', 'Marketplace'],
+      <String>['Home', 'Marketplace', 'Transactions', 'Profile'],
     );
   });
 
@@ -103,11 +168,10 @@ void main() {
   ) async {
     await pumpShell(tester);
 
-    // Transactions, Notifications and Profile are M3+. A disabled or "coming
-    // soon" tab advertises a screen that cannot be opened.
-    expect(find.text('Transactions'), findsNothing);
+    // Notifications is still a later phase. A disabled or "coming soon"
+    // destination advertises a screen that cannot be opened — the four
+    // labels above are exactly the screens that exist, each of them real.
     expect(find.text('Notifications'), findsNothing);
-    expect(find.text('Profile'), findsNothing);
   });
 
   testWidgets('starts on Home', (WidgetTester tester) async {
@@ -125,6 +189,28 @@ void main() {
 
     expect(find.byType(MarketplaceScreen), findsOneWidget);
     expect(find.text('Marketplace'), findsWidgets);
+  });
+
+  testWidgets('switches to the transactions tab', (WidgetTester tester) async {
+    await pumpShell(tester);
+
+    // Tapped inside the bar: the screen's own `AppBar` also says
+    // "Transactions" once the tab is selected, and the bar is the control
+    // under test.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Transactions'),
+      ),
+    );
+    await settleMarketplace(tester, frames: 12);
+
+    expect(find.byType(TransactionsScreen), findsOneWidget);
+    expect(
+      find.text('TRX-001'),
+      findsOneWidget,
+      reason: 'the freshly loaded pending tab shows its record',
+    );
   });
 
   testWidgets('the home card navigates to the marketplace tab', (

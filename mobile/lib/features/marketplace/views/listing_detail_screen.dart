@@ -4,14 +4,20 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
+import '../../../models/transaction.dart';
 import '../../../repositories/marketplace_repository.dart';
+import '../../../repositories/transaction_repository.dart';
+import '../../../widgets/detail_row.dart';
+import '../../../widgets/section_card.dart';
+import '../../auth/state/auth_scope.dart';
+import '../../transactions/state/transaction_scope.dart';
+import '../../transactions/views/transaction_detail_screen.dart';
+import '../../transactions/widgets/buy_sheet.dart';
 import '../state/listing_detail_controller.dart';
 import '../state/listing_detail_state.dart';
 import '../state/marketplace_scope.dart';
 import '../widgets/listing_photo.dart';
 import '../widgets/marketplace_state_views.dart';
-import '../../../widgets/detail_row.dart';
-import '../../../widgets/section_card.dart';
 
 /// One listing's detail, from `GET /listings/{listing}`.
 ///
@@ -210,6 +216,10 @@ class _DetailContent extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
+              // Buyer-only. A seller viewing their own listing sees no Buy —
+              // there is no seller create endpoint and self-dealing is 409.
+              _BuyAction(listing: listing),
+              const SizedBox(height: AppSpacing.md),
               Row(
                 children: <Widget>[
                   const Icon(
@@ -292,4 +302,49 @@ String _titleCase(String value) {
     return trimmed;
   }
   return '${trimmed[0].toUpperCase()}${trimmed.substring(1)}';
+}
+
+/// The Buy / Inquire entry point on a listing detail.
+///
+/// Renders nothing when the viewer owns the listing (`seller.id == me.id`):
+/// a seller has no create endpoint and cannot transact with themselves
+/// (§6.2). Otherwise opens the [BuySheet] and navigates to the created
+/// pending transaction.
+class _BuyAction extends StatelessWidget {
+  const _BuyAction({required this.listing});
+
+  final Listing listing;
+
+  @override
+  Widget build(BuildContext context) {
+    final int? viewerId = AuthScope.of(context).state.user?.id;
+    if (viewerId != null && viewerId == listing.seller.id) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: () async {
+          final TransactionRepository repository = TransactionScope.readOf(
+            context,
+          );
+          final Transaction? created = await BuySheet.show(
+            context,
+            listing: listing,
+            repository: repository,
+          );
+          if (created != null && context.mounted) {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (BuildContext context) =>
+                    TransactionDetailScreen(transactionId: created.id),
+              ),
+            );
+          }
+        },
+        child: const Text('Buy / Inquire'),
+      ),
+    );
+  }
 }
