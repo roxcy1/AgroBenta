@@ -1275,6 +1275,7 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 16px;
   margin-top: 20px;
   padding: 12px 0;
@@ -1301,6 +1302,13 @@ input {
   cursor: not-allowed;
 }
 
+.users-page-button:focus-visible,
+.users-page-number:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--ring-primary);
+}
+
 .users-page-info {
   font-size: 14px;
   color: var(--color-text-secondary);
@@ -1308,6 +1316,69 @@ input {
 
 .users-page-total {
   font-size: 13px;
+}
+
+.users-page-number {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.users-page-number:hover:not(:disabled):not(.users-page-number--active) {
+  background: var(--color-bg);
+  border-color: var(--color-primary);
+}
+
+.users-page-number:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.users-page-number--active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #FFFFFF;
+}
+
+.users-page-number--active:disabled {
+  opacity: 1;
+}
+
+.users-page-ellipsis {
+  min-width: 24px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.users-page-updating {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.users-filter-notice {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+}
+
+.users-table-container--fetching {
+  opacity: 0.6;
 }
 
 /* Livestock & Verification Page */

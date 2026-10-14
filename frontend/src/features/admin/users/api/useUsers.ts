@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 
 export interface AdminUser {
@@ -10,6 +10,11 @@ export interface AdminUser {
   email_verified_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserVerificationInfo {
+  verificationId: number | null;
+  status: 'submitted' | 'pending_review' | 'approved' | 'rejected' | null;
 }
 
 export interface UsersPagination {
@@ -37,7 +42,7 @@ export interface UsersParams {
   per_page?: number;
 }
 
-async function fetchUsers(params: UsersParams): Promise<UsersData> {
+export async function fetchUsers(params: UsersParams): Promise<UsersData> {
   const query = new URLSearchParams();
   if (params.search) query.set('search', params.search);
   if (params.role) query.set('role', params.role);
@@ -56,6 +61,7 @@ export function useUsers(params: UsersParams) {
   return useQuery({
     queryKey: ['admin', 'users', params],
     queryFn: () => fetchUsers(params),
+    placeholderData: keepPreviousData,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     retry: 1,
