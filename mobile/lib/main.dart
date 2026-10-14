@@ -16,16 +16,19 @@ import 'features/seller_listings/state/seller_listing_controller.dart';
 import 'features/seller_listings/state/seller_listing_scope.dart';
 import 'features/seller_verification/state/seller_verification_controller.dart';
 import 'features/seller_verification/state/seller_verification_scope.dart';
+import 'features/transactions/state/transaction_scope.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/marketplace_repository.dart';
 import 'repositories/profile_repository.dart';
 import 'repositories/seller_listing_repository.dart';
 import 'repositories/seller_verification_repository.dart';
+import 'repositories/transaction_repository.dart';
 import 'services/auth_service.dart';
 import 'services/marketplace_service.dart';
 import 'services/profile_service.dart';
 import 'services/seller_listing_service.dart';
 import 'services/seller_verification_service.dart';
+import 'services/transaction_service.dart';
 
 /// AgroBenta mobile client — application entry point.
 ///
@@ -100,6 +103,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final ProfileService _profileService;
   late final ProfileRepository _profileRepository;
   late final ProfileController _profileController;
+  late final TransactionService _transactionService;
+  late final TransactionRepository _transactionRepository;
 
   @override
   void initState() {
@@ -146,6 +151,12 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _profileService = ProfileService(_apiClient);
     _profileRepository = ProfileRepository(_profileService);
     _profileController = ProfileController(_profileRepository);
+
+    // Transactions. No session-scoped controller: each tab owns one, because
+    // each tab is an independent filtered query. The repository is shared so
+    // the scope above `MaterialApp` can serve the pushed detail screen.
+    _transactionService = TransactionService(_apiClient);
+    _transactionRepository = TransactionRepository(_transactionService);
   }
 
   @override
@@ -196,11 +207,17 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
             child: ProfileScope(
               repository: _profileRepository,
               controller: _profileController,
-              child: MaterialApp(
-                title: 'AgroBenta',
-                debugShowCheckedModeBanner: false,
-                theme: AppTheme.light(),
-                home: AuthGate(authenticatedView: _buildBuyerShell),
+              // Transactions sits as a sibling of the other scopes, above
+              // `MaterialApp`, for the same reason each of them does: the
+              // detail screen is a pushed route.
+              child: TransactionScope(
+                repository: _transactionRepository,
+                child: MaterialApp(
+                  title: 'AgroBenta',
+                  debugShowCheckedModeBanner: false,
+                  theme: AppTheme.light(),
+                  home: AuthGate(authenticatedView: _buildBuyerShell),
+                ),
               ),
             ),
           ),

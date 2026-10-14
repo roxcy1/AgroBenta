@@ -224,6 +224,51 @@ abstract final class SellerListingEndpoints {
   static const int maxPerPage = 50;
 }
 
+/// Transaction endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `transactions` prefix. Every one requires a `mobile`-ability Sanctum token
+/// and resolves the user from that token — no path takes a user id, and
+/// `buyer_id` / `seller_id` are refused as filters.
+///
+/// There is deliberately **no `complete` path** here. The backend answers
+/// `POST /transactions/{id}/complete` with an explicit 501 (OQ-15: the
+/// confirming actor is undecided), and the client never calls it — hiding the
+/// affordance is safer than a button that always errors.
+abstract final class TransactionEndpoints {
+  /// `GET` — the caller's transactions, newest first. 200, paginated.
+  ///
+  /// Query allow-list: `role` (`buyer`|`seller`, one side of the caller's own
+  /// records), `status` (`pending`|`completed`|`cancelled`, one tab),
+  /// `page`, `per_page`. Anything else has no path to the request.
+  static const String list = '/transactions';
+
+  /// `POST` — create a pending transaction. 201, plain envelope.
+  ///
+  /// The caller is the buyer ([D-15] rule 1). Body allow-list is exactly
+  /// `{ listing_id, quantity }`; `buyer_id`, `seller_id`, `total_amount` and
+  /// `status` are server-derived and refused with 422.
+  static const String create = '/transactions';
+
+  /// `GET` — one transaction the caller is party to. 200, plain envelope.
+  ///
+  /// [id] is a selector, not proof of party: the server re-checks and answers
+  /// 404 for a transaction the caller is not party to.
+  static String detail(int id) => '/transactions/$id';
+
+  /// `POST` — cancel a pending transaction. 200, plain envelope.
+  ///
+  /// Either party may cancel ([D-15] rule 5), pending-only, irreversible.
+  /// The body allow-list is empty; any field is 422.
+  static String cancel(int id) => '/transactions/$id/cancel';
+
+  /// Page size used when the caller does not ask for a specific one.
+  static const int defaultPerPage = 15;
+
+  /// Largest page the server will serve (`between:1,50`).
+  static const int maxPerPage = 50;
+}
+
 /// Profile endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the

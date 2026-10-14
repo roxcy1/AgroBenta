@@ -3,19 +3,15 @@ import 'package:flutter/material.dart';
 import '../../home/view/buyer_home_screen.dart';
 import '../../marketplace/views/marketplace_screen.dart';
 import '../../profile/view/profile_screen.dart';
+import '../../transactions/views/transactions_screen.dart';
 
 /// The signed-in shell: bottom navigation over the buyer-facing destinations.
-///s
-/// ## Two destinations, not five
 ///
-/// `mobile/DESIGN.md` asks for 3–5 bottom-nav items across the app's life, and
-/// M2 has delivered exactly two of them: Home and Marketplace. Transactions,
-/// Notifications and Profile are later phases, and a disabled or "coming soon"
-/// destination is worse than an absent one — it advertises a screen that cannot
-/// be opened and reads as a broken build. Two items is a valid `NavigationBar`
-/// and the third slot costs nothing when the features exist.
+/// Four destinations: Home, Marketplace, Transactions, Profile. Transactions
+/// arrives now that the backend serves it (M5) — no disabled or "coming
+/// soon" destination ever ships, so the fourth slot waited for this phase.
 ///
-/// The two screens are held in an [IndexedStack] rather than rebuilt on switch.
+/// The screens are held in an [IndexedStack] rather than rebuilt on switch.
 /// Rebuilding would discard the marketplace's scroll position and re-trigger its
 /// initial load every time the buyer glanced at Home and came back, which for a
 /// browse screen is the most likely interaction in the app.
@@ -46,7 +42,8 @@ class _BuyerShellState extends State<BuyerShell> {
             onBrowseMarketplace: () =>
                 setState(() => _index = _marketplaceIndex),
           ),
-                   const MarketplaceScreen(),
+          const MarketplaceScreen(),
+          const TransactionsScreen(),
           const ProfileScreen(),
         ],
       ),
@@ -59,10 +56,15 @@ class _BuyerShellState extends State<BuyerShell> {
             selectedIcon: Icon(Icons.home),
             label: 'Home',
           ),
-                   NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.storefront_outlined),
             selectedIcon: Icon(Icons.storefront),
             label: 'Marketplace',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Transactions',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),

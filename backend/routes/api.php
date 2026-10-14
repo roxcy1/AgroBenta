@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Notification\NotificationController;
 use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
+use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
@@ -93,6 +94,25 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     // another seller's id is a 404 here, never a 403 that confirms it exists.
     Route::post('/{listing}/photos', [SellerListingController::class, 'storePhotos']);
     Route::delete('/{listing}/photos', [SellerListingController::class, 'destroyPhoto']);
+});
+
+// Transactions — the caller's own transactions as buyer or seller.
+//
+// No route here takes a user id. Both counterparties are resolved from the
+// token inside the repository, so there is no parameter that could widen a
+// list to somebody else's transactions, and no id that could redirect a
+// write at a foreign row. `role` narrows to one side of the caller's own
+// records; `buyer_id` / `seller_id` are refused.
+//
+// The `complete` route exists only to answer 501 explicitly: [D-15] rule 4
+// leaves the confirming actor undecided (OQ-15), so the transition stays
+// unimplemented rather than guessed. The mobile client never calls it.
+Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->group(function (): void {
+    Route::get('/', [MobileTransactionController::class, 'index']);
+    Route::post('/', [MobileTransactionController::class, 'store']);
+    Route::get('/{transaction}', [MobileTransactionController::class, 'show']);
+    Route::post('/{transaction}/cancel', [MobileTransactionController::class, 'cancel']);
+    Route::post('/{transaction}/complete', [MobileTransactionController::class, 'complete']);
 });
 
 // Profile — the caller's own account details and credentials.

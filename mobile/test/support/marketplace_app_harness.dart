@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
+import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
+import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/marketplace_screen.dart';
@@ -38,6 +42,22 @@ class MarketplaceHarness {
     final MarketplaceController controller = MarketplaceController(repository);
     addTearDown(controller.dispose);
 
+    // The listing detail screen reads the signed-in viewer from `AuthScope`
+    // (the Buy / Inquire action needs to know who is buying), and `main.dart`
+    // installs that scope above the navigator — so the harness must too, or a
+    // pushed detail route crashes on build.
+    final AuthController authController = AuthController(
+      buildAuthRepository(
+        tokenStore,
+        (_) async => http.Response(
+          jsonEncode(successEnvelope(data: userJson())),
+          200,
+        ),
+      ),
+    );
+    addTearDown(authController.dispose);
+    await authController.restoreSession();
+
     // The default test surface is 800x600 logical, which is only a couple of
     // image-on-top results cards tall — too short for the load-more footer or a
     // second card to be built by the lazy list, hiding them from finders. A
@@ -52,12 +72,15 @@ class MarketplaceHarness {
       // A pushed route is a sibling of the home route inside the navigator's
       // overlay, so a scope inside `home` would not be visible to the detail
       // screen and the harness would not reproduce the real tree.
-      MarketplaceScope(
-        repository: repository,
-        controller: controller,
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: const MarketplaceScreen(),
+      AuthScope(
+        controller: authController,
+        child: MarketplaceScope(
+          repository: repository,
+          controller: controller,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const MarketplaceScreen(),
+          ),
         ),
       ),
     );
