@@ -593,7 +593,7 @@ Unlike §5.2, a seller sees **all** their own statuses including `draft` and
 | **Authentication** | Required |
 | **Ability** | `mobile` |
 | **Request fields** | `livestock_type` **required**<br>`location` **required**<br>`asking_price` **required**<br>`quantity` **required**<br>`breed`, `age_value`, `age_unit`, `gender`, `weight_value`, `weight_unit`, `health_status`, `vaccination`, `short_description`, `additional_notes` (all optional)<br>`photos` optional array, default `[]`<br>**`status` is NOT accepted.** |
-| **Validation** | `livestock_type` `required`,`string`,`max:255` — free text, no enum (functional doc §4.1)<br>`location` `required`,`string`,`max:255`<br>`asking_price` `required`,`numeric`,`min:0`,`max:99999999999.99`<br>`quantity` `required`,`integer`,`min:1`<br>`age_value` `sometimes`,`integer`,`min:0`<br>`age_unit` `sometimes`,`Rule::in(['day','month','year'])`<br>`gender` `sometimes`,`Rule::in(['male','female'])`<br>`weight_value` `sometimes`,`numeric`,`min:0`<br>`weight_unit` `sometimes`,`Rule::in(['kg','lb'])`<br>`age_value`↔`age_unit` and `weight_value`↔`weight_unit` must be supplied together — `required_with`<br>`photos` `sometimes`,`array`<br>`photos.*` `string`<br>**`status` and `seller_id` must be rejected if present** — [SEC] §4.5 |
+| **Validation** | `livestock_type` `required`,`string`,`max:255` — free text, no enum (functional doc §4.1)<br>`location` `required`,`string`,`max:255`<br>`asking_price` `required`,`numeric`,`min:0`,`max:99999999999.99`<br>`quantity` `required`,`integer`,`min:1`<br>`age_value` `sometimes`,`integer`,`min:0`<br>`age_unit` `sometimes`,`Rule::in(['day','month','year'])`<br>`gender` `sometimes`,`Rule::in(['male','female'])`<br>`weight_value` `sometimes`,`numeric`,`min:0`<br>`weight_unit` `sometimes`,`Rule::in(['kg','lb'])`<br>`age_value`↔`age_unit` and `weight_value`↔`weight_unit` must be supplied together — `required_with`<br>`photos` `sometimes`,`array`,`max:10`<br>`photos.*` `string`,`max:2048`<br>**`status` and `seller_id` must be rejected if present** — [SEC] §4.5 |
 | **Response** | `201`, §3.1. `data` = listing, `status` is `draft` |
 | **Errors** | `401`, `403` not an approved seller, `422` |
 | **Authorization** | `seller_capability = seller` |
@@ -609,10 +609,15 @@ seller can cause is `pending`, via the submit action below. A request carrying
 `status` must be **rejected**, not silently ignored — silently dropping it hides
 a client bug, and accepting it is rule 6 violated.
 
-**`photos` is a JSON column, not an upload (F-13).** Per **[SEC] / functional
-doc §4.5**, the mobile API must expose photos, and **the schema must not change
-to make that possible**. The representation is decided at implementation time —
-**D-10**.
+**Photos — [D-10] decided and implemented.** Per **[SEC] / functional doc §4.5**
+the schema does not change; the JSON column holds **bare filenames** only
+(a model mutator normalises relative paths, URLs and filenames all down to the
+filename), and the API serves **absolute URLs** built from them via the
+`listing-photos` disk — local by default, S3 by environment. Photos are added
+with `POST /seller/listings/{listing}/photos` and removed with `DELETE
+/seller/listings/{listing}/photos` (both §5.4a); the `photos` field on
+create/`PATCH` sets the list in one go under the same 10-photo ceiling, so
+neither path can exceed it. A storage-relative path never leaves the API.
 
 ---
 
@@ -694,6 +699,52 @@ transition `active → inactive` is reserved to **admin** ([D-02] transition
 table). A seller who can `DELETE` an `active` listing has self-deactivated it
 and bypassed that rule. Restrict deletion to `draft` and `inactive` until the
 interaction is settled — recorded as **D-25**, not invented.
+
+---
+
+### 5.4a Listing photos — [SEC] §4.5 / [D-10]
+
+Photos live in the existing `listings.photos` JSON column. **The schema does
+not change** (§4.5). Stored form: bare filenames. Served form: absolute URLs,
+resolved by a `Listing` accessor over the `listing-photos` disk.
+
+#### `POST /seller/listings/{listing}/photos`
+
+| Dimension | Specification |
+|---|---|
+| **Endpoint** | `/api/seller/listings/{listing}/photos` |
+| **Method** | `POST` |
+| **Authentication** | Required |
+| **Ability** | `mobile` |
+| **Request fields** | `photos` — multipart file array, `required`, 1–10 files |
+| **Validation** | `photos.*` `file`,`mimes:jpg,jpeg,png,webp`,`max:5120` (KB) — explicit allow-list [SEC] §4.5.2. Cumulative ceiling: existing photos + uploaded files ≤ 10, else `422` |
+| **Response** | `201`, §3.1, updated listing (`photos` as absolute URLs) |
+| **Errors** | `401`, `403` not an approved seller, `404` not yours, `409` not `draft`/`active`, `422` |
+| **Authorization** | `seller_capability = seller` |
+| **Ownership** | `listing.seller_id === $me->id`, else `404` — never `403`, which would confirm the id exists |
+
+Files are written under `listings/{id}/` on the `listing-photos` disk; only
+the generated filenames are stored in the column. Photos are content: editable
+only in `draft` and `active` (D-24), exactly like `PATCH`.
+
+#### `DELETE /seller/listings/{listing}/photos`
+
+| Dimension | Specification |
+|---|---|
+| **Endpoint** | `/api/seller/listings/{listing}/photos` |
+| **Method** | `DELETE` |
+| **Authentication** | Required |
+| **Ability** | `mobile` |
+| **Request fields** | `photo` — the value the client was served: the absolute URL or the bare filename. `required`,`string` |
+| **Validation** | N/A beyond presence; the name is matched against the stored list |
+| **Response** | `200`, §3.1, updated listing (`photos` as absolute URLs) |
+| **Errors** | `401`, `403`, `404` not yours **or** no such photo on this listing, `409` not `draft`/`active` |
+| **Authorization** | `seller_capability = seller` |
+| **Ownership** | `listing.seller_id === $me->id`, else `404` |
+
+The file is removed from disk as well as from the column. Deleting by URL is
+deliberate: the client holds URLs, and making it parse its own URL to delete
+would be a trap.
 
 ---
 
@@ -1233,7 +1284,7 @@ Verified against source. **F-01, F-02 and F-11 are the ones that matter most.**
 | **F-09** | Medium | **No guard against duplicate open verifications, and no "latest record" resolution.** `AdminSellerVerificationRepository::list()` returns every record ordered by `created_at desc` with no dedupe (line 23), and `AdminSellerVerificationService::approve()`/`reject()` act on **whatever record is passed** without checking it is the seller's most recent (lines 28, 46). With the history rule (§3.2), approving a stale record would re-grant `seller_capability` after a newer rejection. `SellerVerificationStatus::isOpen()` exists but is unused. |
 | **F-09b** | Medium | **`reject()` does not revoke seller capability.** `AdminSellerVerificationService::reject()` (line 46) updates the record but never touches `seller_capability`. If an approved seller is ever re-reviewed and rejected, they remain a seller. `approve()` does set it (line 38). Asymmetric. |
 | **F-12** | Medium | **Sanctum tokens never expire.** `config/sanctum.php` sets `'expiration' => null`. A stolen mobile token is valid indefinitely, and logout is the only revocation. D-11/OQ-11. |
-| **F-13** | Medium | **Listing `photos` is stored but never exposed.** The column exists and is `NOT NULL` (`listings` migration), but `ListingResource` omits it — 15 fields, none of them `photos`. A mobile listing screen would render no images. No upload endpoint, storage disk, or URL scheme exists. D-10. |
+| **F-13** | Medium | **Listing `photos` is stored but never exposed.** The column exists and is `NOT NULL` (`listings` migration), but `ListingResource` omits it — 15 fields, none of them `photos`. A mobile listing screen would render no images. No upload endpoint, storage disk, or URL scheme exists. D-10. **CLOSED** — mobile serves absolute URLs via the `listing-photos` disk and a `Listing` accessor (§5.4a); upload/delete endpoints exist; the admin `ListingResource` still omits photos by design (§10.4). |
 | **F-10** | High | **No listing publication path — now REQUIRED by [D-02].** `GET /api/admin/listings` is the only listing route (`routes/api.php:27`); admin can read listings but cannot change any status. [D-02] rule 8 requires admin approval before `active`, so `approve`, `reject` and `deactivate` endpoints are mandatory and **do not exist**. Specified in §5.4b. Functional doc OQ-14. |
 | **F-04** | Medium | **`email_verified_at` is permanently null.** `MustVerifyEmail` is commented out (`User.php:5`) and nothing sets the column, yet `UserResource` exposes `email_verified_at` (line 23). The API advertises a verification state that can never be true. |
 | **F-05** | Low | **Error bodies have no `success` field.** Success responses set `success: true`; Laravel's default errors do not. A client that checks `body.success` will treat every error as malformed. Mobile should branch on HTTP status, not on `success`. |
@@ -1295,7 +1346,7 @@ Reuse the existing field set, with three changes:
 | Change | Reason |
 |---|---|
 | **`seller.email` removed** | F-08, [SEC] §10.4. Marketplace browsing must not harvest seller emails. |
-| **`photos` added** | F-13 + functional doc §4.5. The mobile API **must** expose photos, and **the schema must not change to make that possible** — the JSON column is sufficient. Representation settled at implementation (**D-10**). |
+| **`photos` added** | F-13 + functional doc §4.5. The mobile API **must** expose photos, and **the schema must not change to make that possible** — the JSON column is sufficient. **[D-10] decided**: filenames stored, absolute URLs served (§5.4a). |
 | `asking_price` as a **string** | §3.4. Never a float. |
 | **No admin-only fields** | `status` here reflects the *owner's* listing. Never expose reviewer or internal data. |
 
@@ -1353,7 +1404,7 @@ serialise `total_amount` as a string.
 | D-03 | **[D-03] / OQ-03** | Price-suggestion *constraints* are settled (dedicated service, no invented algorithm, no ML claims, seller owns the price). The **estimation method itself is still open** — see 9.2. |
 | D-15 | **[D-15] / OQ-15** | Transaction states, both transitions, terminality, two-party cancellation and buyer-initiated creation are settled. **The completion-confirmation actor is still open** — see 9.2. |
 | — | **[SEC]** | Mass-assignment exposure (F-11) and admin-resource email leakage (F-08) are now binding approved requirements, not findings awaiting a decision. |
-| D-16 (photos) | **D-10** | Partly closed: **no schema change permitted**, and the mobile API **must** expose photos. Upload mechanism and URL scheme remain open. |
+| D-16 (photos) | **D-10** | **Closed.** No schema change permitted (§4.5); mobile must expose photos. [D-10] settled at implementation: filenames stored, absolute URLs served, `listing-photos` disk, upload/delete endpoints (§5.4a). |
 
 ### 9.2 Still blocking implementation
 
@@ -1362,7 +1413,6 @@ serialise `total_amount` as a string.
 | **OQ-15** (D-15) | **Who performs transaction completion confirmation, and what constitutes it** — seller, buyer, or mutual agreement? [D-15] rule 4 says "the appropriate transaction confirmation" without naming it. | `POST /transactions/{id}/complete` **only.** Everything else in §5.6 is buildable. |
 | **OQ-03** (D-03) | **The estimation method.** [D-03] mandates a dedicated service and forbids inventing an algorithm, but no algorithm, model, or integration exists. Must be documented before the production estimator. | The **interior** of the price-suggestion service. The endpoint contract in §5.5 is buildable. |
 | **OQ-14** | **Admin listing moderation endpoints.** [D-02] makes admin approval mandatory, but admin can only read listings today. Specified in §5.4b; needs building. | The `active` half of the lifecycle. Not mobile surface. |
-| **D-10** | **Listing photo representation** — upload mechanism, storage, URL scheme, exact mobile shape. Constrained: no schema change (§4.5). | Photo *upload*; photo *read* shape depends on it. |
 | **D-11** | **Token lifetime.** `config/sanctum.php` has `expiration => null` (F-12). | Shipping to production, not first implementation. |
 | **D-17** | **Messaging eligibility.** Verified seller, existing transaction, or listing context? | §5.8 |
 | **D-16** | **Which notification types exist, and what triggers them?** | §5.7 payloads |

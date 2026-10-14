@@ -8,8 +8,11 @@ use App\Models\Listing;
 use App\Models\User;
 use App\Repositories\SellerListing\SellerListingRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * The rules for what a seller may do to a listing, and from which state.
@@ -140,6 +143,102 @@ class SellerListingService
         $this->ensureStatusIs($listing, self::DELETABLE_STATUSES, 'Only a draft or an inactive listing can be deleted.');
 
         $this->listingRepository->delete($listing);
+    }
+
+    /**
+     * Add photos to a listing the seller owns.
+     *
+     * Files are written to the `listing-photos` disk under `listings/{id}/`
+     * (functional documentation §4.5, D-10); only the generated filenames are
+     * stored in the JSON column, and `MobileListingResource` turns them back
+     * into absolute URLs on the way out.
+     *
+     * The per-listing ceiling is checked here, against the stored count,
+     * rather than in the Form Request: the request sees only its own body, so
+     * a cumulative limit is a service question — and checking it after the
+     * controller's ownership lookup means an over-limit request from a
+     * non-owner is a 404, never a 422 that confirms the listing exists.
+     *
+     * @param  array<int, UploadedFile>  $files
+     *
+     * @throws ValidationException if existing photos plus these files exceed the limit
+     */
+    public function addPhotos(Listing $listing, array $files): Listing
+    {
+        $this->ensureStatusIs(
+            $listing,
+            self::EDITABLE_STATUSES,
+            'Photos can only be changed on a draft or an active listing.',
+        );
+
+        $stored = $listing->storedPhotoFilenames();
+
+        if (count($stored) + count($files) > Listing::PHOTO_LIMIT) {
+            throw ValidationException::withMessages([
+                'photos' => 'A listing may have at most '.Listing::PHOTO_LIMIT.' photos.',
+            ]);
+        }
+
+        $disk = Storage::disk(Listing::PHOTO_DISK);
+        $directory = (string) $listing->getKey();
+
+        foreach ($files as $file) {
+            $filename = $file->hashName();
+
+            // The disk is configured not to throw, so a failed write returns
+            // false; that must not look like a successful upload until a buyer
+            // discovers a broken image.
+            if (! $disk->putFileAs($directory, $file, $filename)) {
+                throw new RuntimeException('Failed to store a listing photo.');
+            }
+
+            $stored[] = $filename;
+        }
+
+        return $this->listingRepository->update($listing, ['photos' => $stored]);
+    }
+
+    /**
+     * Remove one photo from a listing the seller owns.
+     *
+     * The client names the photo with the value it was served — the full URL
+     * or the bare filename — and either collapses to the same filename, so a
+     * client never has to parse its own URL to delete from it.
+     *
+     * @throws ValidationException if the listing is not in an editable state
+     */
+    public function removePhoto(Listing $listing, string $photo): Listing
+    {
+        $this->ensureStatusIs(
+            $listing,
+            self::EDITABLE_STATUSES,
+            'Photos can only be changed on a draft or an active listing.',
+        );
+
+        $filename = basename(str_replace('\\', '/', trim($photo)));
+        $stored = $listing->storedPhotoFilenames();
+
+        // 404, not 422: the listing is the seller's own, but a name that is
+        // not on it names a photo that does not exist — the same absence as a
+        // listing id that was never theirs.
+        if (! in_array($filename, $stored, true)) {
+            abort(404, 'Photo not found.');
+        }
+
+        $updated = $this->listingRepository->update($listing, [
+            'photos' => array_values(array_filter(
+                $stored,
+                static fn (string $stored): bool => $stored !== $filename,
+            )),
+        ]);
+
+        // The database is the source of truth, so it is written before the
+        // file is deleted: if the delete fails the worst case is an orphaned
+        // file nothing references, while the reverse order would leave the
+        // API advertising a photo that is gone.
+        Storage::disk(Listing::PHOTO_DISK)->delete($listing->getKey().'/'.$filename);
+
+        return $updated;
     }
 
     /**

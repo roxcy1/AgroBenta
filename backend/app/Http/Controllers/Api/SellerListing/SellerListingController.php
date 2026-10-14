@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api\SellerListing;
 
 use App\Enums\ListingStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SellerListing\DeleteListingPhotoRequest;
 use App\Http\Requests\SellerListing\IndexSellerListingRequest;
 use App\Http\Requests\SellerListing\SellerListingActionRequest;
+use App\Http\Requests\SellerListing\StoreListingPhotoRequest;
 use App\Http\Requests\SellerListing\StoreSellerListingRequest;
 use App\Http\Requests\SellerListing\UpdateSellerListingRequest;
 use App\Http\Resources\MobileListingResource;
@@ -130,6 +132,49 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Listing deleted.',
+        ], 200);
+    }
+
+    /**
+     * Upload photos to a listing the seller owns.
+     *
+     * Resolution order is deliberate: middleware (a buyer is a 403), then the
+     * Form Request's file allow-list (a bad file is a 422 that depends only on
+     * the body), then ownership (another seller's id is a 404, before the
+     * service's cumulative limit can turn it into a 422 that would confirm the
+     * listing exists).
+     */
+    public function storePhotos(StoreListingPhotoRequest $request, string $listing): JsonResponse
+    {
+        $photos = $this->listings->addPhotos(
+            $this->findOwnedListing($request, $listing),
+            $request->file('photos', []),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Photos uploaded.',
+            'data' => new MobileListingResource($photos),
+        ], 201);
+    }
+
+    /**
+     * Remove one photo from a listing the seller owns.
+     *
+     * Same resolution order as the upload above; the photo is named by the
+     * value the client was served, URL or filename.
+     */
+    public function destroyPhoto(DeleteListingPhotoRequest $request, string $listing): JsonResponse
+    {
+        $remaining = $this->listings->removePhoto(
+            $this->findOwnedListing($request, $listing),
+            $request->validated('photo'),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Photo removed.',
+            'data' => new MobileListingResource($remaining),
         ], 200);
     }
 
