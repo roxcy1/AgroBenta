@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 
 export interface ActivityUser {
@@ -44,7 +44,7 @@ export interface ActivitiesParams {
   per_page?: number;
 }
 
-async function fetchActivities(params: ActivitiesParams): Promise<ActivitiesData> {
+export async function fetchActivities(params: ActivitiesParams): Promise<ActivitiesData> {
   const query = new URLSearchParams();
   if (params.search) query.set('search', params.search);
   if (params.action) query.set('action', params.action);
@@ -65,6 +65,7 @@ export function useActivities(params: ActivitiesParams) {
   return useQuery({
     queryKey: ['admin', 'activities', params],
     queryFn: () => fetchActivities(params),
+    placeholderData: keepPreviousData,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     retry: 1,
