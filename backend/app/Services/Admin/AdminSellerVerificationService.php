@@ -2,21 +2,24 @@
 
 namespace App\Services\Admin;
 
+use App\Enums\ActivityAction;
 use App\Enums\SellerCapability;
 use App\Enums\SellerVerificationStatus;
 use App\Models\SellerVerification;
 use App\Models\User;
+use App\Notifications\SellerVerificationApproved;
+use App\Notifications\SellerVerificationRejected;
 use App\Repositories\Admin\AdminSellerVerificationRepository;
+use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use App\Notifications\SellerVerificationApproved;
-use App\Notifications\SellerVerificationRejected;
 
 class AdminSellerVerificationService
 {
     public function __construct(
         private readonly AdminSellerVerificationRepository $verifications,
+        private readonly ActivityLogger $activity,
     ) {
         //
     }
@@ -37,22 +40,22 @@ class AdminSellerVerificationService
         return $this->verifications->historyFor($verification->user_id, $verification->id);
     }
 
-    public function approve(SellerVerification $verification, int $reviewerId, ?string $adminNote = null): SellerVerification
+    public function approve(SellerVerification $verification, User $reviewer, ?string $adminNote = null): SellerVerification
     {
         return $this->moderate(
             $verification,
             SellerVerificationStatus::Approved,
-            $reviewerId,
+            $reviewer,
             $adminNote,
         );
     }
 
-    public function reject(SellerVerification $verification, int $reviewerId, string $adminNote): SellerVerification
+    public function reject(SellerVerification $verification, User $reviewer, string $adminNote): SellerVerification
     {
         return $this->moderate(
             $verification,
             SellerVerificationStatus::Rejected,
-            $reviewerId,
+            $reviewer,
             $adminNote,
         );
     }
@@ -65,10 +68,10 @@ class AdminSellerVerificationService
     private function moderate(
         SellerVerification $verification,
         SellerVerificationStatus $to,
-        int $reviewerId,
+        User $reviewer,
         ?string $adminNote,
     ): SellerVerification {
-        return DB::transaction(function () use ($verification, $to, $reviewerId, $adminNote): SellerVerification {
+        return DB::transaction(function () use ($verification, $to, $reviewer, $adminNote): SellerVerification {
             // Lock the applicant so concurrent review decisions serialise per
             // applicant and a resubmission cannot race the decision.
             $applicant = User::query()->lockForUpdate()->findOrFail($verification->user_id);
@@ -83,9 +86,18 @@ class AdminSellerVerificationService
                 abort(409, 'This verification request has already been reviewed.');
             }
 
+            // Observed before the write, so the audit records the transition the
+            // review actually performed rather than a re-derived guess.
+            $previousStatus = $latest->status->value;
+            $previousCapability = $applicant->seller_capability->value;
+
+            $newCapability = $to === SellerVerificationStatus::Approved
+                ? SellerCapability::Seller
+                : SellerCapability::Buyer;
+
             $latest->update([
                 'status' => $to,
-                'reviewed_by' => $reviewerId,
+                'reviewed_by' => $reviewer->getKey(),
                 'reviewed_at' => now(),
                 'admin_note' => $adminNote,
             ]);
@@ -94,10 +106,8 @@ class AdminSellerVerificationService
             // guards on purpose. It is only ever set from this trusted path.
             // Approval grants selling; rejection revokes it, so a previously
             // approved applicant who is later rejected is no longer a seller.
-                      $applicant->forceFill([
-                'seller_capability' => $to === SellerVerificationStatus::Approved
-                    ? SellerCapability::Seller
-                    : SellerCapability::Buyer,
+            $applicant->forceFill([
+                'seller_capability' => $newCapability,
             ])->save();
 
             // Fire the applicant's notification. Inside the transaction, on
@@ -114,6 +124,32 @@ class AdminSellerVerificationService
                 : new SellerVerificationRejected($latest->fresh());
 
             $applicant->notify($notification);
+
+            $action = $to === SellerVerificationStatus::Approved
+                ? ActivityAction::SellerVerificationApproved
+                : ActivityAction::SellerVerificationRejected;
+
+            $this->activity->log(
+                $reviewer,
+                $action,
+                sprintf('%s for "%s".', $action->label(), $latest->business_name),
+                [
+                    'target_type' => 'seller_verification',
+                    'target_id' => $latest->getKey(),
+                    'context' => [
+                        'applicant_id' => $applicant->getKey(),
+                        'business_name' => $latest->business_name,
+                    ],
+                    'changes' => [
+                        'status' => ['from' => $previousStatus, 'to' => $to->value],
+                        'seller_capability' => [
+                            'from' => $previousCapability,
+                            'to' => $newCapability->value,
+                        ],
+                    ],
+                    'admin_note' => $adminNote,
+                ],
+            );
 
             return $latest->fresh(['seller:id,name,email', 'reviewer:id,name']);
         });

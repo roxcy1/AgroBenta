@@ -314,4 +314,60 @@ class ListingManagementTest extends TestCase
         $this->assertEquals($second->id, $data['listings'][1]['id']);
         $this->assertEquals($first->id, $data['listings'][2]['id']);
     }
+
+    public function test_admin_can_show_a_single_listing(): void
+    {
+        $listing = $this->createListing();
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/listings/{$listing->id}");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('data.id', $listing->id);
+        $response->assertJsonPath('data.livestock_type', 'cattle');
+        $response->assertJsonStructure([
+            'data' => [
+                'id',
+                'seller' => ['id', 'name', 'email'],
+                'livestock_type',
+                'breed',
+                'status',
+            ],
+        ]);
+    }
+
+    public function test_guest_cannot_show_a_single_listing(): void
+    {
+        $listing = $this->createListing();
+
+        $response = $this->getJson("/api/admin/listings/{$listing->id}");
+
+        $response->assertStatus(401);
+    }
+
+    public function test_regular_user_cannot_show_a_single_listing(): void
+    {
+        $listing = $this->createListing();
+
+        $user = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        $token = $user->createToken('user_token')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson("/api/admin/listings/{$listing->id}");
+
+        $response->assertStatus(403);
+    }
+
+    public function test_show_returns_not_found_for_missing_listing(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/listings/999999');
+
+        $response->assertStatus(404);
+    }
 }

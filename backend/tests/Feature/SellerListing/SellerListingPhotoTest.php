@@ -4,9 +4,12 @@ namespace Tests\Feature\SellerListing;
 
 use App\Enums\ListingStatus;
 use App\Enums\UserRole;
+use App\Models\Activity;
 use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\SellerListing\SellerListingService;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -734,5 +737,91 @@ class SellerListingPhotoTest extends TestCase
             ->assertJsonPath('data.photos', [
                 $this->photoBase().'/'.$listing->id.'/front.jpg',
             ]);
+    }
+
+    // --------------------------------------------------------------- audit log
+
+    #[Test]
+    public function adding_photos_records_an_activity(): void
+    {
+        $listing = $this->createListing($this->seller);
+
+        $this->upload($listing, [
+            $this->tinyJpeg('front.jpg'),
+            $this->tinyPng('side.png'),
+        ])->assertStatus(201);
+
+        // Exactly one entry: an upload writes one audit row, not one per file.
+        $activity = Activity::query()->sole();
+
+        $this->assertSame('listing_photo_added', $activity->action);
+        $this->assertSame($this->seller->id, $activity->user_id);
+        $this->assertNotNull($activity->created_at);
+        $this->assertSame('listing', $activity->metadata['target_type']);
+        $this->assertSame($listing->id, $activity->metadata['target_id']);
+        $this->assertSame(['from' => 0, 'to' => 2], $activity->metadata['changes']['photos']);
+    }
+
+    #[Test]
+    public function the_activity_records_the_running_photo_count(): void
+    {
+        $listing = $this->createListing($this->seller, ['photos' => ['a.jpg', 'b.jpg']]);
+
+        $this->upload($listing, [$this->tinyJpeg('c.jpg')])->assertStatus(201);
+
+        $activity = Activity::query()->sole();
+
+        $this->assertSame(['from' => 2, 'to' => 3], $activity->metadata['changes']['photos']);
+    }
+
+    #[Test]
+    public function a_rejected_upload_records_no_activity(): void
+    {
+        // Nine stored, so two more pass the per-request ceiling but break the
+        // service's cumulative one — the refusal happens before any write.
+        $listing = $this->createListing($this->seller, [
+            'photos' => ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg', 'e.jpg', 'f.jpg', 'g.jpg', 'h.jpg', 'i.jpg'],
+        ]);
+
+        $this->upload($listing, [
+            $this->tinyJpeg('one.jpg'),
+            $this->tinyJpeg('two.jpg'),
+        ])->assertStatus(422)->assertJsonValidationErrors('photos');
+
+        $this->assertSame(0, Activity::query()->count());
+    }
+
+    #[Test]
+    public function an_upload_under_review_records_no_activity(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Pending,
+            'photos' => ['front.jpg'],
+        ]);
+
+        $this->upload($listing, [$this->tinyJpeg('sneaky.jpg')])->assertStatus(409);
+
+        $this->assertSame(0, Activity::query()->count());
+    }
+
+    #[Test]
+    public function a_failed_write_records_no_activity(): void
+    {
+        $listing = $this->createListing($this->seller);
+
+        // The disk reports a failed write, so the service throws before it can
+        // update the row or reach the audit write.
+        $disk = \Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->once()->andReturn(false);
+        Storage::shouldReceive('disk')->with(Listing::PHOTO_DISK)->andReturn($disk);
+
+        try {
+            app(SellerListingService::class)->addPhotos($listing, [$this->tinyJpeg('front.jpg')]);
+            $this->fail('A failed photo write must throw.');
+        } catch (\RuntimeException) {
+            // Expected: the write failure aborts the operation.
+        }
+
+        $this->assertSame(0, Activity::query()->count());
     }
 }

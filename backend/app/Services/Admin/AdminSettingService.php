@@ -2,17 +2,22 @@
 
 namespace App\Services\Admin;
 
+use App\Enums\ActivityAction;
 use App\Http\Requests\Admin\UpdateSettingsRequest;
 use App\Models\Setting;
+use App\Models\User;
 use App\Repositories\Admin\AdminSettingRepository;
+use App\Services\ActivityLogger;
 use App\Services\SettingService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AdminSettingService
 {
     public function __construct(
         private readonly AdminSettingRepository $settings,
         private readonly SettingService $settingService,
+        private readonly ActivityLogger $activity,
     ) {
         //
     }
@@ -40,7 +45,7 @@ class AdminSettingService
      * @param  array<string, string>  $input  key => value pairs from the request
      * @return array{updated: list<string>, rejected: list<string>}
      */
-    public function updateSettings(array $input): array
+    public function updateSettings(array $input, User $actor): array
     {
         $definitions = config('settings.keys');
         $rows = [];
@@ -64,11 +69,40 @@ class AdminSettingService
         }
 
         if ($rows !== []) {
-            $this->settings->updateMany($rows);
+            DB::transaction(function () use ($rows, $actor): void {
+                $changes = [];
 
-            // The write path owns cache correctness: the reader caches the whole
-            // map, so dropping it here is what makes an update visible at once.
-            $this->settingService->flush();
+                foreach ($rows as $key => $row) {
+                    $setting = $this->settings->findByKey($key);
+
+                    // A key that has no row is a no-op for the write below, so
+                    // it is not recorded as a change either.
+                    if ($setting === null || $setting->value === $row['value']) {
+                        continue;
+                    }
+
+                    $changes[$key] = ['from' => $setting->value, 'to' => $row['value']];
+                }
+
+                $this->settings->updateMany($rows);
+
+                // The write path owns cache correctness: the reader caches the whole
+                // map, so dropping it here is what makes an update visible at once.
+                $this->settingService->flush();
+
+                if ($changes !== []) {
+                    $this->activity->log(
+                        $actor,
+                        ActivityAction::SettingsUpdated,
+                        'Platform settings updated.',
+                        [
+                            'target_type' => 'setting',
+                            'target_id' => null,
+                            'changes' => $changes,
+                        ],
+                    );
+                }
+            });
         }
 
         return [

@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { useTransactions, useTransactionCounts, fetchAllTransactions } from '../api/useTransactions';
+import { useSearchParams } from 'react-router-dom';
+import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
+import {
+  useTransactions,
+  useTransaction,
+  useTransactionCounts,
+  fetchAllTransactions,
+} from '../api/useTransactions';
 import type { Transaction } from '../api/useTransactions';
 import { buildTransactionsCsv, buildTransactionsFilename, downloadCsv } from '../csv';
 import TransactionDetailDialog from './TransactionDetailDialog';
@@ -38,6 +45,9 @@ export function TransactionsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const linkedTransactionId = parsePositiveInt(searchParams.get('transaction'));
+  const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
 
   const { data, isLoading, error, refetch } = useTransactions({
     search: search || undefined,
@@ -49,6 +59,29 @@ export function TransactionsPage() {
   });
 
   const { data: counts } = useTransactionCounts();
+  const { data: linkedTransaction, isError: linkedTransactionFailed } =
+    useTransaction(linkedTransactionId);
+
+  // A deep link opens the transaction it names even when that row is not on the
+  // page the list is showing. The dialog's record is derived from the query
+  // result so the URL stays the single source of truth for the open dialog.
+  const linkedState = resolveDeepLinkedRecord({
+    entity: 'Transaction',
+    id: linkedTransactionId,
+    dismissedId: dismissedLinkId,
+    record: linkedTransaction,
+    isError: linkedTransactionFailed,
+  });
+  const activeTransaction = selectedTransaction ?? linkedState.record;
+
+  const handleCloseTransaction = () => {
+    setSelectedTransaction(null);
+    if (linkedTransactionId !== null) setDismissedLinkId(linkedTransactionId);
+  };
+
+  const handleDismissLinkedNotice = () => {
+    if (linkedTransactionId !== null) setDismissedLinkId(linkedTransactionId);
+  };
 
   const handleSearch = () => {
     setSearch(searchInput);
@@ -218,6 +251,19 @@ export function TransactionsPage() {
 
           {exportError && <p className="lv-error-text">{exportError}</p>}
 
+          {linkedState.message !== null && (
+            <div className="deep-link-notice" role="alert">
+              <p className="deep-link-notice-text">{linkedState.message}</p>
+              <button
+                type="button"
+                className="deep-link-notice-dismiss"
+                onClick={handleDismissLinkedNotice}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {transactions.length === 0 ? (
             <div className="lv-empty">
               <p>No transactions found.</p>
@@ -301,10 +347,10 @@ export function TransactionsPage() {
         </>
       )}
 
-      {selectedTransaction && (
+      {activeTransaction && (
         <TransactionDetailDialog
-          transaction={selectedTransaction}
-          onClose={() => setSelectedTransaction(null)}
+          transaction={activeTransaction}
+          onClose={handleCloseTransaction}
         />
       )}
     </div>

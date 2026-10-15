@@ -2,13 +2,16 @@
 
 namespace App\Services\Transaction;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Enums\TransactionStatus;
 use App\Models\Listing;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Repositories\Transaction\TransactionRepository;
+use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The rules for what a user may do to a transaction, and from which state.
@@ -31,8 +34,10 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
  */
 class TransactionService
 {
-    public function __construct(private readonly TransactionRepository $transactions)
-    {
+    public function __construct(
+        private readonly TransactionRepository $transactions,
+        private readonly ActivityLogger $activity,
+    ) {
         //
     }
 
@@ -87,13 +92,39 @@ class TransactionService
         // sends only the quantity and never a price.
         $totalAmount = number_format((float) $listing->asking_price * $quantity, 2, '.', '');
 
-        return $this->transactions->createPending(
-            $buyer,
-            (int) $listing->seller_id,
-            (int) $listing->getKey(),
-            $quantity,
-            $totalAmount,
-        );
+        return DB::transaction(function () use ($buyer, $listing, $quantity, $totalAmount): Transaction {
+            $transaction = $this->transactions->createPending(
+                $buyer,
+                (int) $listing->seller_id,
+                (int) $listing->getKey(),
+                $quantity,
+                $totalAmount,
+            );
+
+            $this->activity->log(
+                $buyer,
+                ActivityAction::TransactionCreated,
+                sprintf(
+                    'Transaction #%d created for listing #%d.',
+                    $transaction->getKey(),
+                    $listing->getKey(),
+                ),
+                [
+                    'target_type' => 'transaction',
+                    'target_id' => $transaction->getKey(),
+                    'context' => [
+                        'listing_id' => $listing->getKey(),
+                        'seller_id' => (int) $listing->seller_id,
+                        'quantity' => $quantity,
+                    ],
+                    'changes' => [
+                        'status' => ['from' => null, 'to' => TransactionStatus::Pending->value],
+                    ],
+                ],
+            );
+
+            return $transaction;
+        });
     }
 
     /**
@@ -101,7 +132,7 @@ class TransactionService
      *
      * The transition is irreversible: a cancelled transaction stays cancelled.
      */
-    public function cancel(Transaction $transaction): Transaction
+    public function cancel(Transaction $transaction, User $actor): Transaction
     {
         $this->ensureStatusIs(
             $transaction,
@@ -109,7 +140,32 @@ class TransactionService
             'Only a pending transaction can be cancelled.',
         );
 
-        return $this->transactions->updateStatus($transaction, TransactionStatus::Cancelled);
+        return DB::transaction(function () use ($transaction, $actor): Transaction {
+            $cancelled = $this->transactions->updateStatus($transaction, TransactionStatus::Cancelled);
+
+            $this->activity->log(
+                $actor,
+                ActivityAction::TransactionCancelled,
+                sprintf('Transaction #%d cancelled.', $transaction->getKey()),
+                [
+                    'target_type' => 'transaction',
+                    'target_id' => $transaction->getKey(),
+                    'context' => [
+                        'listing_id' => $transaction->listing_id,
+                        'buyer_id' => $transaction->buyer_id,
+                        'seller_id' => $transaction->seller_id,
+                    ],
+                    'changes' => [
+                        'status' => [
+                            'from' => TransactionStatus::Pending->value,
+                            'to' => TransactionStatus::Cancelled->value,
+                        ],
+                    ],
+                ],
+            );
+
+            return $cancelled;
+        });
     }
 
     /**

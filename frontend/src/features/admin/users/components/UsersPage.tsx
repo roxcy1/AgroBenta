@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { KeyboardEvent } from 'react';
-import { useUsers } from '../api/useUsers';
+import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
+import { useAdminUser, useUsers } from '../api/useUsers';
 import { useUserVerificationsMap } from '../api/useUserVerifications';
 import { PAGE_ELLIPSIS, buildPageWindow } from '../pagination';
 import { Header } from '../../components/Header';
@@ -52,9 +54,26 @@ export function UsersPage() {
     '' | 'submitted' | 'pending_review' | 'approved' | 'rejected' | 'none'
   >('');
   const [detailsId, setDetailsId] = useState<number | null>(null);
+  const [searchParams] = useSearchParams();
+  const linkedUserId = parsePositiveInt(searchParams.get('user'));
+  const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
+
+  // The users surface has no detail screen, so a `?user=` deep link is resolved
+  // to the account and applied as a search filter. The list is derived from the
+  // URL rather than synced from the fetched record, so no effect is needed.
+  const { data: linkedUser, isError: linkedUserFailed } = useAdminUser(linkedUserId);
+  const linkedState = resolveDeepLinkedRecord({
+    entity: 'User',
+    id: linkedUserId,
+    dismissedId: dismissedLinkId,
+    record: linkedUser,
+    isError: linkedUserFailed,
+  });
+  const deepLinkedEmail = linkedState.record?.email ?? '';
+  const effectiveSearch = search || deepLinkedEmail;
 
   const { data, isLoading, isFetching, error, refetch } = useUsers({
-    search: search || undefined,
+    search: effectiveSearch || undefined,
     role: roleFilter || undefined,
     seller_capability: sellerFilter || undefined,
     page,
@@ -101,6 +120,11 @@ export function UsersPage() {
     setSellerFilter('');
     setVerificationFilter('');
     setPage(1);
+    if (linkedUserId !== null) setDismissedLinkId(linkedUserId);
+  };
+
+  const handleDismissLinkedNotice = () => {
+    if (linkedUserId !== null) setDismissedLinkId(linkedUserId);
   };
 
   const handlePageChange = (newPage: number) => {
@@ -172,7 +196,7 @@ export function UsersPage() {
   }
 
   const filtersActive = Boolean(
-    search || roleFilter || sellerFilter || verificationFilter,
+    search || deepLinkedEmail || roleFilter || sellerFilter || verificationFilter,
   );
 
   return (
@@ -188,7 +212,7 @@ export function UsersPage() {
                 className="users-search-input"
                 placeholder="Search by name or email..."
                 aria-label="Search users by name or email"
-                value={searchInput}
+                value={searchInput || deepLinkedEmail}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
               />
@@ -264,6 +288,19 @@ export function UsersPage() {
             </div>
           </div>
         </div>
+
+        {linkedState.message !== null && (
+          <div className="deep-link-notice" role="alert">
+            <p className="deep-link-notice-text">{linkedState.message}</p>
+            <button
+              type="button"
+              className="deep-link-notice-dismiss"
+              onClick={handleDismissLinkedNotice}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {verificationFilter && (
           <p className="users-filter-notice" role="note">

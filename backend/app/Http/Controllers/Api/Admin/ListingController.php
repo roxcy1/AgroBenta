@@ -52,6 +52,24 @@ class ListingController extends Controller
     }
 
     /**
+     * Show a single livestock listing.
+     *
+     * Deep-link support: the activity feed links to a listing by id, so the
+     * administrator's detail dialog opens from this record instead of from a
+     * row that may not be on the page they were sent to. The projection is the
+     * same admin `ListingResource` the list uses, not a second shape.
+     */
+    public function show(Listing $listing): JsonResponse
+    {
+        $listing->load('seller:id,name,email');
+
+        return response()->json([
+            'success' => true,
+            'data' => new ListingResource($listing),
+        ], 200);
+    }
+
+    /**
      * Approve a pending listing.
      *
      * `pending → active` [D-02]. The response is the moderated listing in the
@@ -60,7 +78,7 @@ class ListingController extends Controller
      */
     public function approve(ModerateListingRequest $request, Listing $listing): JsonResponse
     {
-        $approved = $this->listings->approve($listing);
+        $approved = $this->listings->approve($listing, $request->user());
 
         return response()->json([
             'success' => true,
@@ -80,7 +98,7 @@ class ListingController extends Controller
      */
     public function reject(RejectListingRequest $request, Listing $listing): JsonResponse
     {
-        $rejected = $this->listings->reject($listing, $request->validated('admin_note'));
+        $rejected = $this->listings->reject($listing, $request->user(), $request->validated('admin_note'));
 
         return response()->json([
             'success' => true,
@@ -97,7 +115,7 @@ class ListingController extends Controller
      */
     public function deactivate(ModerateListingRequest $request, Listing $listing): JsonResponse
     {
-        $deactivated = $this->listings->deactivate($listing);
+        $deactivated = $this->listings->deactivate($listing, $request->user());
 
         return response()->json([
             'success' => true,

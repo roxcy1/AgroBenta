@@ -67,7 +67,7 @@ class SellerVerificationController extends Controller
     {
         $result = $this->verifications->approve(
             $sellerVerification,
-            $request->user()->id,
+            $request->user(),
             $request->validated('admin_note'),
         );
 
@@ -85,7 +85,7 @@ class SellerVerificationController extends Controller
     {
         $result = $this->verifications->reject(
             $sellerVerification,
-            $request->user()->id,
+            $request->user(),
             $request->validated('admin_note'),
         );
 

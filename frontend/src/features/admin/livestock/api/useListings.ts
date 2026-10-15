@@ -125,6 +125,26 @@ export function useListings(params: ListingsParams) {
   });
 }
 
+export async function fetchListing(id: number): Promise<Listing> {
+  const response = await api.get<{ success: boolean; data: Listing }>(`/admin/listings/${id}`);
+  return response.data.data;
+}
+
+/**
+ * A single listing by id, used to open a listing deep link even when the row is
+ * not on the page the list happens to be showing.
+ */
+export function useListing(id: number | null) {
+  return useQuery({
+    queryKey: ['admin', 'listings', 'detail', id],
+    queryFn: () => fetchListing(id as number),
+    enabled: id !== null,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 0,
+  });
+}
+
 export function useApproveListing() {
   const invalidateListings = useInvalidateListings();
 
