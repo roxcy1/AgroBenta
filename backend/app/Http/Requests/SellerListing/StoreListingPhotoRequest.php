@@ -3,6 +3,7 @@
 namespace App\Http\Requests\SellerListing;
 
 use App\Models\Listing;
+use App\Services\SettingService;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -17,9 +18,10 @@ use Illuminate\Foundation\Http\FormRequest;
  *
  * What this class owns is the file allow-list (functional documentation §4.5,
  * contract §4.5.2): explicit, closed, and enforced at the boundary. The
- * per-request ceiling here (10) matches the per-listing ceiling in the
- * service; the service adds the *cumulative* check (existing photos + these
- * files ≤ 10) because only it can see the stored count.
+ * per-request ceiling here matches the per-listing ceiling in the service; both
+ * read the `listing.max_photos` setting (defaulting to 10). The service adds the
+ * *cumulative* check (existing photos + these files ≤ the ceiling) because only
+ * it can see the stored count.
  */
 class StoreListingPhotoRequest extends FormRequest
 {
@@ -33,11 +35,14 @@ class StoreListingPhotoRequest extends FormRequest
      */
     public function rules(): array
     {
+        $photoLimit = app(SettingService::class)->getInt('listing.max_photos', Listing::PHOTO_LIMIT);
+
         return [
-            // `Listing::PHOTO_LIMIT`, not a literal: the per-request ceiling is
-            // the per-listing ceiling, and one number cannot drift from the
-            // other.
-            'photos' => ['required', 'array', 'min:1', 'max:'.Listing::PHOTO_LIMIT],
+            // The per-request ceiling is the per-listing ceiling, read from the
+            // configurable setting and falling back to `Listing::PHOTO_LIMIT`
+            // when it is absent or malformed, so a bad setting cannot raise or
+            // disable the limit.
+            'photos' => ['required', 'array', 'min:1', 'max:'.$photoLimit],
 
             // The mime allow-list is a list, not a denylist: `jpg` and `jpeg`
             // are both named because the guessed extension for `image/jpeg`

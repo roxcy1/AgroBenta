@@ -3,25 +3,20 @@
 namespace App\Services\Admin;
 
 use App\Enums\ActivityAction;
+use App\Http\Requests\Admin\UpdateSettingsRequest;
 use App\Models\Setting;
 use App\Models\User;
 use App\Repositories\Admin\AdminSettingRepository;
 use App\Services\ActivityLogger;
+use App\Services\SettingService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class AdminSettingService
 {
-    private const ALLOWED_KEYS = [
-        'system.name',
-        'system.description',
-        'admin_contact.name',
-        'admin_contact.email',
-        'admin_contact.phone',
-    ];
-
     public function __construct(
         private readonly AdminSettingRepository $settings,
+        private readonly SettingService $settingService,
         private readonly ActivityLogger $activity,
     ) {
         //
@@ -38,41 +33,62 @@ class AdminSettingService
     }
 
     /**
-     * Update multiple settings at once. Only allowlisted keys are accepted.
+     * Update multiple settings at once. Only registered keys are accepted.
+     *
+     * The allow-list is the settings registry itself, so a key cannot be
+     * updatable through the API without existing as a described setting with
+     * validation rules — there is no second list to drift from.
+     *
+     * Values have already been validated by {@see UpdateSettingsRequest};
+     * this method only decides which keys are known and writes them.
      *
      * @param  array<string, string>  $input  key => value pairs from the request
      * @return array{updated: list<string>, rejected: list<string>}
      */
     public function updateSettings(array $input, User $actor): array
     {
-        $allowed = [];
+        $definitions = config('settings.keys');
+        $rows = [];
         $rejected = [];
 
         foreach ($input as $key => $value) {
-            if (in_array($key, self::ALLOWED_KEYS, true)) {
-                $allowed[$key] = (string) $value;
-            } else {
+            $definition = $definitions[$key] ?? null;
+
+            if ($definition === null) {
                 $rejected[] = $key;
+
+                continue;
             }
+
+            $rows[$key] = [
+                'value' => (string) $value,
+                'group' => $definition['group'],
+                'label' => $definition['label'],
+                'description' => $definition['description'],
+            ];
         }
 
-        if ($allowed !== []) {
-            DB::transaction(function () use ($allowed, $actor): void {
+        if ($rows !== []) {
+            DB::transaction(function () use ($rows, $actor): void {
                 $changes = [];
 
-                foreach ($allowed as $key => $value) {
+                foreach ($rows as $key => $row) {
                     $setting = $this->settings->findByKey($key);
 
                     // A key that has no row is a no-op for the write below, so
                     // it is not recorded as a change either.
-                    if ($setting === null || $setting->value === $value) {
+                    if ($setting === null || $setting->value === $row['value']) {
                         continue;
                     }
 
-                    $changes[$key] = ['from' => $setting->value, 'to' => $value];
+                    $changes[$key] = ['from' => $setting->value, 'to' => $row['value']];
                 }
 
-                $this->settings->updateMany($allowed);
+                $this->settings->updateMany($rows);
+
+                // The write path owns cache correctness: the reader caches the whole
+                // map, so dropping it here is what makes an update visible at once.
+                $this->settingService->flush();
 
                 if ($changes !== []) {
                     $this->activity->log(
@@ -90,7 +106,7 @@ class AdminSettingService
         }
 
         return [
-            'updated' => array_keys($allowed),
+            'updated' => array_keys($rows),
             'rejected' => $rejected,
         ];
     }

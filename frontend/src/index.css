@@ -2427,11 +2427,39 @@ input {
   margin-bottom: 2px;
 }
 
-.settings-input {
+.settings-value {
   padding: 10px 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: 14px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.settings-value--empty {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.settings-default-note {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.settings-empty {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.settings-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
   background: var(--color-surface);
   color: var(--color-text);
   transition: border-color 0.18s;
@@ -2444,10 +2472,12 @@ input {
 }
 
 .settings-textarea {
+  width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: 14px;
+  font-family: inherit;
   background: var(--color-surface);
   color: var(--color-text);
   resize: vertical;
@@ -2487,6 +2517,95 @@ input {
 .settings-save-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.settings-input--error,
+.settings-textarea.settings-input--error {
+  border-color: var(--color-danger);
+}
+
+.settings-input--error:focus,
+.settings-textarea.settings-input--error:focus {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.15);
+}
+
+.settings-field-error {
+  font-size: 13px;
+  color: var(--color-danger);
+}
+
+.settings-confirm-buttons {
+  margin-top: 20px;
+}
+
+/* Toasts */
+.toast-region {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 40px));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-modal);
+  pointer-events: auto;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast--success {
+  border-left-color: #1B5E20;
+}
+
+.toast--error {
+  border-left-color: var(--color-danger);
+}
+
+.toast-message {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-text);
+  overflow-wrap: break-word;
+}
+
+.toast-dismiss {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.toast-dismiss:hover {
+  color: var(--color-text);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* Responsive */

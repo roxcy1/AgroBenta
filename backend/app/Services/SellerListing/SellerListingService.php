@@ -251,11 +251,12 @@ class SellerListingService
         );
 
         $stored = $listing->storedPhotoFilenames();
+        $limit = $this->photoLimit();
         $previousCount = count($stored);
 
-        if (count($stored) + count($files) > Listing::PHOTO_LIMIT) {
+        if (count($stored) + count($files) > $limit) {
             throw ValidationException::withMessages([
-                'photos' => 'A listing may have at most '.Listing::PHOTO_LIMIT.' photos.',
+                'photos' => 'A listing may have at most '.$limit.' photos.',
             ]);
         }
 

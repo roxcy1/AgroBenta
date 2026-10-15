@@ -42,6 +42,9 @@ abstract final class AppColors {
   /// Success, and semantically "approved / active / completed". (`#168A4A`)
   static const Color success = Color(0xFF168A4A);
 
+  /// "sold" status, blue. (`#1565C0`)
+  static const Color sold = Color(0xFF1565C0);
+
   /// Warning, and semantically "pending / awaiting review". (`#D98B00`)
   static const Color warning = Color(0xFFD98B00);
 

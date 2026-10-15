@@ -1,69 +1,30 @@
 import { useMemo, useState } from 'react';
 import { useSettings, useUpdateSettings } from '../api/useSettings';
-import type { Setting } from '../api/useSettings';
-
-const GROUP_LABELS: Record<string, string> = {
-  system: 'System',
-  admin_contact: 'Admin Contact',
-};
-
-function buildDefaultValues(data: Record<string, Setting[]> | undefined): Record<string, string> {
-  if (!data) return {};
-  const values: Record<string, string> = {};
-  for (const group of Object.values(data)) {
-    for (const setting of group) {
-      values[setting.key] = setting.value;
-    }
-  }
-  return values;
-}
+import { buildSections, flattenFields } from '../settingsSchema';
+import type { ResolvedSettingField } from '../settingsSchema';
+import { initialSaveDialogState, nextSaveState, planSave } from '../settingsSave';
+import type { SaveDialogState } from '../settingsSave';
+import {
+  settingsErrorMessage,
+  settingsRejectedMessage,
+  settingsSuccessMessage,
+} from '../settingsErrorMessage';
+import SettingsConfirmDialog from './SettingsConfirmDialog';
+import { useToast } from '../../../../lib/toast/ToastProvider';
 
 export function SettingsPage() {
   const { data, isLoading, error, refetch } = useSettings();
-  const updateMutation = useUpdateSettings();
+  const updateSettings = useUpdateSettings();
+  const toast = useToast();
 
   const [edits, setEdits] = useState<Record<string, string>>({});
-  const [hasChanges, setHasChanges] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [attempted, setAttempted] = useState(false);
+  const [dialog, setDialog] = useState<SaveDialogState>(initialSaveDialogState);
 
-  const defaultValues = useMemo(() => buildDefaultValues(data), [data]);
-
-  const formValues = useMemo(() => ({ ...defaultValues, ...edits }), [defaultValues, edits]);
-
-  const handleChange = (key: string, value: string) => {
-    setEdits((prev) => ({ ...prev, [key]: value }));
-    setHasChanges(true);
-    setSaveMessage(null);
-  };
-
-  const handleSave = async () => {
-    setSaveMessage(null);
-
-    const changed: Record<string, string> = {};
-    for (const key of Object.keys(formValues)) {
-      if (formValues[key] !== defaultValues[key]) {
-        changed[key] = formValues[key];
-      }
-    }
-
-    if (Object.keys(changed).length === 0) {
-      setHasChanges(false);
-      return;
-    }
-
-    try {
-      const result = await updateMutation.mutateAsync(changed);
-      setHasChanges(false);
-      setEdits({});
-      if (result.rejected.length > 0) {
-        setSaveMessage(`Updated ${result.updated.length} setting(s). ${result.rejected.length} key(s) were rejected.`);
-      } else {
-        setSaveMessage(`Updated ${result.updated.length} setting(s) successfully.`);
-      }
-    } catch {
-      setSaveMessage('Failed to save settings. Please try again.');
-    }
-  };
+  const sections = useMemo(() => buildSections(data), [data]);
+  const fields = useMemo(() => flattenFields(sections), [sections]);
+  const plan = useMemo(() => planSave(fields, edits), [fields, edits]);
 
   if (isLoading) {
     return (
@@ -89,65 +50,169 @@ export function SettingsPage() {
     );
   }
 
-  const groups = data ?? {};
-  const groupKeys = Object.keys(groups).sort();
+  function handleEdit(key: string, value: string) {
+    setEdits((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleBlur(key: string) {
+    setTouched((current) => ({ ...current, [key]: true }));
+  }
+
+  function showError(key: string): boolean {
+    return attempted || touched[key] === true;
+  }
+
+  function handleSaveRequest() {
+    setAttempted(true);
+
+    if (!plan.canSave) {
+      return;
+    }
+
+    const { state } = nextSaveState(dialog, 'request');
+    setDialog(state);
+  }
+
+  function handleCancel() {
+    const { state } = nextSaveState(dialog, 'cancel');
+    setDialog(state);
+  }
+
+  function handleConfirm() {
+    const { state, effect } = nextSaveState(dialog, 'submit');
+    setDialog(state);
+
+    if (effect !== 'save') {
+      return;
+    }
+
+    updateSettings.mutate(plan.payload, {
+      onSuccess: (result) => {
+        if (result.rejected.length > 0) {
+          toast.error(settingsRejectedMessage(result.rejected));
+        } else {
+          toast.success(settingsSuccessMessage(result.updated));
+        }
+
+        setEdits({});
+        setTouched({});
+        setAttempted(false);
+        setDialog(initialSaveDialogState);
+      },
+      onError: (saveError) => {
+        // Edits are deliberately left in place so the administrator can correct
+        // and retry without retyping.
+        toast.error(settingsErrorMessage(saveError));
+        setDialog(initialSaveDialogState);
+      },
+    });
+  }
+
+  const isPending = dialog.pending || updateSettings.isPending;
 
   return (
     <div className="settings-content">
-      {saveMessage && (
-        <div className={`settings-message ${saveMessage.includes('Failed') ? 'settings-message--error' : 'settings-message--success'}`}>
-          {saveMessage}
-        </div>
-      )}
-
-      {groupKeys.map((groupKey) => {
-        const settings = groups[groupKey];
-        return (
-          <div key={groupKey} className="settings-group">
-            <h2 className="settings-group-title">{GROUP_LABELS[groupKey] ?? groupKey}</h2>
-            <div className="settings-group-fields">
-              {settings.map((setting: Setting) => (
-                <div key={setting.key} className="settings-field">
-                  <label htmlFor={`setting-${setting.key}`} className="settings-label">
-                    {setting.label}
-                  </label>
-                  {setting.description && (
-                    <p className="settings-description">{setting.description}</p>
-                  )}
-                  {setting.key === 'system.description' ? (
-                    <textarea
-                      id={`setting-${setting.key}`}
-                      className="settings-textarea"
-                      value={formValues[setting.key] ?? ''}
-                      onChange={(e) => handleChange(setting.key, e.target.value)}
-                      rows={3}
-                    />
-                  ) : (
-                    <input
-                      id={`setting-${setting.key}`}
-                      type={setting.key.includes('email') ? 'email' : 'text'}
-                      className="settings-input"
-                      value={formValues[setting.key] ?? ''}
-                      onChange={(e) => handleChange(setting.key, e.target.value)}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
+      {sections.map((section) => (
+        <div key={section.id} className="settings-group">
+          <h2 className="settings-group-title">{section.title}</h2>
+          <div className="settings-group-fields">
+            {section.fields.map((field) => (
+              <SettingField
+                key={field.key}
+                field={field}
+                value={edits[field.key] ?? field.value}
+                error={showError(field.key) ? plan.errors[field.key] : undefined}
+                disabled={isPending}
+                onChange={(value) => handleEdit(field.key, value)}
+                onBlur={() => handleBlur(field.key)}
+              />
+            ))}
           </div>
-        );
-      })}
+        </div>
+      ))}
 
       <div className="settings-actions">
         <button
           type="button"
           className="settings-save-button"
-          disabled={!hasChanges || updateMutation.isPending}
-          onClick={() => void handleSave()}
+          disabled={plan.changes.length === 0 || isPending}
+          onClick={handleSaveRequest}
         >
-          {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+          {updateSettings.isPending ? 'Saving…' : 'Save Changes'}
         </button>
       </div>
+
+      {dialog.open && (
+        <SettingsConfirmDialog
+          changes={plan.changes}
+          isPending={dialog.pending}
+          onCancel={handleCancel}
+          onConfirm={handleConfirm}
+        />
+      )}
+    </div>
+  );
+}
+
+interface SettingFieldProps {
+  field: ResolvedSettingField;
+  value: string;
+  error: string | undefined;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+}
+
+function SettingField({ field, value, error, disabled, onChange, onBlur }: SettingFieldProps) {
+  const inputId = `setting-${field.key}`;
+  const errorId = `${inputId}-error`;
+  const describedBy = error !== undefined ? errorId : undefined;
+  const showDefault = field.isDefault && value === field.default;
+
+  const inputMode =
+    field.type === 'integer' ? 'numeric' : field.type === 'decimal' ? 'decimal' : undefined;
+
+  return (
+    <div className="settings-field">
+      <label className="settings-label" htmlFor={inputId}>
+        {field.label}
+      </label>
+      {field.description && <p className="settings-description">{field.description}</p>}
+
+      {field.multiline ? (
+        <textarea
+          id={inputId}
+          className={`settings-textarea${error !== undefined ? ' settings-input--error' : ''}`}
+          value={value}
+          maxLength={field.maxLength}
+          disabled={disabled}
+          aria-invalid={error !== undefined}
+          aria-describedby={describedBy}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+        />
+      ) : (
+        <input
+          id={inputId}
+          className={`settings-input${error !== undefined ? ' settings-input--error' : ''}`}
+          type={field.type === 'email' ? 'email' : 'text'}
+          inputMode={inputMode}
+          value={value}
+          maxLength={field.maxLength}
+          disabled={disabled}
+          aria-invalid={error !== undefined}
+          aria-describedby={describedBy}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+        />
+      )}
+
+      {showDefault && <span className="settings-default-note">Showing the default value.</span>}
+      {error !== undefined && (
+        <p className="settings-field-error" id={errorId} role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

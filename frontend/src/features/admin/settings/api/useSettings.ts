@@ -24,6 +24,9 @@ interface UpdateSettingsResponse {
   rejected: string[];
 }
 
+/** The React Query key for the settings map, shared by read and write. */
+export const SETTINGS_QUERY_KEY = ['admin', 'settings'] as const;
+
 async function fetchSettings(): Promise<SettingsData> {
   const response = await api.get<SettingsResponse>('/admin/settings');
   return response.data.data;
@@ -36,7 +39,7 @@ async function updateSettings(input: Record<string, string>): Promise<UpdateSett
 
 export function useSettings() {
   return useQuery({
-    queryKey: ['admin', 'settings'],
+    queryKey: SETTINGS_QUERY_KEY,
     queryFn: fetchSettings,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
@@ -49,8 +52,11 @@ export function useUpdateSettings() {
 
   return useMutation({
     mutationFn: updateSettings,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
+    onSuccess: (result) => {
+      // The response carries the full, persisted settings map, so reconcile the
+      // cached query with it directly instead of triggering a second GET. The
+      // form's originals then reflect exactly what the server stored.
+      queryClient.setQueryData(SETTINGS_QUERY_KEY, result.data);
     },
   });
 }
