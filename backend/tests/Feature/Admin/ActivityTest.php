@@ -232,18 +232,16 @@ class ActivityTest extends TestCase
             'seller_capability' => SellerCapability::Buyer,
         ]);
 
-        Activity::create([
+        Activity::factory()->createdAt(now()->subDays(10))->create([
             'user_id' => $user->id,
             'action' => 'old_action',
             'description' => 'Old activity',
-            'created_at' => now()->subDays(10),
         ]);
 
-        Activity::create([
+        Activity::factory()->createdAt(now()->subDays(2))->create([
             'user_id' => $user->id,
             'action' => 'new_action',
             'description' => 'New activity',
-            'created_at' => now()->subDays(2),
         ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
@@ -253,6 +251,7 @@ class ActivityTest extends TestCase
 
         $data = $response->json('data');
         $this->assertEquals(1, $data['pagination']['total']);
+        $this->assertEquals('new_action', $data['activities'][0]['action']);
     }
 
     public function test_pagination_works(): void
@@ -263,7 +262,7 @@ class ActivityTest extends TestCase
         ]);
 
         for ($i = 0; $i < 24; $i++) {
-            Activity::create([
+            Activity::factory()->create([
                 'user_id' => $user->id,
                 'action' => 'test_action',
                 'description' => "Activity {$i}",
@@ -279,7 +278,7 @@ class ActivityTest extends TestCase
         $this->assertCount(10, $data['activities']);
         $this->assertEquals(1, $data['pagination']['current_page']);
         $this->assertEquals(3, $data['pagination']['last_page']);
-        $this->assertEquals(25, $data['pagination']['total']);
+        $this->assertEquals(24, $data['pagination']['total']);
     }
 
     public function test_empty_state_works(): void
