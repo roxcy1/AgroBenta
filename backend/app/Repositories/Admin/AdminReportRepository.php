@@ -13,6 +13,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AdminReportRepository
 {
@@ -80,7 +81,7 @@ class AdminReportRepository
      */
     private function getUserRegistrationTrend(?string $dateFrom, ?string $dateTo): array
     {
-        $query = User::selectRaw("strftime('%Y-%m', created_at) as month, COUNT(*) as count")
+        $query = User::selectRaw($this->monthExpression('created_at').' as month, COUNT(*) as count')
             ->groupBy('month')
             ->orderBy('month');
 
@@ -227,7 +228,7 @@ class AdminReportRepository
      */
     private function getTransactionTrend(?string $dateFrom, ?string $dateTo): array
     {
-        $query = Transaction::selectRaw("strftime('%Y-%m', created_at) as month, COUNT(*) as count, SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END) as revenue")
+        $query = Transaction::selectRaw($this->monthExpression('created_at').' as month, COUNT(*) as count, SUM(CASE WHEN status = \'completed\' THEN total_amount ELSE 0 END) as revenue')
             ->groupBy('month')
             ->orderBy('month');
 
@@ -315,7 +316,7 @@ class AdminReportRepository
      */
     private function getVerificationTrend(?string $dateFrom, ?string $dateTo): array
     {
-        $query = SellerVerification::selectRaw("strftime('%Y-%m', created_at) as month, COUNT(*) as count")
+        $query = SellerVerification::selectRaw($this->monthExpression('created_at').' as month, COUNT(*) as count')
             ->groupBy('month')
             ->orderBy('month');
 
@@ -385,7 +386,7 @@ class AdminReportRepository
      */
     private function getActivityTrend(?string $dateFrom, ?string $dateTo): array
     {
-        $query = Activity::selectRaw("strftime('%Y-%m', created_at) as month, COUNT(*) as count")
+        $query = Activity::selectRaw($this->monthExpression('created_at').' as month, COUNT(*) as count')
             ->groupBy('month')
             ->orderBy('month');
 
@@ -413,6 +414,19 @@ class AdminReportRepository
         $this->applyDateFilter($query, $dateFrom, $dateTo, 'activities');
 
         return $query->get();
+    }
+
+    /**
+     * Build a driver-compatible expression that formats a timestamp column
+     * as a `YYYY-MM` month key for monthly trend grouping.
+     */
+    private function monthExpression(string $column): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'sqlite' => "strftime('%Y-%m', {$column})",
+            'pgsql' => "to_char({$column}, 'YYYY-MM')",
+            default => "DATE_FORMAT({$column}, '%Y-%m')",
+        };
     }
 
     /**
