@@ -119,6 +119,11 @@ class SellerListingController extends ChangeNotifier {
 
   /// Applies a status filter and reloads from page 1.
   ///
+  /// The Active tab also carries the seller's `inactive` listings beneath the
+  /// active ones: the server's `status` filter takes a single value, and the
+  /// spec gives `inactive` no tab of its own, so the client fetches that tail
+  /// itself (see [_loadFirstPage]).
+  ///
   /// Pagination is always reset: keeping page 3 of one result set while showing a
   /// filter for a different query would be meaningless. Re-applying an identical
   /// filter is a no-op rather than a request.
@@ -502,10 +507,39 @@ class SellerListingController extends ChangeNotifier {
       }
 
       _inFlightFirstPageQuery = null;
+
+      // The Active tab also carries the seller's `inactive` listings as a
+      // tail section. The server's `status` filter takes a single value and
+      // `inactive` has no tab of its own, so when this tab is unsearched the
+      // client fetches page 1 of `inactive` and appends it. The tail is a
+      // display concern only: the state's pagination stays the active query's
+      // own, so `loadMore` pages the active set and the tail is fetched once
+      // and only up front.
+      List<Listing> listings = page.listings;
+      if (_state.statusFilter == ListingStatus.active &&
+          _state.searchText.trim().isEmpty) {
+        final MarketplacePage inactiveTail = await _repository.listMine(
+          statusFilter: ListingStatus.inactive.value,
+          page: 1,
+        );
+        if (_disposed || generation != _generation) {
+          return;
+        }
+        _inFlightFirstPageQuery = null;
+        final Set<int> seen = <int>{
+          for (final Listing listing in listings) listing.id,
+        };
+        listings = <Listing>[
+          ...listings,
+          for (final Listing listing in inactiveTail.listings)
+            if (seen.add(listing.id)) listing,
+        ];
+      }
+
       _set(
         _state.copyWith(
           status: SellerListingStatus.ready,
-          listings: page.listings,
+          listings: listings,
           pagination: page.pagination,
         ),
       );
