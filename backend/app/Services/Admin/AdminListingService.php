@@ -2,15 +2,21 @@
 
 namespace App\Services\Admin;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Models\Listing;
+use App\Models\User;
 use App\Repositories\Admin\AdminListingRepository;
+use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class AdminListingService
 {
-    public function __construct(private readonly AdminListingRepository $listings)
-    {
+    public function __construct(
+        private readonly AdminListingRepository $listings,
+        private readonly ActivityLogger $activity,
+    ) {
         //
     }
 
@@ -31,13 +37,15 @@ class AdminListingService
      * and a seller has no path to it at all — `SellerListingService` stops at
      * `pending` and does not contain an equivalent method.
      */
-    public function approve(Listing $listing): Listing
+    public function approve(Listing $listing, User $actor): Listing
     {
         return $this->moderate(
             $listing,
             ListingStatus::Pending,
             ListingStatus::Active,
             'Only a listing that is pending review can be approved.',
+            ActivityAction::ListingApproved,
+            $actor,
         );
     }
 
@@ -56,13 +64,15 @@ class AdminListingService
      * rejection, because the contract makes the transition unconditional and
      * gates it on the listing's status, not on what a moderator typed.
      */
-    public function reject(Listing $listing, ?string $adminNote = null): Listing
+    public function reject(Listing $listing, User $actor, ?string $adminNote = null): Listing
     {
         return $this->moderate(
             $listing,
             ListingStatus::Pending,
             ListingStatus::Inactive,
             'Only a listing that is pending review can be rejected.',
+            ActivityAction::ListingRejected,
+            $actor,
             $adminNote,
         );
     }
@@ -75,13 +85,15 @@ class AdminListingService
      * moderation decision, which is why `SellerListingService` cannot delete an
      * `active` listing [D-25].
      */
-    public function deactivate(Listing $listing): Listing
+    public function deactivate(Listing $listing, User $actor): Listing
     {
         return $this->moderate(
             $listing,
             ListingStatus::Active,
             ListingStatus::Inactive,
             'Only an active listing can be deactivated.',
+            ActivityAction::ListingDeactivated,
+            $actor,
         );
     }
 
@@ -105,12 +117,33 @@ class AdminListingService
         ListingStatus $from,
         ListingStatus $to,
         string $conflictMessage,
+        ActivityAction $action,
+        User $actor,
         ?string $adminNote = null,
     ): Listing {
-        $moderated = $this->listings->transition($listing, $from, $to, $adminNote);
+        return DB::transaction(function () use ($listing, $from, $to, $conflictMessage, $action, $actor, $adminNote): Listing {
+            $moderated = $this->listings->transition($listing, $from, $to, $adminNote);
 
-        abort_if($moderated === null, 409, $conflictMessage);
+            abort_if($moderated === null, 409, $conflictMessage);
 
-        return $moderated;
+            // Written in the same transaction as the transition, so an audit
+            // entry can never describe a moderation that did not commit.
+            $this->activity->log(
+                $actor,
+                $action,
+                sprintf('%s (#%d, %s).', $action->label(), $moderated->getKey(), $moderated->livestock_type),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $moderated->getKey(),
+                    'context' => ['seller_id' => $moderated->seller_id],
+                    'changes' => [
+                        'status' => ['from' => $from->value, 'to' => $to->value],
+                    ],
+                    'admin_note' => $adminNote,
+                ],
+            );
+
+            return $moderated;
+        });
     }
 }

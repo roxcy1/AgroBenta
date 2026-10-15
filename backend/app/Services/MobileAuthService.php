@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ActivityAction;
 use App\Models\User;
 use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Hash;
@@ -32,6 +33,7 @@ class MobileAuthService
     public function __construct(
         private readonly UserRepository $users,
         private readonly AuthService $auth,
+        private readonly ActivityLogger $activity,
     ) {
         //
     }
@@ -77,6 +79,16 @@ class MobileAuthService
         if ($user->isAdmin()) {
             return ['result' => self::RESULT_NOT_PERMITTED];
         }
+
+        // Best-effort: an unauditable login still issues its token, and this is
+        // deliberately not wired into `register` — account creation is not a
+        // sign-in.
+        $this->activity->logSafely(
+            $user,
+            ActivityAction::UserLoggedIn,
+            'User signed in.',
+            ['context' => ['guard' => 'mobile']],
+        );
 
         return [
             'result' => self::RESULT_AUTHENTICATED,

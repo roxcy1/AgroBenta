@@ -2,13 +2,16 @@
 
 namespace App\Services\SellerListing;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Http\Requests\SellerListing\SellerListingRules;
 use App\Models\Listing;
 use App\Models\User;
 use App\Repositories\SellerListing\SellerListingRepository;
+use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -61,6 +64,7 @@ class SellerListingService
 
     public function __construct(
         private readonly SellerListingRepository $listingRepository,
+        private readonly ActivityLogger $activity,
     ) {}
 
     /**
@@ -95,10 +99,27 @@ class SellerListingService
      */
     public function create(User $seller, array $attributes): Listing
     {
-        return $this->listingRepository->createForSeller(
-            $seller,
-            $this->withStorageDefaults($attributes),
-        );
+        return DB::transaction(function () use ($seller, $attributes): Listing {
+            $listing = $this->listingRepository->createForSeller(
+                $seller,
+                $this->withStorageDefaults($attributes),
+            );
+
+            $this->activity->log(
+                $seller,
+                ActivityAction::ListingCreated,
+                sprintf('Listing #%d created as a draft.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => [
+                        'status' => ['from' => null, 'to' => ListingStatus::Draft->value],
+                    ],
+                ],
+            );
+
+            return $listing;
+        });
     }
 
     /**
@@ -110,7 +131,28 @@ class SellerListingService
     {
         $this->ensureStatusIs($listing, self::EDITABLE_STATUSES, 'Only a draft or an active listing can be edited.');
 
-        return $this->listingRepository->update($listing, $attributes);
+        return DB::transaction(function () use ($listing, $attributes): Listing {
+            $before = $listing->getAttributes();
+
+            $updated = $this->listingRepository->update($listing, $attributes);
+
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingUpdated,
+                sprintf('Listing #%d updated.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => $this->changedAttributes(
+                        $before,
+                        $updated->getAttributes(),
+                        array_keys($attributes),
+                    ),
+                ],
+            );
+
+            return $updated;
+        });
     }
 
     /**
@@ -127,10 +169,27 @@ class SellerListingService
     {
         $this->ensureSubmittable($listing);
 
-        $listing->status = ListingStatus::Pending;
-        $listing->save();
+        return DB::transaction(function () use ($listing): Listing {
+            $previousStatus = $listing->status->value;
 
-        return $listing;
+            $listing->status = ListingStatus::Pending;
+            $listing->save();
+
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingSubmitted,
+                sprintf('Listing #%d submitted for review.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => [
+                        'status' => ['from' => $previousStatus, 'to' => ListingStatus::Pending->value],
+                    ],
+                ],
+            );
+
+            return $listing;
+        });
     }
 
     /**
@@ -142,7 +201,26 @@ class SellerListingService
     {
         $this->ensureStatusIs($listing, self::DELETABLE_STATUSES, 'Only a draft or an inactive listing can be deleted.');
 
-        $this->listingRepository->delete($listing);
+        DB::transaction(function () use ($listing): void {
+            $targetId = $listing->getKey();
+            $sellerId = $listing->seller_id;
+            $previousStatus = $listing->status->value;
+            $livestockType = $listing->livestock_type;
+
+            $this->listingRepository->delete($listing);
+
+            $this->activity->log(
+                $sellerId,
+                ActivityAction::ListingDeleted,
+                sprintf('Listing #%d deleted.', $targetId),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $targetId,
+                    'context' => ['livestock_type' => $livestockType],
+                    'changes' => ['status' => ['from' => $previousStatus, 'to' => null]],
+                ],
+            );
+        });
     }
 
     /**
@@ -225,12 +303,30 @@ class SellerListingService
             abort(404, 'Photo not found.');
         }
 
-        $updated = $this->listingRepository->update($listing, [
-            'photos' => array_values(array_filter(
-                $stored,
-                static fn (string $stored): bool => $stored !== $filename,
-            )),
-        ]);
+        $updated = DB::transaction(function () use ($listing, $filename, $stored): Listing {
+            $updated = $this->listingRepository->update($listing, [
+                'photos' => array_values(array_filter(
+                    $stored,
+                    static fn (string $stored): bool => $stored !== $filename,
+                )),
+            ]);
+
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingPhotoRemoved,
+                sprintf('Photo removed from listing #%d.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'context' => ['photo' => $filename],
+                    'changes' => [
+                        'photos' => ['from' => count($stored), 'to' => count($stored) - 1],
+                    ],
+                ],
+            );
+
+            return $updated;
+        });
 
         // The database is the source of truth, so it is written before the
         // file is deleted: if the delete fails the worst case is an orphaned
@@ -353,5 +449,58 @@ class SellerListingService
         $attributes['weight_unit'] ??= 'kg';
 
         return $attributes;
+    }
+
+    /**
+     * Before/after pairs for the attributes a write actually changed.
+     *
+     * Only keys that differ are returned, so the audit records a real edit
+     * rather than echoing the whole request. `photos` is reported as a count:
+     * the stored value is a JSON array of filenames, and a reordering is not a
+     * meaningful change to the listing.
+     *
+     * @param  array<string, mixed>  $before
+     * @param  array<string, mixed>  $after
+     * @param  list<string>  $keys
+     * @return array<string, array{from: mixed, to: mixed}>
+     */
+    private function changedAttributes(array $before, array $after, array $keys): array
+    {
+        $changes = [];
+
+        foreach ($keys as $key) {
+            $old = $before[$key] ?? null;
+            $new = $after[$key] ?? null;
+
+            if ($key === 'photos') {
+                $oldCount = $this->photoCount($old);
+                $newCount = $this->photoCount($new);
+
+                if ($oldCount !== $newCount) {
+                    $changes['photos'] = ['from' => $oldCount, 'to' => $newCount];
+                }
+
+                continue;
+            }
+
+            if ($old !== $new) {
+                $changes[$key] = ['from' => $old, 'to' => $new];
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Count the filenames in a stored `photos` value, whether it arrives as the
+     * raw JSON string from the attributes array or an already-decoded array.
+     */
+    private function photoCount(mixed $value): int
+    {
+        if (is_string($value)) {
+            $value = json_decode($value, true);
+        }
+
+        return is_array($value) ? count($value) : 0;
     }
 }

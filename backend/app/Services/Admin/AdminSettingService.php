@@ -2,9 +2,13 @@
 
 namespace App\Services\Admin;
 
+use App\Enums\ActivityAction;
 use App\Models\Setting;
+use App\Models\User;
 use App\Repositories\Admin\AdminSettingRepository;
+use App\Services\ActivityLogger;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AdminSettingService
 {
@@ -16,8 +20,10 @@ class AdminSettingService
         'admin_contact.phone',
     ];
 
-    public function __construct(private readonly AdminSettingRepository $settings)
-    {
+    public function __construct(
+        private readonly AdminSettingRepository $settings,
+        private readonly ActivityLogger $activity,
+    ) {
         //
     }
 
@@ -37,7 +43,7 @@ class AdminSettingService
      * @param  array<string, string>  $input  key => value pairs from the request
      * @return array{updated: list<string>, rejected: list<string>}
      */
-    public function updateSettings(array $input): array
+    public function updateSettings(array $input, User $actor): array
     {
         $allowed = [];
         $rejected = [];
@@ -51,7 +57,36 @@ class AdminSettingService
         }
 
         if ($allowed !== []) {
-            $this->settings->updateMany($allowed);
+            DB::transaction(function () use ($allowed, $actor): void {
+                $changes = [];
+
+                foreach ($allowed as $key => $value) {
+                    $setting = $this->settings->findByKey($key);
+
+                    // A key that has no row is a no-op for the write below, so
+                    // it is not recorded as a change either.
+                    if ($setting === null || $setting->value === $value) {
+                        continue;
+                    }
+
+                    $changes[$key] = ['from' => $setting->value, 'to' => $value];
+                }
+
+                $this->settings->updateMany($allowed);
+
+                if ($changes !== []) {
+                    $this->activity->log(
+                        $actor,
+                        ActivityAction::SettingsUpdated,
+                        'Platform settings updated.',
+                        [
+                            'target_type' => 'setting',
+                            'target_id' => null,
+                            'changes' => $changes,
+                        ],
+                    );
+                }
+            });
         }
 
         return [

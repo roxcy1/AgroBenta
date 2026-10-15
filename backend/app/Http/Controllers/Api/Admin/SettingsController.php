@@ -38,7 +38,7 @@ class SettingsController extends Controller
      */
     public function update(UpdateSettingsRequest $request): JsonResponse
     {
-        $result = $this->settings->updateSettings($request->validated());
+        $result = $this->settings->updateSettings($request->validated(), $request->user());
 
         $grouped = $this->settings->getAllGrouped();
 

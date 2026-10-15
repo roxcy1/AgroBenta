@@ -123,7 +123,7 @@ class TransactionController extends Controller
             abort(404, 'Transaction not found.');
         }
 
-        $cancelled = $this->transactions->cancel($found);
+        $cancelled = $this->transactions->cancel($found, $request->user());
 
         return response()->json([
             'success' => true,

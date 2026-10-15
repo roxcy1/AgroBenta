@@ -2,10 +2,12 @@
 
 namespace App\Services\SellerVerification;
 
+use App\Enums\ActivityAction;
 use App\Enums\SellerVerificationStatus;
 use App\Models\SellerVerification;
 use App\Models\User;
 use App\Repositories\SellerVerification\SellerVerificationRepository;
+use App\Services\ActivityLogger;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -33,6 +35,7 @@ class SellerVerificationService
 
     public function __construct(
         private readonly SellerVerificationRepository $verifications,
+        private readonly ActivityLogger $activity,
     ) {
         //
     }
@@ -70,7 +73,7 @@ class SellerVerificationService
             // `seller_capability` is not touched at all: submitting grants
             // nothing, and only an administrator approval can promote a buyer
             // (functional documentation §2.6).
-            return SellerVerification::create([
+            $verification = SellerVerification::create([
                 'user_id' => $locked->id,
                 'business_name' => $input['business_name'],
                 'business_location' => $input['business_location'] ?? null,
@@ -82,6 +85,26 @@ class SellerVerificationService
                 'reviewed_at' => null,
                 'submitted_at' => now(),
             ]);
+
+            // Inside the transaction, so the audit row and the submission it
+            // records commit or roll back together. A resubmission is a new
+            // record, so its status genuinely starts from nothing rather than
+            // from the rejected predecessor's state.
+            $this->activity->log(
+                $locked,
+                ActivityAction::SellerVerificationSubmitted,
+                sprintf('Seller verification submitted for "%s".', $verification->business_name),
+                [
+                    'target_type' => 'seller_verification',
+                    'target_id' => $verification->getKey(),
+                    'context' => ['business_name' => $verification->business_name],
+                    'changes' => [
+                        'status' => ['from' => null, 'to' => SellerVerificationStatus::Submitted->value],
+                    ],
+                ],
+            );
+
+            return $verification;
         });
     }
 

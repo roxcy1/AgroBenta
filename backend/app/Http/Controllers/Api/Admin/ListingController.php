@@ -60,7 +60,7 @@ class ListingController extends Controller
      */
     public function approve(ModerateListingRequest $request, Listing $listing): JsonResponse
     {
-        $approved = $this->listings->approve($listing);
+        $approved = $this->listings->approve($listing, $request->user());
 
         return response()->json([
             'success' => true,
@@ -80,7 +80,7 @@ class ListingController extends Controller
      */
     public function reject(RejectListingRequest $request, Listing $listing): JsonResponse
     {
-        $rejected = $this->listings->reject($listing, $request->validated('admin_note'));
+        $rejected = $this->listings->reject($listing, $request->user(), $request->validated('admin_note'));
 
         return response()->json([
             'success' => true,
@@ -97,7 +97,7 @@ class ListingController extends Controller
      */
     public function deactivate(ModerateListingRequest $request, Listing $listing): JsonResponse
     {
-        $deactivated = $this->listings->deactivate($listing);
+        $deactivated = $this->listings->deactivate($listing, $request->user());
 
         return response()->json([
             'success' => true,
