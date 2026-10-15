@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useActivities } from '../api/useActivities';
 import type { Activity } from '../api/useActivities';
 import { useUsers } from '../../users/api/useUsers';
@@ -8,11 +9,11 @@ import {
   activityActionLabel,
   activityActorLabel,
   activityChanges,
-  activityTargetLabel,
-  activityTimestampTitle,
   emptyActivitiesMessage,
   formatActivityTimestamp,
+  getActivityTargetLink,
   hasActiveActivityFilters,
+  activityTimestampTitle,
 } from '../activityFormat';
 
 export function ActivitiesPage() {
@@ -42,7 +43,8 @@ export function ActivitiesPage() {
 
   const { data: usersData } = useUsers({ page: 1, per_page: 100 });
 
-  const handleSearch = () => {    setSearch(searchInput);
+  const handleSearch = () => {
+    setSearch(searchInput);
     setPage(1);
   };
 
@@ -233,12 +235,30 @@ export function ActivitiesPage() {
               <tbody>
                 {activities.map((activity) => {
                   const changes = activityChanges(activity.metadata);
+                  const targetLink = getActivityTargetLink(activity.metadata);
+                  const actorLabel = activityActorLabel(activity.user);
 
                   return (
                     <tr key={activity.id}>
-                      <td className="lv-name-cell">{activityActorLabel(activity.user)}</td>
+                      <td className="lv-name-cell">
+                        {activity.user ? (
+                          <Link className="activity-link" to={`/users?user=${activity.user.id}`}>
+                            {actorLabel}
+                          </Link>
+                        ) : (
+                          actorLabel
+                        )}
+                      </td>
                       <td>{activityActionLabel(activity.action)}</td>
-                      <td>{activityTargetLabel(activity.metadata)}</td>
+                      <td>
+                        {targetLink.href ? (
+                          <Link className="activity-link" to={targetLink.href}>
+                            {targetLink.label}
+                          </Link>
+                        ) : (
+                          targetLink.label
+                        )}
+                      </td>
                       <td>{activity.description ?? '\u2014'}</td>
                       <td className="activity-changes-cell">
                         {changes.length === 0 ? (

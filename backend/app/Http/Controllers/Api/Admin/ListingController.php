@@ -52,6 +52,24 @@ class ListingController extends Controller
     }
 
     /**
+     * Show a single livestock listing.
+     *
+     * Deep-link support: the activity feed links to a listing by id, so the
+     * administrator's detail dialog opens from this record instead of from a
+     * row that may not be on the page they were sent to. The projection is the
+     * same admin `ListingResource` the list uses, not a second shape.
+     */
+    public function show(Listing $listing): JsonResponse
+    {
+        $listing->load('seller:id,name,email');
+
+        return response()->json([
+            'success' => true,
+            'data' => new ListingResource($listing),
+        ], 200);
+    }
+
+    /**
      * Approve a pending listing.
      *
      * `pending → active` [D-02]. The response is the moderated listing in the

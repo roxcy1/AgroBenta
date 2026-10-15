@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListTransactionsRequest;
 use App\Http\Resources\TransactionResource;
+use App\Models\Transaction;
 use App\Services\Admin\AdminTransactionService;
 use Illuminate\Http\JsonResponse;
 
@@ -39,6 +40,27 @@ class TransactionController extends Controller
                     'total' => $paginator->total(),
                 ],
             ],
+        ], 200);
+    }
+
+    /**
+     * Show a single transaction.
+     *
+     * Deep-link support: the activity feed links to a transaction by id, so the
+     * administrator's detail dialog opens from this record rather than from a
+     * row that may not be on the page they were sent to.
+     */
+    public function show(Transaction $transaction): JsonResponse
+    {
+        $transaction->load([
+            'buyer:id,name,email',
+            'seller:id,name,email',
+            'listing:id,livestock_type,breed',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => new TransactionResource($transaction),
         ], 200);
     }
 }

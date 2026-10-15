@@ -3,6 +3,7 @@ import type { AxiosResponse } from 'axios';
 import api from '../../../../lib/api';
 import {
   fetchAllTransactions,
+  fetchTransaction,
   type Transaction,
   type TransactionsPagination,
 } from './useTransactions';
@@ -31,17 +32,16 @@ function pageResponse(
 }
 
 describe('fetchAllTransactions', () => {
-  const getSpy = vi.spyOn(api, 'get');
-
   afterEach(() => {
-    getSpy.mockReset();
+    vi.restoreAllMocks();
   });
 
   it('walks every page and returns a count equal to the reported total', async () => {
     const firstPage = Array.from({ length: 100 }, (_, index) => makeTransaction(index + 1));
     const secondPage = [makeTransaction(101), makeTransaction(102)];
 
-    getSpy
+    const spy = vi
+      .spyOn(api, 'get')
       .mockResolvedValueOnce(
         pageResponse(firstPage, { current_page: 1, last_page: 2, per_page: 100, total: 102 }),
       )
@@ -54,13 +54,15 @@ describe('fetchAllTransactions', () => {
     expect(result).toHaveLength(102);
     expect(result[0].id).toBe(1);
     expect(result[101].id).toBe(102);
-    expect(getSpy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 
   it('requests pages at the backend per-page cap and forwards the active filters', async () => {
-    getSpy.mockResolvedValueOnce(
-      pageResponse([], { current_page: 1, last_page: 1, per_page: 100, total: 0 }),
-    );
+    const spy = vi
+      .spyOn(api, 'get')
+      .mockResolvedValueOnce(
+        pageResponse([], { current_page: 1, last_page: 1, per_page: 100, total: 0 }),
+      );
 
     await fetchAllTransactions({
       search: 'juan',
@@ -69,7 +71,7 @@ describe('fetchAllTransactions', () => {
       date_to: '2026-10-12',
     });
 
-    const url = getSpy.mock.calls[0][0] as string;
+    const url = spy.mock.calls[0][0] as string;
     expect(url).toContain('per_page=100');
     expect(url).toContain('search=juan');
     expect(url).toContain('status=completed');
@@ -78,13 +80,37 @@ describe('fetchAllTransactions', () => {
   });
 
   it('makes no additional requests when only one page exists', async () => {
-    getSpy.mockResolvedValueOnce(
-      pageResponse([makeTransaction(1)], { current_page: 1, last_page: 1, per_page: 100, total: 1 }),
-    );
+    const spy = vi
+      .spyOn(api, 'get')
+      .mockResolvedValueOnce(
+        pageResponse([makeTransaction(1)], {
+          current_page: 1,
+          last_page: 1,
+          per_page: 100,
+          total: 1,
+        }),
+      );
 
     const result = await fetchAllTransactions({});
 
     expect(result).toHaveLength(1);
-    expect(getSpy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fetchTransaction', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('requests the single transaction by id and returns the record', async () => {
+    const spy = vi.spyOn(api, 'get').mockResolvedValueOnce({
+      data: { success: true, data: makeTransaction(9) },
+    } as unknown as AxiosResponse);
+
+    const transaction = await fetchTransaction(9);
+
+    expect(spy.mock.calls[0][0]).toBe('/admin/transactions/9');
+    expect(transaction.id).toBe(9);
   });
 });

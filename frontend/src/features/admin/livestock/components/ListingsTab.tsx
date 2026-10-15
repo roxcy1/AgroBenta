@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { useListingCounts, useListings } from '../api/useListings';
+import { useSearchParams } from 'react-router-dom';
+import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
+import { useListing, useListingCounts, useListings } from '../api/useListings';
 import type { Listing } from '../api/useListings';
 import ListingDetailsDialog from './ListingDetailsDialog';
 import ListingReviewDialog from './ListingReviewDialog';
@@ -54,6 +56,9 @@ export function ListingsTab() {
     listing: Listing;
     option: ModerationOption;
   } | null>(null);
+  const [searchParams] = useSearchParams();
+  const linkedListingId = parsePositiveInt(searchParams.get('listing'));
+  const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
 
   const { data, isLoading, error, refetch } = useListings({
     search: search || undefined,
@@ -64,6 +69,29 @@ export function ListingsTab() {
   });
 
   const { data: counts } = useListingCounts();
+  const { data: linkedListing, isError: linkedListingFailed } = useListing(linkedListingId);
+
+  // A deep link opens the listing it names even when that row is not on the
+  // page the list is showing. Deriving the dialog's record from the query
+  // result rather than syncing it into state keeps the URL the single source
+  // of truth for the open dialog.
+  const linkedState = resolveDeepLinkedRecord({
+    entity: 'Listing',
+    id: linkedListingId,
+    dismissedId: dismissedLinkId,
+    record: linkedListing,
+    isError: linkedListingFailed,
+  });
+  const activeDetails = details ?? linkedState.record;
+
+  const handleCloseDetails = () => {
+    setDetails(null);
+    if (linkedListingId !== null) setDismissedLinkId(linkedListingId);
+  };
+
+  const handleDismissLinkedNotice = () => {
+    if (linkedListingId !== null) setDismissedLinkId(linkedListingId);
+  };
 
   const handleStatusCardSelect = (status: string) => {
     setStatusFilter((current) => (current === status ? '' : status));
@@ -176,6 +204,19 @@ export function ListingsTab() {
               </div>
             </div>
 
+            {linkedState.message !== null && (
+              <div className="deep-link-notice" role="alert">
+                <p className="deep-link-notice-text">{linkedState.message}</p>
+                <button
+                  type="button"
+                  className="deep-link-notice-dismiss"
+                  onClick={handleDismissLinkedNotice}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {listings.length === 0 ? (
               <div className="lv-empty">
                 <p>No livestock listings found.</p>
@@ -287,8 +328,8 @@ export function ListingsTab() {
         />
       )}
 
-      {details && (
-        <ListingDetailsDialog listing={details} onClose={() => setDetails(null)} />
+      {activeDetails && (
+        <ListingDetailsDialog listing={activeDetails} onClose={handleCloseDetails} />
       )}
     </>
   );

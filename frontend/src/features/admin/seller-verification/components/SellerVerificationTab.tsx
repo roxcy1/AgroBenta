@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { parsePositiveInt } from '../../../../lib/queryParams';
 import type { SellerVerification } from '../api/useSellerVerifications';
 import {
   useSellerVerificationCounts,
@@ -30,6 +32,9 @@ export function SellerVerificationTab() {
     verification: SellerVerification;
     action: VerificationActionConfig;
   } | null>(null);
+  const [searchParams] = useSearchParams();
+  const linkedVerificationId = parsePositiveInt(searchParams.get('verification'));
+  const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
 
   const { data, isLoading, error, refetch } = useSellerVerifications({
     search: search || undefined,
@@ -39,6 +44,20 @@ export function SellerVerificationTab() {
   });
 
   const { data: counts } = useSellerVerificationCounts();
+
+  // The detail dialog fetches the record by id itself, so a deep link only has
+  // to name the id; deriving it from the URL keeps the dialog in sync with the
+  // address bar without an effect that copies the param into state.
+  const activeDetailsId =
+    detailsId ??
+    (linkedVerificationId !== null && linkedVerificationId !== dismissedLinkId
+      ? linkedVerificationId
+      : null);
+
+  const handleCloseDetails = () => {
+    setDetailsId(null);
+    if (linkedVerificationId !== null) setDismissedLinkId(linkedVerificationId);
+  };
 
   const handleTabSelect = (status: VerificationStatus) => {
     setActiveStatus(status);
@@ -223,10 +242,10 @@ export function SellerVerificationTab() {
         />
       )}
 
-      {detailsId !== null && (
+      {activeDetailsId !== null && (
         <VerificationDetailsDialog
-          verificationId={detailsId}
-          onClose={() => setDetailsId(null)}
+          verificationId={activeDetailsId}
+          onClose={handleCloseDetails}
         />
       )}
     </div>

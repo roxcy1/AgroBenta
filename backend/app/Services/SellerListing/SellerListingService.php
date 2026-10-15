@@ -14,6 +14,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -250,6 +251,7 @@ class SellerListingService
         );
 
         $stored = $listing->storedPhotoFilenames();
+        $previousCount = count($stored);
 
         if (count($stored) + count($files) > Listing::PHOTO_LIMIT) {
             throw ValidationException::withMessages([
@@ -273,7 +275,35 @@ class SellerListingService
             $stored[] = $filename;
         }
 
-        return $this->listingRepository->update($listing, ['photos' => $stored]);
+        $updated = $this->listingRepository->update($listing, ['photos' => $stored]);
+
+        // Same target/changes shape as the other listing writes, and written
+        // only once the photos are actually stored and the row is updated, so a
+        // refused or half-written upload can never be recorded as a success.
+        // The files themselves are never named — only how many the listing
+        // gained — so the audit holds no filename that could describe a stored
+        // path.
+        if ($files !== []) {
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingPhotoAdded,
+                sprintf(
+                    '%d %s added to listing #%d.',
+                    count($files),
+                    Str::plural('photo', count($files)),
+                    $listing->getKey(),
+                ),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => [
+                        'photos' => ['from' => $previousCount, 'to' => count($stored)],
+                    ],
+                ],
+            );
+        }
+
+        return $updated;
     }
 
     /**

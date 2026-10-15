@@ -67,3 +67,26 @@ export function useUsers(params: UsersParams) {
     retry: 1,
   });
 }
+
+export async function fetchAdminUser(id: number): Promise<AdminUser> {
+  const response = await api.get<{ success: boolean; data: AdminUser }>(`/admin/users/${id}`);
+  return response.data.data;
+}
+
+/**
+ * A single user by id.
+ *
+ * The users surface has no detail screen, so a `?user=` deep link resolves the
+ * record here and focuses the list on that account rather than linking to a
+ * dead page.
+ */
+export function useAdminUser(id: number | null) {
+  return useQuery({
+    queryKey: ['admin', 'users', 'detail', id],
+    queryFn: () => fetchAdminUser(id as number),
+    enabled: id !== null,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 0,
+  });
+}

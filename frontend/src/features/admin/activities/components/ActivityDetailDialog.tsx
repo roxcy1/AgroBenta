@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import type { Activity } from '../api/useActivities';
 import {
   activityActionLabel,
@@ -8,6 +9,7 @@ import {
   activityTargetLabel,
   activityTimestampTitle,
   formatActivityTimestamp,
+  getActivityTargetLink,
 } from '../activityFormat';
 
 interface ActivityDetailDialogProps {
@@ -27,6 +29,7 @@ export default function ActivityDetailDialog({ activity, onClose }: ActivityDeta
   const changes = activityChanges(activity.metadata);
   const context = activityContextEntries(activity.metadata);
   const target = activityTargetLabel(activity.metadata);
+  const targetLink = getActivityTargetLink(activity.metadata);
 
   return (
     <div className="lv-action-modal-overlay" onClick={onClose}>
@@ -69,7 +72,15 @@ export default function ActivityDetailDialog({ activity, onClose }: ActivityDeta
                 </div>
                 <div className="lv-detail-item">
                   <dt className="lv-detail-label">Target</dt>
-                  <dd className="lv-detail-value">{target}</dd>
+                  <dd className="lv-detail-value">
+                    {targetLink.href ? (
+                      <Link to={targetLink.href} className="activity-link">
+                        {targetLink.label}
+                      </Link>
+                    ) : (
+                      target
+                    )}
+                  </dd>
                 </div>
                 <div className="lv-detail-item">
                   <dt className="lv-detail-label">When</dt>
@@ -141,7 +152,15 @@ export default function ActivityDetailDialog({ activity, onClose }: ActivityDeta
                 </div>
                 <div className="lv-detail-item">
                   <dt className="lv-detail-label">Target reference</dt>
-                  <dd className="lv-detail-value">{target}</dd>
+                  <dd className="lv-detail-value">
+                    {targetLink.href ? (
+                      <Link to={targetLink.href} className="activity-link">
+                        {targetLink.label}
+                      </Link>
+                    ) : (
+                      target
+                    )}
+                  </dd>
                 </div>
               </dl>
             </section>

@@ -34,6 +34,7 @@ export const ACTIVITY_ACTION_OPTIONS = [
   { value: 'listing_approved', label: 'Listing approved' },
   { value: 'listing_rejected', label: 'Listing rejected' },
   { value: 'listing_deactivated', label: 'Listing deactivated' },
+  { value: 'listing_photo_added', label: 'Listing photo added' },
   { value: 'listing_photo_removed', label: 'Listing photo removed' },
   { value: 'seller_verification_submitted', label: 'Seller verification submitted' },
   { value: 'seller_verification_approved', label: 'Seller verification approved' },
@@ -172,6 +173,44 @@ export function formatActivityTimestamp(value: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+export function getActivityTargetLink(
+  metadata: Record<string, unknown> | null | undefined,
+): { href: string | null; label: string } {
+  if (!metadata) {
+    return { href: null, label: '\u2014' };
+  }
+
+  const type = typeof metadata.target_type === 'string' ? metadata.target_type : null;
+  if (!type) {
+    return { href: null, label: activityTargetLabel(metadata) };
+  }
+
+  // Settings are addressed as a page, not a record, so they need no id.
+  if (type === 'setting') {
+    return { href: '/settings', label: 'Settings' };
+  }
+
+  const idRaw = metadata.target_id;
+  const id =
+    typeof idRaw === 'number' || typeof idRaw === 'string' ? String(idRaw).trim() : '';
+  if (id === '') {
+    return { href: null, label: activityTargetLabel(metadata) };
+  }
+
+  switch (type) {
+    case 'listing':
+      return { href: `/livestock?listing=${id}`, label: `Listing #${id}` };
+    case 'transaction':
+      return { href: `/transactions?transaction=${id}`, label: `Transaction #${id}` };
+    case 'seller_verification':
+      return { href: `/seller-verification?verification=${id}`, label: `Verification #${id}` };
+    case 'user':
+      return { href: `/users?user=${id}`, label: `User #${id}` };
+    default:
+      return { href: null, label: activityTargetLabel(metadata) };
+  }
 }
 
 export function activityTimestampTitle(value: string): string {

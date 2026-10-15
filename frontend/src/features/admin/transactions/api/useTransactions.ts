@@ -105,6 +105,28 @@ export function useTransactions(params: TransactionsParams) {
   });
 }
 
+export async function fetchTransaction(id: number): Promise<Transaction> {
+  const response = await api.get<{ success: boolean; data: Transaction }>(
+    `/admin/transactions/${id}`,
+  );
+  return response.data.data;
+}
+
+/**
+ * A single transaction by id, used to open a transaction deep link even when
+ * the row is not on the page the list happens to be showing.
+ */
+export function useTransaction(id: number | null) {
+  return useQuery({
+    queryKey: ['admin', 'transactions', 'detail', id],
+    queryFn: () => fetchTransaction(id as number),
+    enabled: id !== null,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 0,
+  });
+}
+
 export interface TransactionStatusCounts {
   total: number;
   pending: number;

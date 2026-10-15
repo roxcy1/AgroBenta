@@ -10,6 +10,7 @@ import {
   emptyActivitiesMessage,
   formatActivityTimestamp,
   formatMetadataValue,
+  getActivityTargetLink,
   hasActiveActivityFilters,
   humanizeLabel,
 } from './activityFormat';
@@ -55,6 +56,14 @@ describe('ACTIVITY_ACTION_OPTIONS', () => {
   it('has unique action values', () => {
     const values = ACTIVITY_ACTION_OPTIONS.map((option) => option.value);
     expect(new Set(values).size).toBe(values.length);
+  });
+
+  it('offers the listing photo added action and formats its label', () => {
+    expect(ACTIVITY_ACTION_OPTIONS).toContainEqual({
+      value: 'listing_photo_added',
+      label: 'Listing photo added',
+    });
+    expect(activityActionLabel('listing_photo_added')).toBe('Listing Photo Added');
   });
 });
 
@@ -184,6 +193,54 @@ describe('emptyActivitiesMessage', () => {
   it('distinguishes filtered from unfiltered empty states', () => {
     expect(emptyActivitiesMessage(true)).toBe('No activities match the current filters.');
     expect(emptyActivitiesMessage(false)).toBe('No activities have been recorded yet.');
+  });
+});
+
+describe('getActivityTargetLink', () => {
+  it('links each supported target type to its page with the id as a query param', () => {
+    expect(getActivityTargetLink({ target_type: 'listing', target_id: 5 })).toEqual({
+      href: '/livestock?listing=5',
+      label: 'Listing #5',
+    });
+    expect(getActivityTargetLink({ target_type: 'transaction', target_id: 7 })).toEqual({
+      href: '/transactions?transaction=7',
+      label: 'Transaction #7',
+    });
+    expect(getActivityTargetLink({ target_type: 'seller_verification', target_id: 3 })).toEqual({
+      href: '/seller-verification?verification=3',
+      label: 'Verification #3',
+    });
+    expect(getActivityTargetLink({ target_type: 'user', target_id: 9 })).toEqual({
+      href: '/users?user=9',
+      label: 'User #9',
+    });
+  });
+
+  it('links settings without an id', () => {
+    expect(getActivityTargetLink({ target_type: 'setting' })).toEqual({
+      href: '/settings',
+      label: 'Settings',
+    });
+  });
+
+  it('accepts a string id and trims it', () => {
+    expect(getActivityTargetLink({ target_type: 'listing', target_id: ' 12 ' })).toEqual({
+      href: '/livestock?listing=12',
+      label: 'Listing #12',
+    });
+  });
+
+  it('returns no href for unknown or incomplete targets', () => {
+    expect(getActivityTargetLink(null)).toEqual({ href: null, label: '\u2014' });
+    expect(getActivityTargetLink({})).toEqual({ href: null, label: '\u2014' });
+    expect(getActivityTargetLink({ target_type: 'listing' })).toEqual({
+      href: null,
+      label: 'Listing',
+    });
+    expect(getActivityTargetLink({ target_type: 'invoice', target_id: 4 })).toEqual({
+      href: null,
+      label: 'Invoice #4',
+    });
   });
 });
 

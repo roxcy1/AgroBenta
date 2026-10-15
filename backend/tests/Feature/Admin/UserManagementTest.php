@@ -302,4 +302,78 @@ class UserManagementTest extends TestCase
         $this->assertEquals('Second User', $data['users'][1]['name']);
         $this->assertEquals('First User', $data['users'][2]['name']);
     }
+
+    public function test_admin_can_show_a_single_user(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Juan Dela Cruz',
+            'email' => 'juan@example.com',
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Seller,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/users/{$user->id}");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('data.id', $user->id);
+        $response->assertJsonPath('data.email', 'juan@example.com');
+        $response->assertJsonStructure([
+            'data' => [
+                'id',
+                'name',
+                'email',
+                'role',
+                'seller_capability',
+                'email_verified_at',
+                'created_at',
+                'updated_at',
+            ],
+        ]);
+    }
+
+    public function test_show_does_not_expose_sensitive_fields(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/users/{$user->id}");
+
+        $response->assertStatus(200);
+
+        $data = $response->json('data');
+        $this->assertArrayNotHasKey('password', $data);
+        $this->assertArrayNotHasKey('remember_token', $data);
+    }
+
+    public function test_guest_cannot_show_a_single_user(): void
+    {
+        $response = $this->getJson('/api/admin/users/1');
+
+        $response->assertStatus(401);
+    }
+
+    public function test_regular_user_cannot_show_a_single_user(): void
+    {
+        $user = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        $token = $user->createToken('user_token')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson("/api/admin/users/{$user->id}");
+
+        $response->assertStatus(403);
+    }
+
+    public function test_show_returns_not_found_for_missing_user(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/users/999999');
+
+        $response->assertStatus(404);
+    }
 }

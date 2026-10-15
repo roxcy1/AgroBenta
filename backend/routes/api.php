@@ -153,6 +153,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/{user}', [UserController::class, 'show']);
     Route::get('/listings', [ListingController::class, 'index']);
     // Listing moderation. [D-02 rule 8] makes administrator approval the only
     // route to `active`, and the transition table reserves `pending -> inactive`
@@ -165,11 +166,13 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::post('/listings/{listing}/approve', [ListingController::class, 'approve']);
     Route::post('/listings/{listing}/reject', [ListingController::class, 'reject']);
     Route::post('/listings/{listing}/deactivate', [ListingController::class, 'deactivate']);
+    Route::get('/listings/{listing}', [ListingController::class, 'show']);
     Route::get('/seller-verifications', [SellerVerificationController::class, 'index']);
     Route::get('/seller-verifications/{sellerVerification}', [SellerVerificationController::class, 'show']);
     Route::post('/seller-verifications/{sellerVerification}/approve', [SellerVerificationController::class, 'approve']);
     Route::post('/seller-verifications/{sellerVerification}/reject', [SellerVerificationController::class, 'reject']);
     Route::get('/transactions', [TransactionController::class, 'index']);
+    Route::get('/transactions/{transaction}', [TransactionController::class, 'show']);
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::get('/reports', [ReportsController::class, 'index']);
     Route::get('/settings', [SettingsController::class, 'index']);
