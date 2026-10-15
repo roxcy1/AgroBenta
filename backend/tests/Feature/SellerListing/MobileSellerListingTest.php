@@ -5,6 +5,7 @@ namespace Tests\Feature\SellerListing;
 use App\Enums\ListingStatus;
 use App\Enums\UserRole;
 use App\Models\Listing;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -239,6 +240,83 @@ class MobileSellerListingTest extends TestCase
         $this->store(['asking_price' => 'not-a-price', 'quantity' => 0])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['asking_price', 'quantity']);
+    }
+
+    #[Test]
+    public function the_asking_price_ceiling_follows_the_setting(): void
+    {
+        Setting::create([
+            'key' => 'listing.max_price',
+            'value' => '10000',
+            'group' => 'listings',
+            'label' => 'Maximum Asking Price',
+            'description' => 'The highest asking price a listing may be given.',
+        ]);
+
+        $this->store(['asking_price' => 10001])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('asking_price');
+
+        $this->store(['asking_price' => 10000])
+            ->assertStatus(201);
+    }
+
+    #[Test]
+    public function a_malformed_asking_price_ceiling_falls_back_to_the_column_maximum(): void
+    {
+        // Garbage in the setting must not switch off the bound: the code's own
+        // `decimal(14,2)` ceiling still rejects an over-range price.
+        Setting::create([
+            'key' => 'listing.max_price',
+            'value' => 'not-a-number',
+            'group' => 'listings',
+            'label' => 'Maximum Asking Price',
+            'description' => 'The highest asking price a listing may be given.',
+        ]);
+
+        $this->store(['asking_price' => '100000000000.00'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('asking_price');
+    }
+
+    /**
+     * A stored ceiling outside the registry bounds falls back to the column
+     * maximum, exactly as garbage does — never to itself.
+     *
+     * Written straight to the table because the admin API refuses these values;
+     * the point is the *consumer's* defence. Both directions are asserted: a
+     * ceiling of `0` must not reject every price, and the fallback must still be
+     * a real ceiling that an over-range price fails.
+     */
+    #[Test]
+    #[DataProvider('outOfBoundsAskingPriceCeilings')]
+    public function an_out_of_bounds_asking_price_ceiling_falls_back_to_the_column_maximum(string $setting): void
+    {
+        Setting::create([
+            'key' => 'listing.max_price',
+            'value' => $setting,
+            'group' => 'listings',
+            'label' => 'Maximum Asking Price',
+            'description' => 'The highest asking price a listing may be given.',
+        ]);
+
+        $this->store(['asking_price' => 50000])->assertStatus(201);
+
+        $this->store(['asking_price' => '100000000000.00'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('asking_price');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function outOfBoundsAskingPriceCeilings(): array
+    {
+        return [
+            'zero' => ['0'],
+            'negative' => ['-10'],
+            'above the registry maximum' => ['100000000000.00'],
+        ];
     }
 
     #[Test]

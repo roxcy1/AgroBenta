@@ -4,6 +4,7 @@ namespace App\Http\Requests\SellerListing;
 
 use App\Enums\ListingStatus;
 use App\Models\Listing;
+use App\Services\SettingService;
 
 /**
  * The field rules for seller listing creation and update.
@@ -59,11 +60,12 @@ trait SellerListingRules
 
             'quantity' => ['integer', 'min:1'],
 
-            // `numeric`, not `decimal`, and bounded to `decimal(14,2)`, for the
-            // same reason. Precision is not truncated to two places here: the
-            // column does that, and rounding a seller's price in the request
-            // layer would hide the behaviour from the test that should catch it.
-            'asking_price' => ['numeric', 'min:0', 'max:99999999999.99'],
+            // `numeric`, not `decimal`, and bounded by the configurable ceiling,
+            // for the same reason. Precision is not truncated to two places
+            // here: the column does that, and rounding a seller's price in the
+            // request layer would hide the behaviour from the test that should
+            // catch it.
+            'asking_price' => ['numeric', 'min:0', 'max:'.$this->maxAskingPrice()],
 
             'location' => ['string', 'max:255'],
             'health_status' => ['nullable', 'string', 'max:255'],
@@ -75,14 +77,36 @@ trait SellerListingRules
             // absolute URLs built from them (functional documentation §4.5,
             // D-10). Uploads go through POST `/{id}/photos`, so this field on
             // create/update is the *set-at-once* path — and it carries the same
-            // 10-per-listing ceiling as the upload path, because a client that
-            // could create an 11-photo listing would defeat the limit the upload
-            // endpoint enforces. The model mutator normalises every entry to a
-            // filename, so a URL echoed back from a GET collapses to the same
-            // stored form.
-            'photos' => ['array', 'max:'.Listing::PHOTO_LIMIT],
+            // per-listing ceiling as the upload path, because a client that
+            // could create a listing past the limit would defeat the limit the
+            // upload endpoint enforces. The model mutator normalises every entry
+            // to a filename, so a URL echoed back from a GET collapses to the
+            // same stored form.
+            'photos' => ['array', 'max:'.$this->photoLimit()],
             'photos.*' => ['string', 'max:2048'],
         ];
+    }
+
+    /**
+     * The per-listing photo ceiling, from settings.
+     *
+     * Falls back to the model constant when the setting is absent or malformed,
+     * so a missing or bad setting can never disable the limit.
+     */
+    protected function photoLimit(): int
+    {
+        return app(SettingService::class)->getInt('listing.max_photos', Listing::PHOTO_LIMIT);
+    }
+
+    /**
+     * The asking-price ceiling, from settings.
+     *
+     * `99999999999.99` is the `decimal(14,2)` column maximum and the fallback
+     * when the setting is absent or malformed.
+     */
+    protected function maxAskingPrice(): float
+    {
+        return app(SettingService::class)->getDecimal('listing.max_price', 99999999999.99);
     }
 
     /**
@@ -95,7 +119,7 @@ trait SellerListingRules
         return [
             'livestock_type' => ['string', 'max:255'],
             'location' => ['string', 'max:255'],
-            'asking_price' => ['numeric', 'min:0', 'max:99999999999.99'],
+            'asking_price' => ['numeric', 'min:0', 'max:'.$this->maxAskingPrice()],
             'quantity' => ['integer', 'min:1'],
         ];
     }

@@ -5,6 +5,7 @@ namespace Tests\Feature\SellerListing;
 use App\Enums\ListingStatus;
 use App\Enums\UserRole;
 use App\Models\Listing;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -351,6 +352,197 @@ class SellerListingPhotoTest extends TestCase
             ])
             ->assertStatus(201)
             ->assertJsonCount(10, 'data.photos');
+    }
+
+    // ------------------------------------------------- configurable ceiling
+
+    /**
+     * Write a `listing.max_photos` setting row directly, bypassing the admin
+     * API so the consumer behaviour is tested in isolation.
+     */
+    private function setPhotoLimit(string $value): void
+    {
+        Setting::create([
+            'key' => 'listing.max_photos',
+            'value' => $value,
+            'group' => 'listings',
+            'label' => 'Maximum Photos per Listing',
+            'description' => 'The most photos a single listing may hold.',
+        ]);
+    }
+
+    #[Test]
+    public function the_photo_ceiling_follows_the_setting(): void
+    {
+        $this->setPhotoLimit('3');
+
+        $listing = $this->createListing($this->seller);
+
+        $files = [];
+
+        for ($i = 0; $i < 4; $i++) {
+            $files[] = $this->tinyJpeg("photo{$i}.jpg");
+        }
+
+        $this->upload($listing, $files)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertSame([], $this->storedPhotos($listing));
+    }
+
+    #[Test]
+    public function the_photo_ceiling_applies_when_creating_with_the_setting(): void
+    {
+        $this->setPhotoLimit('3');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings', [
+                'livestock_type' => 'cattle',
+                'location' => 'Bukidnon',
+                'asking_price' => 50000,
+                'quantity' => 1,
+                'photos' => array_map(
+                    static fn (int $i): string => "photo{$i}.jpg",
+                    range(1, 4),
+                ),
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+    }
+
+    #[Test]
+    public function a_malformed_photo_ceiling_setting_falls_back_to_the_default(): void
+    {
+        // Garbage in the setting must not disable the limit: the code's own
+        // ceiling of 10 still rejects the eleventh photo.
+        $this->setPhotoLimit('not-a-number');
+
+        $listing = $this->createListing($this->seller);
+
+        $files = [];
+
+        for ($i = 0; $i < 11; $i++) {
+            $files[] = $this->tinyJpeg("photo{$i}.jpg");
+        }
+
+        $this->upload($listing, $files)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+    }
+
+    /**
+     * A stored ceiling outside the registry bounds is as invalid as garbage, and
+     * must resolve to the documented default rather than to itself.
+     *
+     * The value is written straight to the table, bypassing the admin API — the
+     * only way an out-of-bounds row can exist — so this is the consumer's own
+     * defence, not the writer's. Each case proves both halves: the bad value does
+     * not raise the ceiling (11 files are rejected) and does not *lower* it to
+     * zero (exactly 10 files are still accepted).
+     */
+    #[Test]
+    #[DataProvider('outOfBoundsPhotoCeilings')]
+    public function an_out_of_bounds_photo_ceiling_falls_back_to_the_default(string $value): void
+    {
+        $this->setPhotoLimit($value);
+
+        $listing = $this->createListing($this->seller);
+
+        $eleven = [];
+
+        for ($i = 0; $i < 11; $i++) {
+            $eleven[] = $this->tinyJpeg("over{$i}.jpg");
+        }
+
+        $this->upload($listing, $eleven)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertSame([], $this->storedPhotos($listing));
+
+        $ten = [];
+
+        for ($i = 0; $i < 10; $i++) {
+            $ten[] = $this->tinyJpeg("ok{$i}.jpg");
+        }
+
+        $this->upload($listing, $ten)
+            ->assertStatus(201)
+            ->assertJsonCount(10, 'data.photos');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function outOfBoundsPhotoCeilings(): array
+    {
+        return [
+            'zero' => ['0'],
+            'negative' => ['-1'],
+            'above the registry maximum' => ['51'],
+        ];
+    }
+
+    #[Test]
+    public function the_photo_ceiling_applies_when_editing_with_the_setting(): void
+    {
+        // The *edit* path must honour the same ceiling as upload and create: a
+        // listing cannot be PATCHed past it.
+        $this->setPhotoLimit('2');
+
+        $listing = $this->createListing($this->seller);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", [
+                'photos' => ['a.jpg', 'b.jpg', 'c.jpg'],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", [
+                'photos' => ['a.jpg', 'b.jpg'],
+            ])
+            ->assertOk();
+    }
+
+    #[Test]
+    public function updating_the_photo_ceiling_takes_effect_for_uploads(): void
+    {
+        // Warm the settings cache first, so this proves the write path drops a
+        // populated cache rather than merely reading a cold one.
+        $listing = $this->createListing($this->seller);
+
+        $this->upload($listing, [$this->tinyJpeg('first.jpg')])->assertStatus(201);
+
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $token = $admin->createToken('admin_token', ['admin'])->plainTextToken;
+
+        // Uploading above authenticated the seller; the resolved user is memoised
+        // on the guard, so a fresh identity needs the guards reset first.
+        app('auth')->forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->putJson('/api/admin/settings', ['listing.max_photos' => '3'])
+            ->assertOk()
+            ->assertJsonPath('updated', ['listing.max_photos']);
+
+        $files = [];
+
+        for ($i = 0; $i < 3; $i++) {
+            // One is already stored, so three more makes four — over the new
+            // ceiling of three. This is the point of the test: the *existing*
+            // cache must not survive the write, or the ceiling would still read
+            // as ten.
+            $files[] = $this->tinyJpeg("more{$i}.jpg");
+        }
+
+        app('auth')->forgetGuards();
+
+        $this->upload($listing, $files)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
     }
 
     // --------------------------------------------------------------- deletion
