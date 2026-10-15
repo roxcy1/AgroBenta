@@ -42,7 +42,6 @@ class SellerListingFormScreen extends StatefulWidget {
 }
 
 class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _livestockType = TextEditingController();
   final TextEditingController _breed = TextEditingController();
   final TextEditingController _ageValue = TextEditingController();
@@ -59,10 +58,38 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   String? _gender;
   String? _weightUnit;
 
+  int _step = 0;
+
   late final SellerListingController _controller;
   bool _submitting = false;
 
   bool get _isEditing => widget.listing != null;
+
+  void _onStepContinue() {
+    if (_step == 0) {
+      if (validateLivestockType(_livestockType.text) != null) {
+        setState(() {});
+        return;
+      }
+    }
+    if (_step == 1) {
+      if (validateQuantity(_quantity.text) != null ||
+          validateAskingPrice(_askingPrice.text) != null ||
+          validateListingLocation(_location.text) != null) {
+        setState(() {});
+        return;
+      }
+    }
+    if (_step < 2) {
+      setState(() => _step++);
+    }
+  }
+
+  void _onStepCancel() {
+    if (_step > 0) {
+      setState(() => _step--);
+    }
+  }
 
   @override
   void initState() {
@@ -123,7 +150,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   );
 
   Future<void> _save() async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
+    final SellerListingDraft draft = _buildDraft();
+    if (draft.missingRequiredFields.isNotEmpty) {
+      setState(() {});
       return;
     }
 
@@ -184,274 +213,368 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             final SellerListingState state = _controller.state;
             final bool busy = _submitting || state.isActioning;
 
-            return Form(
-              key: _formKey,
-              // `autovalidateMode` off: validating a form the seller has not
-              // finished yet would put an error under every empty field the
-              // moment the screen opens. Errors appear on save, and from then on
-              // as the field is corrected.
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.screenGutter),
-                children: <Widget>[
-                  _Intro(
-                    isEditing: _isEditing,
-                    actionMessage: state.actionMessage,
-                    actionError: state.actionErrorMessage,
-                    conflictMessage: state.conflictMessage,
-                    serverErrors: state.validationErrors,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  SectionCard(
-                    title: 'What is being sold',
+            return ExcludeSemantics(
+              child: Stepper(
+              currentStep: _step,
+              onStepContinue: busy ? null : _onStepContinue,
+              onStepCancel: busy ? null : _onStepCancel,
+              controlsBuilder: (BuildContext context, ControlsDetails details) {
+                if (_step == 2) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: FilledButton(
+                      onPressed: busy ? null : _save,
+                      child: busy
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(_isEditing ? 'Save changes' : 'Save as draft'),
+                    ),
+                  );
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.md),
+                  // Expanded buttons: the test viewport (and small phones)
+                  // are narrower than the two buttons' intrinsic widths, so
+                  // an unconstrained Row overflows and fails layout. Sharing
+                  // the width keeps both actions on one line at any width.
+                  child: Row(
                     children: <Widget>[
-                      _TextField(
-                        controller: _livestockType,
-                        label: 'Type of livestock',
-                        hint: 'e.g. Cattle, Goat, Poultry',
-                        helper: 'Required. As specific as you like.',
-                        validator: validateLivestockType,
-                        serverErrors: state.validationErrors['livestock_type'],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _TextField(
-                        controller: _breed,
-                        label: 'Breed',
-                        hint: 'e.g. Brahman',
-                        helper: 'Optional. Used as the listing title.',
-                        validator: validateBreed,
-                        serverErrors: state.validationErrors['breed'],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Expanded(
-                            child: _TextField(
-                              controller: _ageValue,
-                              label: 'Age',
-                              hint: 'e.g. 18',
-                              validator: validateAgeValue,
-                              serverErrors: state.validationErrors['age_value'],
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: _Dropdown<String>(
-                              label: 'Age unit',
-                              value: _ageUnit,
-                              items: const <DropdownMenuItem<String>>[
-                                DropdownMenuItem<String>(
-                                  value: 'month',
-                                  child: Text('Month'),
-                                ),
-                                DropdownMenuItem<String>(
-                                  value: 'year',
-                                  child: Text('Year'),
-                                ),
-                              ],
-                              onChanged: busy
-                                  ? null
-                                  : (String? value) =>
-                                        setState(() => _ageUnit = value),
-                              // Read inside the closure, not from a cached value:
-                              // the pair rule depends on the age field, which the
-                              // seller can fill in without touching this
-                              // dropdown.
-                              validator: (String? value) =>
-                                  state.validationErrors['age_unit']?.first ??
-                                  validateAgeUnit(
-                                    value,
-                                    hasValue: _ageValue.text.trim().isNotEmpty,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Expanded(
-                            child: _TextField(
-                              controller: _weightValue,
-                              label: 'Weight',
-                              hint: 'e.g. 320',
-                              validator: validateWeightValue,
-                              serverErrors:
-                                  state.validationErrors['weight_value'],
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: _Dropdown<String>(
-                              label: 'Weight unit',
-                              value: _weightUnit,
-                              items: const <DropdownMenuItem<String>>[
-                                DropdownMenuItem<String>(
-                                  value: 'kg',
-                                  child: Text('Kilograms'),
-                                ),
-                                DropdownMenuItem<String>(
-                                  value: 'lb',
-                                  child: Text('Pounds'),
-                                ),
-                              ],
-                              onChanged: busy
-                                  ? null
-                                  : (String? value) =>
-                                        setState(() => _weightUnit = value),
-                              validator: (String? value) =>
-                                  state
-                                      .validationErrors['weight_unit']
-                                      ?.first ??
-                                  validateWeightUnit(
-                                    value,
-                                    hasValue: _weightValue.text
-                                        .trim()
-                                        .isNotEmpty,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  SectionCard(
-                    title: 'Availability and price',
-                    children: <Widget>[
-                      _TextField(
-                        controller: _quantity,
-                        label: 'Quantity available',
-                        hint: 'e.g. 12',
-                        helper: 'Required. How many head this listing covers.',
-                        validator: validateQuantity,
-                        serverErrors: state.validationErrors['quantity'],
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _TextField(
-                        controller: _askingPrice,
-                        label: 'Asking price',
-                        hint: 'e.g. 42500',
-                        helper: 'Required. In pesos, for the whole listing.',
-                        validator: validateAskingPrice,
-                        serverErrors: state.validationErrors['asking_price'],
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: details.onStepContinue,
+                          child: const Text('Continue'),
                         ),
-                        prefixText: '₱ ',
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      _TextField(
-                        controller: _location,
-                        label: 'Location',
-                        hint: 'e.g. Mabalacat, Pampanga',
-                        helper: 'Required. Where the livestock is.',
-                        validator: validateListingLocation,
-                        serverErrors: state.validationErrors['location'],
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: TextButton(
+                          onPressed: details.onStepCancel,
+                          child: const Text('Back'),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  SectionCard(
-                    title: 'Details',
-                    children: <Widget>[
-                      _Dropdown<String>(
-                        label: 'Gender',
-                        value: _gender,
-                        items: const <DropdownMenuItem<String>>[
-                          DropdownMenuItem<String>(
-                            value: 'male',
-                            child: Text('Male'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'female',
-                            child: Text('Female'),
-                          ),
-                        ],
-                        onChanged: busy
-                            ? null
-                            : (String? value) =>
-                                  setState(() => _gender = value),
-                        serverErrors: state.validationErrors['gender'],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _TextField(
-                        controller: _healthStatus,
-                        label: 'Health status',
-                        hint: 'e.g. Healthy, vaccinated',
-                        validator: validateOptionalShortText,
-                        serverErrors: state.validationErrors['health_status'],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _TextField(
-                        controller: _vaccination,
-                        label: 'Vaccination record',
-                        hint: 'e.g. Bovi-Shield given March',
-                        validator: validateOptionalShortText,
-                        serverErrors: state.validationErrors['vaccination'],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _TextField(
-                        controller: _shortDescription,
-                        label: 'Short description',
-                        hint: 'One or two lines about the livestock.',
-                        validator: validateOptionalShortText,
-                        serverErrors:
-                            state.validationErrors['short_description'],
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _TextField(
-                        controller: _additionalNotes,
-                        label: 'Additional notes',
-                        hint: 'Anything a buyer should know.',
-                        validator: validateAdditionalNotes,
-                        serverErrors:
-                            state.validationErrors['additional_notes'],
-                        maxLines: 4,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _PhotoNotAvailableNote(
-                        hasPhotos: listing?.photos.isNotEmpty ?? false,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  FilledButton(
-                    onPressed: busy ? null : _save,
-                    child: busy
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(_isEditing ? 'Save changes' : 'Save as draft'),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    _isEditing
-                        ? 'Saving keeps this listing in its current status.'
-                        : 'Saved as a draft. Only you can see it until you submit '
-                              'it for review.',
-                    style: theme.textTheme.bodySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                ],
-              ),
-            );
+                );
+              },
+              steps: <Step>[
+                Step(
+                  title: const Text('Information'),
+                  isActive: _step >= 0,
+                  state: _step > 0 ? StepState.complete : StepState.indexed,
+                  content: _buildInformationStep(state),
+                ),
+                Step(
+                  title: const Text('Details'),
+                  isActive: _step >= 1,
+                  state: _step > 1
+                      ? StepState.complete
+                      : (_step == 1 ? StepState.indexed : StepState.disabled),
+                  content: _buildDetailsStep(state),
+                ),
+                Step(
+                  title: const Text('Review'),
+                  isActive: _step >= 2,
+                  state: _step == 2 ? StepState.indexed : StepState.disabled,
+                  content: _buildReviewStep(state),
+                ),
+              ],
+            ),
+          );
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildInformationStep(SellerListingState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _Intro(
+          isEditing: _isEditing,
+          actionMessage: state.actionMessage,
+          actionError: state.actionErrorMessage,
+          conflictMessage: state.conflictMessage,
+          serverErrors: state.validationErrors,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SectionCard(
+          title: 'What is being sold',
+          children: <Widget>[
+            _TextField(
+              controller: _livestockType,
+              label: 'Type of livestock',
+              hint: 'e.g. Cattle, Goat, Poultry',
+              helper: 'Required. As specific as you like.',
+              validator: validateLivestockType,
+              serverErrors: state.validationErrors['livestock_type'],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _TextField(
+              controller: _breed,
+              label: 'Breed',
+              hint: 'e.g. Brahman',
+              helper: 'Optional. Used as the listing title.',
+              validator: validateBreed,
+              serverErrors: state.validationErrors['breed'],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: _TextField(
+                    controller: _ageValue,
+                    label: 'Age',
+                    hint: 'e.g. 18',
+                    validator: validateAgeValue,
+                    serverErrors: state.validationErrors['age_value'],
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _Dropdown<String>(
+                    label: 'Age unit',
+                    value: _ageUnit,
+                    items: const <DropdownMenuItem<String>>[
+                      DropdownMenuItem<String>(
+                        value: 'month',
+                        child: Text('Month'),
+                      ),
+                      DropdownMenuItem<String>(
+                        value: 'year',
+                        child: Text('Year'),
+                      ),
+                    ],
+                    onChanged: (String? value) =>
+                        setState(() => _ageUnit = value),
+                    validator: (String? value) =>
+                        state.validationErrors['age_unit']?.first ??
+                        validateAgeUnit(
+                          value,
+                          hasValue: _ageValue.text.trim().isNotEmpty,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: _TextField(
+                    controller: _weightValue,
+                    label: 'Weight',
+                    hint: 'e.g. 320',
+                    validator: validateWeightValue,
+                    serverErrors: state.validationErrors['weight_value'],
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _Dropdown<String>(
+                    label: 'Weight unit',
+                    value: _weightUnit,
+                    items: const <DropdownMenuItem<String>>[
+                      DropdownMenuItem<String>(
+                        value: 'kg',
+                        child: Text('Kilograms'),
+                      ),
+                      DropdownMenuItem<String>(
+                        value: 'lb',
+                        child: Text('Pounds'),
+                      ),
+                    ],
+                    onChanged: (String? value) =>
+                        setState(() => _weightUnit = value),
+                    validator: (String? value) =>
+                        state
+                            .validationErrors['weight_unit']
+                            ?.first ??
+                        validateWeightUnit(
+                          value,
+                          hasValue: _weightValue.text.trim().isNotEmpty,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailsStep(SellerListingState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SectionCard(
+          title: 'Availability and price',
+          children: <Widget>[
+            _TextField(
+              controller: _quantity,
+              label: 'Quantity available',
+              hint: 'e.g. 12',
+              helper: 'Required. How many head this listing covers.',
+              validator: validateQuantity,
+              serverErrors: state.validationErrors['quantity'],
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _TextField(
+              controller: _askingPrice,
+              label: 'Asking price',
+              hint: 'e.g. 42500',
+              helper: 'Required. In pesos, for the whole listing.',
+              validator: validateAskingPrice,
+              serverErrors: state.validationErrors['asking_price'],
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              prefixText: '₱ ',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _TextField(
+              controller: _location,
+              label: 'Location',
+              hint: 'e.g. Mabalacat, Pampanga',
+              helper: 'Required. Where the livestock is.',
+              validator: validateListingLocation,
+              serverErrors: state.validationErrors['location'],
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SectionCard(
+          title: 'Details',
+          children: <Widget>[
+            _Dropdown<String>(
+              label: 'Gender',
+              value: _gender,
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem<String>(
+                  value: 'male',
+                  child: Text('Male'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'female',
+                  child: Text('Female'),
+                ),
+              ],
+              onChanged: (String? value) => setState(() => _gender = value),
+              serverErrors: state.validationErrors['gender'],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _TextField(
+              controller: _healthStatus,
+              label: 'Health status',
+              hint: 'e.g. Healthy, vaccinated',
+              validator: validateOptionalShortText,
+              serverErrors: state.validationErrors['health_status'],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _TextField(
+              controller: _vaccination,
+              label: 'Vaccination record',
+              hint: 'e.g. Bovi-Shield given March',
+              validator: validateOptionalShortText,
+              serverErrors: state.validationErrors['vaccination'],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _TextField(
+              controller: _shortDescription,
+              label: 'Short description',
+              hint: 'One or two lines about the livestock.',
+              validator: validateOptionalShortText,
+              serverErrors: state.validationErrors['short_description'],
+              maxLines: 2,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _TextField(
+              controller: _additionalNotes,
+              label: 'Additional notes',
+              hint: 'Anything a buyer should know.',
+              validator: validateAdditionalNotes,
+              serverErrors: state.validationErrors['additional_notes'],
+              maxLines: 4,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewStep(SellerListingState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _Intro(
+          isEditing: _isEditing,
+          actionMessage: state.actionMessage,
+          actionError: state.actionErrorMessage,
+          conflictMessage: state.conflictMessage,
+          serverErrors: state.validationErrors,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SectionCard(
+          title: 'Summary',
+          children: <Widget>[
+            _ReviewRow(label: 'Type', value: _livestockType.text),
+            if (_breed.text.isNotEmpty)
+              _ReviewRow(label: 'Breed', value: _breed.text),
+            if (_ageValue.text.isNotEmpty && _ageUnit != null)
+              _ReviewRow(
+                label: 'Age',
+                value: '${_ageValue.text} ${_ageUnit!}',
+              ),
+            if (_gender != null)
+              _ReviewRow(label: 'Gender', value: _gender!),
+            if (_weightValue.text.isNotEmpty && _weightUnit != null)
+              _ReviewRow(
+                label: 'Weight',
+                value: '${_weightValue.text} ${_weightUnit!}',
+              ),
+            _ReviewRow(label: 'Quantity', value: _quantity.text),
+            _ReviewRow(label: 'Asking price', value: '₱ ${_askingPrice.text}'),
+            _ReviewRow(label: 'Location', value: _location.text),
+            if (_healthStatus.text.isNotEmpty)
+              _ReviewRow(label: 'Health', value: _healthStatus.text),
+            if (_vaccination.text.isNotEmpty)
+              _ReviewRow(label: 'Vaccination', value: _vaccination.text),
+            if (_shortDescription.text.isNotEmpty)
+              _ReviewRow(
+                label: 'Description',
+                value: _shortDescription.text,
+              ),
+            if (_additionalNotes.text.isNotEmpty)
+              _ReviewRow(label: 'Notes', value: _additionalNotes.text),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _PhotoNotAvailableNote(
+          hasPhotos: widget.listing?.photos.isNotEmpty ?? false,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          _isEditing
+              ? 'Saving keeps this listing in its current status.'
+              : 'Saved as a draft. Only you can see it until you submit it for '
+                    'review.',
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }
@@ -623,6 +746,43 @@ class _Dropdown<T> extends StatelessWidget {
         errorText: serverError,
       ),
       validator: validator,
+    );
+  }
+}
+
+/// A read-only label-value pair for the review step.
+class _ReviewRow extends StatelessWidget {
+  const _ReviewRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

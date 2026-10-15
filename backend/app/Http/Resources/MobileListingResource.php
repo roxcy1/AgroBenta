@@ -46,6 +46,7 @@ class MobileListingResource extends JsonResource
             'additional_notes' => $this->additional_notes,
             'photos' => $this->photoUrls(),
             'status' => $this->status?->value,
+            'admin_note' => $this->admin_note,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

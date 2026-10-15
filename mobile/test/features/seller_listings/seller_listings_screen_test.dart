@@ -22,7 +22,7 @@ void main() {
       ),
     );
 
-    expect(find.text('No listings yet'), findsOneWidget);
+    expect(find.text('No listings yet — Create your first listing'), findsOneWidget);
     expect(
       find.widgetWithText(FilledButton, 'Create a listing'),
       findsOneWidget,
@@ -81,7 +81,10 @@ void main() {
       await sellerListingsSettle(tester, frames: 20);
 
       expect(find.text('No listings match'), findsOneWidget);
-      expect(find.text('No listings yet'), findsNothing);
+      expect(
+        find.text('No listings yet — Create your first listing'),
+        findsNothing,
+      );
     },
   );
 

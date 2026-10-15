@@ -13,7 +13,10 @@ import '../../support/seller_listing_fakes.dart';
 /// newer one.
 void main() {
   group('availability mirrors', () {
-    test('canEdit covers draft and active only', () {
+    test('canEdit covers draft and active', () {
+      // The backend's EDITABLE_STATUSES are [Draft, Active]: a draft is
+      // unfinished work the seller may keep changing, an active listing is
+      // live but still editable. Everything else is read-only to the seller.
       expect(_canEdit(ListingStatus.draft), isTrue);
       expect(_canEdit(ListingStatus.active), isTrue);
       expect(_canEdit(ListingStatus.pending), isFalse);
@@ -158,6 +161,73 @@ void main() {
       expect(harness.recorded, hasLength(after));
     });
 
+
+  group('active tab inactive tail', () {
+    test(
+      'the active tab appends page 1 of inactive below the active rows',
+      () async {
+        final harness = buildRecordedController((
+          RecordedRequest request,
+        ) async {
+          if (request.query['status'] == 'inactive') {
+            return sellerListingListResponse(
+              listings: <Map<String, dynamic>>[
+                listingJson(id: 9, status: 'inactive'),
+              ],
+              total: 1,
+            );
+          }
+          return sellerListingListResponse(
+            listings: <Map<String, dynamic>>[
+              listingJson(id: 1, status: 'active'),
+            ],
+            total: 1,
+          );
+        });
+        addTearDown(harness.controller.dispose);
+
+        await harness.controller.applyStatusFilter(ListingStatus.active);
+
+        final List<Listing> listings = harness.controller.state.listings;
+        expect(
+          listings.map((Listing listing) => listing.id).toList(),
+          <int>[1, 9],
+        );
+        expect(
+          listings.map((Listing listing) => listing.status).toList(),
+          <ListingStatus>[ListingStatus.active, ListingStatus.inactive],
+        );
+      },
+    );
+
+    test('other tabs do not fetch the inactive tail', () async {
+      final harness = buildRecordedController(
+        (RecordedRequest request) async => sellerListingListResponse(),
+      );
+      addTearDown(harness.controller.dispose);
+
+      await harness.controller.applyStatusFilter(ListingStatus.pending);
+
+      expect(harness.recorded, hasLength(1));
+      expect(harness.recorded.single.query['status'], 'pending');
+    });
+
+    test('a search on the active tab does not fetch the inactive tail', ()
+    async {
+      final harness = buildRecordedController(
+        (RecordedRequest request) async => sellerListingListResponse(),
+      );
+      addTearDown(harness.controller.dispose);
+
+      await harness.controller.applyStatusFilter(ListingStatus.active);
+      final int afterFilter = harness.recorded.length;
+      harness.controller.updateSearch('goat');
+      await harness.controller.submitSearch();
+
+      expect(harness.recorded, hasLength(afterFilter + 1));
+      expect(harness.recorded.last.query['status'], 'active');
+    });
+  });
     test('clearing the query drops both the filter and the search', () async {
       final harness = buildRecordedController(
         (RecordedRequest request) async => sellerListingListResponse(),
