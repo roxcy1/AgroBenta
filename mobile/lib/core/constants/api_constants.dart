@@ -168,6 +168,20 @@ abstract final class SellerListingEndpoints {
   /// deactivation: nothing here takes a live listing out of sale.
   static String destroy(int id) => '/seller/listings/$id';
 
+  /// `POST` — upload photos to a listing the caller owns. 201.
+  ///
+  /// [id] is appended. Multipart `photos[]` field; max 10 files per request and
+  /// a cumulative per-listing ceiling enforced server-side (422). Permitted only
+  /// while the listing is `draft` or `active`.
+  static String photos(int id) => '/seller/listings/$id/photos';
+
+  /// `DELETE` — remove one photo from a listing the caller owns. 200.
+  ///
+  /// [id] is appended. The photo is named by the value the client was served
+  /// (URL or bare filename both work) and sent as the `photo` field. 404 when
+  /// the named photo is not on the listing.
+  static String deletePhoto(int id) => '/seller/listings/$id/photos';
+
   /// The field names the create and update requests may contain.
   ///
   /// Listed as an explicit allow-list, and used by `SellerListingService` to

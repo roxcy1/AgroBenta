@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
+import '../state/listing_photo_item.dart';
 import '../state/seller_listing_controller.dart';
 import '../state/seller_listing_draft.dart';
 import '../state/seller_listing_scope.dart';
 import '../state/seller_listing_state.dart';
+import '../widgets/listing_photo_grid.dart';
 import 'seller_listing_views.dart';
 import 'seller_listing_validators.dart';
 import '../../../widgets/section_card.dart';
@@ -114,6 +117,20 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       _shortDescription.text = draft.shortDescription;
       _additionalNotes.text = draft.additionalNotes;
     }
+
+    // Seed the photo composer from the server-served URLs when editing, or
+    // leave it empty for a new draft. Photos upload once the listing exists.
+    //
+    // Deferred to a post-frame callback: startPhotoComposer notifies the
+    // controller's listeners, and notifying during this build (initState)
+    // throws "setState() or markNeedsBuild() called during build".
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _controller.startPhotoComposer(
+        widget.listing?.id,
+        widget.listing?.photos ?? const <String>[],
+      );
+    });
   }
 
   @override
@@ -169,8 +186,17 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     setState(() => _submitting = false);
 
     if (saved != null) {
+      // Upload any locally-picked photos that were not yet stored. The server
+      // returns the whole listing, so the composer is rebuilt from served URLs
+      // and client and server agree.
+      final bool hasPending = _controller.photos.any(
+        (ListingPhotoItem p) => p.status == ListingPhotoStatus.pending,
+      );
+      if (hasPending) {
+        await _controller.uploadComposerPhotos(saved.id);
+      }
       // The caller needs the record it just wrote, to open or refresh with.
-      Navigator.of(context).pop(saved);
+      if (mounted) Navigator.of(context).pop(saved);
     }
   }
 
@@ -411,6 +437,13 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.md),
+        SectionCard(
+          title: 'Photos',
+          children: <Widget>[
+            ListingPhotoGrid(),
+          ],
+        ),
       ],
     );
   }
@@ -562,10 +595,6 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        _PhotoNotAvailableNote(
-          hasPhotos: widget.listing?.photos.isNotEmpty ?? false,
-        ),
-        const SizedBox(height: AppSpacing.sm),
         Text(
           _isEditing
               ? 'Saving keeps this listing in its current status.'
@@ -787,50 +816,3 @@ class _ReviewRow extends StatelessWidget {
   }
 }
 
-/// Why there is no photo control.
-///
-/// Stated rather than omitted silently: a seller filling in a listing form
-/// expects photos, and an unexplained absence reads as a bug in the app. The
-/// truth is that the backend has no upload endpoint and no agreed storage URL
-/// scheme (D-10 / GAP-06), so a picker here could only either send something the
-/// server cannot store or invent a contract nobody agreed to.
-class _PhotoNotAvailableNote extends StatelessWidget {
-  const _PhotoNotAvailableNote({required this.hasPhotos});
-
-  final bool hasPhotos;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Icon(
-            Icons.image_outlined,
-            size: 18,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(
-              hasPhotos
-                  ? 'Photos cannot be added or changed from the app yet. This '
-                        'listing keeps the photos already on record.'
-                  : 'Photos cannot be added from the app yet — photo upload is '
-                        'not available. The listing will show a placeholder image.',
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

@@ -16,7 +16,7 @@ import '../../transactions/widgets/buy_sheet.dart';
 import '../state/listing_detail_controller.dart';
 import '../state/listing_detail_state.dart';
 import '../state/marketplace_scope.dart';
-import '../widgets/listing_photo.dart';
+import '../widgets/listing_photo_carousel.dart';
 import '../widgets/marketplace_state_views.dart';
 
 /// One listing's detail, from `GET /listings/{listing}`.
@@ -131,7 +131,7 @@ class _DetailContent extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
       children: <Widget>[
-        SizedBox(height: 220, child: ListingPhoto(listing: listing)),
+        ListingPhotoCarousel(listing: listing),
         Padding(
           padding: const EdgeInsets.all(AppSpacing.screenGutter),
           child: Column(
