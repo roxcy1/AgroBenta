@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\ActivityController;
-use App\Http\Controllers\Api\Admin\AuthController;
+use App\Http\Controllers\Api\Admin\AuthController; 
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\ListingController;
 use App\Http\Controllers\Api\Admin\ReportsController;
@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
+use App\Http\Controllers\Api\Messaging\ConversationController;
+use App\Http\Controllers\Api\Messaging\MessageController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
@@ -128,6 +130,30 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('profile')->group(fu
     Route::get('/', [ProfileController::class, 'show']);
     Route::put('/', [ProfileController::class, 'update']);
     Route::put('/password', [ProfileController::class, 'changePassword']);
+});
+
+// Messaging — the caller's own conversations and messages.
+//
+// A "conversation" is derived, not stored: it is the pair
+// (counterpart_id, listing_id) over the messages that touch the caller. That
+// is why there is no `/conversations/{id}` route — an id would require a row
+// that does not exist.
+//
+// `/conversations/{userId}/messages` is the thread with a counterpart;
+// `/conversations/{userId}/read` flips the caller's unread messages in that
+// thread. `/messages` is where a new message is sent, because the receiver is
+// a body field, not a route segment: the caller can start a thread with
+// anybody, including a user they have never messaged before.
+Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    Route::get('/conversations', [ConversationController::class, 'index']);
+    Route::post('/conversations/{userId}/read', [ConversationController::class, 'markRead'])
+        ->whereNumber('userId');
+
+    Route::get('/conversations/{userId}/messages', [MessageController::class, 'index'])
+        ->whereNumber('userId');
+    Route::post('/messages', [MessageController::class, 'store']);
+    Route::patch('/messages/{id}/read', [MessageController::class, 'markRead'])
+        ->whereNumber('id');
 });
 
 // Notifications — the caller's own notification feed.
