@@ -283,6 +283,51 @@ abstract final class TransactionEndpoints {
   static const int maxPerPage = 50;
 }
 
+/// Messaging endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `conversations` and `messages` prefixes. Every one requires a
+/// `mobile`-ability Sanctum token and resolves the caller from that token —
+/// no path takes a user id as proof of identity.
+///
+/// ## Why there is no `conversation_id`
+///
+/// There is no `conversations` table. A conversation is derived from the set
+/// of messages that touch the caller, identified by the pair
+/// `(counterpart_id, listing_id)`. So the paths are built on the *counterpart*
+/// id, never on a conversation id — the id the mobile client knows is the
+/// user it wants to talk to, not a row that does not exist.
+abstract final class MessagingEndpoints {
+  /// `GET` — the caller's inbox. 200, plain envelope.
+  static const String conversations = '/conversations';
+
+  /// `GET` — the thread with one counterpart. 200, paginated.
+  static String thread(int counterpartId) =>
+      '/conversations/$counterpartId/messages';
+
+  /// `POST` — mark every unread message from a counterpart as read. 200.
+  static String markRead(int counterpartId) =>
+      '/conversations/$counterpartId/read';
+
+  /// `POST` — send a message. 201, plain envelope.
+  ///
+  /// The receiver id is in the body, not the path: the caller can start a
+  /// thread with anybody, including a user they have never messaged before.
+  static const String send = '/messages';
+
+  /// `PATCH` — mark one message as read. 200, plain envelope.
+  static String markOneRead(int messageId) => '/messages/$messageId/read';
+
+  /// Page size used when the caller does not ask for a specific one.
+  ///
+  /// Matches the server default the thread endpoint uses when `per_page` is
+  /// absent.
+  static const int defaultPerPage = 30;
+
+  /// Largest page the server will serve (`between:1,50`).
+  static const int maxPerPage = 50;
+}
+
 /// Profile endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the
