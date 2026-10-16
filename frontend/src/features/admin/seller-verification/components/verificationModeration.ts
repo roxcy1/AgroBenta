@@ -37,6 +37,19 @@ export const VERIFICATION_TABS: readonly VerificationTab[] = [
 ];
 
 /**
+ * Resolve a `?status=` deep-link value to the tab the page should open on.
+ *
+ * Unknown or absent values fall back to the default `submitted` tab, so a
+ * stale or hand-edited link can never put the page in a state it cannot render.
+ * Kept here, beside the tab list, so the URL contract and the tabs cannot drift.
+ */
+export function resolveStatusTab(value: string | null | undefined): VerificationStatus {
+  const known = VERIFICATION_TABS.find((tab) => tab.value === value);
+
+  return known ? known.value : 'submitted';
+}
+
+/**
  * The two in-flight states. A verification in either may be reviewed; anything
  * else is already decided and the server answers 409 rather than re-review it.
  */

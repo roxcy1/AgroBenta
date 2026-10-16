@@ -7,7 +7,12 @@ import {
   useSellerVerifications,
 } from '../api/useSellerVerifications';
 import type { VerificationActionConfig, VerificationStatus } from './verificationModeration';
-import { VERIFICATION_TABS, statusLabel, verificationActionsFor } from './verificationModeration';
+import {
+  VERIFICATION_TABS,
+  resolveStatusTab,
+  statusLabel,
+  verificationActionsFor,
+} from './verificationModeration';
 import VerificationDetailsDialog from './VerificationDetailsDialog';
 import VerificationReviewDialog from './VerificationReviewDialog';
 
@@ -23,7 +28,10 @@ function formatDate(dateString: string | null): string {
 }
 
 export function SellerVerificationTab() {
-  const [activeStatus, setActiveStatus] = useState<VerificationStatus>('submitted');
+  const [searchParams] = useSearchParams();
+  const [activeStatus, setActiveStatus] = useState<VerificationStatus>(() =>
+    resolveStatusTab(searchParams.get('status')),
+  );
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
@@ -32,7 +40,6 @@ export function SellerVerificationTab() {
     verification: SellerVerification;
     action: VerificationActionConfig;
   } | null>(null);
-  const [searchParams] = useSearchParams();
   const linkedVerificationId = parsePositiveInt(searchParams.get('verification'));
   const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
 

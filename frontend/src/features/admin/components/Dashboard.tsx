@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeftRight,
@@ -31,7 +30,6 @@ import { TopNavBar } from './TopNavBar';
 const PIE_COLORS = ['#1B5E20', '#2E7D32', '#4CAF50', '#66BB6A', '#81C784', '#A5D6A7', '#C8E6C9'];
 
 export function Dashboard() {
-  const [search, setSearch] = useState('');
   const { data, isLoading, error, refetch } = useDashboard();
   const {
     data: reportsData,
@@ -43,7 +41,7 @@ export function Dashboard() {
   if (isLoading) {
     return (
       <>
-        <TopNavBar search={search} onSearchChange={setSearch} />
+        <TopNavBar />
         <div className="dashboard-content">
           <div className="dashboard-loading">
             <div className="loading-spinner" />
@@ -57,7 +55,7 @@ export function Dashboard() {
   if (error) {
     return (
       <>
-        <TopNavBar search={search} onSearchChange={setSearch} />
+        <TopNavBar />
         <div className="dashboard-content">
           <div className="dashboard-error">
             <p className="dashboard-error-text">Failed to load dashboard data.</p>
@@ -73,7 +71,7 @@ export function Dashboard() {
   if (!data) {
     return (
       <>
-        <TopNavBar search={search} onSearchChange={setSearch} />
+        <TopNavBar />
         <div className="dashboard-content">
           <div className="dashboard-empty">
             <p>No dashboard data available.</p>
@@ -119,7 +117,7 @@ export function Dashboard() {
 
   return (
     <>
-      <TopNavBar search={search} onSearchChange={setSearch} />
+      <TopNavBar />
 
       <div className="dashboard-content">
         <div className="dashboard-welcome">
@@ -160,7 +158,7 @@ export function Dashboard() {
           </div>
 
           <Link
-            to="/seller-verification"
+            to="/seller-verification?status=pending_review"
             className="dashboard-stat-card dashboard-stat-card--pending dashboard-stat-card--link"
           >
             <div className="dashboard-stat-icon dashboard-stat-icon--pending">
@@ -327,7 +325,7 @@ export function Dashboard() {
             <Link to="/livestock" className="dashboard-view-all">View all</Link>
           </div>
 
-          <RecentListingsTable listings={recent_listings} filter={search} />
+          <RecentListingsTable listings={recent_listings} />
         </div>
 
         <div className="dashboard-section">
@@ -340,7 +338,7 @@ export function Dashboard() {
             processed by AgroBenta.
           </p>
 
-          <RecentTransactionsTable transactions={recent_transactions} filter={search} />
+          <RecentTransactionsTable transactions={recent_transactions} />
         </div>
 
         <div className="dashboard-section">

@@ -3,34 +3,13 @@ import { formatCurrency, formatDate } from './dashboardFormat';
 
 interface RecentTransactionsTableProps {
   transactions: DashboardRecentTransaction[];
-  filter?: string;
 }
 
-function matchesFilter(transaction: DashboardRecentTransaction, filter: string): boolean {
-  const query = filter.trim().toLowerCase();
-  if (!query) return true;
-  const livestock = transaction.listing
-    ? `${transaction.listing.livestock_type} ${transaction.listing.breed}`.toLowerCase()
-    : '';
-  return (
-    String(transaction.id).toLowerCase().includes(query) ||
-    `#${transaction.id}`.toLowerCase().includes(query) ||
-    (transaction.buyer?.name ?? '').toLowerCase().includes(query) ||
-    (transaction.seller?.name ?? '').toLowerCase().includes(query) ||
-    livestock.includes(query)
-  );
-}
-
-export function RecentTransactionsTable({
-  transactions,
-  filter = '',
-}: RecentTransactionsTableProps) {
-  const visible = transactions.filter((transaction) => matchesFilter(transaction, filter));
-
-  if (visible.length === 0) {
+export function RecentTransactionsTable({ transactions }: RecentTransactionsTableProps) {
+  if (transactions.length === 0) {
     return (
       <div className="dashboard-empty-state">
-        <p>{filter ? 'No transactions match your search.' : 'No transactions available yet.'}</p>
+        <p>No transactions available yet.</p>
       </div>
     );
   }
@@ -50,7 +29,7 @@ export function RecentTransactionsTable({
           </tr>
         </thead>
         <tbody>
-          {visible.map((transaction) => (
+          {transactions.map((transaction) => (
             <tr key={transaction.id}>
               <td className="lv-name-cell">#{transaction.id}</td>
               <td className="lv-seller-cell">{transaction.buyer?.name ?? '—'}</td>

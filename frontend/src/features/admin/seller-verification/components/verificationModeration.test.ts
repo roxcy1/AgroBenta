@@ -4,6 +4,7 @@ import {
   VERIFICATION_POLL_INTERVAL_MS,
   VERIFICATION_TABS,
   isOpenStatus,
+  resolveStatusTab,
   statusLabel,
   verificationActionsFor,
   verificationErrorMessage,
@@ -29,6 +30,25 @@ describe('VERIFICATION_TABS', () => {
   it('has no duplicate tab', () => {
     const values = VERIFICATION_TABS.map((tab) => tab.value);
     expect(new Set(values).size).toBe(values.length);
+  });
+});
+
+describe('resolveStatusTab', () => {
+  it('resolves every known tab value to itself', () => {
+    for (const tab of VERIFICATION_TABS) {
+      expect(resolveStatusTab(tab.value)).toBe(tab.value);
+    }
+  });
+
+  it('resolves the deep-link target used by the dashboard card', () => {
+    expect(resolveStatusTab('pending_review')).toBe('pending_review');
+  });
+
+  it('falls back to the default tab for an unknown, empty, or absent value', () => {
+    expect(resolveStatusTab('archived')).toBe('submitted');
+    expect(resolveStatusTab('')).toBe('submitted');
+    expect(resolveStatusTab(null)).toBe('submitted');
+    expect(resolveStatusTab(undefined)).toBe('submitted');
   });
 });
 

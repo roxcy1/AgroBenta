@@ -90,3 +90,43 @@ export function useAdminUser(id: number | null) {
     retry: 0,
   });
 }
+
+export interface UserStatusCounts {
+  total: number;
+  buyers: number;
+  sellers: number;
+  admins: number;
+}
+
+/**
+ * Aggregate user counts for the summary cards.
+ *
+ * There is no counting endpoint, and one is not needed: `GET /admin/users`
+ * already reports `pagination.total` for the query it ran, which is the server's
+ * `count(*)`, not the size of the page it returned. Asking it once per segment
+ * with `per_page=1` therefore yields exact totals without a new backend surface.
+ *
+ * All four requests share one query key, so the cards have a single loading
+ * state and any later `['admin', 'users']` invalidation refreshes them too.
+ */
+export function useUserCounts() {
+  return useQuery({
+    queryKey: ['admin', 'users', 'counts'],
+    queryFn: async (): Promise<UserStatusCounts> => {
+      const [all, buyers, sellers, admins] = await Promise.all([
+        fetchUsers({ per_page: 1 }),
+        fetchUsers({ seller_capability: 'buyer', per_page: 1 }),
+        fetchUsers({ seller_capability: 'seller', per_page: 1 }),
+        fetchUsers({ role: 'admin', per_page: 1 }),
+      ]);
+
+      return {
+        total: all.pagination.total,
+        buyers: buyers.pagination.total,
+        sellers: sellers.pagination.total,
+        admins: admins.pagination.total,
+      };
+    },
+    staleTime: 30_000,
+  });
+}

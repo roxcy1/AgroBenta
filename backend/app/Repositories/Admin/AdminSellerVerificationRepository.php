@@ -35,6 +35,21 @@ class AdminSellerVerificationRepository
     }
 
     /**
+     * Count each applicant's most recent record that is in the given status.
+     *
+     * Applies the same latest-per-applicant narrowing as the list, so the count
+     * agrees with the tab totals rather than counting superseded submissions.
+     */
+    public function countLatestByStatus(SellerVerificationStatus $status): int
+    {
+        $query = SellerVerification::query()->where('status', $status);
+
+        $this->onlyLatestPerUser($query);
+
+        return $query->count();
+    }
+
+    /**
      * Resolve the applicant's most recent record. A record is "most recent"
      * when it scores highest on `submitted_at desc, id desc`.
      */
