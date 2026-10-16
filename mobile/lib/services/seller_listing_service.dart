@@ -1,3 +1,6 @@
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../models/listing.dart';
@@ -180,6 +183,81 @@ class SellerListingService {
     throw FormatException(
       'Expected the $context response data to be a JSON object, got '
       '${data.runtimeType}.',
+    );
+  }
+
+  /// `POST /seller/listings/{id}/photos` — upload photos to a listing.
+  ///
+  /// [files] are the photos the seller picked. The request is `multipart/form-data`
+  /// and [onProgress] reports aggregate bytes sent so the UI can show an upload
+  /// indicator. The server returns the stored listing, whose `photos` holds the
+  /// newly-served absolute URLs.
+  ///
+  /// Throws [ApiException]:
+  ///  * `validation` on a `422` — the per-request or cumulative photo limit was
+  ///    exceeded, or a file failed the mime/size rules.
+  ///  * `conflict` on a `409` — the listing is not `draft` or `active`.
+  Future<Listing> uploadPhotos({
+    required int listingId,
+    required List<XFile> files,
+    required void Function(int sent, int total) onProgress,
+  }) async {
+    int totalBytes = 0;
+    for (final XFile file in files) {
+      totalBytes += await file.length();
+    }
+    int sentBytes = 0;
+
+    final List<http.MultipartFile> parts = <http.MultipartFile>[];
+    for (final XFile file in files) {
+      parts.add(
+        http.MultipartFile(
+          'photos',
+          _wrapWithProgress(file.openRead(), (int chunk) {
+            sentBytes += chunk;
+            onProgress(sentBytes, totalBytes);
+          }),
+          await file.length(),
+          filename: file.name,
+        ),
+      );
+    }
+
+    return _apiClient.postMultipart<Listing>(
+      path: SellerListingEndpoints.photos(listingId),
+      files: parts,
+      parse: (Object? data) =>
+          Listing.fromJson(_asObject(data, 'POST /seller/listings/$listingId/photos')),
+    );
+  }
+
+  /// Wraps [stream] so each emitted chunk is reported to [onBytes] before being
+  /// forwarded, letting callers track upload progress.
+  static Stream<List<int>> _wrapWithProgress(
+    Stream<List<int>> stream,
+    void Function(int bytes) onBytes,
+  ) async* {
+    await for (final List<int> chunk in stream) {
+      onBytes(chunk.length);
+      yield chunk;
+    }
+  }
+
+  /// `DELETE /seller/listings/{id}/photos` — remove one photo by the value the
+  /// client was served (URL or bare filename both work; never by index).
+  ///
+  /// Throws [ApiException]:
+  ///  * `notFound` on a `404` — the named photo is not on the listing.
+  ///  * `conflict` on a `409` — the listing is not `draft` or `active`.
+  Future<Listing> removePhoto({
+    required int listingId,
+    required String photo,
+  }) {
+    return _apiClient.delete<Listing>(
+      SellerListingEndpoints.deletePhoto(listingId),
+      query: <String, dynamic>{'photo': photo},
+      parse: (Object? data) =>
+          Listing.fromJson(_asObject(data, 'DELETE /seller/listings/$listingId/photos')),
     );
   }
 }

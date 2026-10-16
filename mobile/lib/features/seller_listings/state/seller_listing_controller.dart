@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../models/listing.dart';
 import '../../../models/marketplace_page.dart';
 import '../../../repositories/seller_listing_repository.dart';
+import 'listing_photo_item.dart';
 import 'seller_listing_draft.dart';
 import 'seller_listing_state.dart';
 
@@ -48,10 +50,18 @@ class SellerListingController extends ChangeNotifier {
   /// How long typing must pause before the list is re-queried.
   static const Duration searchDebounce = Duration(milliseconds: 350);
 
+  /// Client-side ceiling matching the server's `Listing::PHOTO_LIMIT` / the
+  /// `listing.max_photos` setting (default 10), so the seller can never reach a
+  /// state `POST /seller/listings/{id}/photos` rejects with a 422.
+  static const int maxListingPhotos = 10;
+
   final SellerListingRepository _repository;
 
   SellerListingState _state = const SellerListingState();
   SellerListingState get state => _state;
+
+  /// The photo composer for the listing being created or edited.
+  List<ListingPhotoItem> get photos => _state.photos;
 
   Timer? _searchDebounce;
   bool _disposed = false;
@@ -415,6 +425,214 @@ class SellerListingController extends ChangeNotifier {
         ),
       );
       return false;
+    }
+  }
+
+  /// Starts the photo composer for the listing being created or edited.
+  ///
+  /// [listingId] is `null` for a new draft: its photos can only be uploaded
+  /// once the draft exists and has an id. [existingUrls] are the absolute URLs
+  /// the server already serves for an existing listing, shown as uploaded
+  /// items. The list order is the display order.
+  void startPhotoComposer(int? listingId, List<String> existingUrls) {
+    if (_state.isActioning) return;
+    _set(_state.copyWith(
+      actionListingId: listingId,
+      photos: existingUrls
+          .map((String url) => ListingPhotoItem.uploaded(url))
+          .toList(growable: false),
+    ));
+  }
+
+  /// Whether the composer can accept another photo, mirroring the server's
+  /// 10-photo ceiling so the add affordance disables at the limit.
+  bool get canAddPhoto => _state.photos.length < maxListingPhotos;
+
+  /// Appends picked photos to the composer, capped at [maxListingPhotos].
+  void addPickedPhotos(List<XFile> picked) {
+    if (_state.isActioning) return;
+    final int room = maxListingPhotos - _state.photos.length;
+    if (room <= 0) return;
+    final List<XFile> toAdd = picked.take(room).toList(growable: false);
+    _set(_state.copyWith(
+      photos: <ListingPhotoItem>[
+        ..._state.photos,
+        ...ListingPhotoItem.fromPicked(toAdd),
+      ],
+    ));
+  }
+
+  /// Removes one item from the composer by id.
+  ///
+  /// An uploaded photo is deleted from the server by the value it was served
+  /// (never by index). A locally-picked photo that was never uploaded is
+  /// dropped locally. Removal is optimistic and reverted if the server refuses.
+  Future<void> removePhotoItem(String itemId) async {
+    int itemIndex = -1;
+    ListingPhotoItem? item;
+    for (int i = 0; i < _state.photos.length; i++) {
+      if (_state.photos[i].id == itemId) {
+        itemIndex = i;
+        item = _state.photos[i];
+        break;
+      }
+    }
+    if (item == null) return;
+
+    final bool wasUploaded = item.status == ListingPhotoStatus.uploaded;
+
+    _set(_state.copyWith(
+      photos: _state.photos
+          .where((ListingPhotoItem p) => p.id != itemId)
+          .toList(growable: false),
+    ));
+
+    if (!wasUploaded || item.deleteValue == null) {
+      return;
+    }
+
+    final int? listingId = _state.actionListingId;
+    if (listingId == null) return;
+
+    try {
+      await _repository.removePhoto(
+        listingId: listingId,
+        photo: item.deleteValue!,
+      );
+      if (_disposed) return;
+    } on ApiException catch (error) {
+      if (_disposed) return;
+      final List<ListingPhotoItem> photos = List.of(_state.photos)
+        ..insert(itemIndex, item);
+      _set(_state.copyWith(photos: photos));
+      _failAction(error);
+    } on Object {
+      if (_disposed) return;
+      final List<ListingPhotoItem> photos = List.of(_state.photos)
+        ..insert(itemIndex, item);
+      _set(_state.copyWith(
+        photos: photos,
+        actionErrorMessage: 'Something went wrong. Please try again.',
+      ));
+    }
+  }
+
+  /// Reorders two items in the composer by index.
+  ///
+  /// This is client-side only for this phase: there is no photo-reorder
+  /// endpoint, so the new order is reflected on screen immediately but is not
+  /// persisted to the server until a future phase adds one. New uploads still
+  /// append to the stored set server-side in the order they are sent.
+  void reorderPhotos(int oldIndex, int newIndex) {
+    if (_state.isActioning) return;
+    if (oldIndex < 0 || oldIndex >= _state.photos.length) return;
+    if (newIndex < 0 || newIndex >= _state.photos.length) return;
+    if (oldIndex == newIndex) return;
+    final List<ListingPhotoItem> photos = List.of(_state.photos);
+    final ListingPhotoItem moved = photos.removeAt(oldIndex);
+    photos.insert(newIndex, moved);
+    _set(_state.copyWith(photos: photos));
+  }
+
+  /// Uploads every locally-picked photo for the listing being edited.
+  ///
+  /// Files are sent in one `multipart/form-data` request as the `photos` array,
+  /// in composer order. Each pending item shows an upload indicator while the
+  /// request is in flight. On success the composer is rebuilt from the URLs the
+  /// server served, so client and server agree. On failure the pending items
+  /// are marked `failed` and can be retried.
+  Future<void> uploadComposerPhotos(int listingId) async {
+    if (_state.isActioning) return;
+    final List<ListingPhotoItem> pending = _state.photos
+        .where((ListingPhotoItem p) => p.status == ListingPhotoStatus.pending)
+        .toList(growable: false);
+    if (pending.isEmpty) return;
+
+    _beginAction(SellerListingAction.uploadingPhotos, listingId: listingId);
+
+    try {
+      final List<XFile> files = pending
+          .map((ListingPhotoItem item) => item.file!)
+          .toList(growable: false);
+
+      final Listing updated = await _repository.uploadPhotos(
+        listingId: listingId,
+        files: files,
+        onProgress: (int sent, int total) {
+          if (_disposed) return;
+          final double progress = total == 0 ? 0.0 : sent / total;
+          _set(_state.copyWith(
+            photos: _state.photos
+                .map((ListingPhotoItem p) {
+                  if (p.status != ListingPhotoStatus.pending) {
+                    return p;
+                  }
+                  return ListingPhotoItem(
+                    id: p.id,
+                    status: ListingPhotoStatus.uploading,
+                    file: p.file,
+                    url: p.url,
+                    progress: progress,
+                    error: p.error,
+                  );
+                })
+                .toList(growable: false),
+          ));
+        },
+      );
+
+      if (_disposed) return;
+      _endAction(message: 'Photos uploaded.');
+      _set(_state.copyWith(
+        actionListingId: listingId,
+        photos: updated.photos
+            .map((String url) => ListingPhotoItem.uploaded(url))
+            .toList(growable: false),
+      ));
+    } on ApiException catch (error) {
+      if (_disposed) return;
+      _set(_state.copyWith(
+        photos: _state.photos
+            .map((ListingPhotoItem p) {
+              if (p.status == ListingPhotoStatus.pending ||
+                  p.status == ListingPhotoStatus.uploading) {
+                return ListingPhotoItem(
+                  id: p.id,
+                  status: ListingPhotoStatus.failed,
+                  file: p.file,
+                  url: p.url,
+                  progress: null,
+                  error: error.message,
+                );
+              }
+              return p;
+            })
+            .toList(growable: false),
+      ));
+      _failAction(error);
+    } on Object {
+      if (_disposed) return;
+      _set(_state.copyWith(
+        photos: _state.photos
+            .map((ListingPhotoItem p) {
+              if (p.status == ListingPhotoStatus.pending ||
+                  p.status == ListingPhotoStatus.uploading) {
+                return ListingPhotoItem(
+                  id: p.id,
+                  status: ListingPhotoStatus.failed,
+                  file: p.file,
+                  url: p.url,
+                  progress: null,
+                  error: 'Upload failed. Please try again.',
+                );
+              }
+              return p;
+            })
+            .toList(growable: false),
+        action: SellerListingAction.none,
+        clearActionListingId: true,
+        actionErrorMessage: 'Something went wrong. Please try again.',
+      ));
     }
   }
 

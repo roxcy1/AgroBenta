@@ -62,29 +62,32 @@ class ListingPhoto extends StatelessWidget {
       width: width,
       child: url == null
           ? _Placeholder(hasPhotos: listing.photos.isNotEmpty)
-          : Image.network(
-              url,
-              fit: BoxFit.cover,
-              height: height,
-              width: width,
-              // A failed load must not leave a broken-image glyph. Falling back
-              // to the same placeholder is indistinguishable from "no photo",
-              // which is the truth from the buyer's point of view.
-              errorBuilder:
-                  (BuildContext context, Object error, StackTrace? _) =>
-                      _Placeholder(hasPhotos: true),
-              loadingBuilder:
-                  (
-                    BuildContext context,
-                    Widget child,
-                    ImageChunkEvent? progress,
-                  ) => progress == null
-                  ? child
-                  : _Placeholder(hasPhotos: true, showSpinner: true),
-              // A decorative, redundant image: the livestock type and breed are
-              // already rendered as text beside it, so announcing the picture
-              // too would just repeat them to a screen reader.
-              excludeFromSemantics: true,
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Image.network(
+                url,
+                fit: BoxFit.cover,
+                height: height,
+                width: width,
+                // A failed load must not leave a broken-image glyph. Falling back
+                // to the same placeholder is indistinguishable from "no photo",
+                // which is the truth from the buyer's point of view.
+                errorBuilder:
+                    (BuildContext context, Object error, StackTrace? _) =>
+                        _Placeholder(hasPhotos: true),
+                loadingBuilder:
+                    (
+                      BuildContext context,
+                      Widget child,
+                      ImageChunkEvent? progress,
+                    ) => progress == null
+                    ? child
+                    : _Placeholder(hasPhotos: true, showSpinner: true),
+                // A decorative, redundant image: the livestock type and breed are
+                // already rendered as text beside it, so announcing the picture
+                // too would just repeat them to a screen reader.
+                excludeFromSemantics: true,
+              ),
             ),
     );
   }

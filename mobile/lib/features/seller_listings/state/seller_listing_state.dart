@@ -1,5 +1,6 @@
 import '../../../models/listing.dart';
 import '../../../models/pagination.dart';
+import 'listing_photo_item.dart';
 
 /// Where the seller listing list is in its lifecycle.
 ///
@@ -56,6 +57,9 @@ enum SellerListingAction {
 
   /// `DELETE /seller/listings/{id}`.
   deleting,
+
+  /// `POST /seller/listings/{id}/photos`. Upload photos to a listing.
+  uploadingPhotos,
 }
 
 /// An immutable snapshot of everything the seller listing screens render from.
@@ -78,12 +82,19 @@ class SellerListingState {
     this.actionErrorMessage,
     this.conflictMessage,
     this.validationErrors = const <String, List<String>>{},
+    this.photos = const <ListingPhotoItem>[],
   });
 
   final SellerListingStatus status;
 
   /// Every listing loaded so far, in server order. Accumulates across pages.
   final List<Listing> listings;
+
+  /// The photo composer for the listing currently being created or edited.
+  ///
+  /// New picks are local-only until uploaded; uploaded items carry the absolute
+  /// URL the server served. The list order is the display order.
+  final List<ListingPhotoItem> photos;
 
   /// Pagination for the most recent page received, or `null` before the first
   /// successful response.
@@ -244,6 +255,7 @@ class SellerListingState {
     SellerListingAction? action,
     int? actionListingId,
     bool clearActionListingId = false,
+    List<ListingPhotoItem>? photos,
     String? actionMessage,
     String? actionErrorMessage,
     String? conflictMessage,
@@ -275,6 +287,7 @@ class SellerListingState {
       actionListingId: clearActionListingId
           ? null
           : (actionListingId ?? this.actionListingId),
+      photos: photos ?? this.photos,
       actionMessage: clearActionMessage
           ? null
           : (actionMessage ?? this.actionMessage),
