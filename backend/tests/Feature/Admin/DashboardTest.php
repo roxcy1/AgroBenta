@@ -4,10 +4,12 @@ namespace Tests\Feature\Admin;
 
 use App\Enums\ListingStatus;
 use App\Enums\SellerCapability;
+use App\Enums\SellerVerificationStatus;
 use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
 use App\Models\Activity;
 use App\Models\Listing;
+use App\Models\SellerVerification;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -69,6 +71,7 @@ class DashboardTest extends TestCase
                     'total_listings',
                     'active_listings',
                     'total_transactions',
+                    'pending_verifications',
                 ],
                 'listings' => [
                     'total',
@@ -87,6 +90,8 @@ class DashboardTest extends TestCase
                 'transaction_trend',
                 'livestock_distribution',
                 'recent_activities',
+                'recent_listings',
+                'recent_transactions',
             ],
         ]);
     }
@@ -109,6 +114,7 @@ class DashboardTest extends TestCase
                     'total_listings' => 0,
                     'active_listings' => 0,
                     'total_transactions' => 0,
+                    'pending_verifications' => 0,
                 ],
                 'listings' => [
                     'total' => 0,
@@ -125,6 +131,8 @@ class DashboardTest extends TestCase
                     'cancelled' => 0,
                 ],
                 'recent_activities' => [],
+                'recent_listings' => [],
+                'recent_transactions' => [],
             ],
         ]);
     }
@@ -215,5 +223,159 @@ class DashboardTest extends TestCase
 
         $this->assertCount(1, $data['recent_activities']);
         $this->assertEquals('listing_created', $data['recent_activities'][0]['action']);
+
+        $this->assertCount(5, $data['recent_listings']);
+        $this->assertEquals(Listing::orderByDesc('id')->first()->id, $data['recent_listings'][0]['id']);
+        $this->assertEquals('cattle', $data['recent_listings'][0]['livestock_type']);
+        $this->assertEquals('Angus', $data['recent_listings'][0]['breed']);
+        $this->assertEquals($seller->name, $data['recent_listings'][0]['seller']['name']);
+
+        $this->assertCount(2, $data['recent_transactions']);
+        $this->assertEquals(Transaction::orderByDesc('id')->first()->id, $data['recent_transactions'][0]['id']);
+        $this->assertEquals($buyer->name, $data['recent_transactions'][0]['buyer']['name']);
+        $this->assertEquals($seller->name, $data['recent_transactions'][0]['seller']['name']);
+        $this->assertEquals('cattle', $data['recent_transactions'][0]['listing']['livestock_type']);
+    }
+
+    public function test_dashboard_counts_pending_verifications_from_latest_record_only(): void
+    {
+        $applicant = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        $other = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        $decision = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Seller,
+        ]);
+
+        // The applicant's older submission is pending, but a newer approved
+        // record supersedes it, so the applicant must not count as pending.
+        SellerVerification::create([
+            'user_id' => $applicant->id,
+            'business_name' => 'Superseded Farm',
+            'status' => SellerVerificationStatus::PendingReview,
+            'submitted_at' => now()->subDay(),
+        ]);
+
+        SellerVerification::create([
+            'user_id' => $applicant->id,
+            'business_name' => 'Latest Farm',
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now(),
+        ]);
+
+        // This applicant's only (and therefore latest) record is pending.
+        SellerVerification::create([
+            'user_id' => $other->id,
+            'business_name' => 'Pending Farm',
+            'status' => SellerVerificationStatus::PendingReview,
+            'submitted_at' => now(),
+        ]);
+
+        // A terminal record must never be counted as pending.
+        SellerVerification::create([
+            'user_id' => $decision->id,
+            'business_name' => 'Rejected Farm',
+            'status' => SellerVerificationStatus::Rejected,
+            'submitted_at' => now(),
+        ]);
+
+        $token = $this->admin->createToken('admin_token', ['admin'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/admin/dashboard');
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('data.summary.pending_verifications'));
+    }
+
+    public function test_dashboard_recent_sections_are_limited_and_newest_first(): void
+    {
+        $buyer = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        $seller = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Seller,
+        ]);
+
+        $listings = [];
+        for ($i = 1; $i <= 7; $i++) {
+            $listing = $this->createListing($seller, ['breed' => "Breed {$i}"]);
+            $listing->forceFill([
+                'created_at' => now()->subDays(8 - $i),
+                'updated_at' => now()->subDays(8 - $i),
+            ])->save();
+
+            $listings[$i] = $listing;
+        }
+
+        $transactions = [];
+        for ($i = 1; $i <= 6; $i++) {
+            $transaction = Transaction::create([
+                'buyer_id' => $buyer->id,
+                'seller_id' => $seller->id,
+                'listing_id' => $listings[1]->id,
+                'quantity' => $i,
+                'total_amount' => 1000.00 * $i,
+                'status' => TransactionStatus::Pending,
+            ]);
+            $transaction->forceFill([
+                'created_at' => now()->subDays(7 - $i),
+                'updated_at' => now()->subDays(7 - $i),
+            ])->save();
+
+            $transactions[$i] = $transaction;
+        }
+
+        $token = $this->admin->createToken('admin_token', ['admin'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/admin/dashboard');
+
+        $response->assertStatus(200);
+
+        $recentListings = $response->json('data.recent_listings');
+        $this->assertCount(5, $recentListings);
+        $this->assertEquals($listings[7]->id, $recentListings[0]['id']);
+        $this->assertEquals($listings[3]->id, $recentListings[4]['id']);
+
+        $recentTransactions = $response->json('data.recent_transactions');
+        $this->assertCount(5, $recentTransactions);
+        $this->assertEquals($transactions[6]->id, $recentTransactions[0]['id']);
+        $this->assertEquals($transactions[2]->id, $recentTransactions[4]['id']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function createListing(User $seller, array $overrides = []): Listing
+    {
+        return Listing::create(array_merge([
+            'seller_id' => $seller->id,
+            'livestock_type' => 'cattle',
+            'breed' => 'Angus',
+            'age_value' => 2,
+            'age_unit' => 'year',
+            'gender' => 'male',
+            'weight_value' => 500,
+            'weight_unit' => 'kg',
+            'quantity' => 1,
+            'asking_price' => 50000.00,
+            'location' => 'Bukidnon',
+            'health_status' => 'healthy',
+            'vaccination' => 'up_to_date',
+            'short_description' => 'Healthy Angus bull',
+            'photos' => [],
+            'status' => ListingStatus::Active,
+        ], $overrides));
     }
 }

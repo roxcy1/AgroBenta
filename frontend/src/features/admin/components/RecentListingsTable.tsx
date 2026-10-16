@@ -4,26 +4,13 @@ import { formatCurrency, formatDate } from './dashboardFormat';
 
 interface RecentListingsTableProps {
   listings: DashboardRecentListing[];
-  filter?: string;
 }
 
-function matchesFilter(listing: DashboardRecentListing, filter: string): boolean {
-  const query = filter.trim().toLowerCase();
-  if (!query) return true;
-  return (
-    listing.livestock_type.toLowerCase().includes(query) ||
-    (listing.breed ?? '').toLowerCase().includes(query) ||
-    (listing.seller?.name ?? '').toLowerCase().includes(query)
-  );
-}
-
-export function RecentListingsTable({ listings, filter = '' }: RecentListingsTableProps) {
-  const visible = listings.filter((listing) => matchesFilter(listing, filter));
-
-  if (visible.length === 0) {
+export function RecentListingsTable({ listings }: RecentListingsTableProps) {
+  if (listings.length === 0) {
     return (
       <div className="dashboard-empty-state">
-        <p>{filter ? 'No listings match your search.' : 'No livestock listings available yet.'}</p>
+        <p>No livestock listings available yet.</p>
       </div>
     );
   }
@@ -42,7 +29,7 @@ export function RecentListingsTable({ listings, filter = '' }: RecentListingsTab
           </tr>
         </thead>
         <tbody>
-          {visible.map((listing) => (
+          {listings.map((listing) => (
             <tr key={listing.id}>
               <td className="lv-name-cell">{listing.livestock_type}</td>
               <td>{listing.breed ?? '—'}</td>

@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { KeyboardEvent } from 'react';
 import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
-import { useAdminUser, useUsers } from '../api/useUsers';
+import { useAdminUser, useUserCounts, useUsers } from '../api/useUsers';
+import type { AdminUser } from '../api/useUsers';
 import { useUserVerificationsMap } from '../api/useUserVerifications';
 import { PAGE_ELLIPSIS, buildPageWindow } from '../pagination';
 import { Header } from '../../components/Header';
+import UserStatsCards from './UserStatsCards';
+import type { UserCardKey } from './UserStatsCards';
+import UserDetailsDialog from './UserDetailsDialog';
 import VerificationDetailsDialog from '../../seller-verification/components/VerificationDetailsDialog';
 
 const ROLE_OPTIONS = [
@@ -54,6 +58,7 @@ export function UsersPage() {
     '' | 'submitted' | 'pending_review' | 'approved' | 'rejected' | 'none'
   >('');
   const [detailsId, setDetailsId] = useState<number | null>(null);
+  const [detailsUser, setDetailsUser] = useState<AdminUser | null>(null);
   const [searchParams] = useSearchParams();
   const linkedUserId = parsePositiveInt(searchParams.get('user'));
   const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
@@ -85,6 +90,8 @@ export function UsersPage() {
     per_page: 100,
   });
 
+  const { data: counts } = useUserCounts();
+
   const handleSearch = () => {
     setSearch(searchInput);
     setPage(1);
@@ -103,6 +110,41 @@ export function UsersPage() {
 
   const handleSellerChange = (value: string) => {
     setSellerFilter(value);
+    setPage(1);
+  };
+
+  // Each card selects one filter dimension: account type (buyer/seller) or role
+  // (admin). Selecting a card clears the other dimension, and selecting the
+  // active card or "Total Users" clears both, so the cards stay mutually
+  // exclusive and mirror the table's own filters.
+  const activeCardKey: UserCardKey | '' =
+    sellerFilter === 'buyer'
+      ? 'buyer'
+      : sellerFilter === 'seller'
+        ? 'seller'
+        : roleFilter === 'admin'
+          ? 'admin'
+          : roleFilter === '' && sellerFilter === ''
+            ? 'all'
+            : '';
+
+  const handleCardSelect = (key: UserCardKey) => {
+    if (key === activeCardKey && key !== 'all') {
+      setRoleFilter('');
+      setSellerFilter('');
+    } else if (key === 'buyer') {
+      setSellerFilter('buyer');
+      setRoleFilter('');
+    } else if (key === 'seller') {
+      setSellerFilter('seller');
+      setRoleFilter('');
+    } else if (key === 'admin') {
+      setRoleFilter('admin');
+      setSellerFilter('');
+    } else {
+      setRoleFilter('');
+      setSellerFilter('');
+    }
     setPage(1);
   };
 
@@ -151,11 +193,23 @@ export function UsersPage() {
     }
   };
 
+  const handleRowKeyDown = (
+    event: KeyboardEvent<HTMLTableRowElement>,
+    user: AdminUser,
+  ) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setDetailsUser(user);
+    }
+  };
+
   if (isLoading || verificationsLoading) {
     return (
       <>
         <Header title="Users" subtitle="Manage platform users" />
         <div className="users-content">
+          <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
           <div className="users-loading">
             <div className="loading-spinner" />
             <span>Loading users...</span>
@@ -170,6 +224,7 @@ export function UsersPage() {
       <>
         <Header title="Users" subtitle="Manage platform users" />
         <div className="users-content">
+          <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
           <div className="users-error">
             <p className="users-error-text">Failed to load users.</p>
             <button type="button" className="users-retry-button" onClick={() => refetch()}>
@@ -204,6 +259,8 @@ export function UsersPage() {
       <Header title="Users" subtitle="Manage platform users" />
 
       <div className="users-content">
+        <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
+
         <div className="users-controls">
           <div className="users-search-row">
             <div className="users-search-wrapper">
@@ -341,7 +398,14 @@ export function UsersPage() {
                       const vStatus = v?.status ?? null;
                       const vLabel = statusLabel(vStatus);
                       return (
-                        <tr key={user.id}>
+                        <tr
+                          key={user.id}
+                          className="users-row--clickable"
+                          tabIndex={0}
+                          aria-label={`View details for ${user.name}`}
+                          onClick={() => setDetailsUser(user)}
+                          onKeyDown={(event) => handleRowKeyDown(event, user)}
+                        >
                           <td className="users-name-cell">{user.name}</td>
                           <td className="users-email-cell">{user.email}</td>
                           <td>
@@ -361,8 +425,14 @@ export function UsersPage() {
                                 role="button"
                                 tabIndex={0}
                                 style={{ cursor: 'pointer' }}
-                                onClick={() => handleVerificationClick(v.verificationId)}
-                                onKeyDown={(e) => handleVerificationKeyDown(e, v.verificationId)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVerificationClick(v.verificationId);
+                                }}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  handleVerificationKeyDown(e, v.verificationId);
+                                }}
                                 aria-label={`View verification details for ${user.name}`}
                               >
                                 {vLabel}
@@ -445,6 +515,14 @@ export function UsersPage() {
         <VerificationDetailsDialog
           verificationId={detailsId}
           onClose={() => setDetailsId(null)}
+        />
+      )}
+
+      {detailsUser !== null && (
+        <UserDetailsDialog
+          user={detailsUser}
+          verificationStatus={verificationMap.get(detailsUser.id)?.status ?? null}
+          onClose={() => setDetailsUser(null)}
         />
       )}
     </>
