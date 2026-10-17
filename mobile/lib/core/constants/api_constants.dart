@@ -328,6 +328,64 @@ abstract final class MessagingEndpoints {
   static const int maxPerPage = 50;
 }
 
+/// Notification endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `notifications` prefix. Every one requires a `mobile`-ability Sanctum
+/// token and resolves the caller from that token — no path takes a user id.
+///
+/// ## Why `read-all` and `unread-count` are separate paths
+///
+/// `read-all` is declared before `{id}` in the backend so a literal segment
+/// cannot be swallowed by the UUID parameter. `unread-count` exists as its
+/// own endpoint because the mobile badge must poll it cheaply — fetching a
+/// full page of notifications just to read one integer would be wasteful.
+abstract final class NotificationEndpoints {
+  /// `GET` — the caller's notifications, newest first. 200, paginated.
+  ///
+  /// Query allow-list: `type` (one of the four categories the filter chips
+  /// map to), `unread` (`0`|`1`), `page`, `per_page`.
+  static const String list = '/notifications';
+
+  /// `GET` — the caller's unread count. 200, plain envelope.
+  static const String unreadCount = '/notifications/unread-count';
+
+  /// `POST` — mark every unread notification as read. 200.
+  static const String readAll = '/notifications/read-all';
+
+  /// `PATCH` — mark one notification as read. 200, plain envelope.
+  static String read(String id) => '/notifications/$id/read';
+
+  /// `DELETE` — delete one notification. 200.
+  ///
+  /// Currently unused on mobile — no swipe-to-dismiss in the initial version.
+  /// Kept here so a future feature can reach for it without adding a new
+  /// constant group.
+  static String destroy(String id) => '/notifications/$id';
+
+  /// Page size used when the caller does not ask for a specific one.
+  ///
+  /// Matches the server default (`IndexNotificationRequest` validates
+  /// `between:1,50`).
+  static const int defaultPerPage = 15;
+
+  /// Largest page the server will serve.
+  static const int maxPerPage = 50;
+
+  /// The four categories the client's filter chips send.
+  ///
+  /// Mirrors `IndexNotificationRequest::TYPES` on the backend. `All` is not
+  /// in the list — it is the absence of a `type` query parameter.
+  static const List<String> filterTypes = <String>[
+    'transactions',
+    'inquiries',
+    'listings',
+    'system',
+  ];
+}
+
+
+
 /// Profile endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the

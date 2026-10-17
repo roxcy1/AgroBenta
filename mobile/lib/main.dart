@@ -33,6 +33,10 @@ import 'services/profile_service.dart';
 import 'services/seller_listing_service.dart';
 import 'services/seller_verification_service.dart';
 import 'services/transaction_service.dart';
+import 'features/notifications/state/notifications_controller.dart';
+import 'features/notifications/state/notifications_scope.dart';
+import 'repositories/notification_repository.dart';
+import 'services/notification_service.dart';
 
 /// AgroBenta mobile client — application entry point.
 ///
@@ -92,6 +96,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final MessagingService _messagingService;
   late final MessagingRepository _messagingRepository;
   late final ConversationsController _conversationsController;
+  late final NotificationService _notificationService;
+  late final NotificationRepository _notificationRepository;
+  late final NotificationsController _notificationsController;
 
   @override
   void initState() {
@@ -149,11 +156,19 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // session-scoped so the buyer shell's unread badge and the Conversations
     // screen read the same state. The chat controller is per-screen and lives
     // inside the chat screen itself.
-    _messagingService = MessagingService(_apiClient);
+        _messagingService = MessagingService(_apiClient);
     _messagingRepository = MessagingRepository(_messagingService);
     _conversationsController = ConversationsController(_messagingRepository);
-  }
 
+    // Notifications. Session-scoped like the Conversations controller so the
+    // bell icon's unread badge on the Home AppBar and the Notifications screen
+    // read the same state. The controller does not load on construction —
+    // screens trigger `load()` / `refreshUnreadCount()` when they appear, so
+    // an account that never opens the bell never pays for a request.
+    _notificationService = NotificationService(_apiClient);
+    _notificationRepository = NotificationRepository(_notificationService);
+    _notificationsController = NotificationsController(_notificationRepository);
+  }
   @override
   void dispose() {
     // The controllers own no transport of their own, and the client they were
@@ -164,6 +179,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _sellerListingController.dispose();
     _profileController.dispose();
     _conversationsController.dispose();
+    _notificationsController.dispose();
     _apiClient.close();
     super.dispose();
   }
@@ -212,14 +228,22 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                 // `MaterialApp`, for the same reason each of them does: the
                 // chat screen is a pushed route and needs to reach the shared
                 // repository and the conversations controller.
-                child: MessagingScope(
+                                child: MessagingScope(
                   repository: _messagingRepository,
                   conversationsController: _conversationsController,
-                  child: MaterialApp(
-                    title: 'AgroBenta',
-                    debugShowCheckedModeBanner: false,
-                    theme: AppTheme.light(),
-                    home: AuthGate(authenticatedView: _buildBuyerShell),
+                  // Notifications sits as a sibling of the other scopes, above
+                  // `MaterialApp`, for the same reason each of them does: the
+                  // Notifications screen is a pushed route and the bell icon
+                  // in the Home AppBar needs to reach the same controller.
+                  child: NotificationsScope(
+                    repository: _notificationRepository,
+                    controller: _notificationsController,
+                    child: MaterialApp(
+                      title: 'AgroBenta',
+                      debugShowCheckedModeBanner: false,
+                      theme: AppTheme.light(),
+                      home: AuthGate(authenticatedView: _buildBuyerShell),
+                    ),
                   ),
                 ),
               ),

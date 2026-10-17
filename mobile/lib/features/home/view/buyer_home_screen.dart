@@ -6,32 +6,50 @@ import '../../../models/user.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../auth/state/auth_state.dart';
 import '../../auth/widgets/auth_error_banner.dart';
+import '../../notifications/state/notifications_scope.dart';
+import '../../notifications/view/notifications_screen.dart';
 import '../../seller_listings/widgets/seller_listings_entry_card.dart';
 import '../../seller_verification/widgets/seller_verification_entry_card.dart';
 
 /// The authenticated landing screen.
 ///
-/// A shell, and honestly so. The buyer shell's bottom navigation carries the app
-/// between Home and the Marketplace; this screen states what the account is, says
-/// where the account is in the seller verification flow, and offers a way into
-/// the marketplace. Transactions, notifications and messaging are later phases,
-/// and `mobile/DESIGN.md` is explicit that navigation must not be built for
-/// screens that do not exist — so nothing here points at them, and no placeholder
-/// listings are invented to fill the space.
+/// A shell, and honestly so. The buyer shell's bottom navigation carries the
+/// app between Home and the Marketplace; this screen states what the account
+/// is, says where the account is in the seller verification flow, and offers a
+/// way into the marketplace.
+///
+/// The bell icon in the AppBar is the entry point into Notifications. It is
+/// deliberately not a tab: a bell is a "peek" affordance, not a place the user
+/// lives, and five tabs is already the practical ceiling for the shell.
 ///
 /// Listing management is here for sellers only, as a card in this screen's
 /// scroll rather than a tab in the bottom navigation: the navigation is shared
 /// with every buyer, and a tab that leads to a screen the buyer cannot use is
 /// exactly what the design rules forbid.
-class BuyerHomeScreen extends StatelessWidget {
+class BuyerHomeScreen extends StatefulWidget {
   const BuyerHomeScreen({this.onBrowseMarketplace, super.key});
 
   /// Switches the shell to the Marketplace tab.
   ///
-  /// Injected rather than reached for, so this screen does not have to know how
-  /// the shell is built or hold a reference to it. Null renders the card without
-  /// the button, which is what a test or a standalone use of this screen wants.
+  /// Injected rather than reached for, so this screen does not have to know
+  /// how the shell is built or hold a reference to it. Null renders the card
+  /// without the button, which is what a test or a standalone use of this
+  /// screen wants.
   final VoidCallback? onBrowseMarketplace;
+
+  @override
+  State<BuyerHomeScreen> createState() => _BuyerHomeScreenState();
+}
+
+class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Refresh the badge count on every visit to Home. `readOf` because
+    // `initState` cannot register an inherited-widget dependency; the
+    // ListenableBuilder below registers it once we are in `build`.
+    NotificationsScope.readOf(context).refreshUnreadCount();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +74,32 @@ class BuyerHomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Home'),
         actions: <Widget>[
+          // The notifications bell, with a live unread badge driven by the
+          // session-scoped NotificationsController. `of` here is safe because
+          // `build` runs after `initState` has completed.
+          ListenableBuilder(
+            listenable: NotificationsScope.of(context),
+            builder: (BuildContext context, Widget? child) {
+              final int unread = NotificationsScope.of(context).state.unreadCount;
+              return IconButton(
+                tooltip: 'Notifications',
+                icon: unread > 0
+                    ? Badge(
+                        label: Text(unread > 99 ? '99+' : '$unread'),
+                        child: const Icon(Icons.notifications_outlined),
+                      )
+                    : const Icon(Icons.notifications_outlined),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) =>
+                          const NotificationsScreen(),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
           Padding(
             padding: const EdgeInsets.only(right: AppSpacing.xs),
             child: TextButton(
@@ -152,10 +196,10 @@ class BuyerHomeScreen extends StatelessWidget {
                             'open one to see its full details.',
                             style: theme.textTheme.bodySmall,
                           ),
-                          if (onBrowseMarketplace != null) ...<Widget>[
+                          if (widget.onBrowseMarketplace != null) ...<Widget>[
                             const SizedBox(height: AppSpacing.md),
                             OutlinedButton(
-                              onPressed: onBrowseMarketplace,
+                              onPressed: widget.onBrowseMarketplace,
                               child: const Text('Go to marketplace'),
                             ),
                           ],
