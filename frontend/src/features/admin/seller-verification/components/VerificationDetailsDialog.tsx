@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { SellerVerification } from '../api/useSellerVerifications';
-import { useSellerVerification } from '../api/useSellerVerifications';
+import type { SellerVerification, VerificationDocumentType } from '../api/useSellerVerifications';
+import {
+  fetchVerificationDocument,
+  useSellerVerification,
+} from '../api/useSellerVerifications';
 import { statusLabel } from './verificationModeration';
 
 interface VerificationDetailsDialogProps {
@@ -71,6 +74,94 @@ function historyTable(history: SellerVerification[]): ReactNode {
   );
 }
 
+/**
+ * One evidence document: whether it is on file, and a View action that streams
+ * the bytes behind the authenticated admin endpoint.
+ *
+ * The bytes are fetched on demand rather than listed, because the API never
+ * returns a URL — the private disk has none. A `URL.createObjectURL` preview is
+ * revoked when the lightbox closes so an open document does not leak a blob.
+ */
+function DocumentViewer({
+  verificationId,
+  type,
+  label,
+  present,
+}: {
+  verificationId: number;
+  type: VerificationDocumentType;
+  label: string;
+  present: boolean;
+}) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [objectUrl]);
+
+  async function open() {
+    setLoading(true);
+    setError(false);
+    try {
+      const blob = await fetchVerificationDocument(verificationId, type);
+      setObjectUrl(URL.createObjectURL(blob));
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function close() {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    setObjectUrl(null);
+  }
+
+  return (
+    <div className="lv-detail-item">
+      <dt className="lv-detail-label">{label}</dt>
+      <dd className="lv-detail-value">
+        {present ? (
+          <button type="button" className="lv-action-cancel" onClick={open} disabled={loading}>
+            {loading ? 'Loading…' : 'View'}
+          </button>
+        ) : (
+          <span>{'\u2014'} Not provided</span>
+        )}
+        {error ? <span className="lv-error-text"> Failed to load document.</span> : null}
+      </dd>
+
+      {objectUrl ? (
+        <div className="lv-action-modal-overlay" onClick={close}>
+          <div
+            className="lv-action-modal lv-action-modal--detail"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${label} document`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="lv-detail-header">
+              <h2 className="lv-action-modal-title">{label}</h2>
+            </header>
+            <div className="lv-detail-body">
+              <img src={objectUrl} alt={label} style={{ maxWidth: '100%' }} />
+            </div>
+            <footer className="lv-detail-footer">
+              <button type="button" className="lv-action-cancel" onClick={close}>
+                Close
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function VerificationDetailsDialog({
   verificationId,
   onClose,
@@ -118,6 +209,32 @@ export default function VerificationDetailsDialog({
         {
           title: 'Identity document',
           rows: [['Reference', orDash(verification.id_document_ref)]],
+        },
+        {
+          title: 'Government-issued ID',
+          content: (
+            <dl className="lv-detail-list">
+              <DocumentViewer
+                verificationId={verification.id}
+                type="id_document"
+                label="Government-issued ID"
+                present={verification.has_id_document}
+              />
+            </dl>
+          ),
+        },
+        {
+          title: 'Selfie holding ID',
+          content: (
+            <dl className="lv-detail-list">
+              <DocumentViewer
+                verificationId={verification.id}
+                type="selfie"
+                label="Selfie holding ID"
+                present={verification.has_selfie}
+              />
+            </dl>
+          ),
         },
         {
           title: 'Decision',

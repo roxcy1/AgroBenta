@@ -2,33 +2,37 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../models/transaction.dart';
+import '../state/transactions_filter.dart';
 
-/// The empty state for one transaction tab.
+/// The empty state for one purchases filter.
 ///
-/// Fixed copy per tab. The Completed copy is honest about the dead end: no
-/// path in the app can reach `completed` today (OQ-15), so the tab is
+/// Fixed copy per filter. The Completed copy is honest about the dead end: no
+/// path in the app can reach `completed` today (OQ-15), so the filter is
 /// legitimately empty — that is correct, not a bug to work around.
 class TransactionsEmptyState extends StatelessWidget {
-  const TransactionsEmptyState({required this.status, super.key});
+  const TransactionsEmptyState({required this.filter, super.key});
 
-  final TransactionStatus status;
+  final TransactionsFilter filter;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final (String title, String body) = switch (status) {
-      TransactionStatus.pending => (
-        'No ongoing transactions yet',
-        'Transactions you start or receive will appear here while pending.',
+    final (String title, String body) = switch (filter) {
+      TransactionsFilter.all => (
+        'No purchases yet',
+        'Transactions you start from a listing will appear here.',
       ),
-      TransactionStatus.completed => (
-        'No completed transactions yet',
+      TransactionsFilter.ongoing => (
+        'No ongoing purchases yet',
+        'Purchases that are still pending will appear here.',
+      ),
+      TransactionsFilter.completed => (
+        'No completed purchases yet',
         'Completion is not yet available in the app.',
       ),
-      TransactionStatus.cancelled => (
-        'No cancelled transactions',
-        'Transactions cancelled by either party will appear here.',
+      TransactionsFilter.cancelled => (
+        'No cancelled purchases',
+        'Purchases cancelled by either party will appear here.',
       ),
     };
 
@@ -44,9 +48,17 @@ class TransactionsEmptyState extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
             const SizedBox(height: AppSpacing.md),
-            Text(title, style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: AppSpacing.xs),
-            Text(body, style: theme.textTheme.bodySmall, textAlign: TextAlign.center),
+            Text(
+              body,
+              style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -56,7 +68,11 @@ class TransactionsEmptyState extends StatelessWidget {
 
 /// A full-screen failure with a retry, for the first page only.
 class TransactionsErrorState extends StatelessWidget {
-  const TransactionsErrorState({required this.message, required this.onRetry, super.key});
+  const TransactionsErrorState({
+    required this.message,
+    required this.onRetry,
+    super.key,
+  });
 
   final String message;
   final VoidCallback onRetry;
@@ -71,7 +87,11 @@ class TransactionsErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(Icons.error_outline, size: 40, color: AppColors.textSecondary),
+            const Icon(
+              Icons.error_outline,
+              size: 40,
+              color: AppColors.textSecondary,
+            ),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Could not load transactions',
@@ -79,7 +99,11 @@ class TransactionsErrorState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.xs),
-            Text(message, style: theme.textTheme.bodySmall, textAlign: TextAlign.center),
+            Text(
+              message,
+              style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: AppSpacing.lg),
             OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
           ],
@@ -120,11 +144,16 @@ class TransactionsLoadMoreFooter extends StatelessWidget {
           children: <Widget>[
             Text(
               errorMessage!,
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.error),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.error,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.xs),
-            OutlinedButton(onPressed: onLoadMore, child: const Text('Try again')),
+            OutlinedButton(
+              onPressed: onLoadMore,
+              child: const Text('Try again'),
+            ),
           ],
         ),
       );
@@ -153,14 +182,21 @@ class TransactionsLoadMoreFooter extends StatelessWidget {
         AppSpacing.screenGutter,
         AppSpacing.lg,
       ),
-      child: OutlinedButton(onPressed: onLoadMore, child: const Text('Load more')),
+      child: OutlinedButton(
+        onPressed: onLoadMore,
+        child: const Text('Load more'),
+      ),
     );
   }
 }
 
 /// A pull-to-refresh that failed, above results still on screen.
 class TransactionsRefreshNotice extends StatelessWidget {
-  const TransactionsRefreshNotice({required this.message, required this.onRetry, super.key});
+  const TransactionsRefreshNotice({
+    required this.message,
+    required this.onRetry,
+    super.key,
+  });
 
   final String message;
   final VoidCallback onRetry;
@@ -184,7 +220,11 @@ class TransactionsRefreshNotice extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.sync_problem_outlined, size: 18, color: AppColors.error),
+          const Icon(
+            Icons.sync_problem_outlined,
+            size: 18,
+            color: AppColors.error,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(

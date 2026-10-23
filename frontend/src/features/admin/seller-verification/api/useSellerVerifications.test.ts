@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AxiosResponse } from 'axios';
 import api from '../../../../lib/api';
-import { fetchVerificationCounts } from './useSellerVerifications';
+import {
+  fetchVerificationCounts,
+  fetchVerificationDocument,
+} from './useSellerVerifications';
+
+const getSpy = vi.spyOn(api, 'get');
+
+afterEach(() => {
+  getSpy.mockReset();
+});
 
 function countsResponse(total: number): AxiosResponse {
   return {
@@ -16,12 +25,6 @@ function countsResponse(total: number): AxiosResponse {
 }
 
 describe('fetchVerificationCounts', () => {
-  const getSpy = vi.spyOn(api, 'get');
-
-  afterEach(() => {
-    getSpy.mockReset();
-  });
-
   it('reports the server total for each of the four statuses', async () => {
     getSpy
       .mockResolvedValueOnce(countsResponse(3))
@@ -47,5 +50,31 @@ describe('fetchVerificationCounts', () => {
         urls.some((url) => url.includes(`status=${status}`) && url.includes('per_page=1')),
       ).toBe(true);
     }
+  });
+});
+
+describe('fetchVerificationDocument', () => {
+  it('requests the admin document endpoint as a blob, never as JSON', async () => {
+    const blob = new Blob(['bytes'], { type: 'image/png' });
+    getSpy.mockResolvedValue({ data: blob } as unknown as AxiosResponse);
+
+    const result = await fetchVerificationDocument(7, 'selfie');
+
+    expect(result).toBe(blob);
+    expect(getSpy).toHaveBeenCalledWith(
+      '/admin/seller-verifications/7/documents/selfie',
+      { responseType: 'blob' },
+    );
+  });
+
+  it('carries the document type through the path', async () => {
+    getSpy.mockResolvedValue({ data: new Blob() } as unknown as AxiosResponse);
+
+    await fetchVerificationDocument(3, 'id_document');
+
+    expect(getSpy).toHaveBeenCalledWith(
+      '/admin/seller-verifications/3/documents/id_document',
+      { responseType: 'blob' },
+    );
   });
 });

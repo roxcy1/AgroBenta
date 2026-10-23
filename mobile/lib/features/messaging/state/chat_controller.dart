@@ -63,12 +63,7 @@ class ChatController extends ChangeNotifier {
     _loading = true;
 
     final int generation = ++_generation;
-    _set(
-      _state.copyWith(
-        status: ChatStatus.loading,
-        clearError: true,
-      ),
-    );
+    _set(_state.copyWith(status: ChatStatus.loading, clearError: true));
 
     try {
       final List<Message> messages = await _repository.thread(
@@ -78,21 +73,13 @@ class ChatController extends ChangeNotifier {
       if (_disposed || generation != _generation) {
         return;
       }
-      _set(
-        _state.copyWith(
-          status: ChatStatus.ready,
-          messages: messages,
-        ),
-      );
+      _set(_state.copyWith(status: ChatStatus.ready, messages: messages));
     } on ApiException catch (error) {
       if (_disposed || generation != _generation) {
         return;
       }
       _set(
-        _state.copyWith(
-          status: ChatStatus.failed,
-          errorMessage: error.message,
-        ),
+        _state.copyWith(status: ChatStatus.failed, errorMessage: error.message),
       );
     } on Object {
       if (_disposed || generation != _generation) {
@@ -209,23 +196,25 @@ class ChatController extends ChangeNotifier {
         return;
       }
       // Update local state so the "unread" dots on bubbles disappear.
-      final List<Message> updated = _state.messages.map((Message m) {
-        if (m.receiverId == currentUserId && !m.read) {
-          return Message(
-            id: m.id,
-            body: m.body,
-            senderId: m.senderId,
-            receiverId: m.receiverId,
-            listingId: m.listingId,
-            read: true,
-            readAt: DateTime.now(),
-            createdAt: m.createdAt,
-            sender: m.sender,
-            receiver: m.receiver,
-          );
-        }
-        return m;
-      }).toList(growable: false);
+      final List<Message> updated = _state.messages
+          .map((Message m) {
+            if (m.receiverId == currentUserId && !m.read) {
+              return Message(
+                id: m.id,
+                body: m.body,
+                senderId: m.senderId,
+                receiverId: m.receiverId,
+                listingId: m.listingId,
+                read: true,
+                readAt: DateTime.now(),
+                createdAt: m.createdAt,
+                sender: m.sender,
+                receiver: m.receiver,
+              );
+            }
+            return m;
+          })
+          .toList(growable: false);
       _set(_state.copyWith(messages: updated));
     } on Object {
       // Silent: the next load fixes the truth.

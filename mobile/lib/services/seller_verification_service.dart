@@ -1,3 +1,8 @@
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
@@ -96,6 +101,94 @@ class SellerVerificationService {
 
   static bool _present(String? value) =>
       value != null && value.trim().isNotEmpty;
+
+  /// `POST /seller-verification/documents` — stage one evidence document.
+  ///
+  /// [file] is the picked image. The body is a multipart form with exactly two
+  /// parts: `type` (the enum's wire value) and `document` (the bytes). Both are
+  /// named here, so a server-owned field — `user_id`, `seller_verification_id`,
+  /// `path`, `status`, all `prohibited` server-side — has no path into the
+  /// request.
+  ///
+  /// There is no `data` payload beyond `{ type, uploaded: true }`; the stored
+  /// path is never returned, because the file is on a private disk and is read
+  /// back only through [fetchDocument]. The return value is discarded.
+  ///
+  /// Throws [ApiException]:
+  ///  * `validation` on a `422` — the file failed the mime/size rules.
+  ///  * `forbidden` on a `403` — the account is already an approved seller.
+  ///  * `conflict` on a `409` — an application is already open for review.
+  Future<void> uploadDocument({
+    required VerificationDocumentType type,
+    required XFile file,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final int length = await file.length();
+    int uploaded = 0;
+
+    final http.MultipartFile part = http.MultipartFile(
+      SellerVerificationEndpoints.documentFileField,
+      _wrapWithProgress(file.openRead(), (int chunk) {
+        uploaded += chunk;
+        onProgress?.call(uploaded, length);
+      }),
+      length,
+      filename: file.name,
+    );
+
+    return _apiClient.postMultipart<void>(
+      path: SellerVerificationEndpoints.documents,
+      files: <http.MultipartFile>[part],
+      fields: <String, String>{'type': type.value},
+      parse: (_) {},
+    );
+  }
+
+  /// `DELETE /seller-verification/documents/{type}` — remove a staged document.
+  ///
+  /// Only the staging area is mutable; once an application is submitted its
+  /// documents belong to the record under review and this route does not reach
+  /// them.
+  ///
+  /// Throws [ApiException]:
+  ///  * `notFound` on a `404` — there is no staged document of that type.
+  Future<void> deleteDocument(VerificationDocumentType type) {
+    return _apiClient.delete<void>(
+      SellerVerificationEndpoints.deleteDocument(type.value),
+      parse: (_) {},
+    );
+  }
+
+  /// `GET /seller-verification/documents/{type}` — the stored document's bytes.
+  ///
+  /// The success body is the file itself, not an envelope, so this goes through
+  /// [ApiClient.getBytes]. Returns the bytes, or `null` for a `404` — the
+  /// document has never been uploaded — which the caller renders as "not on
+  /// file" rather than as a failure. Every other [ApiException] propagates.
+  Future<Uint8List?> fetchDocument(VerificationDocumentType type) async {
+    try {
+      return await _apiClient.getBytes(
+        SellerVerificationEndpoints.document(type.value),
+      );
+    } on ApiException catch (error) {
+      if (error.kind == ApiErrorKind.notFound) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// Wraps [stream] so each emitted chunk is reported to [onBytes] before being
+  /// forwarded, letting callers track upload progress.
+  static Stream<List<int>> _wrapWithProgress(
+    Stream<List<int>> stream,
+    void Function(int bytes) onBytes,
+  ) async* {
+    await for (final List<int> chunk in stream) {
+      onBytes(chunk.length);
+      yield chunk;
+    }
+  }
 
   /// Casts an unwrapped `data` payload to a JSON object with a message that
   /// names the endpoint, instead of a bare cast error. A [FormatException] here

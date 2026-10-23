@@ -9,11 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 /// submits the field. Clears itself on a successful send; the parent decides
 /// whether to keep the text on a failure, so a failed message is not lost.
 class ChatInputBar extends StatefulWidget {
-  const ChatInputBar({
-    required this.onSend,
-    this.isSending = false,
-    super.key,
-  });
+  const ChatInputBar({required this.onSend, this.isSending = false, super.key});
 
   /// Called with the current text when the user submits.
   ///
@@ -77,9 +73,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
         ),
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
-          border: const Border(
-            top: BorderSide(color: AppColors.border),
-          ),
+          border: const Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,

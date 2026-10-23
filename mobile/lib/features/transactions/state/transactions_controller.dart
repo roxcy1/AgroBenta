@@ -6,23 +6,29 @@ import '../../../models/transaction_page.dart';
 import '../../../repositories/transaction_repository.dart';
 import 'transactions_state.dart';
 
-/// Presentation logic for one transaction tab.
+/// Presentation logic for one purchases filter.
 ///
-/// One instance per tab ([TransactionStatus.pending], `completed`,
-/// `cancelled`), because each tab is an independent filtered query with its
-/// own pages. The screen owns the three instances and disposes them.
+/// One instance per filter. Each filter is an independent filtered query with
+/// its own pages; `null` [status] is the "All" filter and sends no status.
+/// [role] narrows to one side of the caller's records — My Purchases passes
+/// `buyer` so a sale can never appear among a user's purchases. The screen
+/// owns the instances and disposes them.
 ///
 /// The mechanics mirror `MarketplaceController`: generation-guarded first
 /// pages, a `loadMore` guard, and a `refresh` that keeps results on screen.
 /// The differences are ruled by the lifecycle: there is no search, no filter,
 /// and no re-sort — the server order is the order.
 class TransactionsController extends ChangeNotifier {
-  TransactionsController(this._repository, this.status);
+  TransactionsController(this._repository, this.status, {this.role});
 
   final TransactionRepository _repository;
 
-  /// The lifecycle state this tab shows. Fixed for the controller's life.
-  final TransactionStatus status;
+  /// The lifecycle state this filter shows; `null` means all of them.
+  /// Fixed for the controller's life.
+  final TransactionStatus? status;
+
+  /// The side of the caller's records to show; `null` means both.
+  final TransactionRole? role;
 
   TransactionsState _state = const TransactionsState();
   TransactionsState get state => _state;
@@ -50,10 +56,16 @@ class TransactionsController extends ChangeNotifier {
     }
 
     _loadingMore = true;
-    _set(_state.copyWith(status: TransactionsStatus.loadingMore, clearLoadMoreError: true));
+    _set(
+      _state.copyWith(
+        status: TransactionsStatus.loadingMore,
+        clearLoadMoreError: true,
+      ),
+    );
 
     try {
       final TransactionPage page = await _repository.list(
+        role: role,
         status: status,
         page: _state.currentPage + 1,
       );
@@ -63,7 +75,10 @@ class TransactionsController extends ChangeNotifier {
       _set(
         _state.copyWith(
           status: TransactionsStatus.ready,
-          transactions: <Transaction>[..._state.transactions, ...page.transactions],
+          transactions: <Transaction>[
+            ..._state.transactions,
+            ...page.transactions,
+          ],
           pagination: page.pagination,
         ),
       );
@@ -100,7 +115,9 @@ class TransactionsController extends ChangeNotifier {
 
     _set(
       _state.copyWith(
-        status: keepResults ? TransactionsStatus.refreshing : TransactionsStatus.loading,
+        status: keepResults
+            ? TransactionsStatus.refreshing
+            : TransactionsStatus.loading,
         clearTransactions: !keepResults,
         clearError: true,
         clearLoadMoreError: true,
@@ -109,7 +126,11 @@ class TransactionsController extends ChangeNotifier {
     );
 
     try {
-      final TransactionPage page = await _repository.list(status: status, page: 1);
+      final TransactionPage page = await _repository.list(
+        role: role,
+        status: status,
+        page: 1,
+      );
       if (_disposed || generation != _generation) {
         return;
       }

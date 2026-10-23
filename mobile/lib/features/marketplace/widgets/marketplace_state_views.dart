@@ -80,6 +80,7 @@ class MarketplaceErrorState extends StatelessWidget {
   const MarketplaceErrorState({
     required this.message,
     required this.onRetry,
+    this.title = 'Could not load listings',
     super.key,
   });
 
@@ -87,6 +88,11 @@ class MarketplaceErrorState extends StatelessWidget {
   final String message;
 
   final VoidCallback onRetry;
+
+  /// The heading above [message]. Defaults to the marketplace's own copy; a
+  /// non-marketplace caller (for example the transaction detail screen) passes
+  /// its own noun so the error never names the wrong thing.
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +107,7 @@ class MarketplaceErrorState extends StatelessWidget {
             const Icon(Icons.error_outline, size: 40, color: AppColors.error),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'Could not load listings',
+              title,
               style: theme.textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),

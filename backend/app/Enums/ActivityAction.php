@@ -35,6 +35,10 @@ enum ActivityAction: string
     case TransactionCreated = 'transaction_created';
     case TransactionCancelled = 'transaction_cancelled';
 
+    case InquiryCreated = 'inquiry_created';
+    case InquiryStatusUpdated = 'inquiry_status_updated';
+    case InquiryDeleted = 'inquiry_deleted';
+
     case SettingsUpdated = 'settings_updated';
 
     public function label(): string
@@ -56,6 +60,8 @@ enum ActivityAction: string
             self::SellerVerificationRejected => 'Seller verification rejected',
             self::TransactionCreated => 'Transaction created',
             self::TransactionCancelled => 'Transaction cancelled',
+            self::InquiryStatusUpdated => 'Inquiry status updated',
+            self::InquiryDeleted => 'Inquiry deleted',
             self::SettingsUpdated => 'Settings updated',
         };
     }

@@ -33,32 +33,32 @@ class MessagingScope extends InheritedWidget {
 
   /// The repository, for a chat screen creating its own controller.
   static MessagingRepository repositoryOf(BuildContext context) {
-    final MessagingScope? scope =
-        context.dependOnInheritedWidgetOfExactType<MessagingScope>();
+    final MessagingScope? scope = context
+        .dependOnInheritedWidgetOfExactType<MessagingScope>();
     assert(scope != null, 'No MessagingScope found in context.');
     return scope!.repository;
   }
 
   /// The repository, without registering a dependency. For `initState`.
   static MessagingRepository readRepositoryOf(BuildContext context) {
-    final MessagingScope? scope =
-        context.getInheritedWidgetOfExactType<MessagingScope>();
+    final MessagingScope? scope = context
+        .getInheritedWidgetOfExactType<MessagingScope>();
     assert(scope != null, 'No MessagingScope found in context.');
     return scope!.repository;
   }
 
   /// The inbox controller, registering [context] as a dependency.
   static ConversationsController of(BuildContext context) {
-    final MessagingScope? scope =
-        context.dependOnInheritedWidgetOfExactType<MessagingScope>();
+    final MessagingScope? scope = context
+        .dependOnInheritedWidgetOfExactType<MessagingScope>();
     assert(scope != null, 'No MessagingScope found in context.');
     return scope!.conversationsController;
   }
 
   /// The inbox controller, without registering a dependency. For `initState`.
   static ConversationsController readOf(BuildContext context) {
-    final MessagingScope? scope =
-        context.getInheritedWidgetOfExactType<MessagingScope>();
+    final MessagingScope? scope = context
+        .getInheritedWidgetOfExactType<MessagingScope>();
     assert(scope != null, 'No MessagingScope found in context.');
     return scope!.conversationsController;
   }

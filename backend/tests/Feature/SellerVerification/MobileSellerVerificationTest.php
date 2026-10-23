@@ -3,11 +3,15 @@
 namespace Tests\Feature\SellerVerification;
 
 use App\Enums\SellerCapability;
+use App\Enums\SellerVerificationDocumentType;
 use App\Enums\SellerVerificationStatus;
 use App\Enums\UserRole;
 use App\Models\SellerVerification;
 use App\Models\User;
+use App\Services\SellerVerification\SellerVerificationDocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -42,6 +46,8 @@ class MobileSellerVerificationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Storage::fake(SellerVerificationDocumentService::DISK);
 
         $this->buyer = User::factory()->create([
             'role' => UserRole::User,
@@ -95,6 +101,31 @@ class MobileSellerVerificationTest extends TestCase
         ], $overrides);
     }
 
+    /**
+     * Stage both required documents for [user] through the real upload route.
+     *
+     * Staging is a precondition of submission, so every test that expects a
+     * 201 comes through here rather than writing files directly: the endpoint,
+     * the validation and the storage layout are all exercised.
+     */
+    private function stageDocuments(User $user): void
+    {
+        $token = $this->mobileToken($user);
+
+        foreach (SellerVerificationDocumentType::cases() as $type) {
+            $this->withToken($token)
+                ->post('/api/seller-verification/documents', [
+                    'type' => $type->value,
+                    'document' => UploadedFile::fake()->image(
+                        "{$type->value}.png",
+                        10,
+                        10,
+                    ),
+                ])
+                ->assertCreated();
+        }
+    }
+
     // -------------------------------------------------------------------
     // Submission
     // -------------------------------------------------------------------
@@ -102,6 +133,8 @@ class MobileSellerVerificationTest extends TestCase
     #[Test]
     public function a_buyer_can_submit_a_verification(): void
     {
+        $this->stageDocuments($this->buyer);
+
         $response = $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', $this->payload());
 
@@ -111,7 +144,9 @@ class MobileSellerVerificationTest extends TestCase
             ->assertJsonPath('data.business_name', 'Reyes Livestock')
             ->assertJsonPath('data.business_location', 'Mabalacat, Pampanga')
             ->assertJsonPath('data.business_description', 'Family cattle farm since 1998.')
-            ->assertJsonPath('data.id_document_ref', 'ID-1234567');
+            ->assertJsonPath('data.id_document_ref', 'ID-1234567')
+            ->assertJsonPath('data.has_id_document', true)
+            ->assertJsonPath('data.has_selfie', true);
 
         $this->assertNotNull($response->json('data.submitted_at'));
         $this->assertDatabaseHas('seller_verifications', [
@@ -123,6 +158,8 @@ class MobileSellerVerificationTest extends TestCase
     #[Test]
     public function submission_does_not_grant_seller_capability(): void
     {
+        $this->stageDocuments($this->buyer);
+
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', $this->payload())
             ->assertCreated();
@@ -137,6 +174,8 @@ class MobileSellerVerificationTest extends TestCase
     #[Test]
     public function the_optional_business_fields_may_be_omitted(): void
     {
+        $this->stageDocuments($this->buyer);
+
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', [
                 'business_name' => 'Only a name',
@@ -310,6 +349,8 @@ class MobileSellerVerificationTest extends TestCase
             'reviewed_at' => now(),
             'submitted_at' => now()->subDays(3),
         ]);
+
+        $this->stageDocuments($this->buyer);
 
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', $this->payload([

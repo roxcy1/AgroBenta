@@ -33,8 +33,16 @@ class SellerVerificationService
      */
     public const string OPEN_EXISTS = 'seller_verification.open_exists';
 
+    /**
+     * `@throws DomainException` with this code when the required ID or selfie
+     * has not been staged. The controller normally answers that with a 422
+     * before reaching this method; this is the safety net for a direct call.
+     */
+    public const string DOCUMENTS_MISSING = 'seller_verification.documents_missing';
+
     public function __construct(
         private readonly SellerVerificationRepository $verifications,
+        private readonly SellerVerificationDocumentService $documents,
         private readonly ActivityLogger $activity,
     ) {
         //
@@ -68,6 +76,13 @@ class SellerVerificationService
                 throw new DomainException(self::OPEN_EXISTS);
             }
 
+            // Both documents are mandatory. Checking inside the transaction,
+            // after the user row is locked, means two submissions racing cannot
+            // both consume the same staged files.
+            if ($this->documents->missingStaged($locked) !== []) {
+                throw new DomainException(self::DOCUMENTS_MISSING);
+            }
+
             // Every field except the four client-supplied ones is written here.
             // `status` and `submitted_at` are server-set, and
             // `seller_capability` is not touched at all: submitting grants
@@ -85,6 +100,16 @@ class SellerVerificationService
                 'reviewed_at' => null,
                 'submitted_at' => now(),
             ]);
+
+            // Move the staged files onto the record and persist their private
+            // paths. The filenames are generated server-side; no client input
+            // reaches the disk path. Doing this inside the transaction keeps a
+            // record and its documents from diverging: if the move fails the
+            // record is rolled back, and `promote` cleans the staging directory
+            // on success.
+            $verification->forceFill(
+                $this->documents->promote($locked, $verification),
+            )->save();
 
             // Inside the transaction, so the audit row and the submission it
             // records commit or roll back together. A resubmission is a new

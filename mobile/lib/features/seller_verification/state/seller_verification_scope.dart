@@ -46,6 +46,19 @@ class SellerVerificationScope extends InheritedWidget {
     return scope!.controller;
   }
 
+  /// The repository, **without** registering a dependency.
+  ///
+  /// For a screen that owns its own short-lived controller over the same
+  /// transport — the form's document uploads — rather than the long-lived
+  /// [controller]. Reading it in `initState` is the point, so this deliberately
+  /// does not register a dependency.
+  static SellerVerificationRepository repositoryOf(BuildContext context) {
+    final SellerVerificationScope? scope = context
+        .getInheritedWidgetOfExactType<SellerVerificationScope>();
+    assert(scope != null, 'No SellerVerificationScope found in context.');
+    return scope!.repository;
+  }
+
   @override
   bool updateShouldNotify(SellerVerificationScope oldWidget) =>
       repository != oldWidget.repository || controller != oldWidget.controller;

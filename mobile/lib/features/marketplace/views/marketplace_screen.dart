@@ -10,9 +10,10 @@ import '../state/marketplace_controller.dart';
 import '../state/marketplace_scope.dart';
 import '../state/marketplace_state.dart';
 import '../widgets/listing_card.dart';
+import '../widgets/marketplace_filter_button.dart';
 import '../widgets/marketplace_state_views.dart';
 import 'listing_detail_screen.dart';
-import 'marketplace_filter_sheet.dart';
+import 'marketplace_filter_screen.dart';
 
 /// The buyer marketplace.
 ///
@@ -110,7 +111,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Future<void> _openFilters(MarketplaceState state) async {
-    final ListingFilters? applied = await showMarketplaceFilterSheet(
+    final ListingFilters? applied = await showMarketplaceFilterScreen(
       context: context,
       filters: state.filters,
     );
@@ -304,59 +305,8 @@ class _SearchAndFilters extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
-          _FilterButton(state: state, onPressed: onOpenFilters),
+          MarketplaceFilterButton(state: state, onPressed: onOpenFilters),
         ],
-      ),
-    );
-  }
-}
-
-/// The filter control, badged when filters are active.
-///
-/// A button, not a permanently visible row of every filter. Six filters would
-/// not fit on a phone, and a list that only grows as more filters are added
-/// would push the results off the screen. The summary in the tooltip covers
-/// what is applied for anyone who wants the detail without opening the sheet.
-class _FilterButton extends StatelessWidget {
-  const _FilterButton({required this.state, required this.onPressed});
-
-  final MarketplaceState state;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final String summary = state.filters.summary;
-    final bool isActive = state.filters.isActive;
-
-    return Tooltip(
-      message: isActive ? 'Filters: $summary' : 'Filters',
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(48, 48),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-          side: BorderSide(
-            color: isActive ? AppColors.primary : AppColors.border,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(Icons.tune, size: 20),
-            if (isActive) ...<Widget>[
-              const SizedBox(width: AppSpacing.xxs),
-              // A count, not the values: the sheet shows the values, and the
-              // count is what fits.
-              Text(
-                '${state.filters.activeCount}',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
+import 'package:agrobenta_mobile/features/transactions/views/transaction_detail_screen.dart';
 import 'package:agrobenta_mobile/features/transactions/views/transactions_screen.dart';
 import 'package:agrobenta_mobile/repositories/transaction_repository.dart';
 import 'package:flutter/material.dart';
@@ -28,17 +29,16 @@ void main() {
 
   Future<void> pumpScreen(
     WidgetTester tester,
-    Future<http.Response> Function(RecordedRequest request) handler,
-  ) async {
+    Future<http.Response> Function(RecordedRequest request) handler, {
+    Size surface = const Size(800, 1800),
+  }) async {
     final TransactionRepository repository = buildTransactionRepository(
       tokenStore,
       handler,
       recorded: recorded,
     );
 
-    // The default 800x600 surface is a couple of cards tall; a taller one
-    // makes "the tab rendered its list" assertions meaningful.
-    tester.view.physicalSize = const Size(800, 1800);
+    tester.view.physicalSize = surface;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
@@ -54,56 +54,95 @@ void main() {
     await settle(tester);
   }
 
-  testWidgets('offers the three lifecycle tabs in order', (
+  List<String> chipLabels(WidgetTester tester) {
+    return tester
+        .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+        .map((ChoiceChip chip) => (chip.label as Text).data!)
+        .toList(growable: false);
+  }
+
+  http.Response emptyList() =>
+      transactionListResponse(transactions: <Map<String, dynamic>>[], total: 0);
+
+  testWidgets('shows My Purchases and the backend filter chips in order', (
     WidgetTester tester,
   ) async {
-    await pumpScreen(tester, (_) async => transactionListResponse());
+    await pumpScreen(tester, (_) async => emptyList());
 
-    final TabBar bar = tester.widget<TabBar>(find.byType(TabBar));
+    expect(find.text('My Purchases'), findsOneWidget);
+    expect(chipLabels(tester), <String>[
+      'All',
+      'Ongoing',
+      'Completed',
+      'Cancelled',
+    ]);
+
+    final ChoiceChip all = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'All'),
+    );
+    expect(all.selected, isTrue, reason: 'All is the initial filter');
+  });
+
+  testWidgets('the design\'s extra Pending chip is omitted because the server '
+      'has no state distinct from Ongoing', (WidgetTester tester) async {
+    await pumpScreen(tester, (_) async => emptyList());
+
     expect(
-      bar.tabs
-          .map((Widget tab) => (tab as Tab).text)
-          .toList(growable: false),
-      <String>['Ongoing', 'Completed', 'Cancelled'],
+      find.widgetWithText(ChoiceChip, 'Pending'),
+      findsNothing,
+      reason:
+          'a second chip querying the same `pending` status would fabricate a '
+          'lifecycle distinction the backend does not persist',
     );
   });
 
-  testWidgets('the Ongoing tab queries pending and renders its empty state', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('All queries the buyer role with no status and shows every '
+      'record the server returns', (WidgetTester tester) async {
     await pumpScreen(
       tester,
       (_) async => transactionListResponse(
-        transactions: <Map<String, dynamic>>[],
-        total: 0,
+        transactions: <Map<String, dynamic>>[
+          transactionJson(id: 7, status: 'pending'),
+          transactionJson(id: 8, status: 'completed'),
+        ],
+        total: 2,
       ),
     );
 
-    expect(find.text('No ongoing transactions yet'), findsOneWidget);
-    expect(
-      find.text(
-        'Transactions you start or receive will appear here while pending.',
-      ),
-      findsOneWidget,
-    );
     expect(recorded, hasLength(1));
-    expect(recorded.single.query['status'], 'pending');
+    final RecordedRequest request = recorded.single;
+    expect(request.method, 'GET');
+    expect(request.apiPath, '/transactions');
+    expect(request.query['role'], 'buyer');
+    expect(request.query.containsKey('status'), isFalse);
+    expect(request.query['page'], '1');
+
+    expect(find.text('TRX-007'), findsOneWidget);
+    expect(
+      find.text('TRX-008'),
+      findsOneWidget,
+      reason: 'All does not filter client-side or hide a status',
+    );
+    expect(find.text('Completed'), findsWidgets);
   });
 
-  testWidgets('each tab asks the server for its own status and is honest '
-      'when empty', (WidgetTester tester) async {
-    await pumpScreen(
-      tester,
-      (_) async => transactionListResponse(
-        transactions: <Map<String, dynamic>>[],
-        total: 0,
-      ),
-    );
+  testWidgets('each working filter queries its verified backend status as the '
+      'buyer and is honest when empty', (WidgetTester tester) async {
+    await pumpScreen(tester, (_) async => emptyList());
+
+    expect(find.text('No purchases yet'), findsOneWidget);
+
+    await tester.tap(find.text('Ongoing'));
+    await settle(tester);
+
+    expect(find.text('No ongoing purchases yet'), findsOneWidget);
+    expect(recorded.last.query['role'], 'buyer');
+    expect(recorded.last.query['status'], 'pending');
 
     await tester.tap(find.text('Completed'));
     await settle(tester);
 
-    expect(find.text('No completed transactions yet'), findsOneWidget);
+    expect(find.text('No completed purchases yet'), findsOneWidget);
     expect(
       find.text('Completion is not yet available in the app.'),
       findsOneWidget,
@@ -111,24 +150,19 @@ void main() {
           'no path in the app can reach completed today (OQ-15); the empty '
           'state says so rather than pretending',
     );
-    expect(
-      recorded.any((RecordedRequest r) => r.query['status'] == 'completed'),
-      isTrue,
-    );
+    expect(recorded.last.query['role'], 'buyer');
+    expect(recorded.last.query['status'], 'completed');
 
     await tester.tap(find.text('Cancelled'));
     await settle(tester);
 
-    expect(find.text('No cancelled transactions'), findsOneWidget);
-    expect(
-      recorded.any((RecordedRequest r) => r.query['status'] == 'cancelled'),
-      isTrue,
-    );
+    expect(find.text('No cancelled purchases'), findsOneWidget);
+    expect(recorded.last.query['role'], 'buyer');
+    expect(recorded.last.query['status'], 'cancelled');
   });
 
-  testWidgets('renders a card per record with id, title, amount and badge', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('renders a real record with id, title, agreed price, status and '
+      'date', (WidgetTester tester) async {
     await pumpScreen(
       tester,
       (_) async => transactionListResponse(
@@ -141,11 +175,70 @@ void main() {
 
     expect(find.text('TRX-007'), findsOneWidget);
     expect(find.text('Holstein'), findsOneWidget);
+    expect(
+      find.text('Agreed price'),
+      findsOneWidget,
+      reason: 'the amount must not be mistakable for a listing asking price',
+    );
+    expect(
+      find.text('₱85,000.00'),
+      findsOneWidget,
+      reason: 'the server figure is shown exactly, never computed',
+    );
     expect(find.text('Ongoing'), findsWidgets);
     expect(
-      find.textContaining('85,000'),
+      find.text('1 Oct 2026'),
       findsOneWidget,
-      reason: 'the amount shown is the server figure, formatted not computed',
+      reason: 'the card date comes from the persisted created_at',
+    );
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+  });
+
+  testWidgets('long titles and a narrow screen do not overflow', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(
+      tester,
+      (_) async => transactionListResponse(
+        transactions: <Map<String, dynamic>>[
+          transactionJson(
+            id: 7,
+            listing: transactionListingJson(
+              breed:
+                  'A very long breed description that would overflow any '
+                  'unbounded horizontal row on a narrow phone',
+            ),
+          ),
+        ],
+        total: 1,
+      ),
+      surface: const Size(320, 900),
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping a card opens the existing detail screen with the real '
+      'id', (WidgetTester tester) async {
+    await pumpScreen(tester, (RecordedRequest request) async {
+      if (request.apiPath == '/transactions/7') {
+        return transactionDetailResponse(transaction: transactionJson(id: 7));
+      }
+      return transactionListResponse(
+        transactions: <Map<String, dynamic>>[
+          transactionJson(id: 7, totalAmount: '85000.00'),
+        ],
+        total: 1,
+      );
+    });
+
+    await tester.tap(find.text('TRX-007'));
+    await settle(tester, frames: 14);
+
+    expect(find.byType(TransactionDetailScreen), findsOneWidget);
+    expect(
+      recorded.map((RecordedRequest r) => r.apiPath),
+      contains('/transactions/7'),
     );
   });
 
@@ -158,10 +251,7 @@ void main() {
       if (calls == 1) {
         return transactionServerErrorResponse();
       }
-      return transactionListResponse(
-        transactions: <Map<String, dynamic>>[],
-        total: 0,
-      );
+      return emptyList();
     });
 
     expect(find.text('Could not load transactions'), findsOneWidget);
@@ -170,44 +260,28 @@ void main() {
     await tester.tap(find.text('Retry'));
     await settle(tester);
 
-    expect(find.text('No ongoing transactions yet'), findsOneWidget);
+    expect(find.text('No purchases yet'), findsOneWidget);
     expect(calls, 2);
   });
 
-  testWidgets('pull-to-refresh re-queries page one', (
+  testWidgets('pull-to-refresh re-queries page one as the buyer', (
     WidgetTester tester,
   ) async {
-    await pumpScreen(
-      tester,
-      (_) async => transactionListResponse(
-        transactions: <Map<String, dynamic>>[],
-        total: 0,
-      ),
-    );
+    await pumpScreen(tester, (_) async => emptyList());
     expect(recorded, hasLength(1));
-    expect(
-      find.text('No ongoing transactions yet'),
-      findsOneWidget,
-      reason: 'the pending tab starts honestly empty',
-    );
+    expect(find.text('No purchases yet'), findsOneWidget);
 
-    // The indicator is wired to the controller's refresh flow: a pull must
-    // re-query page one (page stays 1, status pending) without touching the
-    // scroll position or the results already on screen.
-    final RefreshIndicator indicator =
-        tester.widget(find.byType(RefreshIndicator));
-    expect(indicator.onRefresh, isNotNull,
-        reason: 'refresh is wired to the controller');
+    final RefreshIndicator indicator = tester.widget(
+      find.byType(RefreshIndicator),
+    );
+    expect(indicator.onRefresh, isNotNull);
     await indicator.onRefresh();
     await settle(tester);
 
     expect(recorded, hasLength(2));
-    expect(
-      recorded.last.query['page'],
-      '1',
-      reason: 'refresh always re-queries the first page',
-    );
-    expect(recorded.last.query['status'], 'pending');
-    expect(find.text('No ongoing transactions yet'), findsOneWidget);
+    expect(recorded.last.query['page'], '1');
+    expect(recorded.last.query['role'], 'buyer');
+    expect(recorded.last.query.containsKey('status'), isFalse);
+    expect(find.text('No purchases yet'), findsOneWidget);
   });
 }

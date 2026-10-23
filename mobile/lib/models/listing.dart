@@ -254,6 +254,23 @@ class Listing {
     return unit == null ? _trimDecimal(value) : '${_trimDecimal(value)} $unit';
   }
 
+  /// The gender as a buyer-facing label, e.g. `Female`, or `null`.
+  ///
+  /// The API stores the value lowercase (`female`); the attribute rows show it
+  /// capitalised, the same way [ageLabel] and [weightLabel] turn the raw
+  /// halves into one readable string. Blank and absent both render as nothing.
+  String? get genderLabel {
+    final String? value = gender;
+    if (value == null) {
+      return null;
+    }
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return '${trimmed[0].toUpperCase()}${trimmed.substring(1)}';
+  }
+
   /// A buyer-facing title for the listing: the breed when there is one,
   /// otherwise the species.
   ///

@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../models/seller_verification.dart';
 import '../../../models/user.dart';
+import '../../auth/state/auth_scope.dart';
+import '../../auth/widgets/auth_scenic_header.dart';
+import '../../seller_verification/state/seller_verification_controller.dart';
+import '../../seller_verification/state/seller_verification_scope.dart';
+import '../../seller_verification/state/seller_verification_state.dart';
+import '../../seller_verification/view/seller_verification_screen.dart';
 import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
@@ -12,13 +19,13 @@ import 'edit_profile_screen.dart';
 /// The caller's own profile.
 ///
 /// Reached from the buyer shell's bottom navigation. Read-only until the user
-/// taps "Edit profile", which pushes the form. A "Change password" action is
-/// offered separately because the password is not part of the profile resource
-/// and has its own endpoint.
+/// taps "Personal Information", which pushes the existing edit form. "Change
+/// password" is offered separately because the password is not part of the
+/// profile resource. Sign out lives under "Other".
 ///
-/// Reads the controller once in `initState` and rebuilds from
-/// [ListenableBuilder], so a keystroke elsewhere does not rebuild the whole
-/// tree — the same pattern `SellerListingsScreen` uses.
+/// Reads the profile controller once in `initState` and rebuilds from
+/// [ListenableBuilder], following the same pattern as the rest of the M6
+/// screens.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -32,11 +39,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // `readOf`, not `of`: a dependency cannot be registered from `initState`,
-    // and the whole screen already listens to the controller directly.
     _controller = ProfileScope.readOf(context);
-    // Idempotent while in flight; a rebuild that re-enters this is a no-op.
-    _controller.load();
+    if (_controller.state.status == ProfileUiStatus.initial) {
+      _controller.load();
+    }
   }
 
   Future<void> _openEdit() async {
@@ -46,10 +52,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         fullscreenDialog: true,
       ),
     );
-    // Nothing to do on return — the controller already holds the updated
-    // profile and the ListenableBuilder rebuilds. The result value is
-    // intentionally ignored: it exists so a future change can react to a save
-    // without changing the edit screen's contract.
   }
 
   Future<void> _openChangePassword() async {
@@ -64,15 +66,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      backgroundColor: AppColors.background,
       body: ListenableBuilder(
         listenable: _controller,
         builder: (BuildContext context, Widget? child) {
           final ProfileState state = _controller.state;
 
-          // A success message is one-shot: show it, then clear it so the next
-          // rebuild does not show it again. Deferred to after the frame so a
-          // `setState` during build is avoided.
           final String? success = state.successMessage;
           if (success != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -87,19 +86,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
 
           return switch (state.status) {
-            ProfileUiStatus.initial ||
-            ProfileUiStatus.loading => const Center(
-              child: CircularProgressIndicator(),
-            ),
+            ProfileUiStatus.initial || ProfileUiStatus.loading => const Center(
+                child: CircularProgressIndicator(),
+              ),
             ProfileUiStatus.failed => _ErrorState(
-              message: state.errorMessage ?? 'Something went wrong.',
-              onRetry: _controller.load,
-            ),
+                message: state.errorMessage ?? 'Something went wrong.',
+                onRetry: _controller.load,
+              ),
             _ => _ProfileBody(
-              user: state.user!,
-              onEdit: _openEdit,
-              onChangePassword: _openChangePassword,
-            ),
+                user: state.user!,
+                onEdit: _openEdit,
+                onChangePassword: _openChangePassword,
+              ),
           };
         },
       ),
@@ -120,71 +118,381 @@ class _ProfileBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    // The header carries the same painted landscape, temporary logo and tagline
+    // as the auth screens, so the brand treatment stays in one place. It grows
+    // with the text scale and is capped, like the auth screens, so an enlarged
+    // wordmark cannot overflow.
+    final double textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, 1.8).toDouble();
+    final double heroHeight =
+        (MediaQuery.sizeOf(context).height * 0.26 * textScale)
+            .clamp(180.0, 260.0)
+            .toDouble();
 
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.screenGutter),
-      children: <Widget>[
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    // How far the summary card rides up over the header's lower edge.
+    const double overlap = 24;
+
+    return SafeArea(
+      bottom: false,
+      child: SingleChildScrollView(
+        child: Column(
+          children: <Widget>[
+            Stack(
+              clipBehavior: Clip.none,
               children: <Widget>[
-                _Avatar(name: user.name, url: user.avatarUrl),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  user.name,
-                  style: theme.textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  user.email,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                if (user.isSeller) ...<Widget>[
-                  const SizedBox(height: AppSpacing.sm),
-                  const Center(child: _VerifiedBadge()),
-                ],
-                const SizedBox(height: AppSpacing.lg),
-                _InfoSection(
-                  title: 'Contact',
-                  rows: <_InfoRow>[
-                    _InfoRow('Phone', user.phone ?? 'Not set'),
-                    _InfoRow('Location', user.location ?? 'Not set'),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _InfoSection(
-                  title: 'About',
-                  rows: <_InfoRow>[
-                    _InfoRow(
-                      'Bio',
-                      (user.bio == null || user.bio!.isEmpty)
-                          ? 'Not set'
-                          : user.bio!,
-                      multiline: true,
+                AuthScenicHeader(height: heroHeight),
+                Padding(
+                  padding: EdgeInsets.only(top: heroHeight - overlap),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.screenGutter,
                     ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                FilledButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Edit profile'),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                OutlinedButton.icon(
-                  onPressed: onChangePassword,
-                  icon: const Icon(Icons.lock_outline),
-                  label: const Text('Change password'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _ProfileSummaryCard(user: user, onEdit: onEdit),
+                        const SizedBox(height: AppSpacing.md),
+                        _AccountModeCard(user: user),
+                        const SizedBox(height: AppSpacing.md),
+                        _BecomeSellerCard(user: user),
+                        const SizedBox(height: AppSpacing.lg),
+                        _AccountSettingsSection(
+                          onEdit: onEdit,
+                          onChangePassword: onChangePassword,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        const _OtherSection(),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
+            SizedBox(
+              height: MediaQuery.paddingOf(context).bottom + AppSpacing.xl,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSummaryCard extends StatelessWidget {
+  const _ProfileSummaryCard({required this.user, required this.onEdit});
+
+  final User user;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: <Widget>[
+            _Avatar(name: user.name, url: user.avatarUrl),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    user.name,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    user.email,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (user.location != null && user.location!.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Row(
+                      children: <Widget>[
+                        const Icon(Icons.location_on_outlined, size: 16),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            user.location!,
+                            style: theme.textTheme.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: onEdit,
+              child: const Text('Edit'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountModeCard extends StatelessWidget {
+  const _AccountModeCard({required this.user});
+
+  final User user;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isSeller = user.isSeller;
+
+    return Card(
+      color: AppColors.primary.withValues(alpha: 0.08),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.shopping_cart_outlined, color: AppColors.primary),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Account Mode', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    isSeller ? 'Seller Account' : 'Buyer Account',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSeller)
+              const Text(
+                'Active',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BecomeSellerCard extends StatefulWidget {
+  const _BecomeSellerCard({required this.user});
+
+  final User user;
+
+  @override
+  State<_BecomeSellerCard> createState() => _BecomeSellerCardState();
+}
+
+class _BecomeSellerCardState extends State<_BecomeSellerCard> {
+  late final SellerVerificationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = SellerVerificationScope.readOf(context);
+    if (_controller.state.status == SellerVerificationUiStatus.initial) {
+      _controller.load();
+    }
+  }
+
+  void _openVerification() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            SellerVerificationScreen(accountName: widget.user.name),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isSeller = widget.user.isSeller;
+
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (BuildContext context, Widget? child) {
+        final SellerVerificationState state = _controller.state;
+
+        return Card(
+          // A pale amber tint derived from the existing warning token, the same
+          // way the account-mode card derives its pale green — no new colour is
+          // introduced for this one card.
+          color: AppColors.warning.withValues(alpha: 0.10),
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Icon(Icons.person_add_alt_outlined),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text('Become a Seller', style: theme.textTheme.titleSmall),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Complete seller verification to start selling livestock.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (!isSeller) ...<Widget>[
+                  _statusLine(state),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                _action(state, isSeller: isSeller),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _statusLine(SellerVerificationState state) {
+    final SellerVerification? verification = state.verification;
+    if (verification == null) {
+      return const SizedBox.shrink();
+    }
+
+    final (Color color, String text) = switch (verification.status) {
+      SellerVerificationStatus.approved => (AppColors.success, 'Verification approved'),
+      SellerVerificationStatus.rejected => (AppColors.error, 'Verification not approved'),
+      SellerVerificationStatus.submitted ||
+      SellerVerificationStatus.pendingReview => (AppColors.warning, 'Verification under review'),
+    };
+
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+      ],
+    );
+  }
+
+  Widget _action(SellerVerificationState state, {required bool isSeller}) {
+    if (isSeller) {
+      return FilledButton(
+        onPressed: _openVerification,
+        child: const Text('View verification'),
+      );
+    }
+
+    if (state.status == SellerVerificationUiStatus.loading) {
+      return const OutlinedButton(
+        onPressed: null,
+        child: Text('Checking your application…'),
+      );
+    }
+
+    if (state.status == SellerVerificationUiStatus.failed) {
+      return OutlinedButton(
+        onPressed: _controller.load,
+        child: const Text('Try again'),
+      );
+    }
+
+    return switch (state.status) {
+      SellerVerificationUiStatus.notSubmitted => FilledButton(
+          onPressed: _openVerification,
+          child: const Text('Start Seller Verification'),
+        ),
+      SellerVerificationUiStatus.rejected => FilledButton(
+          onPressed: _openVerification,
+          child: const Text('Resubmit Verification'),
+        ),
+      _ => OutlinedButton(
+          onPressed: _openVerification,
+          child: const Text('View status'),
+        ),
+    };
+  }
+}
+
+class _AccountSettingsSection extends StatelessWidget {
+  const _AccountSettingsSection({
+    required this.onEdit,
+    required this.onChangePassword,
+  });
+
+  final VoidCallback onEdit;
+  final VoidCallback onChangePassword;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text('Account Settings', style: theme.textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.xs),
+        Card(
+          margin: EdgeInsets.zero,
+          child: Column(
+            children: <Widget>[
+              _SettingsTile(
+                icon: Icons.person_outline,
+                title: 'Personal Information',
+                subtitle: 'View and update your personal details',
+                onTap: onEdit,
+              ),
+              const Divider(height: 1),
+              _SettingsTile(
+                icon: Icons.home_outlined,
+                title: 'Address',
+                subtitle: 'Manage your delivery address',
+                enabled: false,
+                onTap: () {},
+              ),
+              const Divider(height: 1),
+              _SettingsTile(
+                icon: Icons.lock_outline,
+                title: 'Change Password',
+                subtitle: 'Update your account password',
+                onTap: onChangePassword,
+              ),
+              const Divider(height: 1),
+              _SettingsTile(
+                icon: Icons.notifications_outlined,
+                title: 'Notification Settings',
+                subtitle: 'Manage your notification preferences',
+                enabled: false,
+                onTap: () {},
+              ),
+            ],
           ),
         ),
       ],
@@ -192,10 +500,105 @@ class _ProfileBody extends StatelessWidget {
   }
 }
 
-/// The avatar at the top of the profile.
-///
-/// Falls back to the first letter of the name when no URL is set, so an
-/// account with no picture does not render an empty circle.
+class _OtherSection extends StatelessWidget {
+  const _OtherSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text('Other', style: theme.textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.xs),
+        Card(
+          margin: EdgeInsets.zero,
+          child: Column(
+            children: <Widget>[
+              _SettingsTile(
+                icon: Icons.help_outline,
+                title: 'Help and Support',
+                subtitle: 'Get help or contact support',
+                enabled: false,
+                onTap: () {},
+              ),
+              const Divider(height: 1),
+              _SettingsTile(
+                icon: Icons.description_outlined,
+                title: 'Terms and Policies',
+                subtitle: 'View our terms, privacy policy, and guidelines',
+                enabled: false,
+                onTap: () {},
+              ),
+              const Divider(height: 1),
+              const _SignOutTile(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title, style: theme.textTheme.titleSmall),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      enabled: enabled,
+      onTap: enabled ? onTap : null,
+    );
+  }
+}
+
+class _SignOutTile extends StatelessWidget {
+  const _SignOutTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isBusy = AuthScope.of(context).state.isSigningOut;
+
+    return ListTile(
+      leading: const Icon(Icons.logout),
+      title: const Text('Log Out'),
+      subtitle: const Text('Sign out from your account'),
+      trailing: isBusy
+          ? const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.chevron_right),
+      enabled: !isBusy,
+      onTap: isBusy ? null : () => AuthScope.of(context).signOut(),
+    );
+  }
+}
+
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.name, required this.url});
 
@@ -207,134 +610,16 @@ class _Avatar extends StatelessWidget {
     final String? src = url;
     if (src == null || src.isEmpty) {
       return CircleAvatar(
-        radius: 44,
+        radius: 32,
         child: Text(
           name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
-          style: const TextStyle(fontSize: 28),
+          style: const TextStyle(fontSize: 24),
         ),
       );
     }
     return CircleAvatar(
-      radius: 44,
+      radius: 32,
       backgroundImage: NetworkImage(src),
-    );
-  }
-}
-
-class _VerifiedBadge extends StatelessWidget {
-  const _VerifiedBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(Icons.verified, size: 16, color: AppColors.primary),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            'Verified Seller',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoSection extends StatelessWidget {
-  const _InfoSection({required this.title, required this.rows});
-
-  final String title;
-  final List<_InfoRow> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          title,
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            child: Column(
-              children: <Widget>[
-                for (int i = 0; i < rows.length; i++) ...<Widget>[
-                  rows[i],
-                  if (i < rows.length - 1)
-                    const Divider(height: AppSpacing.md),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow(this.label, this.value, {this.multiline = false});
-
-  final String label;
-  final String value;
-  final bool multiline;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    if (multiline) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(value, style: theme.textTheme.bodyMedium),
-        ],
-      );
-    }
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ),
-        Flexible(
-          child: Text(
-            value,
-            style: theme.textTheme.bodyMedium,
-            textAlign: TextAlign.end,
-          ),
-        ),
-      ],
     );
   }
 }

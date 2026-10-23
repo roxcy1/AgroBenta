@@ -127,21 +127,25 @@ class _Placeholder extends StatelessWidget {
               )
             : Padding(
                 padding: const EdgeInsets.all(AppSpacing.xs),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      Icons.image_not_supported_outlined,
-                      size: 20,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(
-                      hasPhotos ? 'Photo unavailable' : 'No photo',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.labelSmall,
-                    ),
-                  ],
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 20,
+                        color: AppColors.textSecondary,
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        hasPhotos ? 'Photo unavailable' : 'No photo',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    ],
+                  ),
                 ),
               ),
       ),

@@ -7,19 +7,28 @@ import '../../../models/listing.dart';
 import '../../../models/transaction.dart';
 import 'transaction_status_badge.dart';
 
-/// One transaction in the tabbed list.
+/// One purchase in the My Purchases list.
 ///
-/// A card the counterparty can judge at a glance: TRX-ID, what it is, the
-/// server's amount, and an unmistakable status badge. Deliberately **not**
-/// every column — quantity and dates belong on the detail screen.
+/// A card the buyer can judge at a glance: TRX-ID and date, what it is, the
+/// server's agreed amount with a label that cannot be mistaken for the
+/// listing's asking price, and an unmistakable status badge. Deliberately
+/// **not** every column — quantity and the counterparty belong on the detail
+/// screen.
 ///
-/// The amount is `total_amount` from the API, formatted for the card. It is
-/// never computed here: any client-side arithmetic that differed from the
-/// server would be a trust bug.
+/// The amount is `total_amount` from the API (the server's `asking_price ×
+/// quantity`). It is never computed here: any client-side arithmetic that
+/// differed from the server would be a trust bug. It is shown exactly, with
+/// cents, because this is a purchase record rather than a browsable listing.
+///
+/// There is no location row: `MobileTransactionResource` does not expose one.
 ///
 /// Tappable as a whole. The [onTap] target is the full card.
 class TransactionCard extends StatelessWidget {
-  const TransactionCard({required this.transaction, required this.onTap, super.key});
+  const TransactionCard({
+    required this.transaction,
+    required this.onTap,
+    super.key,
+  });
 
   final Transaction transaction;
   final VoidCallback onTap;
@@ -28,6 +37,7 @@ class TransactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final String? photoUrl = transaction.listing.loadablePhotoUrl;
+    final String date = AppFormatters.formatDate(transaction.createdAt);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -44,15 +54,25 @@ class TransactionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    // TRX-ID first and in a label style: it is the reference
-                    // the counterparty quotes back to support.
-                    Text(
-                      transaction.displayId,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    // Reference and date in one compact secondary row: they
+                    // identify the record without competing with the title.
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            transaction.displayId,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (date.isNotEmpty) ...<Widget>[
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(date, style: theme.textTheme.labelSmall),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.xxs),
                     Text(
@@ -62,11 +82,16 @@ class TransactionCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: AppSpacing.xs),
+                    // The label is not decoration: it distinguishes the
+                    // persisted transaction amount from a listing's asking
+                    // price, which this screen never shows.
+                    Text('Agreed price', style: theme.textTheme.labelSmall),
                     Text(
-                      AppFormatters.formatMoneyCompact(transaction.totalAmount) ??
+                      AppFormatters.formatMoney(transaction.totalAmount) ??
                           transaction.totalAmount,
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -74,6 +99,16 @@ class TransactionCard extends StatelessWidget {
                     const SizedBox(height: AppSpacing.xs),
                     TransactionStatusBadge(status: transaction.status),
                   ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              // The card opens the existing detail route, so it says so.
+              const Padding(
+                padding: EdgeInsets.only(top: AppSpacing.xxs),
+                child: Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],

@@ -37,6 +37,22 @@ abstract final class AppColors {
   /// seller-related highlights and AI suggestion backgrounds. (`#EAF7F0`)
   static const Color primarySurface = Color(0xFFEAF7F0);
 
+  // --- Illustration (auth hero) -------------------------------------------
+  //
+  // The registration hero is a code-drawn landscape — the project has no brand
+  // scenery asset yet — so these are the only two tones it needs beyond the
+  // brand greens (which it reuses for the hills) and white (clouds and sun).
+  // They are illustration-only: not UI surfaces, not brand accents. They live
+  // here rather than as literals in the widget so the whole palette still has
+  // exactly one home.
+
+  /// Top of the registration hero sky gradient. (`#BEE3F5`)
+  static const Color skyTop = Color(0xFFBEE3F5);
+
+  /// Bottom of the registration hero sky gradient, near the horizon.
+  /// (`#EDF6FC`)
+  static const Color skyBottom = Color(0xFFEDF6FC);
+
   // --- Semantic status -----------------------------------------------------
 
   /// Success, and semantically "approved / active / completed". (`#168A4A`)
@@ -47,6 +63,12 @@ abstract final class AppColors {
 
   /// Warning, and semantically "pending / awaiting review". (`#D98B00`)
   static const Color warning = Color(0xFFD98B00);
+
+  /// Very light amber surface for a pending/awaiting status panel. The
+  /// counterpart to [primarySurface] for [warning]: the Inquiry Sent screen's
+  /// status card needs a pale amber that pairs with the amber clock icon, and
+  /// tinting [warning] itself would put body text below contrast. (`#FDF3E3`)
+  static const Color warningSurface = Color(0xFFFDF3E3);
 
   /// Error, and semantically "rejected / failed / invalid". (`#C93636`)
   static const Color error = Color(0xFFC93636);

@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../models/message.dart';
 import '../../../models/transaction.dart';
+import '../../auth/state/auth_scope.dart';
 import '../../marketplace/widgets/marketplace_state_views.dart';
+import '../../messaging/view/chat_screen.dart';
 import '../state/transaction_detail_controller.dart';
 import '../state/transaction_detail_state.dart';
 import '../state/transaction_scope.dart';
 import 'transaction_detail_content.dart';
+import 'transaction_status_screen.dart';
 
 /// One transaction's detail, from `GET /transactions/{id}`.
 ///
@@ -27,7 +31,7 @@ class TransactionDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Transaction')),
+      appBar: AppBar(title: const Text('Transaction Details')),
       body: SafeArea(child: _DetailBody(transactionId: transactionId)),
     );
   }
@@ -87,6 +91,7 @@ class _DetailBodyState extends State<_DetailBody> {
 
         if (state.status == TransactionDetailStatus.failed) {
           return MarketplaceErrorState(
+            title: 'Could not load transaction',
             message: state.errorMessage ?? 'Something went wrong.',
             onRetry: _controller.load,
           );
@@ -102,31 +107,75 @@ class _DetailBodyState extends State<_DetailBody> {
           isCancelling: state.isCancelling,
           cancelErrorMessage: state.cancelErrorMessage,
           canCancel: state.canCancel,
-          onCancel: _confirmCancel,
+          onCancel: () => _confirmCancel(transaction),
           onDismissCancelError: _controller.clearCancelError,
+          onMessageSeller: () => _openThread(context, transaction),
+          onViewStatus: () => _openStatus(context, transaction),
         );
       },
     );
   }
 
+  /// Opens the dedicated status screen for this same record, by id.
+  void _openStatus(BuildContext context, Transaction transaction) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            TransactionStatusScreen(transactionId: transaction.id),
+      ),
+    );
+  }
+
+  /// Opens the existing chat thread with the counterparty.
+  ///
+  /// The counterparty id is the seller's (for a buyer) straight from the
+  /// payload, so this routes to a real, server-identifiable user. `ChatScreen`
+  /// reads `MessagingScope` in its own `initState`, so this screen builds
+  /// without one — the same split `ListingDetailScreen` uses.
+  void _openThread(BuildContext context, Transaction transaction) {
+    final int? viewerId = AuthScope.maybeOf(context)?.state.user?.id;
+    if (viewerId == null) {
+      // Without a session id the chat cannot label its own messages correctly,
+      // so the action is not offered as if it would work.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in again to message the seller.')),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ChatScreen(
+          counterpart: ChatUser(
+            id: transaction.counterparty.id,
+            name: transaction.counterparty.name,
+            avatarUrl: null,
+          ),
+          currentUserId: viewerId,
+          listingId: transaction.listing.id,
+        ),
+      ),
+    );
+  }
+
   /// Confirms before calling: the transition is irreversible.
-  Future<void> _confirmCancel() async {
+  Future<void> _confirmCancel(Transaction transaction) async {
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: const Text('Cancel this transaction?'),
+        title: const Text('Cancel this request?'),
         content: const Text(
-          'This cannot be undone. A cancelled transaction stays cancelled.',
+          'This cannot be undone. A cancelled request stays cancelled.',
         ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep transaction'),
+            child: const Text('Keep request'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Cancel transaction'),
+            child: const Text('Cancel request'),
           ),
         ],
       ),

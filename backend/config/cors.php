@@ -31,10 +31,12 @@ return [
 
     'allowed_origins' => [
         'http://localhost:5174',
-        'http://localhost:8080',
+       'http://localhost:8080',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+         
+    ],
 
     'allowed_headers' => ['*'],
 

@@ -83,6 +83,34 @@ return [
             'report' => false,
         ],
 
+        // Seller verification documents (government ID + selfie).
+        //
+        // Private by construction: there is no `url` key and no public
+        // visibility, so nothing on this disk is reachable through the web
+        // server. Files are only ever served by an authenticated streaming
+        // endpoint that checks the caller owns the record or is an
+        // administrator. The root defaults to `storage/app/private`, outside
+        // the `public` symlink, so `storage:link` cannot expose it by accident.
+        //
+        // Paths stored in `seller_verifications.id_document_path` and
+        // `selfie_path` are disk-relative. The columns never hold a URL.
+        'seller-verification-documents' => [
+            'driver' => env('SELLER_VERIFICATION_DOCUMENTS_DRIVER', 'local'),
+            'root' => env(
+                'SELLER_VERIFICATION_DOCUMENTS_ROOT',
+                storage_path('app/private/seller-verifications'),
+            ),
+            'visibility' => 'private',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_BUCKET'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

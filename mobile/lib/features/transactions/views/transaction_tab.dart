@@ -3,21 +3,26 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/transaction.dart';
 import '../state/transactions_controller.dart';
+import '../state/transactions_filter.dart';
 import '../state/transactions_state.dart';
 import '../widgets/transaction_card.dart';
 import '../widgets/transactions_state_views.dart';
 import 'transaction_detail_screen.dart';
 
-/// One tab's list, driven entirely by its controller's state.
+/// One filter's list, driven entirely by its controller's state.
 ///
-/// Kept alive across tab switches so scroll position and loaded pages
-/// survive. The screen makes no request of its own: it forwards intent to
-/// the controller and renders whatever state comes back.
+/// The controller outlives the widget, so switching filters and back shows the
+/// pages already loaded. The list makes no request of its own: it forwards
+/// intent to the controller and renders whatever state comes back.
 class TransactionsTab extends StatefulWidget {
-  const TransactionsTab({required this.controller, required this.status, super.key});
+  const TransactionsTab({
+    required this.controller,
+    required this.filter,
+    super.key,
+  });
 
   final TransactionsController controller;
-  final TransactionStatus status;
+  final TransactionsFilter filter;
 
   @override
   State<TransactionsTab> createState() => _TransactionsTabState();
@@ -78,7 +83,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
               physics: const AlwaysScrollableScrollPhysics(),
               children: <Widget>[
                 SizedBox(height: MediaQuery.sizeOf(context).height * 0.2),
-                TransactionsEmptyState(status: widget.status),
+                TransactionsEmptyState(filter: widget.filter),
               ],
             ),
           );

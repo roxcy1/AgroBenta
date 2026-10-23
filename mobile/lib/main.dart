@@ -8,6 +8,7 @@ import 'features/auth/state/auth_controller.dart';
 import 'features/auth/state/auth_scope.dart';
 import 'features/auth/view/auth_gate.dart';
 import 'features/buyer_shell/view/buyer_shell.dart';
+import 'features/inquiries/state/inquiry_scope.dart';
 import 'features/marketplace/state/marketplace_controller.dart';
 import 'features/marketplace/state/marketplace_scope.dart';
 import 'features/messaging/state/conversations_controller.dart';
@@ -20,6 +21,7 @@ import 'features/seller_verification/state/seller_verification_controller.dart';
 import 'features/seller_verification/state/seller_verification_scope.dart';
 import 'features/transactions/state/transaction_scope.dart';
 import 'repositories/auth_repository.dart';
+import 'repositories/inquiry_repository.dart';
 import 'repositories/marketplace_repository.dart';
 import 'repositories/messaging_repository.dart';
 import 'repositories/profile_repository.dart';
@@ -27,6 +29,7 @@ import 'repositories/seller_listing_repository.dart';
 import 'repositories/seller_verification_repository.dart';
 import 'repositories/transaction_repository.dart';
 import 'services/auth_service.dart';
+import 'services/inquiry_service.dart';
 import 'services/marketplace_service.dart';
 import 'services/messaging_service.dart';
 import 'services/profile_service.dart';
@@ -99,6 +102,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final NotificationService _notificationService;
   late final NotificationRepository _notificationRepository;
   late final NotificationsController _notificationsController;
+  late final InquiryService _inquiryService;
+  late final InquiryRepository _inquiryRepository;
 
   @override
   void initState() {
@@ -168,6 +173,13 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _notificationService = NotificationService(_apiClient);
     _notificationRepository = NotificationRepository(_notificationService);
     _notificationsController = NotificationsController(_notificationRepository);
+
+    // Inquiries. No session-scoped controller: the inquire screen owns its
+    // own (a one-shot form, disposed with its route), so only the repository
+    // is shared — through a scope above `MaterialApp`, where the pushed
+    // screen can reach it.
+    _inquiryService = InquiryService(_apiClient);
+    _inquiryRepository = InquiryRepository(_inquiryService);
   }
   @override
   void dispose() {
@@ -238,11 +250,19 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                   child: NotificationsScope(
                     repository: _notificationRepository,
                     controller: _notificationsController,
-                    child: MaterialApp(
-                      title: 'AgroBenta',
-                      debugShowCheckedModeBanner: false,
-                      theme: AppTheme.light(),
-                      home: AuthGate(authenticatedView: _buildBuyerShell),
+                    // Inquiries sits as a sibling of the other scopes, above
+                    // `MaterialApp`, for the same reason each of them does: the
+                    // inquire screen is a pushed route, and only the
+                    // repository is shared — the screen builds its own
+                    // controller and disposes it with the route.
+                    child: InquiryScope(
+                      repository: _inquiryRepository,
+                      child: MaterialApp(
+                        title: 'AgroBenta',
+                        debugShowCheckedModeBanner: false,
+                        theme: AppTheme.light(),
+                        home: AuthGate(authenticatedView: _buildBuyerShell),
+                      ),
                     ),
                   ),
                 ),

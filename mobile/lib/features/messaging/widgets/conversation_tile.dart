@@ -24,85 +24,90 @@ class ConversationTile extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final bool unread = conversation.hasUnread;
 
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.screenGutter,
-          vertical: AppSpacing.sm,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _Avatar(
-              user: conversation.counterpart,
-              hasUnread: unread,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          conversation.counterpart.name,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight:
-                                unread ? FontWeight.w600 : FontWeight.w500,
+    return Material(
+      // Pale green while the thread has unread messages — the theme's own
+      // primarySurface, so it matches every other soft-green surface in the
+      // app (Messages design §3.4, §7).
+      color: unread ? AppColors.primarySurface : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.screenGutter,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _Avatar(user: conversation.counterpart, hasUnread: unread),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            conversation.counterpart.name,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: unread
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        _shortTime(conversation.lastMessageAt),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: unread
-                              ? AppColors.primary
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    conversation.listingTitle ?? 'Direct message',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          conversation.lastMessage,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: unread
-                                ? theme.colorScheme.onSurface
-                                : AppColors.textSecondary,
-                            fontWeight:
-                                unread ? FontWeight.w500 : FontWeight.normal,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (unread) ...<Widget>[
                         const SizedBox(width: AppSpacing.xs),
-                        _UnreadBadge(count: conversation.unreadCount),
+                        Text(
+                          _shortTime(conversation.lastMessageAt),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: unread
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                          ),
+                        ),
                       ],
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      conversation.listingTitle ?? 'Direct message',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            conversation.lastMessage,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: unread
+                                  ? theme.colorScheme.onSurface
+                                  : AppColors.textSecondary,
+                              fontWeight: unread
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (unread) ...<Widget>[
+                          const SizedBox(width: AppSpacing.xs),
+                          _UnreadBadge(count: conversation.unreadCount),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -150,10 +155,7 @@ class _Avatar extends StatelessWidget {
     final String? url = user.avatarUrl;
     final Widget fallback = CircleAvatar(
       radius: 24,
-      child: Text(
-        user.initial,
-        style: const TextStyle(fontSize: 18),
-      ),
+      child: Text(user.initial, style: const TextStyle(fontSize: 18)),
     );
 
     return SizedBox(
@@ -164,10 +166,7 @@ class _Avatar extends StatelessWidget {
         children: <Widget>[
           url == null || url.isEmpty
               ? fallback
-              : CircleAvatar(
-                  radius: 24,
-                  backgroundImage: NetworkImage(url),
-                ),
+              : CircleAvatar(radius: 24, backgroundImage: NetworkImage(url)),
           if (hasUnread)
             Positioned(
               top: 0,

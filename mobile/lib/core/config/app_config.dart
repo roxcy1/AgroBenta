@@ -100,7 +100,7 @@ abstract final class AppConfig {
   /// `--dart-define=API_BASE_URL`, never by editing this constant.
   /// CHANGE_THIS_DEV_LAN_IP: the development machine's address in
   /// `ipconfig`.
-  static const String physicalAndroidApiBaseUrl = 'http://192.168.1.8:8001/api';
+  static const String physicalAndroidApiBaseUrl = 'http://192.168.1.14:8001/api';
 
   /// `10.0.2.2` is the Android emulator's alias for the host machine's loopback
   /// interface. Selected **only** when the build opts in with

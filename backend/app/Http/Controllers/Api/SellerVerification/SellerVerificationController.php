@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers\Api\SellerVerification;
 
+use App\Enums\SellerCapability;
+use App\Enums\SellerVerificationDocumentType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SellerVerification\SubmitSellerVerificationRequest;
+use App\Http\Requests\SellerVerification\UploadSellerVerificationDocumentRequest;
 use App\Http\Resources\MobileSellerVerificationResource;
+use App\Services\SellerVerification\SellerVerificationDocumentService;
 use App\Services\SellerVerification\SellerVerificationService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Mobile seller verification: submission and the caller's own status.
@@ -29,6 +34,7 @@ class SellerVerificationController extends Controller
 {
     public function __construct(
         private readonly SellerVerificationService $verifications,
+        private readonly SellerVerificationDocumentService $documents,
     ) {
         //
     }
@@ -62,6 +68,12 @@ class SellerVerificationController extends Controller
                 ], 409);
             }
 
+            if ($exception->getMessage() === SellerVerificationService::DOCUMENTS_MISSING) {
+                return $this->missingDocumentsResponse(
+                    $this->documents->missingStaged($request->user()),
+                );
+            }
+
             throw $exception;
         }
 
@@ -92,5 +104,123 @@ class SellerVerificationController extends Controller
             'success' => true,
             'data' => new MobileSellerVerificationResource($verification),
         ], 200);
+    }
+
+    /**
+     * `POST /api/seller-verification/documents` — stage one required document.
+     *
+     * The response deliberately carries no path and no URL. The file is on a
+     * private disk, and the only way to read it back is the authenticated
+     * endpoint below.
+     */
+    public function storeDocument(
+        UploadSellerVerificationDocumentRequest $request,
+    ): JsonResponse {
+        $user = $request->user();
+
+        if ($user->seller_capability === SellerCapability::Seller) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This account is already an approved seller.',
+            ], 403);
+        }
+
+        if ($this->verifications->currentFor($user)?->isOpen()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A seller verification is already in review. '
+                    .'Wait for a decision before uploading documents.',
+            ], 409);
+        }
+
+        $type = $request->documentType();
+        $this->documents->stage($user, $type, $request->file('document'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Document uploaded.',
+            'data' => [
+                'type' => $type->value,
+                'uploaded' => true,
+            ],
+        ], 201);
+    }
+
+    /**
+     * `DELETE /api/seller-verification/documents/{type}` — remove a staged
+     * document before submission.
+     *
+     * Only the staging area is mutable. Once an application has been submitted
+     * its documents are part of the record an administrator reviews, and this
+     * route does not reach them.
+     */
+    public function destroyDocument(Request $request, string $type): JsonResponse
+    {
+        $documentType = $this->documentTypeOrAbort($type);
+
+        if (! $this->documents->forgetStaged($request->user(), $documentType)) {
+            abort(404, 'No staged document of that type exists.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Document removed.',
+        ], 200);
+    }
+
+    /**
+     * `GET /api/seller-verification/documents/{type}` — stream one document the
+     * caller submitted.
+     *
+     * Owner-only by construction: the record is resolved from the token, never
+     * from a route parameter. No other account can name this caller's record,
+     * and an administrator uses the separate admin route.
+     */
+    public function showDocument(Request $request, string $type): StreamedResponse
+    {
+        $documentType = $this->documentTypeOrAbort($type);
+        $verification = $this->verifications->currentFor($request->user());
+
+        abort_if($verification === null, 404);
+
+        return $this->documents->response($verification, $documentType);
+    }
+
+    /**
+     * A `422` naming the document fields the submission is missing.
+     *
+     * The keys match the mobile form's two document cards (`id_document` and
+     * `selfie`), so the existing per-field error rendering applies without a
+     * second error shape.
+     *
+     * @param  list<SellerVerificationDocumentType>  $missing
+     */
+    private function missingDocumentsResponse(array $missing): JsonResponse
+    {
+        $errors = [];
+
+        foreach ($missing as $type) {
+            $errors[$type->value] = [
+                $type === SellerVerificationDocumentType::IdDocument
+                    ? 'Upload a clear photo of your government-issued ID.'
+                    : 'Upload a selfie holding the same ID.',
+            ];
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Upload both required documents before submitting.',
+            'errors' => $errors,
+        ], 422);
+    }
+
+    private function documentTypeOrAbort(
+        string $type,
+    ): SellerVerificationDocumentType {
+        $documentType = SellerVerificationDocumentType::tryFrom($type);
+
+        abort_if($documentType === null, 404, 'Unknown document type.');
+
+        return $documentType;
     }
 }

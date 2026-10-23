@@ -30,6 +30,8 @@ Map<String, dynamic> sellerVerificationJson({
   Object? adminNote,
   Object? submittedAt = '2026-09-26T09:30:00.000000Z',
   Object? reviewedAt,
+  bool hasIdDocument = true,
+  bool hasSelfie = true,
 }) {
   return <String, dynamic>{
     'id': id,
@@ -37,6 +39,8 @@ Map<String, dynamic> sellerVerificationJson({
     'business_location': businessLocation,
     'business_description': businessDescription,
     'id_document_ref': idDocumentRef,
+    'has_id_document': hasIdDocument,
+    'has_selfie': hasSelfie,
     'status': status,
     'admin_note': adminNote,
     'submitted_at': submittedAt,
@@ -74,6 +78,55 @@ http.Response sellerVerificationNotFoundResponse({
 http.Response sellerVerificationConflictResponse({
   String message = 'A seller verification is already open for review.',
 }) => http.Response(jsonEncode(message), 409);
+
+/// A successful `POST /api/seller-verification/documents`, which answers `201`
+/// with `{ type, uploaded: true }` and no path.
+http.Response sellerVerificationDocumentUploadedResponse({
+  String type = 'id_document',
+  int statusCode = 201,
+}) => http.Response(
+  jsonEncode(
+    successEnvelope(
+      message: 'Document uploaded.',
+      data: <String, dynamic>{'type': type, 'uploaded': true},
+    ),
+  ),
+  statusCode,
+  headers: <String, String>{'content-type': 'application/json'},
+);
+
+/// A successful `DELETE /api/seller-verification/documents/{type}` — message
+/// only, no `data`.
+http.Response sellerVerificationDocumentDeletedResponse() => http.Response(
+  jsonEncode(<String, dynamic>{
+    'success': true,
+    'message': 'Document removed.',
+  }),
+  200,
+  headers: <String, String>{'content-type': 'application/json'},
+);
+
+/// The `404` from deleting a document that was never staged.
+http.Response sellerVerificationDocumentNotFoundResponse({
+  String message = 'No staged document of that type exists.',
+}) => http.Response(jsonEncode(message), 404);
+
+/// A `422` naming the missing document fields, as the submission endpoint
+/// produces when an application is filed without both documents.
+http.Response sellerVerificationMissingDocumentsResponse() => http.Response(
+  jsonEncode(
+    validationErrorBody(
+      errors: <String, Object>{
+        'id_document': <String>[
+          'Upload a clear photo of your government-issued ID.',
+        ],
+        'selfie': <String>['Upload a selfie holding the same ID.'],
+      },
+    ),
+  ),
+  422,
+  headers: <String, String>{'content-type': 'application/json'},
+);
 
 /// The `403` an already-approved seller gets when submitting.
 http.Response sellerVerificationForbiddenResponse({

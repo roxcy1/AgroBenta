@@ -1,8 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\ActivityController;
-use App\Http\Controllers\Api\Admin\AuthController; 
+use App\Http\Controllers\Api\Admin\AuthController;
 use App\Http\Controllers\Api\Admin\DashboardController;
+use App\Http\Controllers\Api\Admin\InquiryController;
 use App\Http\Controllers\Api\Admin\ListingController;
 use App\Http\Controllers\Api\Admin\ReportsController;
 use App\Http\Controllers\Api\Admin\SellerVerificationController;
@@ -11,14 +12,15 @@ use App\Http\Controllers\Api\Admin\TransactionController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
+use App\Http\Controllers\Api\Inquiry\InquiryController as MobileInquiryController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
+use App\Http\Controllers\Api\Messaging\ConversationController;
+use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
 use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
-use App\Http\Controllers\Api\Messaging\ConversationController;
-use App\Http\Controllers\Api\Messaging\MessageController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
@@ -69,6 +71,20 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
 Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification')->group(function (): void {
     Route::get('/me', [MobileSellerVerificationController::class, 'me']);
     Route::post('/', [MobileSellerVerificationController::class, 'store']);
+
+    // Document upload (government ID + selfie). Staged under the caller's own
+    // id before submission, replaced or deleted while the application is still
+    // being assembled, and promoted onto the record when `POST /` succeeds.
+    //
+    // Neither route takes an id: the account is the token, so there is no path
+    // that could stage a file against somebody else's application. The file
+    // rules live in UploadSellerVerificationDocumentRequest and are enforced on
+    // the bytes, not the client's filename. The response never carries a path
+    // or URL — the file is on private storage and is read back only through
+    // GET /documents/{type} below, which resolves the record from the token.
+    Route::post('/documents', [MobileSellerVerificationController::class, 'storeDocument']);
+    Route::get('/documents/{type}', [MobileSellerVerificationController::class, 'showDocument']);
+    Route::delete('/documents/{type}', [MobileSellerVerificationController::class, 'destroyDocument']);
 });
 
 // Seller listing management, for the caller's own account. `seller` is the
@@ -115,6 +131,27 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
     Route::get('/{transaction}', [MobileTransactionController::class, 'show']);
     Route::post('/{transaction}/cancel', [MobileTransactionController::class, 'cancel']);
     Route::post('/{transaction}/complete', [MobileTransactionController::class, 'complete']);
+});
+
+// Inquiries — the buyer's structured contact with a seller about a listing.
+//
+// Write path only. Reading, triaging, re-statusing and deleting an inquiry
+// belong to the administrator block below; its route comment reserves creation
+// for the buyer's mobile client, and this is that path.
+//
+// No route here takes a user id. The buyer is resolved from the token and the
+// seller from `listing.seller_id` inside the service, so there is no parameter
+// or body field that could point an inquiry at a foreign account. Sending an
+// inquiry changes nothing else: the listing's status, the transaction
+// lifecycle and any payment state are untouched — an inquiry is a message of
+// record, not a sale.
+//
+// No throttle, deliberately, matching `POST /seller-verification` (D-09 is
+// still open, so a limit here would be an undocumented behaviour change). The
+// 500-character message ceiling and `auth:sanctum` are the abuse bounds that
+// exist today. Revisit under D-09 if a limit is decided.
+Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    Route::post('/inquiries', [MobileInquiryController::class, 'store']);
 });
 
 // Profile — the caller's own account details and credentials.
@@ -195,10 +232,23 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::get('/listings/{listing}', [ListingController::class, 'show']);
     Route::get('/seller-verifications', [SellerVerificationController::class, 'index']);
     Route::get('/seller-verifications/{sellerVerification}', [SellerVerificationController::class, 'show']);
+    // Documents. Streamed from the private disk with no-cache headers, guarded
+    // by this group's admin ability, and never by a public URL — the web server
+    // has no route to the storage root.
+    Route::get('/seller-verifications/{sellerVerification}/documents/{type}', [SellerVerificationController::class, 'document']);
     Route::post('/seller-verifications/{sellerVerification}/approve', [SellerVerificationController::class, 'approve']);
     Route::post('/seller-verifications/{sellerVerification}/reject', [SellerVerificationController::class, 'reject']);
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::get('/transactions/{transaction}', [TransactionController::class, 'show']);
+    // Buyer-to-seller inquiries. Administrator-only: an inquiry is read and
+    // worked here, never created here — the write path belongs to the buyer's
+    // mobile client, and the status is an internal bookmark the buyer never
+    // sees. `status` and `destroy` carry their own requests, so the only
+    // mutable field is the workflow status.
+    Route::get('/inquiries', [InquiryController::class, 'index']);
+    Route::get('/inquiries/{inquiry}', [InquiryController::class, 'show']);
+    Route::patch('/inquiries/{inquiry}/status', [InquiryController::class, 'updateStatus']);
+    Route::delete('/inquiries/{inquiry}', [InquiryController::class, 'destroy']);
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::get('/reports', [ReportsController::class, 'index']);
     Route::get('/settings', [SettingsController::class, 'index']);

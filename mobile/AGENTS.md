@@ -338,6 +338,7 @@ server to reject seller actions from a non-approved seller regardless.
 | `flutter_secure_storage` | Sanctum bearer token in the Android Keystore / iOS Keychain. | `shared_preferences` (unencrypted). |
 | `flutter_lints` | Analyzer baseline, via `analysis_options.yaml`. | — |
 | `intl` | Peso, date and relative-date formatting in `AppFormatters`, added in M2 as the first screen that displays money. `main()` calls `initializeDateFormatting('en_PH')` before the first frame; **any locale other than `en_US` must be initialised or `DateFormat` throws**, and `test/flutter_test_config.dart` does the equivalent for the suite. | Hand-rolled month names or a second date library. |
+| `font_awesome_flutter` | Provider brand marks for the registration and login screens' (disabled) Google and Facebook buttons. Material has no Google glyph and the project ships no brand assets, so `FaIcon(FontAwesomeIcons.google/facebook)` is the only accurate source. Pin `^11.0.0`: earlier 10.x versions extend `IconData`, which this SDK declares `final`, and fail to compile. | A hand-drawn `CustomPainter`, an SVG asset, or a second icon-font package. |
 | `cupertino_icons` | Scaffold default. Currently unused by app code; remove it if it stays unused when real iOS-styled widgets land. | — |
 
 **Deliberately not added** in M0, and the phase that should justify each:
@@ -473,10 +474,143 @@ by design, so listing existence is not disclosed — the app renders a single
 by the app; it is admin-only and returns seller fields the marketplace must not
 expose.
 
-**Still open below.** GAP-01 to GAP-05, GAP-07, GAP-08, GAP-09 and GAP-16 are
-`CLOSED` — implemented in the backend and consumed by the app. GAP-06 is
-narrowed but not closed. Everything from GAP-10 onwards is unchanged and still
-blocks its phase.
+**Resolved for the Inquire screen (buyer inquiries).** The backend now exposes
+one write endpoint behind the same `auth:sanctum` + `ability:mobile` guard:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/inquiries` | Files one buyer inquiry against an `active` listing. Returns `201` with the `MobileInquiryResource` and the envelope message `Inquiry sent.`. |
+
+The body allow-list (`StoreInquiryRequest`, mirrored by
+`InquiryEndpoints.writableFields`) is exactly `listing_id`, `message`,
+`subject`, `purchase_interest`, `transaction_method`, `delivery_method`,
+`delivery_fee`, `contact_method` and `preferred_schedule`; `buyer_id`,
+`seller_id` and `status` are rejected with `422` (see the security
+requirements above — the app builds the body from the allow-list only).
+`InquiryService` answers `409` for a non-active listing and `409` for the
+caller's own listing, and `404` when the listing does not exist. Creating an
+inquiry changes nothing else: no transaction, no listing status change, no
+notification. Triage and re-status live under `/api/admin/inquiries*` and are
+not called by this app.
+
+The **Inquiry Sent** confirmation is rendered entirely from that create
+response — the record it returns is the screen's single source of truth, and
+its status card is a fixed, honest sentence, never a fetched or modelled
+server status. There is no buyer endpoint to re-read an inquiry (GAP-19), so
+"View Inquiry" ships disabled with an honest caption rather than faking a
+route.
+
+**Resolved for the Messages screen (inbox + chat, HTTP only).** The backend
+exposes the caller's own conversations and messages behind the same
+`auth:sanctum` + `ability:mobile` guard:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/conversations` | The caller's conversation list. A conversation is derived from message pairs — there is no `conversations` table and no conversation id. |
+| `POST /api/conversations/{userId}/read` | Marks the caller's unread messages in the thread with `userId` (optional `listing_id`) and returns `{updated}`. |
+| `GET /api/conversations/{userId}/messages` | One paginated `messages` page for the thread with `userId` (`?listing_id`, `?page`, `?per_page`). |
+| `POST /api/messages` | Sends one message. The sender is the authenticated user; `sender_id` is never sent. |
+| `PATCH /api/messages/{id}/read` | Marks one message read. |
+
+`ConversationResource` carries `counterpart{id,name,avatar_url}`, `listing_id`,
+`listing_title`, `last_message`, `last_message_at` and `unread_count`;
+`MessageResource` carries the message plus embedded sender/receiver summaries.
+The app's `Conversation` and `Message` models mirror them exactly. Search and
+the category chips are **local view filters** — the API has no conversation
+search and no category column. "Inquiries" selects listing-scoped threads;
+"Transactions" renders disabled — the API links no conversation to a
+transaction, and My Purchases is a separate screen over `/api/transactions`;
+"Notifications" is a shortcut to the existing, separate notifications
+destination, not a thread filter. Opening a thread marks it read through the
+same endpoint from two callers by design (the inbox optimistically, the chat
+screen on open). **There is no real-time transport** (GAP-20): the inbox and
+thread recover via pull-to-refresh and an on-return refresh, and the app ships
+no WebSocket client, no invented event names and no fake reconnect.
+
+**Resolved for the Transactions screen (My Purchases, HTTP only).** The backend
+exposes the caller's transactions behind the same `auth:sanctum` +
+`ability:mobile` guard:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/transactions` | One paginated page of the caller's own transactions (`?role`, `?status`, `?page`, `?per_page`; `per_page` capped at 50). |
+| `POST /api/transactions` | Creates a `pending` transaction as the authenticated buyer. The body allow-list is exactly `listing_id`, `quantity`. |
+| `GET /api/transactions/{id}` | One transaction the caller is party to; `404` for missing and foreign records alike. |
+| `POST /api/transactions/{id}/cancel` | Cancels a `pending` transaction (either party); `409` once terminal. The body allow-list is empty. |
+| `POST /api/transactions/{id}/complete` | **Not implemented** — answers `501` (OQ-15). The client ships no completion affordance. |
+
+`IndexTransactionRequest` accepts only `role` (`buyer`/`seller`), `status`
+(`pending`/`completed`/`cancelled`), `page` and `per_page`; `buyer_id` and
+`seller_id` are `422`. `MobileTransactionResource` carries `id`, `role` (the
+viewer's side), `listing{id,livestock_type,breed,photos}`,
+`counterparty{id,name,email}`, `quantity`, `total_amount` (server-derived
+`asking_price × quantity`, a decimal **string**), `status`, `created_at` and
+`updated_at`. There is **no location field**, so the card shows none.
+
+My Purchases always sends `role=buyer`, so a sale never appears among a user's
+purchases, and the filters are server statuses rather than a local view: All
+sends no `status`; Ongoing sends `pending`; Completed and Cancelled send their
+own values. The design's separate **Pending** chip is **not shown**: the backend
+has a single `pending` state, already labelled Ongoing across the app
+(`mobile/DESIGN.md` §26), so the row carries the three real states plus All
+rather than two chips that cannot return different records. Cards
+are labelled "Agreed price" and show the exact `total_amount`; a listing's
+asking price is not in the resource and is never shown here. Tapping a card
+opens the existing detail screen with the persisted id. Creation yields
+`pending`; the client never sends `status`.
+
+The **Transaction Details** screen (`transaction_detail_screen.dart` +
+`transaction_detail_content.dart`) is built only from a single
+`GET /transactions/{id}` payload, and renders exactly what
+`MobileTransactionResource` carries — nothing wider:
+
+* **Amount.** The one money field is the server-derived `total_amount`,
+  labelled "Transaction total". The resource has no `asking_price`, so no
+  reference-vs-agreed pair is shown and none is fabricated; the screen states
+  that the listing's reference asking price is not part of the transaction.
+* **Seller** (the counterparty) is `{ id, name, email }`. There is **no
+  verification flag and no location**, so no badge and no location row render.
+  "Message seller" opens the existing `ChatScreen` with the counterparty's real
+  id from the payload — the same chat route the marketplace uses.
+* **Livestock** shows only Type and Breed, the only attributes the snapshot
+  holds; age/weight/gender/health are not in the transaction record and an
+  honest line says so.
+* **Status** uses the real `pending`/`completed`/`cancelled` state with a
+  next-step sentence that is true of the workflow; no completion affordance
+  exists (OQ-15, backend 501).
+* **Your inquiry** is an honest statement, not a record: the resource links to
+  no inquiry and there is no mobile inquiry read endpoint (GAP-19).
+* **Cancel request** is pending-only, confirmed, and posted to
+  `POST /transactions/{id}/cancel`; a `409` reloads the terminal state.
+
+The **Transaction Status** screen (`transaction_status_screen.dart` +
+`transaction_status_content.dart`, reached from the detail screen's "View
+status") reuses the same single `GET /transactions/{id}` call through
+`TransactionDetailController` — there is no separate status endpoint and none
+is invented. It shows the listing summary (image when a real loadable URL
+exists, title, server-derived total, status badge), a metadata card (request id
++ the one persisted `created_at`), a **Transaction Progress** tracker, and a
+full-width **Message Seller** action that follows the same real chat route the
+detail screen uses.
+
+The tracker is derived from the real state machine, not the design's five-step
+reference. The backend holds a **single current `status` and no transition
+history**: `transactions` has no history table and no per-step timestamps
+(migration `2026_09_20_120004_create_transactions_table`), and
+`MobileTransactionResource` returns only `status`, `created_at` and
+`updated_at`. Per the design (§5/§59), no per-step dates and no
+seller-acceptance/delivery/receipt steps are fabricated. Instead
+`TransactionTimeline.stepsFor` produces a truthful three-marker summary of the
+actual workflow — Submitted, In progress, Outcome — where `pending` shows In
+progress as current with an unknown outcome, `completed` shows the completion
+as current, and `cancelled` shows a terminal, explicitly **not-completed**
+outcome. A pale-green note states that only the current status is recorded, so
+no dated history is shown. No payment, logistics or transaction-confirmation
+step is implied; completion remains unavailable (OQ-15).
+
+**Still open below.** GAP-01 to GAP-09, GAP-11 to GAP-13 and GAP-16 are
+`CLOSED` — implemented in the backend and consumed by the app. GAP-10, GAP-14,
+GAP-15, GAP-19 and GAP-20 remain open and still block their phase.
 
 Status: `CLOSED` = implemented. `OPEN` = does not exist. Nothing open here has
 been worked around in the app.
@@ -493,12 +627,14 @@ been worked around in the app.
 | GAP-08 | Own verification status retrieval | **CLOSED.** `GET /api/seller-verification/me` with `MobileSellerVerificationController@me`, returning the caller's latest record by `submitted_at DESC, id DESC` through `MobileSellerVerificationResource` (omits `seller`, `reviewer`, `user_id`, timestamps). `404` when the caller has never applied, which the app reads as "not submitted" rather than as an error. No route takes an id, so one buyer cannot read another's record. | — |
 | GAP-09 | Seller listing CRUD, own listings only | **CLOSED.** Five routes in `routes/api.php` under `auth:sanctum` + `ability:mobile` + the `seller` capability gate, served by `Api/SellerListing/SellerListingController` → `SellerListingRequest`s → `SellerListingService` → `SellerListingRepository`, returned through `MobileListingResource`. `GET` lists the owner's own listings in all five statuses (`?status`, `?search`, paginated; scope always server-derived — a `seller_id` filter is `422`). `POST` creates a `draft`; a client-sent `status` or `seller_id` is `422`, never silently dropped. `POST /{id}/submit` moves `draft → pending` only, re-validating the stored listing (invalid → `422`, not queued); its body allow-list is empty, so *any* body field is `422`. `PATCH` edits `draft`/`active` only (D-24). `DELETE` removes `draft`/`inactive` only (D-12/D-25). Non-owner → `404`, buyer → `403`, and no seller path reaches `active` (D-02 rules 6–8). Tests: `backend/tests/Feature/SellerListing/MobileSellerListingTest.php`. | — |
 | GAP-10 | AI price suggestion | `AiPriceEstimate` model and `ai_price_estimates` table exist. No controller, service, route or job. No pricing algorithm in the repository. `OPEN`. | AI price suggestion |
-| GAP-11 | Transactions | `GET /admin/transactions` only. No buyer view, seller view, creation, or status transition. `OPEN`. | Transactions |
-| GAP-12 | Notifications | `notifications` table exists (standard Laravel, **UUID** primary key). No `Notification` model, no `NotificationResource`, no route. `OPEN`. | Notifications |
-| GAP-13 | Messaging | `Message` model and `messages` table exist. No `MessageResource`, no controller, no route. Dead schema. `OPEN`. | Messaging |
+| GAP-11 | Transactions | **CLOSED** for the mobile surface. `GET /api/transactions` (own records only; `?role`, `?status`, paginated), `POST /api/transactions` (buyer creates `pending` from an `active` listing; body `listing_id` + `quantity` only; `total_amount` server-derived), `GET /api/transactions/{id}` (party-only; `404` otherwise) and `POST /api/transactions/{id}/cancel` (pending-only, either party; `409` once terminal), behind `auth:sanctum` + `ability:mobile`, served by `Api/Transaction/TransactionController` over `MobileTransactionResource`. `POST /{id}/complete` is **not implemented** and answers `501` (OQ-15), so the client offers no completion. Tests: `backend/tests/Feature/Transaction/MobileTransactionTest.php`. | Completion (OQ-15) |
+| GAP-12 | Notifications | **CLOSED.** `GET /api/notifications` (paginated `notifications` list with `pagination` and `unread_count`), `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `POST /api/notifications/read-all` and `DELETE /api/notifications/{id}`, all behind `auth:sanctum` + `ability:mobile` and served by `Api/Notification/NotificationController` over `NotificationResource`. Every route resolves the record from the token — no route takes a user id — and notification ids are UUID strings. The app consumes this through its own Notifications screen, reached from the Home bell and from the Messages screen's Notifications chip. | — |
+| GAP-13 | Messaging | **CLOSED.** `GET /api/conversations`, `POST /api/conversations/{userId}/read`, `GET /api/conversations/{userId}/messages`, `POST /api/messages` and `PATCH /api/messages/{id}/read`, behind `auth:sanctum` + `ability:mobile`, served by `Api/Messaging/ConversationController` and `MessageController` over `ConversationResource` / `MessageResource`. Conversations are derived from message pairs (no table, no id); the caller's own participation scopes every query, and `sender_id`/`receiver_id` are server-derived on send. Consumed by the Messages inbox and chat screens. **No broadcasting** accompanies any of it — see GAP-20. No backend feature tests exist for these routes. | — |
 | GAP-14 | Profile read/update for the current user | No endpoint. Admin can list users but not edit them. `OPEN`. | Profile |
 | GAP-15 | Token lifetime policy | Mobile tokens are issued non-expiring, the same as admin tokens. No expiry, no refresh, no revocation-all. Still needs an explicit decision before shipping, so a mobile session currently lasts until it is logged out or revoked. | Security |
 | GAP-16 | Sanctum token ability scoping for mobile | **CLOSED.** Mobile tokens carry `['mobile']`; mobile routes require `ability:mobile`. The `admin` group now also requires `ability:admin`, so a mobile token is refused by admin routes and an admin token is refused by mobile routes. Both directions are covered by `backend/tests/Feature/Auth/MobileAuthTest.php`. | — |
+| GAP-19 | Buyer inquiry read (mobile) | `POST /api/inquiries` is the only inquiry route a mobile token can reach. `GET /api/inquiries`, `GET /api/inquiries/{inquiry}`, `PATCH …/status` and `DELETE` exist only in the admin group (`routes/api.php`, `ability:admin`), and `MobileInquiryResource` omits `status` deliberately — open/responded/closed is an admin triage bookmark. No mobile list or detail endpoint. `OPEN`. | Inquiry list, inquiry details, the Inquiry Sent screen's "View Inquiry" (rendered disabled with an honest caption), any server-driven status display |
+| GAP-20 | Real-time messaging / notifications | **OPEN.** Nothing in the backend broadcasts messages or notifications: `BROADCAST_CONNECTION=log` in `backend/.env`/`.env.example`, no `config/broadcasting.php` or `config/reverb.php`, no `routes/channels.php`, no `app/Events/`, and `laravel/reverb` is not a dependency. The `reverb` service in `compose.yaml` is commented out. The app therefore has no WebSocket client (and no WS/echo package in `pubspec.yaml`), no event names to subscribe to, and no reconnect logic. Both inbox and thread recover by HTTP refresh instead. Building real-time requires broadcasting, authenticated private channels and named events on the server first. | Real-time message delivery, live badge/notification updates |
 
 ### Gaps that are design questions, not missing code
 

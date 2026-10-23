@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/seller_verification.dart';
@@ -21,7 +22,20 @@ import 'seller_verification_views.dart';
 /// account's capability is read from `/auth/me`. It also never offers a second
 /// application while one is open, because the server answers that with a `409`.
 class SellerVerificationScreen extends StatefulWidget {
-  const SellerVerificationScreen({super.key});
+  const SellerVerificationScreen({this.accountName, this.pickImage, super.key});
+
+  /// The caller's full name, from the account, shown read-only on the form.
+  ///
+  /// Optional: the screen is a status hub first, and the name is only needed by
+  /// the form one push deeper. The profile screen supplies it from `/auth/me`; a
+  /// tree without it simply omits the read-only row.
+  final String? accountName;
+
+  /// Overrides how an image is picked on the form, for tests.
+  ///
+  /// Forwarded verbatim to [SellerVerificationFormScreen]. `null` in production,
+  /// where the form uses the platform picker.
+  final Future<XFile?> Function(VerificationDocumentType type)? pickImage;
 
   @override
   State<SellerVerificationScreen> createState() =>
@@ -51,8 +65,11 @@ class _SellerVerificationScreenState extends State<SellerVerificationScreen> {
   void _openForm({required bool isResubmission}) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            SellerVerificationFormScreen(isResubmission: isResubmission),
+        builder: (BuildContext context) => SellerVerificationFormScreen(
+          isResubmission: isResubmission,
+          accountName: widget.accountName,
+          pickImage: widget.pickImage,
+        ),
       ),
     );
   }
@@ -60,7 +77,15 @@ class _SellerVerificationScreenState extends State<SellerVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Seller verification')),
+      appBar: AppBar(
+        // The title depends on the state, which arrives asynchronously, so it
+        // listens to the controller like the body does. Without this the app bar
+        // would keep the title from the frame it was first built in.
+        title: ListenableBuilder(
+          listenable: _controller,
+          builder: (BuildContext context, Widget? child) => Text(_title()),
+        ),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: _controller,
@@ -114,6 +139,23 @@ class _SellerVerificationScreenState extends State<SellerVerificationScreen> {
     );
   }
 
+  /// The app bar title for the current state.
+  ///
+  /// "Become a Seller" introduces the flow, matching the first entry screen; once
+  /// there is a record the screen is the reference's "Seller Application" details
+  /// view. Both are the same route entered at different states.
+  String _title() {
+    final SellerVerificationUiStatus status = _controller.state.status;
+    if (status == SellerVerificationUiStatus.initial ||
+        status == SellerVerificationUiStatus.loading ||
+        status == SellerVerificationUiStatus.failed) {
+      return 'Seller verification';
+    }
+    return status == SellerVerificationUiStatus.notSubmitted
+        ? 'Become a Seller'
+        : 'Seller Application';
+  }
+
   /// The one view for the current state.
   ///
   /// [SellerVerificationUiStatus.submitting] has no case: a submission happens on
@@ -128,17 +170,12 @@ class _SellerVerificationScreenState extends State<SellerVerificationScreen> {
     // record being present, and so a status that arrived without one renders the
     // honest "never applied" view instead of dereferencing null — or, worse,
     // substituting a fabricated record to display.
+    void start() => _openForm(isResubmission: false);
     if (verification == null) {
-      return SellerVerificationNotSubmittedView(
-        onStart: () => _openForm(isResubmission: false),
-      );
+      return SellerVerificationIntroView(onStart: start);
     }
 
     return switch (state.status) {
-      SellerVerificationUiStatus.notSubmitted =>
-        SellerVerificationNotSubmittedView(
-          onStart: () => _openForm(isResubmission: false),
-        ),
       SellerVerificationUiStatus.rejected => SellerVerificationRejectedView(
         verification: verification,
         onResubmit: () => _openForm(isResubmission: true),

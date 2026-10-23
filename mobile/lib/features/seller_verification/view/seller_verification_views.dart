@@ -6,6 +6,7 @@ import '../../../core/utils/app_formatters.dart';
 import '../../../models/seller_verification.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/notice_banner.dart';
+import '../widgets/seller_verification_documents_section.dart';
 
 /// The frame every verification status is presented in.
 ///
@@ -75,40 +76,206 @@ class SellerVerificationStatusCard extends StatelessWidget {
   }
 }
 
-/// The administrator's note on a rejected application.
+/// A short reminder above the last field that the information is reviewed.
 ///
-/// Quoted rather than paraphrased, and omitted entirely when there is none —
-/// [SellerVerification.adminNote] being `null` is normal, and inventing a reason
-/// would be inventing a decision nobody made.
-
-/// Never applied. The entry point into the flow.
-class SellerVerificationNotSubmittedView extends StatelessWidget {
-  const SellerVerificationNotSubmittedView({required this.onStart, super.key});
-
-  final VoidCallback onStart;
+/// Neutral, brand-toned rather than amber: this is guidance, not a warning, and
+/// it must not read as though something has already gone wrong.
+class SellerVerificationAccuracyNotice extends StatelessWidget {
+  const SellerVerificationAccuracyNotice({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return SellerVerificationStatusCard(
-      icon: Icons.storefront_outlined,
+    return const NoticeBanner(
       accent: AppColors.primary,
-      title: 'Become a Seller',
-      body:
-          'Apply to sell on AgroBenta. An administrator reviews every '
-          'application, and your account becomes a seller only after approval.',
-      action: FilledButton(
-        onPressed: onStart,
-        child: const Text('Start seller verification'),
+      icon: Icons.info_outline,
+      message:
+          'Please make sure your information is accurate. An administrator '
+          'will review it before you can sell.',
+    );
+  }
+}
+
+/// The step indicator across the top of the seller application.
+///
+/// The reference shows four steps (Basic Information, Documents, Review,
+/// Submitted). The form's editable steps are the first three; "Submitted" is a
+/// terminal label that is only reached after the backend accepts the
+/// application, which is why the form's own indicator never advances past
+/// Review — see [SellerVerificationFormScreen].
+///
+/// Numbered circles carry the state as text, not colour alone: a completed step
+/// shows a check, the active one its number, and a future one a muted number.
+class SellerApplicationProgressIndicator extends StatelessWidget {
+  const SellerApplicationProgressIndicator({
+    required this.steps,
+    required this.currentStep,
+    super.key,
+  });
+
+  /// The step labels, in order.
+  final List<String> steps;
+
+  /// Zero-based index of the step being edited.
+  final int currentStep;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        for (int i = 0; i < steps.length; i++) ...<Widget>[
+          if (i > 0)
+            Expanded(
+              child: Padding(
+                // Aligns the connector with the centre of the 28dp marker.
+                padding: const EdgeInsets.only(top: 13),
+                child: Container(
+                  height: 2,
+                  color: i <= currentStep
+                      ? AppColors.primary
+                      : AppColors.border,
+                ),
+              ),
+            ),
+          _StepMarker(
+            index: i,
+            label: steps[i],
+            isComplete: i < currentStep,
+            isActive: i == currentStep,
+            theme: theme,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _StepMarker extends StatelessWidget {
+  const _StepMarker({
+    required this.index,
+    required this.label,
+    required this.isComplete,
+    required this.isActive,
+    required this.theme,
+  });
+
+  final int index;
+  final String label;
+  final bool isComplete;
+  final bool isActive;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool reached = isComplete || isActive;
+    final Color color = reached ? AppColors.primary : AppColors.border;
+
+    return SizedBox(
+      width: 96,
+      child: Column(
+        children: <Widget>[
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: isComplete
+                ? const Icon(Icons.check, size: 16, color: AppColors.surface)
+                : Text(
+                    '${index + 1}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: isActive
+                          ? AppColors.surface
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: reached ? AppColors.text : AppColors.textSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Filed and waiting for an administrator.
+/// The "Become a Seller" introduction — the first thing a buyer who has never
+/// applied sees.
 ///
-/// Deliberately offers no form and no "edit" action. A second application is
-/// refused by the server with a `409`, so showing a form here would invite the
-/// user into a dead end and then tell them off for entering it.
+/// This is the same screen as the rest of the flow, entered at its first state:
+/// the reference's separate intro is not added as a second entry point, because
+/// the app already has exactly one ("Become a Seller" on the profile screen), and
+/// a duplicate entry screen is what the design notes warn against.
+///
+/// The headline is the reference's `Start Selling on AgroBenta` (doc 01). The app
+/// bar already carries `Become a Seller`, so the card must not repeat it — two
+/// identical strings on one screen read as a mistake.
+class SellerVerificationIntroView extends StatelessWidget {
+  const SellerVerificationIntroView({required this.onStart, super.key});
+
+  final VoidCallback onStart;
+
+  static const List<(IconData, String)> _benefits = <(IconData, String)>[
+    (Icons.add_business_outlined, 'List your livestock'),
+    (Icons.verified_outlined, 'Get verified'),
+    (Icons.list_alt_outlined, 'Manage your listings'),
+    (Icons.forum_outlined, 'Connect with buyers'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return SellerVerificationStatusCard(
+      icon: Icons.storefront_outlined,
+      accent: AppColors.primary,
+      title: 'Start Selling on AgroBenta',
+      body:
+          'List livestock and connect with interested buyers. Your business '
+          'details and identity documents go to an administrator for review '
+          'before you can publish.',
+      children: <Widget>[
+        for (final (IconData icon, String label) in _benefits)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, size: 20, color: AppColors.primary),
+                const SizedBox(width: AppSpacing.sm),
+                  Expanded(child: Text(label, style: theme.textTheme.bodySmall)),
+              ],
+            ),
+          ),
+        const SizedBox(height: AppSpacing.xs),
+        Image.asset(
+          'assets/images/AgroBentaLogo.png',
+          height: 48,
+          fit: BoxFit.contain,
+        ),
+        FilledButton(
+          onPressed: onStart,
+          child: const Text('Get Started'),
+        ),
+      ],
+    );
+  }
+}
+
+/// An application is on file and open for review — the reference's "Pending
+/// Verification / Application Details" screen.
+///
+/// A second application is refused by the server with a `409`, so showing a form
+/// here would invite the user into a dead end and then tell them off for entering
+/// it. There is likewise no "Edit Application": the contract has no endpoint for
+/// editing an open record, and a rejection is answered with a new submission, not
+/// an edit of the old one.
 class SellerVerificationAwaitingReviewView extends StatelessWidget {
   const SellerVerificationAwaitingReviewView({
     required this.verification,
@@ -119,26 +286,42 @@ class SellerVerificationAwaitingReviewView extends StatelessWidget {
   ///
   /// Non-null: the controller only publishes [SellerVerificationUiStatus
   /// .awaitingReview] together with a record the server returned, and the screen
-  /// falls back to the "never applied" view when there is no record at all.
+  /// falls back to the intro when there is no record at all.
   final SellerVerification verification;
 
   @override
   Widget build(BuildContext context) {
-    return SellerVerificationStatusCard(
-      icon: Icons.hourglass_empty,
-      accent: AppColors.warning,
-      title: 'Under review',
-      body:
-          'Your application is with an administrator. You will be able to sell '
-          'once it is approved. You cannot send another application while this '
-          'one is being reviewed.',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        DetailRow(label: 'Business', value: verification.businessName),
-        if (verification.submittedAt != null)
-          DetailRow(
-            label: 'Submitted',
-            value: AppFormatters.formatDateTime(verification.submittedAt),
-          ),
+        SellerVerificationStatusCard(
+          icon: Icons.hourglass_empty,
+          accent: AppColors.warning,
+          title: 'Under review',
+          body:
+              'Your application is with an administrator. You will be able to sell '
+              'once it is approved. You cannot send another application while this '
+              'one is being reviewed.',
+          children: <Widget>[
+            DetailRow(label: 'Business', value: verification.businessName),
+            if (verification.businessLocation != null &&
+                verification.businessLocation!.trim().isNotEmpty)
+              DetailRow(
+                label: 'Location',
+                value: verification.businessLocation!.trim(),
+              ),
+            if (verification.businessDescription != null &&
+                verification.businessDescription!.trim().isNotEmpty)
+              DetailRow.body(verification.businessDescription!.trim()),
+            if (verification.submittedAt != null)
+              DetailRow(
+                label: 'Submitted',
+                value: AppFormatters.formatDateTime(verification.submittedAt),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SellerVerificationDocumentsSection(verification: verification),
       ],
     );
   }
@@ -205,20 +388,27 @@ class SellerVerificationApprovedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SellerVerificationStatusCard(
-      icon: Icons.verified_outlined,
-      accent: AppColors.success,
-      title: 'Approved — you are a seller',
-      body:
-          'Your seller verification was approved, so your account now has seller '
-          'capability. Account type is shown on your Home screen.',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        DetailRow(label: 'Business', value: verification.businessName),
-        if (verification.reviewedAt != null)
-          DetailRow(
-            label: 'Approved',
-            value: AppFormatters.formatDateTime(verification.reviewedAt),
-          ),
+        SellerVerificationStatusCard(
+          icon: Icons.verified_outlined,
+          accent: AppColors.success,
+          title: 'Approved — you are a seller',
+          body:
+              'Your seller verification was approved, so your account now has seller '
+              'capability. Account type is shown on your Home screen.',
+          children: <Widget>[
+            DetailRow(label: 'Business', value: verification.businessName),
+            if (verification.reviewedAt != null)
+              DetailRow(
+                label: 'Approved',
+                value: AppFormatters.formatDateTime(verification.reviewedAt),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SellerVerificationDocumentsSection(verification: verification),
       ],
     );
   }

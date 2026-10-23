@@ -23,6 +23,8 @@ export interface SellerVerification {
   business_location: string | null;
   business_description: string | null;
   id_document_ref: string | null;
+  has_id_document: boolean;
+  has_selfie: boolean;
   status: VerificationStatus;
   admin_note: string | null;
   submitted_at: string | null;
@@ -31,6 +33,14 @@ export interface SellerVerification {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * The two evidence documents an application can carry.
+ *
+ * These are the `type` values the streaming endpoint accepts, and the same
+ * values the server reports through `has_id_document` / `has_selfie`.
+ */
+export type VerificationDocumentType = 'id_document' | 'selfie';
 
 export interface VerificationsPagination {
   current_page: number;
@@ -112,6 +122,26 @@ async function rejectVerification(id: number, adminNote?: string): Promise<Revie
   const response = await api.post<ReviewResponse>(
     `/admin/seller-verifications/${id}/reject`,
     adminNote ? { admin_note: adminNote } : {},
+  );
+  return response.data;
+}
+
+/**
+ * `GET /admin/seller-verifications/{id}/documents/{type}` returns the file
+ * bytes themselves — not a JSON envelope — from the private disk.
+ *
+ * The response is deliberately not parsed as JSON: `responseType: 'blob'` keeps
+ * axios from running `JSON.parse` on an image. The admin token is attached by
+ * the shared request interceptor, so the fetch is authenticated the same way as
+ * every other admin call and the bytes never need a public URL.
+ */
+export async function fetchVerificationDocument(
+  id: number,
+  type: VerificationDocumentType,
+): Promise<Blob> {
+  const response = await api.get<Blob>(
+    `/admin/seller-verifications/${id}/documents/${type}`,
+    { responseType: 'blob' },
   );
   return response.data;
 }

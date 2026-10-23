@@ -48,7 +48,8 @@ class ConversationsController extends ChangeNotifier {
     );
 
     try {
-      final List<Conversation> conversations = await _repository.conversations();
+      final List<Conversation> conversations = await _repository
+          .conversations();
       if (_disposed || generation != _generation) {
         return;
       }
@@ -93,7 +94,8 @@ class ConversationsController extends ChangeNotifier {
     _set(_state.copyWith(clearRefreshError: true));
 
     try {
-      final List<Conversation> conversations = await _repository.conversations();
+      final List<Conversation> conversations = await _repository
+          .conversations();
       if (_disposed || generation != _generation) {
         return;
       }
@@ -128,19 +130,21 @@ class ConversationsController extends ChangeNotifier {
   /// right now, so it *is* read.
   Future<void> markRead(int counterpartId) async {
     // Optimistic: flip the local state before the request.
-    final List<Conversation> updated = _state.conversations.map((Conversation c) {
-      if (c.counterpart.id == counterpartId && c.hasUnread) {
-        return Conversation(
-          counterpart: c.counterpart,
-          listingId: c.listingId,
-          listingTitle: c.listingTitle,
-          lastMessage: c.lastMessage,
-          lastMessageAt: c.lastMessageAt,
-          unreadCount: 0,
-        );
-      }
-      return c;
-    }).toList(growable: false);
+    final List<Conversation> updated = _state.conversations
+        .map((Conversation c) {
+          if (c.counterpart.id == counterpartId && c.hasUnread) {
+            return Conversation(
+              counterpart: c.counterpart,
+              listingId: c.listingId,
+              listingTitle: c.listingTitle,
+              lastMessage: c.lastMessage,
+              lastMessageAt: c.lastMessageAt,
+              unreadCount: 0,
+            );
+          }
+          return c;
+        })
+        .toList(growable: false);
 
     _set(_state.copyWith(conversations: updated));
 
@@ -151,6 +155,22 @@ class ConversationsController extends ChangeNotifier {
       // the truth. Not surfaced to the user: this is a background housekeeping
       // call, not a user-visible action.
     }
+  }
+
+  /// Updates the inbox search text. Pure view filtering — no request.
+  void setSearch(String query) {
+    if (query == _state.query) {
+      return;
+    }
+    _set(_state.copyWith(query: query));
+  }
+
+  /// Switches the category filter. Pure view filtering — no request.
+  void setFilter(InboxFilter filter) {
+    if (filter == _state.filter) {
+      return;
+    }
+    _set(_state.copyWith(filter: filter));
   }
 
   void _set(ConversationsState next) {

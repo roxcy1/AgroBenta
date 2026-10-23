@@ -22,6 +22,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  - `id`, and the four business fields the client itself just submitted. The
  *    client is echoing its own input back.
  *  - `status`, so the app can render pending, rejected, or approved.
+ *  - `has_id_document` / `has_selfie`, so the app can show that both required
+ *    documents are on file without being handed their private paths.
  *  - `admin_note`, explicitly required by contract §5.3 so a rejected user can
  *    be told *why* without inventing a reason. It is written for the user, so it
  *    is not administrator-internal despite the column name.
@@ -55,6 +57,11 @@ class MobileSellerVerificationResource extends JsonResource
             'business_location' => $this->business_location,
             'business_description' => $this->business_description,
             'id_document_ref' => $this->id_document_ref,
+            // Existence, never the path or a URL: the file is on private
+            // storage and is read back only through the authenticated
+            // document endpoint.
+            'has_id_document' => filled($this->id_document_path),
+            'has_selfie' => filled($this->selfie_path),
             'status' => $this->status?->value,
             'admin_note' => $this->admin_note,
             'submitted_at' => $this->submitted_at?->toISOString(),

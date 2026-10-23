@@ -105,6 +105,29 @@ abstract final class SellerVerificationEndpoints {
   /// account that is already an approved seller.
   static const String submit = '/seller-verification';
 
+  /// `POST` — upload one evidence document (multipart). 201, plain envelope.
+  ///
+  /// The `type` is a field in the multipart body, one of
+  /// `VerificationDocumentType`'s values. Refused with a `403` for an approved
+  /// seller and a `409` while an application is already open — an upload is
+  /// only meaningful before submitting, to stage the documents the submission
+  /// will require.
+  static const String documents = '/seller-verification/documents';
+
+  /// `GET` — stream one uploaded document back. 200, raw bytes (not enveloped).
+  ///
+  /// The response is the file itself, so it is fetched through [ApiClient]'s
+  /// binary path rather than the JSON envelope machinery. `404` when no such
+  /// document exists for the caller's record.
+  static String document(String type) => '/seller-verification/documents/$type';
+
+  /// `DELETE` — remove a staged document by type. 200.
+  static String deleteDocument(String type) =>
+      '/seller-verification/documents/$type';
+
+  /// The multipart field name the document bytes travel in.
+  static const String documentFileField = 'document';
+
   /// The field names `SubmitSellerVerificationRequest` accepts.
   ///
   /// Anything else is `prohibited` server-side and answers `422`. Listed here so
@@ -428,6 +451,49 @@ abstract final class ProfileEndpoints {
     'location',
     'avatar_url',
     'bio',
+  ];
+}
+
+/// Inquiry endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `inquiries`-creating mobile group: one write path, `POST /inquiries`, the
+/// buyer's structured contact with a seller about a listing. Reading,
+/// triaging and re-statusing an inquiry are the Admin Web's `/admin/inquiries*`
+/// flow and are not part of this app's contract.
+///
+/// The route takes no user id. The buyer is the token and the seller is
+/// `listing.seller_id`, resolved server-side, so there is no parameter or body
+/// field that could point an inquiry at a foreign account.
+abstract final class InquiryEndpoints {
+  /// `POST` — send an inquiry about a listing. 201, plain envelope.
+  ///
+  /// Body allow-list is exactly [writableFields]; `buyer_id`, `seller_id` and
+  /// `status` are server-owned and refused with `422`. The inquiry is created
+  /// `open` and changes nothing else — not the listing's status, not a
+  /// transaction.
+  static const String create = '/inquiries';
+
+  /// The field names `StoreInquiryRequest` accepts.
+  ///
+  /// Listed as an explicit allow-list so the service body is visibly exactly
+  /// this set, and so a server-owned field cannot reach a request body by a
+  /// later change to a model. `buyer_id`, `seller_id` and `status` are absent
+  /// **by construction**: the server marks them `prohibited`.
+  ///
+  /// `listing_id` and `message` are the two the server requires; everything
+  /// after them is a nullable preference the schema stores or does not, as the
+  /// buyer filled it in.
+  static const List<String> writableFields = <String>[
+    'listing_id',
+    'message',
+    'subject',
+    'purchase_interest',
+    'transaction_method',
+    'delivery_method',
+    'delivery_fee',
+    'contact_method',
+    'preferred_schedule',
   ];
 }
 

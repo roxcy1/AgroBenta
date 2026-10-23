@@ -1,11 +1,15 @@
+import 'dart:typed_data';
+
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/seller_verification/state/seller_verification_controller.dart';
 import 'package:agrobenta_mobile/features/seller_verification/state/seller_verification_scope.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_screen.dart';
+import 'package:agrobenta_mobile/models/seller_verification.dart';
 import 'package:agrobenta_mobile/repositories/seller_verification_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import 'auth_fakes.dart';
 import 'seller_verification_fakes.dart';
@@ -121,6 +125,8 @@ class SellerVerificationHarness {
     WidgetTester tester, {
     required FakeTokenStore tokenStore,
     required Future<http.Response> Function(RecordedRequest request) handler,
+    String? accountName,
+    Future<XFile?> Function(VerificationDocumentType type)? pickImage,
   }) async {
     final List<RecordedRequest> recorded = <RecordedRequest>[];
     final List<String> capabilityRefreshes = <String>[];
@@ -141,11 +147,18 @@ class SellerVerificationHarness {
       // Above `MaterialApp`, exactly as `main.dart` does it. The form is a
       // pushed route, and a scope inside `home` would be invisible to it.
       SellerVerificationScope(
-        repository: unusedRepository(),
+        repository: buildSellerVerificationRepository(
+          tokenStore,
+          handler,
+          recorded: recorded,
+        ),
         controller: controller,
         child: MaterialApp(
           theme: AppTheme.light(),
-          home: const SellerVerificationScreen(),
+          home: SellerVerificationScreen(
+            accountName: accountName,
+            pickImage: pickImage,
+          ),
         ),
       ),
     );
@@ -169,12 +182,13 @@ Future<void> openSellerVerificationForm(
   WidgetTester tester, {
   required bool resubmission,
 }) async {
-  await tester.tap(
-    find.widgetWithText(
-      FilledButton,
-      resubmission ? 'Resubmit Verification' : 'Start seller verification',
-    ),
+  final Finder target = find.widgetWithText(
+    FilledButton,
+    resubmission ? 'Resubmit Verification' : 'Get Started',
   );
+  await tester.ensureVisible(target);
+  await tester.pump(const Duration(milliseconds: 50));
+  await tester.tap(target);
   await settleSellerVerification(tester);
 }
 
@@ -196,4 +210,62 @@ Future<void> settleSellerVerification(
   for (int frame = 0; frame < frames; frame++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
+}
+
+/// A tiny in-memory PNG an [XFile] can read, for picker injection in tests.
+/// The bytes are a valid 1x1 PNG so `Image.file`/`Image.memory` would render if
+/// ever asked to; the tests exercise the flow, not the pixels.
+final Uint8List kFakeVerificationImageBytes = Uint8List.fromList(<int>[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+  0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+  0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+  0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+  0x42, 0x60, 0x82,
+]);
+
+/// A picker that always returns a fresh in-memory PNG.
+///
+/// Distinct file names per type keep the two slots from looking identical, and
+/// never reuse the same file across the ID and selfie cards — the design forbids
+/// silently reusing the ID image as the selfie.
+Future<XFile?> fakeVerificationPicker(VerificationDocumentType type) async {
+  return XFile.fromData(
+    kFakeVerificationImageBytes,
+    name: '${type.value}.png',
+    mimeType: 'image/png',
+  );
+}
+
+/// A picker that returns `null` — the user cancelled the picker.
+Future<XFile?> cancelledVerificationPicker(
+  VerificationDocumentType type,
+) async => null;
+
+/// Taps the first pick action on a document card, identified by its card title.
+Future<void> tapDocumentPick(
+  WidgetTester tester,
+  String cardTitle,
+) async {
+  final Finder card = find.ancestor(
+    of: find.text(cardTitle),
+    matching: find.byType(Card),
+  );
+  final Finder button = find.descendant(
+    of: card,
+    matching: find.widgetWithText(FilledButton, 'Take Photo'),
+  );
+  await tester.ensureVisible(button);
+  await tester.pump(const Duration(milliseconds: 50));
+  await tester.tap(button);
+  await settleSellerVerification(tester);
+}
+
+/// Advances through the Documents step by uploading both required images.
+Future<void> uploadBothDocuments(WidgetTester tester) async {
+  await tapDocumentPick(tester, 'Valid Government-Issued ID');
+  await tapDocumentPick(tester, 'Selfie Holding Your ID');
 }

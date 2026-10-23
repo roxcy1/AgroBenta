@@ -198,17 +198,21 @@ TransactionRepository buildTransactionRepository(
   return TransactionRepository(TransactionService(client));
 }
 
-/// A list-tab controller over a mock transport: real service, real
-/// repository, real controller, fake HTTP.
+/// A list controller over a mock transport: real service, real repository,
+/// real controller, fake HTTP.
+///
+/// [status] is `null` for the "All" filter; [role] narrows to one side.
 TransactionsController buildTransactionsController(
   FakeTokenStore tokenStore,
   Future<http.Response> Function(RecordedRequest request) handler, {
-  TransactionStatus status = TransactionStatus.pending,
+  TransactionStatus? status = TransactionStatus.pending,
+  TransactionRole? role,
   List<RecordedRequest>? recorded,
 }) {
   return TransactionsController(
     buildTransactionRepository(tokenStore, handler, recorded: recorded),
     status,
+    role: role,
   );
 }
 

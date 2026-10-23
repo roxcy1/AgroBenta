@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import 'package:image_picker/image_picker.dart';
+
 import '../core/network/api_exception.dart';
 import '../models/seller_verification.dart';
 import '../services/seller_verification_service.dart';
@@ -51,5 +55,37 @@ class SellerVerificationRepository {
       businessDescription: businessDescription,
       idDocumentRef: idDocumentRef,
     );
+  }
+
+  /// Stages one evidence document for the caller's application.
+  ///
+  /// No error translation: the `409` (already open) and `422` (bad file) carry
+  /// their own meaning, and the form's documents controller branches on
+  /// [ApiErrorKind].
+  Future<void> uploadDocument({
+    required VerificationDocumentType type,
+    required XFile file,
+    void Function(int sent, int total)? onProgress,
+  }) {
+    return _service.uploadDocument(
+      type: type,
+      file: file,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Removes a staged document. Throws [ApiException] `notFound` when there is
+  /// nothing staged of that type.
+  Future<void> deleteDocument(VerificationDocumentType type) {
+    return _service.deleteDocument(type);
+  }
+
+  /// The stored bytes of one document, or `null` when none is on file.
+  ///
+  /// A `404` here is the normal "not uploaded yet" answer and is returned as
+  /// `null`, mirroring [current]'s treatment of a missing record. Every other
+  /// failure propagates.
+  Future<Uint8List?> fetchDocument(VerificationDocumentType type) {
+    return _service.fetchDocument(type);
   }
 }

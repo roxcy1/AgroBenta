@@ -103,9 +103,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (!mounted) {
                   return;
                 }
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(sendError)),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(sendError)));
                 _controller.clearSendError();
               });
             }
@@ -114,24 +114,23 @@ class _ChatScreenState extends State<ChatScreen> {
               children: <Widget>[
                 Expanded(
                   child: switch (state.status) {
-                    ChatStatus.initial || ChatStatus.loading =>
-                      const Center(child: CircularProgressIndicator()),
+                    ChatStatus.initial || ChatStatus.loading => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
                     ChatStatus.failed => _ErrorState(
-                        message: state.errorMessage ?? 'Something went wrong.',
-                        onRetry: _controller.load,
-                      ),
-                    _ => state.messages.isEmpty
-                        ? const _EmptyThread()
-                        : _MessageList(
-                            messages: state.messages,
-                            currentUserId: widget.currentUserId,
-                          ),
+                      message: state.errorMessage ?? 'Something went wrong.',
+                      onRetry: _controller.load,
+                    ),
+                    _ =>
+                      state.messages.isEmpty
+                          ? const _EmptyThread()
+                          : _MessageList(
+                              messages: state.messages,
+                              currentUserId: widget.currentUserId,
+                            ),
                   },
                 ),
-                ChatInputBar(
-                  onSend: _onSend,
-                  isSending: state.isSending,
-                ),
+                ChatInputBar(onSend: _onSend, isSending: state.isSending),
               ],
             );
           },
@@ -142,10 +141,7 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 class _MessageList extends StatelessWidget {
-  const _MessageList({
-    required this.messages,
-    required this.currentUserId,
-  });
+  const _MessageList({required this.messages, required this.currentUserId});
 
   final List<Message> messages;
   final int currentUserId;
@@ -182,10 +178,7 @@ class _SmallAvatar extends StatelessWidget {
     if (url == null || url.isEmpty) {
       return CircleAvatar(
         radius: 16,
-        child: Text(
-          user.initial,
-          style: const TextStyle(fontSize: 12),
-        ),
+        child: Text(user.initial, style: const TextStyle(fontSize: 12)),
       );
     }
     return CircleAvatar(radius: 16, backgroundImage: NetworkImage(url));
@@ -210,10 +203,7 @@ class _EmptyThread extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Say hello',
-              style: theme.textTheme.titleMedium,
-            ),
+            Text('Say hello', style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Start the conversation below.',

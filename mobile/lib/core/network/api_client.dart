@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -58,6 +59,81 @@ class ApiClient {
     Map<String, dynamic>? query,
   }) {
     return _send<T>(method: 'GET', path: path, parse: parse, query: query);
+  }
+
+  /// Performs a `GET` for a raw binary body — an image, a document — rather than
+  /// a JSON envelope.
+  ///
+  /// Laravel's `streamDownload` endpoints answer with the file bytes and none of
+  /// the `{ success, message, data }` envelope, so they cannot go through
+  /// [_dispatch]. This method keeps the parts that must not be duplicated: the
+  /// bearer token, the timeout, and the translation of `401` (token cleared),
+  /// `403`, `404`, `409`, `422`, `429` and `5xx` into [ApiException]. A `200`
+  /// returns the body verbatim.
+  ///
+  /// Errors still arrive as JSON — Laravel renders them through the exception
+  /// handler even on a route whose success path is a stream — so the same
+  /// [ApiException] surface applies, and a caller can distinguish "no document"
+  /// (`notFound`) from "could not fetch" without inspecting a status code.
+  Future<Uint8List> getBytes(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
+
+    final Map<String, String> headers = <String, String>{
+      'Accept': ApiConstants.acceptJson,
+    };
+
+    final String? token = await _tokenStorage.read();
+    final bool authenticated = token != null && token.isNotEmpty;
+    if (authenticated) {
+      headers[ApiConstants.authorizationHeader] =
+          '${ApiConstants.bearerPrefix} $token';
+    }
+
+    final http.Request request = http.Request('GET', uri)
+      ..headers.addAll(headers);
+
+    http.StreamedResponse streamed;
+    try {
+      streamed = await _httpClient.send(request).timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException.network(
+        message:
+            'The request timed out after ${_timeout.inSeconds}s. '
+            'Check that the API is reachable at $baseUrl.',
+      );
+    } on http.ClientException catch (error) {
+      throw ApiException.network(
+        message:
+            'Could not reach the server. Check your connection and that the '
+            'API is running at $baseUrl.',
+        cause: error,
+      );
+    }
+
+    if (_isSuccessStatus(streamed.statusCode)) {
+      return Uint8List.fromList(await streamed.stream.toBytes());
+    }
+
+    // An error path. Read the body so Laravel's message is preserved, then
+    // translate it exactly as a JSON request would.
+    final http.Response response = await http.Response.fromStream(streamed);
+
+    bool decodeFailed = false;
+    Object? decoded;
+    try {
+      decoded = _decodeBody(response);
+    } on ApiException {
+      decodeFailed = true;
+    }
+
+    throw await _toApiException(
+      response,
+      decodeFailed ? null : decoded,
+      authenticated: authenticated,
+    );
   }
 
   /// Performs a `POST` and returns the unwrapped `data` payload.

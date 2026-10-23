@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:agrobenta_mobile/core/config/app_config.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_state.dart';
 import 'package:agrobenta_mobile/models/user.dart';
@@ -191,8 +192,14 @@ void main() {
       expect(controller.state.status, AuthStatus.signedOut);
       // The network error names the actual configured host — on the default
       // physical-device Android build that is the machine's LAN address, never
-      // the emulator alias.
-      expect(controller.state.errorMessage, contains('192.168.1.8'));
+      // the emulator alias. Derived from the constant rather than spelled out,
+      // so a DHCP change of the LAN IP cannot stale this test.
+      expect(
+        controller.state.errorMessage,
+        contains(
+          Uri.parse(AppConfig.physicalAndroidApiBaseUrl).host,
+        ),
+      );
       expect(controller.state.errorMessage, isNot(contains('10.0.2.2')));
     });
 
