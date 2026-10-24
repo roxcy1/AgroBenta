@@ -22,8 +22,9 @@ When rules appear to conflict, resolve in this order:
 
 1. Root `AGENTS.md`
 2. Root `DESIGN.md` (visual identity and brand)
-3. Approved AgroBenta functional/system documentation —
-   `docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`
+3. **The capstone manuscript** (final document, PDF outside the repository) as
+   restated in `docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`. The manuscript's
+   prototype screens are part of it.
 4. Backend API implementation and contracts (`backend/routes/api.php`,
    controllers, requests, resources, services, repositories, models,
    migrations) — the actual behaviour wins over any assumption
@@ -33,9 +34,10 @@ When rules appear to conflict, resolve in this order:
 
 Consequences:
 
-* **Business rules** come from `docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`.
-  Where it is silent, **stop and report** — do not invent a rule. That document
-  is **approved**: do not edit it to settle a disagreement.
+* **Business rules** come from the manuscript, as restated in
+  `docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`. Where it is silent or lists the
+  point as open (§13 there), **stop and report** — do not invent a rule. Do not
+  edit that document to match the code; see `docs/AGENTS.md`.
 * **API behaviour** must match the actual Laravel implementation, not a
   document describing it.
 * **Mobile visual rules** govern only this app's UI. They never override the
@@ -273,9 +275,13 @@ capability is: submit verification → admin approves → the server sets the fi
 ### Never do this
 
 * Do not create a separate buyer account and a separate seller account.
-* Do not add a "Switch to Seller" toggle.
 * Do not treat being a seller as a different login, a different token, or a
   different user id.
+* Do not let **Seller Mode / Buyer Mode** grant anything. The Account Mode
+  switch (manuscript Figure 20; functional documentation §2.7) is a **view**
+  switch only: Seller Mode is offered only when the server reports
+  `seller_capability = seller`, switching sends no request that changes `role`
+  or `seller_capability`, and the selected mode is cleared on logout.
 * Do not let the client decide what a seller may do. The server decides; the
   client renders the consequence.
 
@@ -640,20 +646,20 @@ been worked around in the app.
 
 Report these; do not decide them unilaterally.
 
-* **`livestock_type` is free text.** `listings.livestock_type` is a plain
-  `string` with an index but no enum and no validation list. Mobile needs a
-  controlled vocabulary for filter chips and pickers. Where should that list
-  live — a backend enum, an endpoint, or app constants? This is a
-  business-rule question.
+* **`livestock_type` categories.** The manuscript limits listings to
+  **cattle, carabao, goat and swine** (functional documentation §4.1), but
+  `listings.livestock_type` is still a plain `string` with no validation list,
+  and the prototype also shows "Others" (open item MS-03). Where the list lives
+  — backend validation exposed through an endpoint, or app constants — is
+  still to be decided; do not hard-code a different list.
 * **Currency and locale.** The Admin Web formats as `₱` / `en-PH`. The schema
   has no currency column. Assume PHP peso until told otherwise, and centralise
   the formatter so it is a one-line change.
-* ~~No approved functional documentation exists~~ — **closed.** The approved
-  functional documentation now lives at
-  `docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`. It was approved during planning
-  but was never committed, which is why this gap existed. One residual item
-  remains: the planning original is still not stored in the repository (DG-01
-  there).
+* ~~No approved functional documentation exists~~ — **closed.** The
+  functional documentation lives at
+  `docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md` and, since 2026-10-24, is
+  aligned to the capstone manuscript, which is the final document (DG-01
+  closed).
 
 ---
 
@@ -666,10 +672,12 @@ ten required dimensions and carries the open-decision register. **Use that
 document, not this section.** The inline copy is kept only as a record of what
 M0 proposed.
 
-**Business rules are now finalized** (D-02 listing publication, D-03 price
-suggestion, D-15 transaction status, and the security requirements). They are
-approved and locked in `docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`, which
-**outranks** the proposal and this file. The proposal has been updated to match.
+**Business rules come from the capstone manuscript**, restated in
+`docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`, which **outranks** the proposal
+and this file. The earlier decision round (D-02 listing publication, D-03 price
+suggestion, D-15 transaction status, and the security requirements) is kept
+there only where the manuscript agrees. Where the proposal still reflects the
+older rules, the functional documentation wins.
 
 Nothing may be built against the contract until the backend actually serves
 those routes. Laravel is authoritative; if the real implementation differs, the
@@ -720,8 +728,25 @@ documentation §10), not open questions:
 
 ### Gap register changes from the decision round
 
-Listing publication (D-02) and transaction status (D-15) are now **decided**.
-The register entries change accordingly:
+> **Updated 2026-10-24 — manuscript alignment.** Read these rows together with
+> the functional documentation, which now settles several of them:
+>
+> * **GAP-10** — the estimation method is an **external AI API called by the
+>   backend** (functional documentation §5.3). The provider is still open
+>   (MS-09), so the rule below — never show a computed value before the service
+>   exists — still applies. Buyers may see the suggestion as a reference (§5.1).
+> * **GAP-11** — the completing actor is decided: **the seller accepts, then
+>   the buyer confirms receipt** (§6.4). How the intermediate "seller accepted"
+>   and "in delivery" steps are stored is still open (MS-12), so completion
+>   stays blocked in the app until the backend implements it.
+> * **GAP-17** — closed: admin `approve` / `reject` / `deactivate` exist.
+> * **GAP-18** — still holds while admin approval is required. Whether a seller
+>   may publish directly is open (MS-01).
+> * Inquiries (seller view and response), document upload for verification and
+>   the Account Mode switch are now in scope (§8.2, §3.3, §2.7).
+
+Listing publication (D-02) and transaction status (D-15) were **decided** in
+the earlier round. The register entries changed accordingly:
 
 | Gap | Change |
 |---|---|

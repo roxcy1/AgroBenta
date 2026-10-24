@@ -2,14 +2,19 @@
 
 ## Project Purpose
 
-This repository is a **generic, reusable full-stack starter template**.
+This repository is **AgroBenta**: a mobile-based livestock trading application
+with AI-based price suggestion, seller verification and data analytics, for the
+Municipality of Trinidad, Bohol.
 
-It must remain project-agnostic and should be usable as the foundation for different applications.
+It was started from a generic Docker full-stack template. The Docker setup
+remains reusable, but the application code, rules and terminology are
+AgroBenta-specific.
 
 ### Stack
 
-* Laravel 13 — Backend
-* React + Vite — Frontend
+* Laravel 13 — Backend (REST API)
+* React + Vite — Admin Web (`frontend/`)
+* Flutter — Mobile app for buyers and sellers (`mobile/`)
 * MySQL — Database
 * Redis — Cache/queue support
 * Nginx — Web server/reverse proxy
@@ -30,10 +35,12 @@ It must remain project-agnostic and should be usable as the foundation for diffe
    * Read this root `AGENTS.md`.
    * Read any applicable `SUBAGENTS.md` before modifying files in its scope.
 
-3. **Keep the template generic.**
+3. **Follow the AgroBenta business rules.**
 
-   * No FarmLink-specific terminology, business rules, roles, workflows, or data.
-   * Avoid assumptions about the future project's domain.
+   * Business rules, roles, workflows and terminology come from the sources in
+     "Business Rules Source of Truth" below.
+   * Do not invent business rules. Where the sources are silent or contradict
+     each other, stop and report it.
 
 4. **Prefer simple, maintainable solutions.**
 
@@ -141,9 +148,28 @@ A task is complete only when:
 1. The requested functionality is implemented.
 2. Existing functionality is not unnecessarily broken.
 3. Relevant validation has passed.
-4. No unnecessary project-specific code was introduced.
+4. No code was introduced that the business rules do not call for.
 5. Documentation is updated when required.
 6. The final report clearly states what changed and what was verified.
+
+## Business Rules Source of Truth
+
+When rules conflict, resolve them in this order:
+
+1. **The capstone manuscript** — *AgroBenta: A Mobile-Based Livestock Trading
+   Application with AI-Based Price Suggestion, Seller Verification, and Data
+   Analytics* (PDF, kept outside the repository). It is the **final** document,
+   including its prototype screens and ERD.
+2. **`docs/AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`** — the repository's
+   restatement of the manuscript. Read this first; it cites the manuscript page
+   for each rule and lists the open questions (§13).
+3. **The backend implementation** — describes what the system currently
+   does. Where it differs from 1 or 2, that is a defect to report, not a new
+   rule.
+4. `docs/MOBILE_API_CONTRACT_PROPOSAL.md` — a proposal; never overrides 1–3.
+
+Where the manuscript contradicts itself, do not pick a side. Report it; it is
+tracked as an open item in the functional documentation.
 
 ## Visual Design Source of Truth
 
