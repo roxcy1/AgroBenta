@@ -73,6 +73,124 @@ input {
   min-height: 100vh;
 }
 
+/* Activity Summary Cards */
+.activity-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.activity-summary-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 16px 18px;
+  min-height: 96px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.activity-summary-card[tabindex]:not([tabindex='-1']) {
+  outline: none;
+}
+
+.activity-summary-card:hover {
+  border-color: #D2D5DA;
+  box-shadow: var(--shadow-card-hover);
+}
+
+.activity-summary-card:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--ring-primary);
+}
+
+.activity-summary-card[role='button'] {
+  cursor: pointer;
+  text-align: left;
+}
+
+.activity-summary-card[role='button']:hover {
+  border-color: #D2D5DA;
+  box-shadow: var(--shadow-card-hover);
+}
+
+.activity-summary-card--emphasis {
+  background: linear-gradient(180deg, #f7fbf8 0%, var(--color-surface) 100%);
+  border-color: rgba(27, 94, 32, 0.25);
+}
+
+.activity-summary-card--emphasis:hover {
+  border-color: rgba(27, 94, 32, 0.4);
+}
+
+.activity-summary-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.activity-summary-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+.activity-summary-card__window {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.activity-summary-card__body {
+  display: flex;
+  align-items: flex-end;
+  flex: 1;
+}
+
+.activity-summary-card__value {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.activity-summary-card__value--muted {
+  color: var(--color-text-muted);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+@media (max-width: 1100px) {
+  .activity-summary-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .activity-summary-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-summary-card {
+    padding: 14px 16px;
+    min-height: 88px;
+  }
+
+  .activity-summary-card__value {
+    font-size: 24px;
+  }
+}
+
 .loading-spinner {
   width: 40px;
   height: 40px;

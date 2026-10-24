@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useActivities } from '../api/useActivities';
+import { useActivities, useActivitySummary } from '../api/useActivities';
 import type { Activity } from '../api/useActivities';
 import { useUsers } from '../../users/api/useUsers';
 import ActivityDetailDialog from './ActivityDetailDialog';
@@ -20,6 +20,7 @@ export function ActivitiesPage() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [actionFilter, setActionFilter] = useState('');
+  const [actionFilters, setActionFilters] = useState<string[]>([]);
   const [userFilter, setUserFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -29,7 +30,8 @@ export function ActivitiesPage() {
 
   const filters = {
     search: search || undefined,
-    action: actionFilter || undefined,
+    actions: actionFilters.length > 0 ? actionFilters : undefined,
+    action: actionFilters.length > 0 ? undefined : (actionFilter || undefined),
     user_id: userFilter ? Number(userFilter) : undefined,
     date_from: appliedDates.date_from,
     date_to: appliedDates.date_to,
@@ -42,6 +44,7 @@ export function ActivitiesPage() {
   });
 
   const { data: usersData } = useUsers({ page: 1, per_page: 100 });
+  const { data: summaryData, isLoading: isSummaryLoading, error: summaryError } = useActivitySummary();
 
   const handleSearch = () => {
     setSearch(searchInput);
@@ -56,6 +59,7 @@ export function ActivitiesPage() {
 
   const handleActionChange = (value: string) => {
     setActionFilter(value);
+    setActionFilters([]);
     setPage(1);
   };
 
@@ -83,6 +87,7 @@ export function ActivitiesPage() {
     setSearch('');
     setSearchInput('');
     setActionFilter('');
+    setActionFilters([]);
     setUserFilter('');
     setDateFrom('');
     setDateTo('');
@@ -97,10 +102,152 @@ export function ActivitiesPage() {
   const activities = data?.activities ?? [];
   const pagination = data?.pagination;
   const actors = usersData?.users ?? [];
-  const filtersActive = hasActiveActivityFilters(filters);
+  const filtersActive = hasActiveActivityFilters({ 
+    search: search || undefined,
+    action: actionFilter || undefined,
+    user_id: userFilter ? Number(userFilter) : undefined,
+    date_from: appliedDates.date_from,
+    date_to: appliedDates.date_to,
+  }) || actionFilters.length > 0;
+
+  const handleClearActionFilter = () => {
+    setActionFilter('');
+    setActionFilters([]);
+    setPage(1);
+  };
+
+  const summary = summaryData;
 
   return (
     <div className="lv-tab-content">
+      <div className="activity-summary-cards" role="region" aria-label="Activity summary last 24 hours">
+        <article className="activity-summary-card" tabIndex={0} aria-label="Total activities in last 24 hours">
+          <div className="activity-summary-card__header">
+            <h3 className="activity-summary-card__title">Total Activities</h3>
+            <span className="activity-summary-card__window">Last 24h</span>
+          </div>
+          <div className="activity-summary-card__body">
+            {isSummaryLoading ? (
+              <p className="activity-summary-card__value">Loading...</p>
+            ) : summaryError ? (
+              <p className="activity-summary-card__value activity-summary-card__value--muted">Unavailable</p>
+            ) : (
+              <p className="activity-summary-card__value">{summary?.total_activities ?? 0}</p>
+            )}
+          </div>
+        </article>
+
+        <article className="activity-summary-card" tabIndex={0} aria-label="Active actors in last 24 hours">
+          <div className="activity-summary-card__header">
+            <h3 className="activity-summary-card__title">Active Actors</h3>
+            <span className="activity-summary-card__window">Last 24h</span>
+          </div>
+          <div className="activity-summary-card__body">
+            {isSummaryLoading ? (
+              <p className="activity-summary-card__value">Loading...</p>
+            ) : summaryError ? (
+              <p className="activity-summary-card__value activity-summary-card__value--muted">Unavailable</p>
+            ) : (
+              <p className="activity-summary-card__value">{summary?.active_actors ?? 0}</p>
+            )}
+          </div>
+        </article>
+
+        <article
+          className="activity-summary-card activity-summary-card--emphasis"
+          tabIndex={0}
+          role="button"
+          aria-pressed={actionFilters.length > 0 && actionFilters.every((a) => ['listing_approved', 'listing_rejected', 'listing_deactivated', 'seller_verification_approved', 'seller_verification_rejected'].includes(a))}
+          aria-label="Moderation actions in last 24 hours"
+          onClick={() => {
+            const moderationActions = ['listing_approved', 'listing_rejected', 'listing_deactivated', 'seller_verification_approved', 'seller_verification_rejected'];
+            const isActive = actionFilters.length === moderationActions.length && moderationActions.every((a) => actionFilters.includes(a));
+            if (isActive) {
+              setActionFilter('');
+              setActionFilters([]);
+              setPage(1);
+            } else {
+              setActionFilter('');
+              setActionFilters(moderationActions);
+              setPage(1);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              const moderationActions = ['listing_approved', 'listing_rejected', 'listing_deactivated', 'seller_verification_approved', 'seller_verification_rejected'];
+              const isActive = actionFilters.length === moderationActions.length && moderationActions.every((a) => actionFilters.includes(a));
+              if (isActive) {
+                setActionFilter('');
+                setActionFilters([]);
+                setPage(1);
+              } else {
+                setActionFilter('');
+                setActionFilters(moderationActions);
+                setPage(1);
+              }
+            }
+          }}
+        >
+          <div className="activity-summary-card__header">
+            <h3 className="activity-summary-card__title">Moderation Actions</h3>
+            <span className="activity-summary-card__window">Last 24h</span>
+          </div>
+          <div className="activity-summary-card__body">
+            {isSummaryLoading ? (
+              <p className="activity-summary-card__value">Loading...</p>
+            ) : summaryError ? (
+              <p className="activity-summary-card__value activity-summary-card__value--muted">Unavailable</p>
+            ) : (
+              <p className="activity-summary-card__value">{summary?.moderation_actions ?? 0}</p>
+            )}
+          </div>
+        </article>
+
+        <article
+          className="activity-summary-card"
+          tabIndex={0}
+          role="button"
+          aria-pressed={actionFilter === 'settings_updated'}
+          aria-label="Configuration changes in last 24 hours"
+          onClick={() => {
+            if (actionFilter === 'settings_updated') {
+              handleClearActionFilter();
+            } else {
+              setActionFilter('settings_updated');
+              setActionFilters([]);
+              setPage(1);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              if (actionFilter === 'settings_updated') {
+                handleClearActionFilter();
+              } else {
+                setActionFilter('settings_updated');
+                setActionFilters([]);
+                setPage(1);
+              }
+            }
+          }}
+        >
+          <div className="activity-summary-card__header">
+            <h3 className="activity-summary-card__title">Configuration Changes</h3>
+            <span className="activity-summary-card__window">Last 24h</span>
+          </div>
+          <div className="activity-summary-card__body">
+            {isSummaryLoading ? (
+              <p className="activity-summary-card__value">Loading...</p>
+            ) : summaryError ? (
+              <p className="activity-summary-card__value activity-summary-card__value--muted">Unavailable</p>
+            ) : (
+              <p className="activity-summary-card__value">{summary?.configuration_changes ?? 0}</p>
+            )}
+          </div>
+        </article>
+      </div>
+
       <div className="lv-controls">
         <div className="lv-search-row">
           <div className="lv-search-wrapper">
