@@ -250,6 +250,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::patch('/inquiries/{inquiry}/status', [InquiryController::class, 'updateStatus']);
     Route::delete('/inquiries/{inquiry}', [InquiryController::class, 'destroy']);
     Route::get('/activities', [ActivityController::class, 'index']);
+    Route::get('/activities/summary', [ActivityController::class, 'summary']);
     Route::get('/reports', [ReportsController::class, 'index']);
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::put('/settings', [SettingsController::class, 'update']);

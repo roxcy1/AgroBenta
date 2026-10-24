@@ -20,9 +20,11 @@ class ActivityController extends Controller
      */
     public function index(ListActivitiesRequest $request): JsonResponse
     {
+        $action = $request->validated('actions') ?? $request->validated('action');
+
         $paginator = $this->activities->listActivities(
             search: $request->validated('search'),
-            action: $request->validated('action'),
+            action: $action,
             userId: $request->validated('user_id'),
             dateFrom: $request->validated('date_from'),
             dateTo: $request->validated('date_to'),
@@ -40,6 +42,16 @@ class ActivityController extends Controller
                     'total' => $paginator->total(),
                 ],
             ],
+        ], 200);
+    }
+
+    public function summary(): JsonResponse
+    {
+        $summary = $this->activities->getSummaryLast24Hours();
+
+        return response()->json([
+            'success' => true,
+            'data' => $summary,
         ], 200);
     }
 }

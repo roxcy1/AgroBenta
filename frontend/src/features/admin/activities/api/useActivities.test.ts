@@ -88,8 +88,23 @@ describe('fetchActivities', () => {
     const url = spy.mock.calls[0][0] as string;
     expect(url).not.toContain('search=');
     expect(url).not.toContain('action=');
+    expect(url).not.toContain('actions');
     expect(url).not.toContain('user_id=');
     expect(url).not.toContain('date_from=');
     expect(url).not.toContain('date_to=');
+  });
+
+  it('forwards multiple actions as actions[] parameters', async () => {
+    const spy = vi.spyOn(api, 'get').mockResolvedValueOnce(makeResponse([], pagination));
+
+    await fetchActivities({
+      actions: ['listing_approved', 'listing_rejected'],
+      page: 1,
+      per_page: 15,
+    });
+
+    const url = spy.mock.calls[0][0] as string;
+    expect(url).toContain('actions%5B%5D=listing_approved');
+    expect(url).toContain('actions%5B%5D=listing_rejected');
   });
 });
