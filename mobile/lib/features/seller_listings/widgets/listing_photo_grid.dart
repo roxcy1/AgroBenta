@@ -45,21 +45,50 @@ class ListingPhotoGrid extends StatelessWidget {
           );
         }),
         if (controller.canAddPhoto)
-          _AddTile(onAdd: () => _pickPhotos(controller)),
+          _AddTile(onAdd: () => _pickPhotos()),
       ],
     );
   }
 
-  /// Opens the image picker (gallery or camera) and appends any picks.
-  static Future<void> _pickPhotos(SellerListingController controller) async {
+  /// Opens a sheet to choose image source (gallery or camera), then appends any picks.
+  Future<void> _pickPhotos() async {
     final ImagePicker picker = ImagePicker();
-    final List<XFile> picked = await picker.pickMultiImage(
-      maxWidth: 1600,
-      maxHeight: 1600,
-      imageQuality: 85,
+    final bool? cameraSelected = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add photos from'),
+        content: const Text('Choose the source for your photos:'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Gallery'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Camera'),
+          ),
+        ],
+      ),
     );
-    if (picked.isNotEmpty) {
-      controller.addPickedPhotos(picked);
+    if (cameraSelected == true) {
+      final XFile? picked = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+      if (picked != null) {
+        controller.addPickedPhotos([picked]);
+      }
+    } else {
+      final List<XFile>? picked = await picker.pickMultiImage(
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+      if (picked.isNotEmpty) {
+        controller.addPickedPhotos(picked);
+      }
     }
   }
 }
