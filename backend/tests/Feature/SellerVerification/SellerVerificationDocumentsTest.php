@@ -8,12 +8,16 @@ use App\Enums\SellerVerificationStatus;
 use App\Enums\UserRole;
 use App\Models\SellerVerification;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use App\Services\SellerVerification\SellerVerificationDocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
+use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -69,6 +73,18 @@ class SellerVerificationDocumentsTest extends TestCase
             'seller_capability' => SellerCapability::Buyer,
             'name' => 'Admin Person',
         ]);
+    }
+
+    #[Test]
+    public function seller_verifications_schema_has_the_document_path_columns(): void
+    {
+        $this->assertTrue(
+            Schema::hasColumns('seller_verifications', [
+                'id_document_path',
+                'selfie_path',
+            ]),
+            'Document paths must have columns before submission can persist them.',
+        );
     }
 
     private function mobileToken(User $user): string
@@ -190,10 +206,10 @@ class SellerVerificationDocumentsTest extends TestCase
             $files,
             'A replacement must leave exactly one staged ID, not two.',
         );
-                $this->assertStringEndsWith(
-                    'id_document.png',
-                    $files[0],
-                );
+        $this->assertStringEndsWith(
+            'id_document.png',
+            $files[0],
+        );
     }
 
     #[Test]
@@ -427,6 +443,39 @@ class SellerVerificationDocumentsTest extends TestCase
         // Never a URL in the record.
         $this->assertStringNotContainsString('http', $verification->id_document_path);
         $this->assertStringNotContainsString('http', $verification->selfie_path);
+    }
+
+    #[Test]
+    public function a_failed_submission_removes_promoted_files(): void
+    {
+        $this->stageBoth($this->buyer);
+
+        $this->mock(ActivityLogger::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('log')
+                ->once()
+                ->andThrow(new RuntimeException('Audit write failed.'));
+        });
+
+        $this->withToken($this->mobileToken($this->buyer))
+            ->postJson('/api/seller-verification', [
+                'business_name' => 'Reyes Livestock',
+            ])
+            ->assertStatus(500);
+
+        $this->assertDatabaseCount('seller_verifications', 0);
+
+        $disk = Storage::disk(SellerVerificationDocumentService::DISK);
+
+        $this->assertSame(
+            [],
+            $disk->allFiles('verifications'),
+            'A rolled-back submission must not leave its promoted files behind.',
+        );
+        $this->assertSame(
+            [],
+            $disk->allFiles(sprintf('staging/%d', $this->buyer->id)),
+            'The failed submission must not leave files in staging either.',
+        );
     }
 
     #[Test]
