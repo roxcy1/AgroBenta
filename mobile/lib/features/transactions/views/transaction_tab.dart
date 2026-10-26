@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/transaction.dart';
+import '../../../widgets/paged_list_state_views.dart';
 import '../state/transactions_controller.dart';
 import '../state/transactions_filter.dart';
 import '../state/transactions_state.dart';
@@ -110,7 +111,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                 const SizedBox(height: AppSpacing.sm),
             itemBuilder: (BuildContext context, int index) {
               if (index >= state.transactions.length) {
-                return TransactionsLoadMoreFooter(
+                return PagedListLoadMoreFooter(
                   isLoading: state.status == TransactionsStatus.loadingMore,
                   hasMore: state.hasMorePages,
                   errorMessage: state.loadMoreErrorMessage,
@@ -121,7 +122,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
               if (index == 0 && state.refreshErrorMessage != null) {
                 return Column(
                   children: <Widget>[
-                    TransactionsRefreshNotice(
+                    PagedListRefreshNotice(
                       message: state.refreshErrorMessage!,
                       onRetry: widget.controller.refresh,
                     ),

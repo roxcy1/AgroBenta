@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
+import '../../../widgets/paged_list_state_views.dart';
 import '../state/listing_filters.dart';
 import '../state/marketplace_controller.dart';
 import '../state/marketplace_scope.dart';
@@ -224,7 +225,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             const SizedBox(height: AppSpacing.sm),
         itemBuilder: (BuildContext context, int index) {
           if (state.refreshErrorMessage != null && index == 0) {
-            return RefreshFailedNotice(
+            return PagedListRefreshNotice(
               message: 'Could not refresh. ${state.refreshErrorMessage}',
               onRetry: () => unawaited(_controller.refresh()),
             );
@@ -234,7 +235,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               index - (state.refreshErrorMessage != null ? 1 : 0);
 
           if (listingIndex == state.listings.length) {
-            return LoadMoreFooter(
+            return PagedListLoadMoreFooter(
               isLoading: state.status == MarketplaceStatus.loadingMore,
               hasMore: state.hasMorePages,
               errorMessage: state.loadMoreErrorMessage,

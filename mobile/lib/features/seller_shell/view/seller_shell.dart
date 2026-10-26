@@ -32,6 +32,7 @@ class _SellerShellState extends State<SellerShell> {
   int _index = 0;
 
   static const int _listingsIndex = 1;
+  static const int _transactionsIndex = 3;
   static const int _profileIndex = 4;
 
   @override
@@ -46,6 +47,8 @@ class _SellerShellState extends State<SellerShell> {
           SellerHomeScreen(
             onOpenListings: () => setState(() => _index = _listingsIndex),
             onOpenProfile: () => setState(() => _index = _profileIndex),
+            onOpenTransactions: () =>
+                setState(() => _index = _transactionsIndex),
           ),
           const SellerListingsScreen(),
           const ConversationsScreen(),

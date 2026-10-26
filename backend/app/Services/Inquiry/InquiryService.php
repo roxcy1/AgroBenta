@@ -9,10 +9,11 @@ use App\Models\Listing;
 use App\Models\User;
 use App\Repositories\Inquiry\InquiryRepository;
 use App\Services\ActivityLogger;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The rules for creating a buyer inquiry.
+ * The rules for buyer inquiries and the seller's received-inquiry read.
  *
  * The repository persists the row and resolves the counterparties; this
  * service decides whether the inquiry may be created at all. The guards are
@@ -40,6 +41,18 @@ class InquiryService
         private readonly ActivityLogger $activity,
     ) {
         //
+    }
+
+    /**
+     * List the inquiries received by one seller, newest first.
+     *
+     * A seller may see only inquiries about their own listings (functional
+     * documentation section 8.2 rule 2). The scope comes from the authenticated
+     * user, so there is no request value that can widen it.
+     */
+    public function listForSeller(User $seller, int $perPage = 15): LengthAwarePaginator
+    {
+        return $this->inquiries->paginateForSeller($seller, $perPage);
     }
 
     /**

@@ -162,19 +162,19 @@ class Inquiry {
       listing: listing == null ? null : InquiryListing.fromJson(listing),
       subject: readNullableString(json, 'subject'),
       message: readString(json, 'message'),
-      purchaseInterest: _readNullableBool(json, 'purchase_interest'),
-      transactionMethod: _readNullableEnum(
+      purchaseInterest: readNullableBool(json, 'purchase_interest'),
+      transactionMethod: readNullableEnum(
         json,
         'transaction_method',
         InquiryTransactionMethod.fromValue,
       ),
-      deliveryMethod: _readNullableEnum(
+      deliveryMethod: readNullableEnum(
         json,
         'delivery_method',
         InquiryDeliveryMethod.fromValue,
       ),
-      deliveryFee: _readNullableDecimal(json, 'delivery_fee'),
-      contactMethod: _readNullableEnum(
+      deliveryFee: readNullableDecimalString(json, 'delivery_fee'),
+      contactMethod: readNullableEnum(
         json,
         'contact_method',
         InquiryContactMethod.fromValue,
@@ -222,34 +222,6 @@ class Inquiry {
   final DateTime? preferredSchedule;
 
   final DateTime? createdAt;
-
-  static bool? _readNullableBool(Map<String, dynamic> json, String key) {
-    final Object? value = json[key];
-    if (value == null || value is bool) {
-      return value as bool?;
-    }
-    throw FormatException(
-      'Expected field "$key" to be a bool or null, got ${value.runtimeType}.',
-      json.toString(),
-    );
-  }
-
-  static String? _readNullableDecimal(Map<String, dynamic> json, String key) {
-    final Object? value = json[key];
-    if (value == null) {
-      return null;
-    }
-    return readDecimalString(json, key);
-  }
-
-  static T? _readNullableEnum<T>(
-    Map<String, dynamic> json,
-    String key,
-    T Function(String) parse,
-  ) {
-    final String? raw = readNullableString(json, key);
-    return raw == null ? null : parse(raw);
-  }
 
   @override
   String toString() => 'Inquiry($id, ${listing?.id ?? 'listing deleted'})';
