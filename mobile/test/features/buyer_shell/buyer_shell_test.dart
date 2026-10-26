@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
+import 'package:agrobenta_mobile/features/account_mode/state/account_mode_controller.dart';
+import 'package:agrobenta_mobile/features/account_mode/state/account_mode_scope.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/buyer_shell/view/buyer_shell.dart';
@@ -105,6 +107,12 @@ void main() {
       ),
     );
     addTearDown(authController.dispose);
+
+    final AccountModeController accountModeController = AccountModeController(
+      authController,
+    );
+    addTearDown(accountModeController.dispose);
+
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
 
@@ -168,22 +176,25 @@ void main() {
           controller: notificationsController,
           child: AuthScope(
             controller: authController,
-            child: MarketplaceScope(
-              repository: repository,
-              controller: controller,
-              // The Home tab's seller card reads the seller verification scope, so
-              // the shell harness carries the scopes `main.dart` installs.
-              // Answered with "never submitted" — this test is about navigation, and
-              // the card must not need a transport to render.
-              child: NeverSubmittedVerificationScope(
-                child: ProfileScope(
-                  repository: profileRepository,
-                  controller: profileController,
-                  child: TransactionScope(
-                    repository: transactionRepository,
-                    child: MaterialApp(
-                      theme: AppTheme.light(),
-                      home: const BuyerShell(),
+            child: AccountModeScope(
+              controller: accountModeController,
+              child: MarketplaceScope(
+                repository: repository,
+                controller: controller,
+                // The Home tab's seller card reads the seller verification scope, so
+                // the shell harness carries the scopes `main.dart` installs.
+                // Answered with "never submitted" — this test is about navigation, and
+                // the card must not need a transport to render.
+                child: NeverSubmittedVerificationScope(
+                  child: ProfileScope(
+                    repository: profileRepository,
+                    controller: profileController,
+                    child: TransactionScope(
+                      repository: transactionRepository,
+                      child: MaterialApp(
+                        theme: AppTheme.light(),
+                        home: const BuyerShell(),
+                      ),
                     ),
                   ),
                 ),

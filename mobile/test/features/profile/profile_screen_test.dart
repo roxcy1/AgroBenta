@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
+import 'package:agrobenta_mobile/features/account_mode/state/account_mode.dart';
+import 'package:agrobenta_mobile/features/account_mode/state/account_mode_controller.dart';
+import 'package:agrobenta_mobile/features/account_mode/state/account_mode_scope.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_controller.dart';
@@ -47,11 +50,21 @@ void main() {
   Future<void> pumpProfile(
     WidgetTester tester, {
     required Future<http.Response> Function(RecordedRequest request) handler,
+    String sellerCapability = 'buyer',
   }) async {
+    final Map<String, dynamic> currentUser = userJson(
+      sellerCapability: sellerCapability,
+    );
+
     final AuthController authController = AuthController(
       buildAuthRepository(tokenStore, handler, recorded: recorded),
     );
     addTearDown(authController.dispose);
+
+    final AccountModeController accountModeController = AccountModeController(
+      authController,
+    );
+    addTearDown(accountModeController.dispose);
 
     final ProfileRepository profileRepository = ProfileRepository(
       ProfileService(
@@ -59,7 +72,7 @@ void main() {
           tokenStorage: tokenStore,
           httpClient: MockClient(
             (_) async => http.Response(
-              jsonEncode(successEnvelope(data: userJson())),
+              jsonEncode(successEnvelope(data: currentUser)),
               200,
               headers: <String, String>{'content-type': 'application/json'},
             ),
@@ -78,11 +91,14 @@ void main() {
     await tester.pumpWidget(
       AuthScope(
         controller: authController,
-        child: NeverSubmittedVerificationScope(
-          child: ProfileScope(
-            repository: profileRepository,
-            controller: profileController,
-            child: const MaterialApp(home: ProfileScreen()),
+        child: AccountModeScope(
+          controller: accountModeController,
+          child: NeverSubmittedVerificationScope(
+            child: ProfileScope(
+              repository: profileRepository,
+              controller: profileController,
+              child: const MaterialApp(home: ProfileScreen()),
+            ),
           ),
         ),
       ),
@@ -107,23 +123,30 @@ void main() {
   ) async {
     await pumpProfile(
       tester,
-      handler: (_) async => http.Response(
-        jsonEncode(successEnvelope(data: userJson())),
-        200,
-      ),
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
     );
 
     // Identity comes from the API payload, never a hardcoded sample.
     expect(find.text('Ana Reyes'), findsOneWidget);
     expect(find.text('ana@example.test'), findsOneWidget);
 
-    // Account mode reflects the server-granted capability.
+    // Account mode always starts as Buyer Mode.
     expect(find.text('Account Mode'), findsOneWidget);
-    expect(find.text('Buyer Account'), findsOneWidget);
+    expect(find.text('Buyer Mode'), findsOneWidget);
+    expect(find.text('Seller Mode'), findsOneWidget);
+    expect(find.text('Browse and purchase livestock.'), findsOneWidget);
 
-    // The seller entry point is present for a buyer.
+    // The seller entry point is present for a buyer, but Seller Mode is not
+    // available until verification is approved.
     expect(find.text('Become a Seller'), findsOneWidget);
     expect(find.text('Start Seller Verification'), findsOneWidget);
+    final SegmentedButton<AccountMode> segmented = tester
+        .widget<SegmentedButton<AccountMode>>(
+          find.byType(SegmentedButton<AccountMode>),
+        );
+    expect(segmented.selected, <AccountMode>{AccountMode.buyer});
+    expect(segmented.segments.last.enabled, isFalse);
 
     // Supported rows are tappable; the unimplemented ones are inert.
     expect(isDisabled(tester, 'Personal Information'), isFalse);
@@ -137,15 +160,50 @@ void main() {
     expect(isDisabled(tester, 'Log Out'), isFalse);
   });
 
+  testWidgets('a verified seller can switch between Buyer and Seller Mode', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      sellerCapability: 'seller',
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: userJson(sellerCapability: 'seller'))),
+        200,
+      ),
+    );
+
+    SegmentedButton<AccountMode> segmented() =>
+        tester.widget<SegmentedButton<AccountMode>>(
+          find.byType(SegmentedButton<AccountMode>),
+        );
+
+    expect(segmented().selected, <AccountMode>{AccountMode.buyer});
+    expect(segmented().segments.last.enabled, isTrue);
+    expect(find.text('Browse and purchase livestock.'), findsOneWidget);
+
+    await tester.tap(find.text('Seller Mode'));
+    await settleAuth(tester, frames: 12);
+
+    expect(segmented().selected, <AccountMode>{AccountMode.seller});
+    expect(
+      find.text('You can list and manage your livestock.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Buyer Mode'));
+    await settleAuth(tester, frames: 12);
+
+    expect(segmented().selected, <AccountMode>{AccountMode.buyer});
+    expect(find.text('Browse and purchase livestock.'), findsOneWidget);
+  });
+
   testWidgets('Personal Information opens the existing edit form', (
     WidgetTester tester,
   ) async {
     await pumpProfile(
       tester,
-      handler: (_) async => http.Response(
-        jsonEncode(successEnvelope(data: userJson())),
-        200,
-      ),
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
     );
 
     await tester.tap(find.widgetWithText(TextButton, 'Edit'));
@@ -164,10 +222,8 @@ void main() {
   ) async {
     await pumpProfile(
       tester,
-      handler: (_) async => http.Response(
-        jsonEncode(successEnvelope(data: userJson())),
-        200,
-      ),
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
     );
 
     await tapAction(tester, 'Change Password');
@@ -179,10 +235,8 @@ void main() {
   ) async {
     await pumpProfile(
       tester,
-      handler: (_) async => http.Response(
-        jsonEncode(successEnvelope(data: userJson())),
-        200,
-      ),
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
     );
 
     await tester.ensureVisible(find.text('Start Seller Verification'));
