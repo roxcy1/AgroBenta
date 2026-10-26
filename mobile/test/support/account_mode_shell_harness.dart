@@ -8,6 +8,7 @@ import 'package:agrobenta_mobile/features/account_mode/state/account_mode_scope.
 import 'package:agrobenta_mobile/features/account_mode/view/account_mode_shell.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
+import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
@@ -16,10 +17,13 @@ import 'package:agrobenta_mobile/features/notifications/state/notifications_cont
 import 'package:agrobenta_mobile/features/notifications/state/notifications_scope.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_controller.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_scope.dart';
+import 'package:agrobenta_mobile/features/seller_dashboard/state/seller_dashboard_scope.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_controller.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_scope.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
+import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
 import 'package:agrobenta_mobile/repositories/profile_repository.dart';
+import 'package:agrobenta_mobile/services/inquiry_service.dart';
 import 'package:agrobenta_mobile/services/profile_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,9 +31,11 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'auth_fakes.dart';
+import 'inquiry_fakes.dart';
 import 'marketplace_fakes.dart';
 import 'messaging_fakes.dart';
 import 'notification_fakes.dart';
+import 'seller_dashboard_fakes.dart';
 import 'seller_listing_fakes.dart';
 import 'seller_verification_app_harness.dart';
 import 'transaction_fakes.dart';
@@ -102,6 +108,10 @@ class AccountModeShellHarness {
             listings: <Map<String, dynamic>>[],
             total: 0,
           );
+        case '/seller/inquiries':
+          return sellerInquiryListResponse();
+        case '/seller/dashboard':
+          return sellerDashboardResponse();
         case '/listings':
           return marketplaceListResponse(
             listings: <Map<String, dynamic>>[],
@@ -181,6 +191,21 @@ class AccountModeShellHarness {
         SellerListingController(sellerListingRepository);
     addTearDown(sellerListingController.dispose);
 
+    final sellerDashboardRepository = buildSellerDashboardRepository(
+      tokenStore,
+      transport,
+      recorded: recorded,
+    );
+
+    final InquiryRepository inquiryRepository = InquiryRepository(
+      InquiryService(
+        ApiClient(
+          tokenStorage: tokenStore,
+          httpClient: _mockClient(transport, recorded),
+        ),
+      ),
+    );
+
     await authController.restoreSession();
 
     await tester.pumpWidget(
@@ -205,10 +230,16 @@ class AccountModeShellHarness {
                     child: NotificationsScope(
                       repository: notificationRepository,
                       controller: notificationsController,
-                      child: NeverSubmittedVerificationScope(
-                        child: MaterialApp(
-                          theme: AppTheme.light(),
-                          home: const AccountModeShell(),
+                      child: InquiryScope(
+                        repository: inquiryRepository,
+                        child: SellerDashboardScope(
+                          repository: sellerDashboardRepository,
+                          child: NeverSubmittedVerificationScope(
+                            child: MaterialApp(
+                              theme: AppTheme.light(),
+                              home: const AccountModeShell(),
+                            ),
+                          ),
                         ),
                       ),
                     ),

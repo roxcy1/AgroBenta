@@ -176,16 +176,26 @@ void main() {
       service = build(
         (_) async => inquiryValidationResponse(
           errors: <String, Object>{
-            'message': <String>['The message must not be greater than 500 characters.'],
+            'message': <String>[
+              'The message must not be greater than 500 characters.',
+            ],
           },
         ),
       );
 
       await expectLater(
-        service.create(listingId: 12, message: 'x' * 501, purchaseInterest: true),
+        service.create(
+          listingId: 12,
+          message: 'x' * 501,
+          purchaseInterest: true,
+        ),
         throwsA(
           isA<ApiException>()
-              .having((ApiException e) => e.kind, 'kind', ApiErrorKind.validation)
+              .having(
+                (ApiException e) => e.kind,
+                'kind',
+                ApiErrorKind.validation,
+              )
               .having(
                 (ApiException e) => e.validationErrors['message']?.first,
                 'message error',
@@ -229,6 +239,73 @@ void main() {
           ),
         ),
       );
+    });
+  });
+
+  group('listReceived()', () {
+    test('gets the seller inbox with only page and per_page', () async {
+      service = build((_) async => sellerInquiryListResponse());
+
+      await service.listReceived(page: 2, perPage: 25);
+
+      expect(recorded, hasLength(1));
+      expect(recorded.single.method, 'GET');
+      expect(recorded.single.apiPath, SellerInquiryEndpoints.received);
+      expect(recorded.single.authorization, 'Bearer 1|mobile-token');
+      expect(recorded.single.query, <String, String>{
+        'page': '2',
+        'per_page': '25',
+      });
+    });
+
+    test('sends the defaults when no page is asked for', () async {
+      service = build((_) async => sellerInquiryListResponse());
+
+      await service.listReceived();
+
+      expect(recorded.single.query, <String, String>{
+        'page': '1',
+        'per_page': '15',
+      });
+    });
+
+    test('has no path for seller, buyer or status filters', () async {
+      service = build((_) async => sellerInquiryListResponse());
+
+      await service.listReceived();
+
+      for (final String forbidden in <String>[
+        'buyer_id',
+        'seller_id',
+        'status',
+      ]) {
+        expect(
+          recorded.single.query.containsKey(forbidden),
+          isFalse,
+          reason: '$forbidden is server-owned or unsupported in this phase',
+        );
+      }
+    });
+
+    test('parses the seller resource and pagination', () async {
+      service = build(
+        (_) async => sellerInquiryListResponse(
+          inquiries: <Map<String, dynamic>>[
+            sellerInquiryJson(id: 9, buyer: inquiryBuyerJson(name: 'Ben Cruz')),
+          ],
+          currentPage: 1,
+          lastPage: 2,
+          total: 16,
+        ),
+      );
+
+      final page = await service.listReceived();
+
+      expect(page.inquiries.single.id, 9);
+      expect(page.inquiries.single.buyer!.name, 'Ben Cruz');
+      expect(page.inquiries.single.deliveryFee, '1500.00');
+      expect(page.pagination.total, 16);
+      expect(page.hasMore, isTrue);
     });
   });
 }

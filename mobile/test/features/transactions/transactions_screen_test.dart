@@ -113,6 +113,38 @@ void main() {
     expect(recorded.last.query['status'], 'cancelled');
   });
 
+  testWidgets('Seller Mode renders a sale from the seller-scoped response', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(
+      tester,
+      (_) async => transactionListResponse(
+        transactions: <Map<String, dynamic>>[
+          transactionJson(
+            id: 11,
+            role: 'seller',
+            totalAmount: '72000.00',
+            counterparty: transactionCounterpartyJson(
+              name: 'Ben Cruz',
+              email: 'ben@example.test',
+            ),
+          ),
+        ],
+        total: 1,
+      ),
+      role: TransactionRole.seller,
+    );
+
+    expect(find.text('My Sales'), findsOneWidget);
+    expect(find.text('TRX-011'), findsOneWidget);
+    expect(find.text('₱72,000.00'), findsOneWidget);
+    expect(recorded.single.query, <String, String>{
+      'role': 'seller',
+      'page': '1',
+      'per_page': '15',
+    });
+  });
+
   testWidgets('the design\'s extra Pending chip is omitted because the server '
       'has no state distinct from Ongoing', (WidgetTester tester) async {
     await pumpScreen(tester, (_) async => emptyList());

@@ -12,9 +12,10 @@ use Illuminate\Http\JsonResponse;
 /**
  * Create a buyer inquiry — the mobile write path.
  *
- * Reading and triaging inquiries is the Admin Web's flow under
- * `/admin/inquiries*`; this controller exists because that block's route
- * comment reserves creation for the buyer's mobile client. Every method
+ * Received inquiries are read through the seller endpoint; triaging and
+ * re-statusing belong to the Admin Web's flow under `/admin/inquiries*`. This
+ * controller exists because that block's route comment reserves creation for
+ * the buyer's mobile client. Every method
  * resolves the buyer from the token and the seller from the listing — never
  * from the body — so there is no parameter or field that could point an
  * inquiry at the wrong account.

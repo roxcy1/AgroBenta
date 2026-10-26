@@ -52,6 +52,35 @@ class SellerListingRepository
     }
 
     /**
+     * Count one seller's listings by status.
+     *
+     * Every known status is present in the result, including statuses with no
+     * rows, so the mobile dashboard can render a stable shape without inventing
+     * zeroes. The total is derived from those counts rather than issued as a
+     * second query.
+     *
+     * @return array{total: int, draft: int, pending: int, active: int, sold: int, inactive: int}
+     */
+    public function countsByStatusForSeller(User $seller): array
+    {
+        $counts = Listing::query()
+            ->where('seller_id', $seller->getKey())
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $summary = ['total' => 0];
+
+        foreach (ListingStatus::cases() as $status) {
+            $count = (int) ($counts[$status->value] ?? 0);
+            $summary[$status->value] = $count;
+            $summary['total'] += $count;
+        }
+
+        return $summary;
+    }
+
+    /**
      * Find one listing owned by this seller, or null.
      *
      * Returns null both when the listing does not exist and when it belongs to

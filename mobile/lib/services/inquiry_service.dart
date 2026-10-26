@@ -2,10 +2,11 @@ import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
 import '../models/inquiry.dart';
+import '../models/received_inquiry_page.dart';
 
-/// The inquiry API surface: one method, one endpoint.
+/// The inquiry API surface: the buyer's create path and the seller's inbox.
 ///
-/// No token handling, no persistence, no error translation — those belong to
+/// No token handling, no persistence, no error translation - those belong to
 /// `InquiryRepository` and `ApiClient`.
 ///
 /// ## What this service can and cannot send
@@ -25,6 +26,29 @@ class InquiryService {
   const InquiryService(this._apiClient);
 
   final ApiClient _apiClient;
+
+  /// `GET /seller/inquiries` — one page of the authenticated seller's inbox.
+  ///
+  /// [page] and [perPage] are the entire query allow-list;
+  /// `IndexSellerInquiryRequest` refuses `buyer_id`, `seller_id` and `status`.
+  /// The seller scope is the token, so there is no id to send.
+  Future<ReceivedInquiryPage> listReceived({
+    int page = 1,
+    int perPage = SellerInquiryEndpoints.defaultPerPage,
+  }) {
+    return _apiClient.get<ReceivedInquiryPage>(
+      SellerInquiryEndpoints.received,
+      query: <String, dynamic>{
+        // Explicit allow-list. Anything not named here has no path to the
+        // request, so a field added to the model can never become a filter.
+        'page': page,
+        'per_page': perPage,
+      },
+      parse: (Object? data) => ReceivedInquiryPage.fromJson(
+        _asObject(data, 'GET /seller/inquiries'),
+      ),
+    );
+  }
 
   /// `POST /inquiries` — send an inquiry about [listingId].
   ///
@@ -64,9 +88,8 @@ class InquiryService {
         if (preferredSchedule != null)
           'preferred_schedule': _dateOnly(preferredSchedule),
       },
-      parse: (Object? data) => Inquiry.fromJson(
-        _asObject(data, 'POST /inquiries'),
-      ),
+      parse: (Object? data) =>
+          Inquiry.fromJson(_asObject(data, 'POST /inquiries')),
     );
   }
 

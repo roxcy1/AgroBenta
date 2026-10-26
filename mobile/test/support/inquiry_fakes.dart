@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/features/inquiries/state/inquiry_controller.dart';
+import 'package:agrobenta_mobile/features/inquiries/state/received_inquiries_controller.dart';
 import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
 import 'package:agrobenta_mobile/services/inquiry_service.dart';
 import 'package:http/http.dart' as http;
@@ -46,6 +47,49 @@ Map<String, dynamic> inquiryJson({
   };
 }
 
+/// A `SellerInquiryResource` payload exactly as the backend serialises one.
+///
+/// Copied from `backend/app/Http/Resources/SellerInquiryResource.php`. There is
+/// deliberately no `status`: the seller-facing resource omits it, and a fixture
+/// that added one would let the model grow a field the API never sends.
+Map<String, dynamic> sellerInquiryJson({
+  Object? id = 5,
+  Map<String, dynamic>? buyer,
+  Map<String, dynamic>? listing,
+  String? subject = 'General Inquiry',
+  String message = 'Is this one still available?',
+  Object? purchaseInterest = true,
+  Object? transactionMethod = 'direct_deal',
+  Object? deliveryMethod = 'buyer_pickup',
+  Object? deliveryFee = '1500.00',
+  Object? contactMethod = 'in_app_message',
+  Object? preferredSchedule = '2026-10-25',
+  Object? createdAt = '2026-10-19T08:15:00.000000Z',
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'buyer': buyer ?? inquiryBuyerJson(),
+    'listing': listing ?? inquiryListingJson(),
+    'subject': subject,
+    'message': message,
+    'purchase_interest': purchaseInterest,
+    'transaction_method': transactionMethod,
+    'delivery_method': deliveryMethod,
+    'delivery_fee': deliveryFee,
+    'contact_method': contactMethod,
+    'preferred_schedule': preferredSchedule,
+    'created_at': createdAt,
+  };
+}
+
+/// The buyer projection: identity and display name only, never an email.
+Map<String, dynamic> inquiryBuyerJson({
+  Object? id = 9,
+  String name = 'Maria Santos',
+}) {
+  return <String, dynamic>{'id': id, 'name': name};
+}
+
 /// The embedded listing snapshot: `id`, `livestock_type`, `breed` — the same
 /// narrow shape `MobileTransactionResource` echoes.
 Map<String, dynamic> inquiryListingJson({
@@ -69,12 +113,38 @@ const Map<String, String> _jsonHeaders = <String, String>{
 http.Response inquiryCreatedResponse({Map<String, dynamic>? inquiry}) {
   return http.Response(
     jsonEncode(
-      successEnvelope(
-        message: 'Inquiry sent.',
-        data: inquiry ?? inquiryJson(),
-      ),
+      successEnvelope(message: 'Inquiry sent.', data: inquiry ?? inquiryJson()),
     ),
     201,
+    headers: _jsonHeaders,
+  );
+}
+
+/// The `200` that `GET /api/seller/inquiries` answers with.
+http.Response sellerInquiryListResponse({
+  List<Map<String, dynamic>>? inquiries,
+  int currentPage = 1,
+  int lastPage = 1,
+  int perPage = 15,
+  int? total,
+}) {
+  final List<Map<String, dynamic>> items =
+      inquiries ?? <Map<String, dynamic>>[sellerInquiryJson()];
+  return http.Response(
+    jsonEncode(
+      successEnvelope(
+        data: <String, dynamic>{
+          'inquiries': items,
+          'pagination': <String, dynamic>{
+            'current_page': currentPage,
+            'last_page': lastPage,
+            'per_page': perPage,
+            'total': total ?? items.length,
+          },
+        },
+      ),
+    ),
+    200,
     headers: _jsonHeaders,
   );
 }
@@ -107,16 +177,12 @@ http.Response inquiryConflictResponse({
 
 /// The `404` for an id that does not exist, with Laravel's `abort(404, ...)`
 /// bare-JSON-string body — the same shape `listingNotFoundResponse` models.
-http.Response inquiryNotFoundResponse({
-  String message = 'Listing not found.',
-}) {
+http.Response inquiryNotFoundResponse({String message = 'Listing not found.'}) {
   return http.Response(jsonEncode(message), 404, headers: _jsonHeaders);
 }
 
 /// A `500`, for failures that are neither validation nor state conflicts.
-http.Response inquiryServerErrorResponse({
-  String message = 'Server error.',
-}) {
+http.Response inquiryServerErrorResponse({String message = 'Server error.'}) {
   return http.Response(
     jsonEncode(<String, String>{'message': message}),
     500,
@@ -163,6 +229,17 @@ InquiryController buildInquiryController(
   List<RecordedRequest>? recorded,
 }) {
   return InquiryController(
+    buildInquiryRepository(tokenStore, handler, recorded: recorded),
+  );
+}
+
+/// The received-inquiries controller over a mock transport.
+ReceivedInquiriesController buildReceivedInquiriesController(
+  FakeTokenStore tokenStore,
+  Future<http.Response> Function(RecordedRequest request) handler, {
+  List<RecordedRequest>? recorded,
+}) {
+  return ReceivedInquiriesController(
     buildInquiryRepository(tokenStore, handler, recorded: recorded),
   );
 }
