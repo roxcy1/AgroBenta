@@ -4,6 +4,8 @@ import 'core/network/api_client.dart';
 import 'core/storage/token_store.dart';
 import 'core/storage/token_storage.dart';
 import 'core/theme/app_theme.dart';
+import 'features/account_mode/state/account_mode_controller.dart';
+import 'features/account_mode/state/account_mode_scope.dart';
 import 'features/auth/state/auth_controller.dart';
 import 'features/auth/state/auth_scope.dart';
 import 'features/auth/view/auth_gate.dart';
@@ -82,6 +84,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final AuthService _authService;
   late final AuthRepository _authRepository;
   late final AuthController _authController;
+  late final AccountModeController _accountModeController;
   late final MarketplaceService _marketplaceService;
   late final MarketplaceRepository _marketplaceRepository;
   late final MarketplaceController _marketplaceController;
@@ -114,6 +117,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _authService = AuthService(_apiClient);
     _authRepository = AuthRepository(_authService, _tokenStore);
     _authController = AuthController(_authRepository);
+    _accountModeController = AccountModeController(_authController);
 
     // Shares the one `ApiClient`, so there is a single place that knows about
     // the base URL, the bearer token and the auth-failure side effects.
@@ -161,7 +165,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // session-scoped so the buyer shell's unread badge and the Conversations
     // screen read the same state. The chat controller is per-screen and lives
     // inside the chat screen itself.
-        _messagingService = MessagingService(_apiClient);
+    _messagingService = MessagingService(_apiClient);
     _messagingRepository = MessagingRepository(_messagingService);
     _conversationsController = ConversationsController(_messagingRepository);
 
@@ -181,10 +185,12 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _inquiryService = InquiryService(_apiClient);
     _inquiryRepository = InquiryRepository(_inquiryService);
   }
+
   @override
   void dispose() {
     // The controllers own no transport of their own, and the client they were
     // built on is closed here — the one place that created it.
+    _accountModeController.dispose();
     _authController.dispose();
     _marketplaceController.dispose();
     _sellerVerificationController.dispose();
@@ -207,61 +213,64 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // buyer tapped a card.
     return AuthScope(
       controller: _authController,
-      child: MarketplaceScope(
-        repository: _marketplaceRepository,
-        controller: _marketplaceController,
-        // Outside `MarketplaceScope` rather than nested inside it: the seller
-        // verification screens are pushed from Home, and a scope nested in
-        // `home` would be invisible to them for the same reason the outer scopes
-        // must sit above `MaterialApp`.
-        child: SellerVerificationScope(
-          repository: _sellerVerificationRepository,
-          controller: _sellerVerificationController,
-          // Sibling of the other scopes, not nested inside one of them, for the
-          // same reason each of them sits above `MaterialApp`: My Listings and
-          // the form are pushed routes and need to reach this from a route
-          // pushed by a widget that is a descendant of the shell.
-          child: SellerListingScope(
-            repository: _sellerListingRepository,
-            controller: _sellerListingController,
-            // Profile sits as a sibling of the other scopes, above
-            // `MaterialApp`, for the same reason each of them does: the
-            // profile screens are pushed routes and a scope installed inside
-            // `home` would be invisible to them.
-            child: ProfileScope(
-              repository: _profileRepository,
-              controller: _profileController,
-              // Transactions sits as a sibling of the other scopes, above
+      child: AccountModeScope(
+        controller: _accountModeController,
+        child: MarketplaceScope(
+          repository: _marketplaceRepository,
+          controller: _marketplaceController,
+          // Outside `MarketplaceScope` rather than nested inside it: the seller
+          // verification screens are pushed from Home, and a scope nested in
+          // `home` would be invisible to them for the same reason the outer scopes
+          // must sit above `MaterialApp`.
+          child: SellerVerificationScope(
+            repository: _sellerVerificationRepository,
+            controller: _sellerVerificationController,
+            // Sibling of the other scopes, not nested inside one of them, for the
+            // same reason each of them sits above `MaterialApp`: My Listings and
+            // the form are pushed routes and need to reach this from a route
+            // pushed by a widget that is a descendant of the shell.
+            child: SellerListingScope(
+              repository: _sellerListingRepository,
+              controller: _sellerListingController,
+              // Profile sits as a sibling of the other scopes, above
               // `MaterialApp`, for the same reason each of them does: the
-              // detail screen is a pushed route.
-              child: TransactionScope(
-                repository: _transactionRepository,
-                // Messaging sits as a sibling of the other scopes, above
+              // profile screens are pushed routes and a scope installed inside
+              // `home` would be invisible to them.
+              child: ProfileScope(
+                repository: _profileRepository,
+                controller: _profileController,
+                // Transactions sits as a sibling of the other scopes, above
                 // `MaterialApp`, for the same reason each of them does: the
-                // chat screen is a pushed route and needs to reach the shared
-                // repository and the conversations controller.
-                                child: MessagingScope(
-                  repository: _messagingRepository,
-                  conversationsController: _conversationsController,
-                  // Notifications sits as a sibling of the other scopes, above
+                // detail screen is a pushed route.
+                child: TransactionScope(
+                  repository: _transactionRepository,
+                  // Messaging sits as a sibling of the other scopes, above
                   // `MaterialApp`, for the same reason each of them does: the
-                  // Notifications screen is a pushed route and the bell icon
-                  // in the Home AppBar needs to reach the same controller.
-                  child: NotificationsScope(
-                    repository: _notificationRepository,
-                    controller: _notificationsController,
-                    // Inquiries sits as a sibling of the other scopes, above
+                  // chat screen is a pushed route and needs to reach the shared
+                  // repository and the conversations controller.
+                  child: MessagingScope(
+                    repository: _messagingRepository,
+                    conversationsController: _conversationsController,
+                    // Notifications sits as a sibling of the other scopes, above
                     // `MaterialApp`, for the same reason each of them does: the
-                    // inquire screen is a pushed route, and only the
-                    // repository is shared — the screen builds its own
-                    // controller and disposes it with the route.
-                    child: InquiryScope(
-                      repository: _inquiryRepository,
-                      child: MaterialApp(
-                        title: 'AgroBenta',
-                        debugShowCheckedModeBanner: false,
-                        theme: AppTheme.light(),
-                        home: AuthGate(authenticatedView: _buildBuyerShell),
+                    // Notifications screen is a pushed route and the bell icon
+                    // in the Home AppBar needs to reach the same controller.
+                    child: NotificationsScope(
+                      repository: _notificationRepository,
+                      controller: _notificationsController,
+                      // Inquiries sits as a sibling of the other scopes, above
+                      // `MaterialApp`, for the same reason each of them does: the
+                      // inquire screen is a pushed route, and only the
+                      // repository is shared — the screen builds its own
+                      // controller and disposes it with the route.
+                      child: InquiryScope(
+                        repository: _inquiryRepository,
+                        child: MaterialApp(
+                          title: 'AgroBenta',
+                          debugShowCheckedModeBanner: false,
+                          theme: AppTheme.light(),
+                          home: AuthGate(authenticatedView: _buildBuyerShell),
+                        ),
                       ),
                     ),
                   ),

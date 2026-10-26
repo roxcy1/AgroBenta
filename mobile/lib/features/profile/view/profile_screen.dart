@@ -4,6 +4,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/seller_verification.dart';
 import '../../../models/user.dart';
+import '../../account_mode/state/account_mode.dart';
+import '../../account_mode/state/account_mode_controller.dart';
+import '../../account_mode/state/account_mode_scope.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../auth/widgets/auth_scenic_header.dart';
 import '../../seller_verification/state/seller_verification_controller.dart';
@@ -78,26 +81,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (!mounted) {
                 return;
               }
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(success)),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(success)));
               _controller.consumeSuccess();
             });
           }
 
           return switch (state.status) {
             ProfileUiStatus.initial || ProfileUiStatus.loading => const Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: CircularProgressIndicator(),
+            ),
             ProfileUiStatus.failed => _ErrorState(
-                message: state.errorMessage ?? 'Something went wrong.',
-                onRetry: _controller.load,
-              ),
+              message: state.errorMessage ?? 'Something went wrong.',
+              onRetry: _controller.load,
+            ),
             _ => _ProfileBody(
-                user: state.user!,
-                onEdit: _openEdit,
-                onChangePassword: _openChangePassword,
-              ),
+              user: state.user!,
+              onEdit: _openEdit,
+              onChangePassword: _openChangePassword,
+            ),
           };
         },
       ),
@@ -153,7 +156,7 @@ class _ProfileBody extends StatelessWidget {
                       children: <Widget>[
                         _ProfileSummaryCard(user: user, onEdit: onEdit),
                         const SizedBox(height: AppSpacing.md),
-                        _AccountModeCard(user: user),
+                        const _AccountModeCard(),
                         const SizedBox(height: AppSpacing.md),
                         _BecomeSellerCard(user: user),
                         const SizedBox(height: AppSpacing.lg),
@@ -216,7 +219,8 @@ class _ProfileSummaryCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (user.location != null && user.location!.isNotEmpty) ...<Widget>[
+                  if (user.location != null &&
+                      user.location!.isNotEmpty) ...<Widget>[
                     const SizedBox(height: AppSpacing.xxs),
                     Row(
                       children: <Widget>[
@@ -236,10 +240,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                 ],
               ),
             ),
-            TextButton(
-              onPressed: onEdit,
-              child: const Text('Edit'),
-            ),
+            TextButton(onPressed: onEdit, child: const Text('Edit')),
           ],
         ),
       ),
@@ -248,48 +249,74 @@ class _ProfileSummaryCard extends StatelessWidget {
 }
 
 class _AccountModeCard extends StatelessWidget {
-  const _AccountModeCard({required this.user});
-
-  final User user;
+  const _AccountModeCard();
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final bool isSeller = user.isSeller;
+    final AccountModeController controller = AccountModeScope.of(context);
+    final bool canUseSellerMode =
+        AuthScope.of(context).state.user?.isSeller ?? false;
+    final AccountMode mode = controller.mode;
 
     return Card(
       color: AppColors.primary.withValues(alpha: 0.08),
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Icon(Icons.shopping_cart_outlined, color: AppColors.primary),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text('Account Mode', style: theme.textTheme.titleSmall),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    isSeller ? 'Seller Account' : 'Buyer Account',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+            Row(
+              children: <Widget>[
+                Icon(
+                  mode == AccountMode.seller
+                      ? Icons.storefront_outlined
+                      : Icons.shopping_cart_outlined,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Text('Account Mode', style: theme.textTheme.titleSmall),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              mode == AccountMode.seller
+                  ? 'You can list and manage your livestock.'
+                  : 'Browse and purchase livestock.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
               ),
             ),
-            if (isSeller)
-              const Text(
-                'Active',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
+            const SizedBox(height: AppSpacing.md),
+            SegmentedButton<AccountMode>(
+              segments: <ButtonSegment<AccountMode>>[
+                const ButtonSegment<AccountMode>(
+                  value: AccountMode.buyer,
+                  label: Text('Buyer Mode'),
+                ),
+                ButtonSegment<AccountMode>(
+                  value: AccountMode.seller,
+                  label: const Text('Seller Mode'),
+                  enabled: canUseSellerMode,
+                ),
+              ],
+              selected: <AccountMode>{mode},
+              onSelectionChanged: (Set<AccountMode> selection) {
+                controller.select(selection.first);
+              },
+              showSelectedIcon: false,
+              expandedInsets: EdgeInsets.zero,
+            ),
+            if (!canUseSellerMode) ...<Widget>[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Seller Mode becomes available after seller verification.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
                 ),
               ),
+            ],
           ],
         ),
       ),
@@ -383,10 +410,19 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
     }
 
     final (Color color, String text) = switch (verification.status) {
-      SellerVerificationStatus.approved => (AppColors.success, 'Verification approved'),
-      SellerVerificationStatus.rejected => (AppColors.error, 'Verification not approved'),
+      SellerVerificationStatus.approved => (
+        AppColors.success,
+        'Verification approved',
+      ),
+      SellerVerificationStatus.rejected => (
+        AppColors.error,
+        'Verification not approved',
+      ),
       SellerVerificationStatus.submitted ||
-      SellerVerificationStatus.pendingReview => (AppColors.warning, 'Verification under review'),
+      SellerVerificationStatus.pendingReview => (
+        AppColors.warning,
+        'Verification under review',
+      ),
     };
 
     return Row(
@@ -397,7 +433,9 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: AppSpacing.xs),
-        Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+        Expanded(
+          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+        ),
       ],
     );
   }
@@ -426,17 +464,17 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
 
     return switch (state.status) {
       SellerVerificationUiStatus.notSubmitted => FilledButton(
-          onPressed: _openVerification,
-          child: const Text('Start Seller Verification'),
-        ),
+        onPressed: _openVerification,
+        child: const Text('Start Seller Verification'),
+      ),
       SellerVerificationUiStatus.rejected => FilledButton(
-          onPressed: _openVerification,
-          child: const Text('Resubmit Verification'),
-        ),
+        onPressed: _openVerification,
+        child: const Text('Resubmit Verification'),
+      ),
       _ => OutlinedButton(
-          onPressed: _openVerification,
-          child: const Text('View status'),
-        ),
+        onPressed: _openVerification,
+        child: const Text('View status'),
+      ),
     };
   }
 }
@@ -617,10 +655,7 @@ class _Avatar extends StatelessWidget {
         ),
       );
     }
-    return CircleAvatar(
-      radius: 32,
-      backgroundImage: NetworkImage(src),
-    );
+    return CircleAvatar(radius: 32, backgroundImage: NetworkImage(src));
   }
 }
 
