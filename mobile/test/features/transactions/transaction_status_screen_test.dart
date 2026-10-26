@@ -129,6 +129,46 @@ void main() {
     );
   });
 
+  testWidgets('a seller sees sale wording and messages the buyer', (
+    WidgetTester tester,
+  ) async {
+    await pumpStatus(tester, (RecordedRequest request) async {
+      if (request.apiPath == '/conversations/3/messages') {
+        return messageThreadResponse();
+      }
+      if (request.apiPath == '/conversations/3/read') {
+        return threadReadResponse();
+      }
+      return transactionDetailResponse(
+        transaction: transactionJson(
+          role: 'seller',
+          counterparty: transactionCounterpartyJson(
+            name: 'Ben Cruz',
+            email: 'ben@example.test',
+          ),
+        ),
+      );
+    });
+
+    expect(find.text('Sale ID'), findsOneWidget);
+    expect(find.text('Request ID'), findsNothing);
+    expect(find.text('Recorded'), findsOneWidget);
+    expect(find.text('Requested'), findsNothing);
+    expect(find.text('Sale recorded'), findsOneWidget);
+    expect(find.text('Purchase request submitted'), findsNothing);
+    expect(find.text('Message Buyer'), findsOneWidget);
+    expect(find.text('Message Seller'), findsNothing);
+
+    await tester.tap(find.text('Message Buyer'));
+    await settle(tester, frames: 16);
+
+    expect(find.byType(ChatScreen), findsOneWidget);
+    expect(
+      recorded.map((RecordedRequest r) => r.apiPath),
+      contains('/conversations/3/messages'),
+    );
+  });
+
   testWidgets('maps a completed status to the completed outcome', (
     WidgetTester tester,
   ) async {

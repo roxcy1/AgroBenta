@@ -2,6 +2,7 @@ import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
 import 'package:agrobenta_mobile/features/transactions/views/transaction_detail_screen.dart';
 import 'package:agrobenta_mobile/features/transactions/views/transactions_screen.dart';
+import 'package:agrobenta_mobile/models/transaction.dart';
 import 'package:agrobenta_mobile/repositories/transaction_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +32,7 @@ void main() {
     WidgetTester tester,
     Future<http.Response> Function(RecordedRequest request) handler, {
     Size surface = const Size(800, 1800),
+    TransactionRole role = TransactionRole.buyer,
   }) async {
     final TransactionRepository repository = buildTransactionRepository(
       tokenStore,
@@ -47,7 +49,7 @@ void main() {
         repository: repository,
         child: MaterialApp(
           theme: AppTheme.light(),
-          home: const TransactionsScreen(),
+          home: TransactionsScreen(role: role),
         ),
       ),
     );
@@ -81,6 +83,34 @@ void main() {
       find.widgetWithText(ChoiceChip, 'All'),
     );
     expect(all.selected, isTrue, reason: 'All is the initial filter');
+  });
+
+  testWidgets('Seller Mode shows My Sales, queries role=seller and uses sales '
+      'empty copy', (WidgetTester tester) async {
+    await pumpScreen(
+      tester,
+      (_) async => emptyList(),
+      role: TransactionRole.seller,
+    );
+
+    expect(find.text('My Sales'), findsOneWidget);
+    expect(find.text('My Purchases'), findsNothing);
+    expect(find.text('No sales yet'), findsOneWidget);
+    expect(recorded.single.query['role'], 'seller');
+
+    await tester.tap(find.text('Ongoing'));
+    await settle(tester);
+
+    expect(find.text('No ongoing sales yet'), findsOneWidget);
+    expect(recorded.last.query['role'], 'seller');
+    expect(recorded.last.query['status'], 'pending');
+
+    await tester.tap(find.text('Cancelled'));
+    await settle(tester);
+
+    expect(find.text('No cancelled sales'), findsOneWidget);
+    expect(recorded.last.query['role'], 'seller');
+    expect(recorded.last.query['status'], 'cancelled');
   });
 
   testWidgets('the design\'s extra Pending chip is omitted because the server '

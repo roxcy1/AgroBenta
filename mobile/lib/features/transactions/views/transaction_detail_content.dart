@@ -23,10 +23,11 @@ import '../widgets/transaction_status_badge.dart';
 ///    agreed price" pair cannot be shown without inventing one side, and the
 ///    screen says so instead of fabricating it;
 ///  * the counterparty is `{ id, name, email }` — no verification flag and no
-///    location, so no badge and no location row are rendered;
+///    location, so no badge and no location row are rendered. It is the seller
+///    for a buyer and the buyer for a seller, as the server's `role` says;
 ///  * the resource links to **no inquiry**, and there is no mobile inquiry read
-///    endpoint (GAP-19), so the "Your inquiry" section is an honest statement
-///    rather than a fabricated record.
+///    endpoint (GAP-19), so the inquiry section is an honest statement rather
+///    than a fabricated record.
 class TransactionDetailContent extends StatelessWidget {
   const TransactionDetailContent({
     required this.transaction,
@@ -35,7 +36,7 @@ class TransactionDetailContent extends StatelessWidget {
     required this.canCancel,
     required this.onCancel,
     required this.onDismissCancelError,
-    required this.onMessageSeller,
+    required this.onMessageCounterparty,
     required this.onViewStatus,
     super.key,
   });
@@ -50,7 +51,7 @@ class TransactionDetailContent extends StatelessWidget {
   /// Opens the existing conversation with the counterparty. The counterparty
   /// id comes from the payload, so this routes to a real, server-identifiable
   /// user and never to an invented one.
-  final VoidCallback onMessageSeller;
+  final VoidCallback onMessageCounterparty;
 
   /// Opens the dedicated Transaction Status screen for this same record.
   final VoidCallback onViewStatus;
@@ -60,6 +61,12 @@ class TransactionDetailContent extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final String? photoUrl = transaction.listing.loadablePhotoUrl;
     final String? total = AppFormatters.formatMoney(transaction.totalAmount);
+    final bool isSeller = transaction.role == TransactionRole.seller;
+    final String counterpartyLabel = isSeller ? 'Buyer' : 'Seller';
+    final String counterpartyAction = isSeller
+        ? 'Message buyer'
+        : 'Message seller';
+    final String recordNoun = isSeller ? 'sale' : 'request';
 
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -92,7 +99,7 @@ class TransactionDetailContent extends StatelessWidget {
               _AmountCard(total: total, transaction: transaction),
               const SizedBox(height: AppSpacing.md),
               SectionCard(
-                title: 'Seller',
+                title: counterpartyLabel,
                 children: <Widget>[
                   DetailRow(
                     label: 'Name',
@@ -106,9 +113,9 @@ class TransactionDetailContent extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: onMessageSeller,
+                      onPressed: onMessageCounterparty,
                       icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                      label: const Text('Message seller'),
+                      label: Text(counterpartyAction),
                     ),
                   ),
                 ],
@@ -149,7 +156,7 @@ class TransactionDetailContent extends StatelessWidget {
                         '${transaction.quantity == 1 ? 'head' : 'heads'}',
                   ),
                   DetailRow(
-                    label: 'Requested',
+                    label: isSeller ? 'Recorded' : 'Requested',
                     value: AppFormatters.formatDateTime(transaction.createdAt),
                   ),
                   DetailRow(
@@ -161,7 +168,7 @@ class TransactionDetailContent extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               _StatusCard(transaction: transaction, onViewStatus: onViewStatus),
               const SizedBox(height: AppSpacing.md),
-              const _InquiryCard(),
+              _InquiryCard(isSeller: isSeller),
               const SizedBox(height: AppSpacing.lg),
               // Cancel is offered to buyer and seller alike, pending-only.
               // Terminal records get an immutable notice, never a button.
@@ -180,12 +187,12 @@ class TransactionDetailContent extends StatelessWidget {
                             dimension: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Cancel request'),
+                        : Text('Cancel $recordNoun'),
                   ),
                 )
               else
                 Text(
-                  'This request is ${_statusWord(transaction.status)} and '
+                  'This $recordNoun is ${_statusWord(transaction.status)} and '
                   'cannot be changed.',
                   style: theme.textTheme.bodySmall,
                 ),
@@ -281,15 +288,20 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool isSeller = transaction.role == TransactionRole.seller;
 
     final String explanation = switch (transaction.status) {
       TransactionStatus.pending =>
-        'A purchase request is not yet a completed sale. Either party can '
-            'still cancel it.',
+        isSeller
+            ? 'A sale is not yet complete. Either party can still cancel it.'
+            : 'A purchase request is not yet a completed sale. Either party can '
+                  'still cancel it.',
       TransactionStatus.completed =>
         'This sale is complete. The record can no longer change.',
       TransactionStatus.cancelled =>
-        'This request was cancelled. The record can no longer change.',
+        isSeller
+            ? 'This sale was cancelled. The record can no longer change.'
+            : 'This request was cancelled. The record can no longer change.',
     };
 
     return Container(
@@ -334,18 +346,24 @@ class _StatusCard extends StatelessWidget {
 /// inquiry at all, so there is nothing real to render. Rather than fabricate a
 /// message or a timestamp, the section states the capability is not available.
 class _InquiryCard extends StatelessWidget {
-  const _InquiryCard();
+  const _InquiryCard({required this.isSeller});
+
+  final bool isSeller;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
     return SectionCard(
-      title: 'Your inquiry',
+      title: isSeller ? 'Buyer inquiry' : 'Your inquiry',
       children: <Widget>[
         Text(
-          'The inquiry you sent is not viewable in the app yet. Reading a '
-          'saved inquiry is not supported by the current API.',
+          isSeller
+              ? 'The inquiry linked to this sale is not viewable in the app '
+                    'yet. Reading a saved inquiry is not supported by the '
+                    'current API.'
+              : 'The inquiry you sent is not viewable in the app yet. Reading '
+                    'a saved inquiry is not supported by the current API.',
           style: theme.textTheme.bodySmall,
         ),
       ],

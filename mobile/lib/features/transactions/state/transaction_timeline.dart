@@ -36,7 +36,7 @@ class TimelineStep {
   final TimelineStepState state;
 }
 
-/// The honest progress tracker for a purchase request.
+/// The honest progress tracker for a purchase or sale.
 ///
 /// The backend workflow is a single `pending` state with two terminal exits,
 /// `completed` and `cancelled` [D-15]. There is no seller-acceptance step, no
@@ -50,68 +50,94 @@ class TimelineStep {
 ///                  `cancelled`, and `upcoming` (with an honest, non-promising
 ///                  label) while still `pending`.
 ///
+/// Buyer and seller see the same state machine from opposite sides: a buyer
+/// submitted a purchase request, while the seller received a sale. The words
+/// follow the viewer's server-reported role so neither side is told a story
+/// that is false for them.
+///
 /// `TransactionStatus` has exactly three values and [TransactionStatus.fromValue]
 /// throws on anything else, so this switch is exhaustive and cannot silently
 /// drop a future status.
 abstract final class TransactionTimeline {
-  static List<TimelineStep> stepsFor(TransactionStatus status) {
+  static List<TimelineStep> stepsFor(
+    TransactionStatus status, {
+    TransactionRole role = TransactionRole.buyer,
+  }) {
+    final bool isSeller = role == TransactionRole.seller;
+
     return switch (status) {
-      TransactionStatus.pending => const <TimelineStep>[
+      TransactionStatus.pending => <TimelineStep>[
         TimelineStep(
-          title: 'Purchase request submitted',
-          detail:
-              'Your request was sent to the seller. This is not yet a '
-              'confirmed sale.',
+          title: isSeller ? 'Sale recorded' : 'Purchase request submitted',
+          detail: isSeller
+              ? 'A buyer requested this listing. This is not yet a confirmed '
+                    'sale.'
+              : 'Your request was sent to the seller. This is not yet a '
+                    'confirmed sale.',
           state: TimelineStepState.completed,
         ),
         TimelineStep(
           title: 'In progress',
-          detail:
-              'The seller has not accepted or completed this request yet. '
-              'Either party can still cancel it.',
+          detail: isSeller
+              ? 'This sale has not been completed yet. Either party can still '
+                    'cancel it.'
+              : 'The seller has not accepted or completed this request yet. '
+                    'Either party can still cancel it.',
           state: TimelineStepState.current,
         ),
         TimelineStep(
           title: 'Outcome',
-          detail:
-              'A request can end as completed or cancelled. No outcome has '
-              'been recorded yet.',
+          detail: isSeller
+              ? 'A sale can end as completed or cancelled. No outcome has been '
+                    'recorded yet.'
+              : 'A request can end as completed or cancelled. No outcome has '
+                    'been recorded yet.',
           state: TimelineStepState.upcoming,
         ),
       ],
-      TransactionStatus.completed => const <TimelineStep>[
+      TransactionStatus.completed => <TimelineStep>[
         TimelineStep(
-          title: 'Purchase request submitted',
-          detail: 'Your request was sent to the seller.',
+          title: isSeller ? 'Sale recorded' : 'Purchase request submitted',
+          detail: isSeller
+              ? 'A buyer requested this listing.'
+              : 'Your request was sent to the seller.',
           state: TimelineStepState.completed,
         ),
         TimelineStep(
           title: 'In progress',
-          detail: 'The request was open and is no longer pending.',
+          detail: isSeller
+              ? 'The sale was open and is no longer pending.'
+              : 'The request was open and is no longer pending.',
           state: TimelineStepState.completed,
         ),
-        TimelineStep(
+        const TimelineStep(
           title: 'Completed',
           detail: 'This sale is recorded as complete and cannot change.',
           state: TimelineStepState.current,
         ),
       ],
-      TransactionStatus.cancelled => const <TimelineStep>[
+      TransactionStatus.cancelled => <TimelineStep>[
         TimelineStep(
-          title: 'Purchase request submitted',
-          detail: 'Your request was sent to the seller.',
+          title: isSeller ? 'Sale recorded' : 'Purchase request submitted',
+          detail: isSeller
+              ? 'A buyer requested this listing.'
+              : 'Your request was sent to the seller.',
           state: TimelineStepState.completed,
         ),
         TimelineStep(
           title: 'Cancelled',
-          detail:
-              'This request was cancelled and cannot change. It was not '
-              'completed.',
+          detail: isSeller
+              ? 'This sale was cancelled and cannot change. It was not '
+                    'completed.'
+              : 'This request was cancelled and cannot change. It was not '
+                    'completed.',
           state: TimelineStepState.current,
         ),
         TimelineStep(
           title: 'Completion',
-          detail: 'A cancelled request is never completed.',
+          detail: isSeller
+              ? 'A cancelled sale is never completed.'
+              : 'A cancelled request is never completed.',
           state: TimelineStepState.unreached,
         ),
       ],

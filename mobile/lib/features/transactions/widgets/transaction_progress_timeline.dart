@@ -4,7 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../state/transaction_timeline.dart';
 
-/// The vertical progress tracker for a purchase request.
+/// The vertical progress tracker for a purchase request or sale.
 ///
 /// Renders [TransactionTimeline.stepsFor] verbatim. It does **not** decide the
 /// steps or invent dates: each marker's title, detail and state come from the

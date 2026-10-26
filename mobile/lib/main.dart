@@ -6,10 +6,10 @@ import 'core/storage/token_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'features/account_mode/state/account_mode_controller.dart';
 import 'features/account_mode/state/account_mode_scope.dart';
+import 'features/account_mode/view/account_mode_shell.dart';
 import 'features/auth/state/auth_controller.dart';
 import 'features/auth/state/auth_scope.dart';
 import 'features/auth/view/auth_gate.dart';
-import 'features/buyer_shell/view/buyer_shell.dart';
 import 'features/inquiries/state/inquiry_scope.dart';
 import 'features/marketplace/state/marketplace_controller.dart';
 import 'features/marketplace/state/marketplace_scope.dart';
@@ -269,7 +269,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                           title: 'AgroBenta',
                           debugShowCheckedModeBanner: false,
                           theme: AppTheme.light(),
-                          home: AuthGate(authenticatedView: _buildBuyerShell),
+                          home: AuthGate(
+                            authenticatedView: _buildAccountModeShell,
+                          ),
                         ),
                       ),
                     ),
@@ -284,6 +286,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   }
 
   /// The signed-in destination, kept as a static so the gate is handed a stable
-  /// builder rather than a fresh closure on every frame.
-  static Widget _buildBuyerShell(BuildContext context) => const BuyerShell();
+  /// builder rather than a fresh closure on every frame. The shell it returns
+  /// follows the Account Mode and re-checks the server-granted capability.
+  static Widget _buildAccountModeShell(BuildContext context) =>
+      const AccountModeShell();
 }

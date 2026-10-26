@@ -51,5 +51,25 @@ void main() {
         }
       }
     });
+
+    test('the seller reads the same state machine as a sale', () {
+      final List<TimelineStep> pending = TransactionTimeline.stepsFor(
+        TransactionStatus.pending,
+        role: TransactionRole.seller,
+      );
+
+      expect(pending[0].title, 'Sale recorded');
+      expect(pending[0].detail, contains('A buyer requested this listing'));
+      expect(pending[0].detail, isNot(contains('Your request')));
+      expect(pending[1].state, TimelineStepState.current);
+
+      final List<TimelineStep> cancelled = TransactionTimeline.stepsFor(
+        TransactionStatus.cancelled,
+        role: TransactionRole.seller,
+      );
+      expect(cancelled[1].detail, contains('This sale was cancelled'));
+      expect(cancelled[1].detail, isNot(contains('This request')));
+      expect(cancelled[2].detail, contains('cancelled sale'));
+    });
   });
 }

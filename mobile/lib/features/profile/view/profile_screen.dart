@@ -21,8 +21,9 @@ import 'edit_profile_screen.dart';
 
 /// The caller's own profile.
 ///
-/// Reached from the buyer shell's bottom navigation. Read-only until the user
-/// taps "Personal Information", which pushes the existing edit form. "Change
+/// Reached from the signed-in shell's bottom navigation in both Buyer Mode and
+/// Seller Mode. Read-only until the user taps "Personal Information", which
+/// pushes the existing edit form. "Change
 /// password" is offered separately because the password is not part of the
 /// profile resource. Sign out lives under "Other".
 ///

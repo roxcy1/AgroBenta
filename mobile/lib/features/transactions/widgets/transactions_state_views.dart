@@ -2,38 +2,69 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../models/transaction.dart';
 import '../state/transactions_filter.dart';
 
-/// The empty state for one purchases filter.
+/// The empty state for one purchases or sales filter.
 ///
-/// Fixed copy per filter. The Completed copy is honest about the dead end: no
-/// path in the app can reach `completed` today (OQ-15), so the filter is
-/// legitimately empty — that is correct, not a bug to work around.
+/// Fixed copy per filter and viewer side. The Completed copy is honest about
+/// the dead end: no path in the app can reach `completed` today (OQ-15), so the
+/// filter is legitimately empty — that is correct, not a bug to work around.
 class TransactionsEmptyState extends StatelessWidget {
-  const TransactionsEmptyState({required this.filter, super.key});
+  const TransactionsEmptyState({
+    required this.filter,
+    required this.role,
+    super.key,
+  });
 
   final TransactionsFilter filter;
+  final TransactionRole role;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool isSeller = role == TransactionRole.seller;
     final (String title, String body) = switch (filter) {
-      TransactionsFilter.all => (
-        'No purchases yet',
-        'Transactions you start from a listing will appear here.',
-      ),
-      TransactionsFilter.ongoing => (
-        'No ongoing purchases yet',
-        'Purchases that are still pending will appear here.',
-      ),
-      TransactionsFilter.completed => (
-        'No completed purchases yet',
-        'Completion is not yet available in the app.',
-      ),
-      TransactionsFilter.cancelled => (
-        'No cancelled purchases',
-        'Purchases cancelled by either party will appear here.',
-      ),
+      TransactionsFilter.all =>
+        isSeller
+            ? (
+                'No sales yet',
+                'Transactions buyers start from your listings will appear here.',
+              )
+            : (
+                'No purchases yet',
+                'Transactions you start from a listing will appear here.',
+              ),
+      TransactionsFilter.ongoing =>
+        isSeller
+            ? (
+                'No ongoing sales yet',
+                'Sales that are still pending will appear here.',
+              )
+            : (
+                'No ongoing purchases yet',
+                'Purchases that are still pending will appear here.',
+              ),
+      TransactionsFilter.completed =>
+        isSeller
+            ? (
+                'No completed sales yet',
+                'Completion is not yet available in the app.',
+              )
+            : (
+                'No completed purchases yet',
+                'Completion is not yet available in the app.',
+              ),
+      TransactionsFilter.cancelled =>
+        isSeller
+            ? (
+                'No cancelled sales',
+                'Sales cancelled by either party will appear here.',
+              )
+            : (
+                'No cancelled purchases',
+                'Purchases cancelled by either party will appear here.',
+              ),
     };
 
     return Center(

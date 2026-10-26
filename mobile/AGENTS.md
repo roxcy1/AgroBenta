@@ -288,6 +288,26 @@ capability is: submit verification → admin approves → the server sets the fi
 `seller_capability` is not a UI-only flag. Gate seller UI on it, and expect the
 server to reject seller actions from a non-approved seller regardless.
 
+### Account Mode shells
+
+`AccountModeShell` replaces the whole signed-in destination when the mode
+changes; it does not push another screen. It guards Seller Mode both ways: the
+controller refuses to select it without server-granted seller capability, and
+the shell falls back to `BuyerShell` if the selected mode and capability
+disagree. Signing out, changing accounts or losing capability clears the mode.
+
+* **BuyerShell** keeps Home, Browse, Messages, Transactions, Profile. Its
+  Transactions screen is **My Purchases** and sends `role=buyer`.
+* **SellerShell** has Home, My Listings, Messages, Transactions, Profile. Its
+  Transactions screen is **My Sales** and sends `role=seller`. My Listings is a
+  real tab here; the buyer Home entry card still switches to it through
+  `SellerListingsEntryCard.onManage` instead of pushing a duplicate screen.
+* **Seller Home** is deliberately a small, truthful landing: the account
+  greeting, notification bell, My Listings entry and Profile action. The backend
+  exposes no seller dashboard metrics or received-inquiry list, so no counts,
+  charts, sales totals or inquiry records may be fabricated. Seller inquiry
+  handling remains blocked by GAP-19 and is not part of Account Mode.
+
 ---
 
 ## E. Backend safety
@@ -525,7 +545,8 @@ The app's `Conversation` and `Message` models mirror them exactly. Search and
 the category chips are **local view filters** — the API has no conversation
 search and no category column. "Inquiries" selects listing-scoped threads;
 "Transactions" renders disabled — the API links no conversation to a
-transaction, and My Purchases is a separate screen over `/api/transactions`;
+transaction, and My Purchases / My Sales are separate screens over
+`/api/transactions`;
 "Notifications" is a shortcut to the existing, separate notifications
 destination, not a thread filter. Opening a thread marks it read through the
 same endpoint from two callers by design (the inbox optimistically, the chat
@@ -533,8 +554,8 @@ screen on open). **There is no real-time transport** (GAP-20): the inbox and
 thread recover via pull-to-refresh and an on-return refresh, and the app ships
 no WebSocket client, no invented event names and no fake reconnect.
 
-**Resolved for the Transactions screen (My Purchases, HTTP only).** The backend
-exposes the caller's transactions behind the same `auth:sanctum` +
+**Resolved for the Transactions screens (My Purchases / My Sales, HTTP only).**
+The backend exposes the caller's transactions behind the same `auth:sanctum` +
 `ability:mobile` guard:
 
 | Endpoint | Purpose |
@@ -553,17 +574,18 @@ viewer's side), `listing{id,livestock_type,breed,photos}`,
 `asking_price × quantity`, a decimal **string**), `status`, `created_at` and
 `updated_at`. There is **no location field**, so the card shows none.
 
-My Purchases always sends `role=buyer`, so a sale never appears among a user's
-purchases, and the filters are server statuses rather than a local view: All
-sends no `status`; Ongoing sends `pending`; Completed and Cancelled send their
-own values. The design's separate **Pending** chip is **not shown**: the backend
-has a single `pending` state, already labelled Ongoing across the app
-(`mobile/DESIGN.md` §26), so the row carries the three real states plus All
-rather than two chips that cannot return different records. Cards
-are labelled "Agreed price" and show the exact `total_amount`; a listing's
-asking price is not in the resource and is never shown here. Tapping a card
-opens the existing detail screen with the persisted id. Creation yields
-`pending`; the client never sends `status`.
+Buyer Mode's **My Purchases** always sends `role=buyer`; Seller Mode's **My
+Sales** always sends `role=seller`. Neither side can leak into the other's list.
+The filters are server statuses rather than a local view: All sends no `status`;
+Ongoing sends `pending`; Completed and Cancelled send their own values. The
+design's separate **Pending** chip is **not shown**: the backend has a single
+`pending` state, already labelled Ongoing across the app (`mobile/DESIGN.md`
+§26), so the row carries the three real states plus All rather than two chips
+that cannot return different records. Cards are labelled "Agreed price" and show
+the exact `total_amount`; a listing's asking price is not in the resource and is
+never shown here. Empty copy names the viewer's side ("No purchases yet" / "No
+sales yet"). Tapping a card opens the existing detail screen with the persisted
+id. Creation yields `pending`; the client never sends `status`.
 
 The **Transaction Details** screen (`transaction_detail_screen.dart` +
 `transaction_detail_content.dart`) is built only from a single
@@ -574,20 +596,25 @@ The **Transaction Details** screen (`transaction_detail_screen.dart` +
   labelled "Transaction total". The resource has no `asking_price`, so no
   reference-vs-agreed pair is shown and none is fabricated; the screen states
   that the listing's reference asking price is not part of the transaction.
-* **Seller** (the counterparty) is `{ id, name, email }`. There is **no
-  verification flag and no location**, so no badge and no location row render.
-  "Message seller" opens the existing `ChatScreen` with the counterparty's real
-  id from the payload — the same chat route the marketplace uses.
+* **Counterparty** is `{ id, name, email }`, read through the server's `role`:
+  the seller for a buyer, the buyer for a seller. The section title is "Seller"
+  or "Buyer" accordingly and there is **no verification flag or location**, so
+  no badge and no location row render. The action is "Message seller" or
+  "Message buyer" and opens the existing `ChatScreen` with the counterparty's
+  real id from the payload — the same chat route the marketplace uses.
 * **Livestock** shows only Type and Breed, the only attributes the snapshot
   holds; age/weight/gender/health are not in the transaction record and an
   honest line says so.
 * **Status** uses the real `pending`/`completed`/`cancelled` state with a
   next-step sentence that is true of the workflow; no completion affordance
   exists (OQ-15, backend 501).
-* **Your inquiry** is an honest statement, not a record: the resource links to
-  no inquiry and there is no mobile inquiry read endpoint (GAP-19).
-* **Cancel request** is pending-only, confirmed, and posted to
-  `POST /transactions/{id}/cancel`; a `409` reloads the terminal state.
+* **Inquiry** is an honest statement, not a record: the resource links to no
+  inquiry and there is no mobile inquiry read endpoint (GAP-19). A buyer sees
+  "Your inquiry"; a seller sees "Buyer inquiry".
+* **Cancel** is pending-only, confirmed, and posted to
+  `POST /transactions/{id}/cancel`; a `409` reloads the terminal state. The
+  wording follows the role: "Cancel request" for a buyer, "Cancel sale" for a
+  seller, including the confirmation dialog and immutable notice.
 
 The **Transaction Status** screen (`transaction_status_screen.dart` +
 `transaction_status_content.dart`, reached from the detail screen's "View
@@ -595,9 +622,11 @@ status") reuses the same single `GET /transactions/{id}` call through
 `TransactionDetailController` — there is no separate status endpoint and none
 is invented. It shows the listing summary (image when a real loadable URL
 exists, title, server-derived total, status badge), a metadata card (request id
-+ the one persisted `created_at`), a **Transaction Progress** tracker, and a
-full-width **Message Seller** action that follows the same real chat route the
-detail screen uses.
+and the one persisted `created_at`, labelled "Request ID"/"Requested" for a
+buyer and "Sale ID"/"Recorded" for a seller), a **Transaction Progress** tracker
+whose wording follows the server's `role`, and a full-width **Message Seller**
+or **Message Buyer** action that follows the same real chat route the detail
+screen uses.
 
 The tracker is derived from the real state machine, not the design's five-step
 reference. The backend holds a **single current `status` and no transition
@@ -610,9 +639,12 @@ seller-acceptance/delivery/receipt steps are fabricated. Instead
 actual workflow — Submitted, In progress, Outcome — where `pending` shows In
 progress as current with an unknown outcome, `completed` shows the completion
 as current, and `cancelled` shows a terminal, explicitly **not-completed**
-outcome. A pale-green note states that only the current status is recorded, so
-no dated history is shown. No payment, logistics or transaction-confirmation
-step is implied; completion remains unavailable (OQ-15).
+outcome. The first marker is a purchase request for a buyer and a recorded sale
+for a seller; `TransactionTimeline.stepsFor` takes the viewer's `TransactionRole`
+so the words are true on both sides. A pale-green note states that only the
+current status is recorded, so no dated history is shown. No payment, logistics
+or transaction-confirmation step is implied; completion remains unavailable
+(OQ-15).
 
 **Still open below.** GAP-01 to GAP-09, GAP-11 to GAP-13 and GAP-16 are
 `CLOSED` — implemented in the backend and consumed by the app. GAP-10, GAP-14,
