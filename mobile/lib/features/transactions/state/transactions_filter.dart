@@ -1,6 +1,6 @@
 import '../../../models/transaction.dart';
 
-/// The selectable filters above My Purchases.
+/// The selectable filters above My Purchases and My Sales.
 ///
 /// The server accepts exactly three lifecycle values — `pending`, `completed`
 /// and `cancelled` — and [all] means "send no status". The design's screenshot

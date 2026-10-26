@@ -14,10 +14,11 @@ import 'seller_listing_form_screen.dart';
 /// The seller's own listings: "My Listings".
 ///
 /// The one screen a seller lands on to manage what they have put up, and the
-/// entry point for creating a listing. Reached from Home, not from the bottom
-/// navigation — `mobile/DESIGN.md` forbids building navigation for screens a
-/// buyer cannot use, and My Listings is unreachable for a buyer by definition
-/// (the server answers `403`).
+/// entry point for creating a listing. In Seller Mode it is a tab in
+/// `SellerShell`; the buyer shell keeps it off its bottom navigation because a
+/// buyer cannot reach it (the server answers `403`). In Buyer Mode the same
+/// screen is reached through the Home entry card, which only verified sellers
+/// see.
 ///
 /// A plain [StatefulWidget] rather than a `Consumer` on a provider: it reads the
 /// controller once in `initState` and rebuilds from [ListenableBuilder], so a
@@ -234,7 +235,8 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                   onRefresh: _controller.refresh,
                   child: switch (state.status) {
                     SellerListingStatus.initial ||
-                    SellerListingStatus.loading => const SellerListingsSkeleton(),
+                    SellerListingStatus.loading =>
+                      const SellerListingsSkeleton(),
                     // A scroll view even on a full-screen error, so
                     // pull-to-refresh works there as well as on the list.
                     SellerListingStatus.failed => ListView(

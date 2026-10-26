@@ -155,6 +155,107 @@ void main() {
     expect(find.textContaining('Mark complete'), findsNothing);
   });
 
+  testWidgets('a seller sees the buyer as counterparty and sale wording', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(
+      tester,
+      (_) async => transactionDetailResponse(
+        transaction: transactionJson(
+          role: 'seller',
+          counterparty: transactionCounterpartyJson(
+            name: 'Ben Cruz',
+            email: 'ben@example.test',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Buyer'), findsWidgets);
+    expect(find.text('Seller'), findsOneWidget);
+    expect(find.text('Ben Cruz'), findsOneWidget);
+    expect(find.text('ben@example.test'), findsOneWidget);
+    expect(find.text('Message buyer'), findsOneWidget);
+    expect(find.text('Message seller'), findsNothing);
+    expect(find.text('Buyer inquiry'), findsOneWidget);
+    expect(find.text('Your inquiry'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Cancel sale'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Cancel request'), findsNothing);
+    expect(find.text('Recorded'), findsOneWidget);
+  });
+
+  testWidgets('a seller cancels a sale with sale-specific confirmation', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(tester, (RecordedRequest request) async {
+      if (request.apiPath == '/transactions/1/cancel') {
+        return transactionDetailResponse(
+          transaction: transactionJson(
+            id: 1,
+            role: 'seller',
+            status: 'cancelled',
+          ),
+        );
+      }
+      return transactionDetailResponse(
+        transaction: transactionJson(id: 1, role: 'seller', status: 'pending'),
+      );
+    });
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel sale'));
+    await settle(tester);
+
+    expect(find.text('Cancel this sale?'), findsOneWidget);
+    expect(
+      find.text('This cannot be undone. A cancelled sale stays cancelled.'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(TextButton, 'Keep sale'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel sale'));
+    await settle(tester, frames: 20);
+
+    final List<RecordedRequest> posts = recorded
+        .where((RecordedRequest r) => r.apiPath == '/transactions/1/cancel')
+        .toList(growable: false);
+    expect(posts, hasLength(1));
+    expect(
+      find.text('This sale is cancelled and cannot be changed.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a seller messages the buyer through the real thread', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(tester, (RecordedRequest request) async {
+      if (request.apiPath == '/conversations/3/messages') {
+        return messageThreadResponse();
+      }
+      if (request.apiPath == '/conversations/3/read') {
+        return threadReadResponse();
+      }
+      return transactionDetailResponse(
+        transaction: transactionJson(
+          role: 'seller',
+          counterparty: transactionCounterpartyJson(
+            name: 'Ben Cruz',
+            email: 'ben@example.test',
+          ),
+        ),
+      );
+    });
+
+    await tester.tap(find.text('Message buyer'));
+    await settle(tester, frames: 16);
+
+    expect(find.byType(ChatScreen), findsOneWidget);
+    expect(
+      recorded.map((RecordedRequest r) => r.apiPath),
+      contains('/conversations/3/messages'),
+    );
+  });
+
   testWidgets('distinguishes the transaction amount from the listing asking '
       'price and shows no fabricated agreed price', (
     WidgetTester tester,

@@ -18,11 +18,13 @@ class TransactionsTab extends StatefulWidget {
   const TransactionsTab({
     required this.controller,
     required this.filter,
+    required this.role,
     super.key,
   });
 
   final TransactionsController controller;
   final TransactionsFilter filter;
+  final TransactionRole role;
 
   @override
   State<TransactionsTab> createState() => _TransactionsTabState();
@@ -83,7 +85,10 @@ class _TransactionsTabState extends State<TransactionsTab> {
               physics: const AlwaysScrollableScrollPhysics(),
               children: <Widget>[
                 SizedBox(height: MediaQuery.sizeOf(context).height * 0.2),
-                TransactionsEmptyState(filter: widget.filter),
+                TransactionsEmptyState(
+                  filter: widget.filter,
+                  role: widget.role,
+                ),
               ],
             ),
           );

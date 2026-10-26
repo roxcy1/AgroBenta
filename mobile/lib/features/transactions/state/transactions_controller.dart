@@ -6,13 +6,13 @@ import '../../../models/transaction_page.dart';
 import '../../../repositories/transaction_repository.dart';
 import 'transactions_state.dart';
 
-/// Presentation logic for one purchases filter.
+/// Presentation logic for one purchases or sales filter.
 ///
 /// One instance per filter. Each filter is an independent filtered query with
 /// its own pages; `null` [status] is the "All" filter and sends no status.
 /// [role] narrows to one side of the caller's records — My Purchases passes
-/// `buyer` so a sale can never appear among a user's purchases. The screen
-/// owns the instances and disposes them.
+/// `buyer`, and My Sales passes `seller`, so neither side can appear in the
+/// other's list. The screen owns the instances and disposes them.
 ///
 /// The mechanics mirror `MarketplaceController`: generation-guarded first
 /// pages, a `loadMore` guard, and a `refresh` that keeps results on screen.
