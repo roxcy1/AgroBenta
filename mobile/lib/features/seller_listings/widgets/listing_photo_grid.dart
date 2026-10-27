@@ -45,13 +45,13 @@ class ListingPhotoGrid extends StatelessWidget {
           );
         }),
         if (controller.canAddPhoto)
-          _AddTile(onAdd: () => _pickPhotos()),
+          _AddTile(onAdd: () => _pickPhotos(context)),
       ],
     );
   }
 
   /// Opens a sheet to choose image source (gallery or camera), then appends any picks.
-  Future<void> _pickPhotos() async {
+  Future<void> _pickPhotos(BuildContext context) async {
     final ImagePicker picker = ImagePicker();
     final bool? cameraSelected = await showDialog<bool>(
       context: context,
@@ -70,6 +70,7 @@ class ListingPhotoGrid extends StatelessWidget {
         ],
       ),
     );
+    final SellerListingController controller = SellerListingScope.of(context);
     if (cameraSelected == true) {
       final XFile? picked = await picker.pickImage(
         source: ImageSource.camera,
@@ -86,7 +87,7 @@ class ListingPhotoGrid extends StatelessWidget {
         maxHeight: 1600,
         imageQuality: 85,
       );
-      if (picked.isNotEmpty) {
+      if (picked != null && picked.isNotEmpty) {
         controller.addPickedPhotos(picked);
       }
     }
