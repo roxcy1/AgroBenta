@@ -6,6 +6,8 @@ use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Models\Listing;
 use App\Models\User;
+use App\Notifications\ListingApproved;
+use App\Notifications\ListingRejected;
 use App\Repositories\Admin\AdminListingRepository;
 use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -142,6 +144,19 @@ class AdminListingService
                     'admin_note' => $adminNote,
                 ],
             );
+
+            // Only the two decisions a seller must learn about notify. A
+            // deactivation withdraws a live listing rather than answering a
+            // submission, so it has no notification of its own.
+            $notification = match ($action) {
+                ActivityAction::ListingApproved => new ListingApproved($moderated),
+                ActivityAction::ListingRejected => new ListingRejected($moderated),
+                default => null,
+            };
+
+            if ($notification !== null) {
+                $moderated->seller->notify($notification);
+            }
 
             return $moderated;
         });
