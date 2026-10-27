@@ -201,11 +201,6 @@ class _ActionBar extends StatelessWidget {
     final bool canDelete = listing.status == ListingStatus.inactive;
 
     if (!canSubmit && !canDelete) {
-      final String? reason = listing.adminNote;
-      final String explanation = reason != null && reason.isNotEmpty
-          ? '${listingStatusExplanation(listing.status)} Reason: $reason'
-          : listingStatusExplanation(listing.status);
-
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(
@@ -218,7 +213,7 @@ class _ActionBar extends StatelessWidget {
           border: Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Text(
-          explanation,
+          listingStatusExplanation(listing.status),
           style: theme.textTheme.bodySmall,
         ),
       );

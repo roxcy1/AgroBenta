@@ -20,8 +20,7 @@ class ListingRejected extends Notification
 
     public function __construct(
         public readonly Listing $listing,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<int, string>
@@ -37,13 +36,14 @@ class ListingRejected extends Notification
     public function toArray(object $notifiable): array
     {
         $note = $this->listing->admin_note;
+        $label = $this->listing->displayLabel();
 
         return [
             'type' => 'listing',
             'title' => 'Listing not approved',
             'body' => $note !== null && $note !== ''
                 ? "Reason: {$note}"
-                : "\"{$this->listing->title}\" was not approved.",
+                : "\"{$label}\" was not approved.",
             'action' => 'listing',
             'action_id' => $this->listing->getKey(),
         ];

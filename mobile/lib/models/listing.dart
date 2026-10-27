@@ -118,11 +118,10 @@ class Listing {
     required this.shortDescription,
     required this.additionalNotes,
     required this.photos,
-      required this.status,
-      required this.createdAt,
-      required this.updatedAt,
-      this.adminNote,
-    });
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+  });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
     return Listing(
@@ -146,7 +145,6 @@ class Listing {
       status: ListingStatus.fromValue(readString(json, 'status')),
       createdAt: readNullableDateTime(json, 'created_at'),
       updatedAt: readNullableDateTime(json, 'updated_at'),
-      adminNote: readNullableString(json, 'admin_note'),
     );
   }
 
@@ -220,8 +218,6 @@ class Listing {
   final DateTime? createdAt;
 
   final DateTime? updatedAt;
-
-  final String? adminNote;
 
   /// Whether this listing has a photo the client can actually fetch.
   ///

@@ -7,7 +7,10 @@ use App\Enums\SellerCapability;
 use App\Enums\UserRole;
 use App\Models\Listing;
 use App\Models\User;
+use App\Notifications\ListingApproved;
+use App\Notifications\ListingRejected;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -200,6 +203,32 @@ class ListingModerationTest extends TestCase
         $this->assertSame($this->seller->id, $row['seller']['id']);
     }
 
+    #[Test]
+    public function admin_listing_measurements_are_numeric_and_nullable(): void
+    {
+        $fractional = $this->createListing([
+            'age_value' => 3,
+            'weight_value' => 320.5,
+        ]);
+        $missing = $this->createListing([
+            'age_value' => null,
+            'age_unit' => null,
+            'weight_value' => null,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->adminToken())
+            ->getJson('/api/admin/listings?status=pending');
+
+        $response->assertOk();
+
+        $rows = collect($response->json('data.listings'))->keyBy('id');
+
+        $this->assertSame(3, $rows[$fractional->id]['age_value']);
+        $this->assertSame(320.5, $rows[$fractional->id]['weight_value']);
+        $this->assertNull($rows[$missing->id]['age_value']);
+        $this->assertNull($rows[$missing->id]['weight_value']);
+    }
+
     // ------------------------------------------------------------- approval
 
     #[Test]
@@ -253,6 +282,53 @@ class ListingModerationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id', $listing->id)
             ->assertJsonPath('data.status', 'active');
+    }
+
+    // -------------------------------------------------- approval notification
+
+    #[Test]
+    public function approving_a_listing_notifies_the_seller_it_is_live(): void
+    {
+        $listing = $this->createListing();
+
+        $this->moderate("/api/admin/listings/{$listing->id}/approve")->assertOk();
+
+        $notification = $this->seller->notifications()->get()->sole();
+
+        $this->assertSame(ListingApproved::class, $notification->type);
+        $this->assertSame($this->seller->id, $notification->notifiable_id);
+        $this->assertSame('listing', $notification->data['type']);
+        $this->assertSame('Listing approved', $notification->data['title']);
+        $this->assertSame('"Angus" is now live in the marketplace.', $notification->data['body']);
+        $this->assertSame('listing', $notification->data['action']);
+        $this->assertSame($listing->id, $notification->data['action_id']);
+    }
+
+    #[Test]
+    public function a_failed_second_approval_does_not_notify_again(): void
+    {
+        Notification::fake();
+
+        $listing = $this->createListing();
+        $path = "/api/admin/listings/{$listing->id}/approve";
+
+        $this->moderate($path)->assertOk();
+        $this->moderate($path)->assertStatus(409);
+
+        Notification::assertSentToOnce($this->seller, ListingApproved::class);
+        Notification::assertCount(1);
+    }
+
+    #[Test]
+    public function deactivating_a_listing_sends_no_decision_notification(): void
+    {
+        Notification::fake();
+
+        $listing = $this->createListing(['status' => ListingStatus::Active]);
+
+        $this->moderate("/api/admin/listings/{$listing->id}/deactivate")->assertOk();
+
+        Notification::assertNothingSent();
     }
 
     // ------------------------------------------------------------ rejection
@@ -314,6 +390,114 @@ class ListingModerationTest extends TestCase
             ->assertJsonPath('data.admin_note', null);
 
         $this->assertNull($listing->fresh()->admin_note);
+    }
+
+    #[Test]
+    public function rejecting_a_listing_notifies_the_seller_with_the_reason(): void
+    {
+        $listing = $this->createListing();
+        $note = 'Health records are missing from the submission.';
+
+        $this->moderate("/api/admin/listings/{$listing->id}/reject", body: [
+            'admin_note' => $note,
+        ])->assertOk();
+
+        $notification = $this->seller->notifications()->get()->sole();
+
+        $this->assertSame(ListingRejected::class, $notification->type);
+        $this->assertSame($this->seller->id, $notification->notifiable_id);
+        $this->assertSame('listing', $notification->data['type']);
+        $this->assertSame('Listing not approved', $notification->data['title']);
+        $this->assertSame("Reason: {$note}", $notification->data['body']);
+        $this->assertSame('listing', $notification->data['action']);
+        $this->assertSame($listing->id, $notification->data['action_id']);
+    }
+
+    #[Test]
+    public function a_rejection_without_a_note_notifies_with_the_listing_label(): void
+    {
+        Notification::fake();
+
+        $listing = $this->createListing();
+
+        $this->moderate("/api/admin/listings/{$listing->id}/reject")->assertOk();
+
+        Notification::assertSentTo(
+            $this->seller,
+            ListingRejected::class,
+            function (ListingRejected $notification) use ($listing): bool {
+                $payload = $notification->toArray($this->seller);
+
+                return $notification->listing->is($listing)
+                    && $payload['body'] === '"Angus" was not approved.';
+            },
+        );
+    }
+
+    #[Test]
+    public function both_decisions_name_a_breedless_listing_by_its_species(): void
+    {
+        Notification::fake();
+
+        $approved = $this->createListing(['breed' => '   ']);
+        $rejected = $this->createListing(['breed' => '']);
+
+        $this->moderate("/api/admin/listings/{$approved->id}/approve")->assertOk();
+        $this->moderate("/api/admin/listings/{$rejected->id}/reject")->assertOk();
+
+        Notification::assertSentTo(
+            $this->seller,
+            ListingApproved::class,
+            function (ListingApproved $notification) use ($approved): bool {
+                $payload = $notification->toArray($this->seller);
+
+                return $notification->listing->is($approved)
+                    && $payload['body'] === '"cattle" is now live in the marketplace.';
+            },
+        );
+
+        Notification::assertSentTo(
+            $this->seller,
+            ListingRejected::class,
+            function (ListingRejected $notification) use ($rejected): bool {
+                $payload = $notification->toArray($this->seller);
+
+                return $notification->listing->is($rejected)
+                    && $payload['body'] === '"cattle" was not approved.';
+            },
+        );
+    }
+
+    #[Test]
+    public function a_rejection_is_not_notified_twice_when_the_second_attempt_fails(): void
+    {
+        Notification::fake();
+
+        $listing = $this->createListing();
+        $path = "/api/admin/listings/{$listing->id}/reject";
+
+        $this->moderate($path, body: ['admin_note' => 'First reason.'])->assertOk();
+        $this->moderate($path, body: ['admin_note' => 'Second reason.'])->assertStatus(409);
+
+        Notification::assertSentToOnce($this->seller, ListingRejected::class);
+        Notification::assertCount(1);
+
+        $this->assertSame(ListingStatus::Inactive, $listing->fresh()->status);
+        $this->assertSame('First reason.', $listing->fresh()->admin_note);
+    }
+
+    #[Test]
+    public function approval_and_deactivation_do_not_send_rejection_notifications(): void
+    {
+        Notification::fake();
+
+        $pending = $this->createListing();
+        $this->moderate("/api/admin/listings/{$pending->id}/approve")->assertOk();
+
+        $active = $this->createListing(['status' => ListingStatus::Active]);
+        $this->moderate("/api/admin/listings/{$active->id}/deactivate")->assertOk();
+
+        Notification::assertNotSentTo($this->seller, ListingRejected::class);
     }
 
     #[Test]
