@@ -73,10 +73,94 @@ async function fetchTransactions(params: TransactionsParams): Promise<Transactio
   return response.data.data;
 }
 
+/**
+ * Fetches every transaction matching the given filters, walking all pages.
+ *
+ * The backend caps `per_page` at 100, so each page is requested at that size and
+ * iteration continues until the reported `last_page` is reached. Results are
+ * returned in the same order the API serves them.
+ */
+export async function fetchAllTransactions(
+  params: Omit<TransactionsParams, 'page' | 'per_page'>,
+): Promise<Transaction[]> {
+  const firstPage = await fetchTransactions({ ...params, page: 1, per_page: 100 });
+  const all: Transaction[] = [...firstPage.transactions];
+  const lastPage = firstPage.pagination.last_page;
+
+  for (let page = 2; page <= lastPage; page += 1) {
+    const nextPage = await fetchTransactions({ ...params, page, per_page: 100 });
+    all.push(...nextPage.transactions);
+  }
+
+  return all;
+}
+
 export function useTransactions(params: TransactionsParams) {
   return useQuery({
     queryKey: ['admin', 'transactions', params],
     queryFn: () => fetchTransactions(params),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
+
+export async function fetchTransaction(id: number): Promise<Transaction> {
+  const response = await api.get<{ success: boolean; data: Transaction }>(
+    `/admin/transactions/${id}`,
+  );
+  return response.data.data;
+}
+
+/**
+ * A single transaction by id, used to open a transaction deep link even when
+ * the row is not on the page the list happens to be showing.
+ */
+export function useTransaction(id: number | null) {
+  return useQuery({
+    queryKey: ['admin', 'transactions', 'detail', id],
+    queryFn: () => fetchTransaction(id as number),
+    enabled: id !== null,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 0,
+  });
+}
+
+export interface TransactionStatusCounts {
+  total: number;
+  pending: number;
+  completed: number;
+  cancelled: number;
+}
+
+/**
+ * Aggregate transaction counts for the status cards.
+ *
+ * The list endpoint already reports `pagination.total` for the query it ran,
+ * which is the server's `count(*)` rather than the size of the returned page.
+ * Requesting one row per status therefore yields exact totals without adding a
+ * counting endpoint. The four requests share a single query key so the cards
+ * have one loading state.
+ */
+export function useTransactionCounts() {
+  return useQuery({
+    queryKey: ['admin', 'transactions', 'counts'],
+    queryFn: async (): Promise<TransactionStatusCounts> => {
+      const [all, pending, completed, cancelled] = await Promise.all([
+        fetchTransactions({ per_page: 1 }),
+        fetchTransactions({ status: 'pending', per_page: 1 }),
+        fetchTransactions({ status: 'completed', per_page: 1 }),
+        fetchTransactions({ status: 'cancelled', per_page: 1 }),
+      ]);
+
+      return {
+        total: all.pagination.total,
+        pending: pending.pagination.total,
+        completed: completed.pagination.total,
+        cancelled: cancelled.pagination.total,
+      };
+    },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     retry: 1,

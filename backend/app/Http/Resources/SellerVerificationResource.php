@@ -24,6 +24,12 @@ class SellerVerificationResource extends JsonResource
             'business_name' => $this->business_name,
             'business_location' => $this->business_location,
             'business_description' => $this->business_description,
+            'id_document_ref' => $this->id_document_ref,
+            // Existence flags, never paths: the private storage location is not
+            // something a response body should carry. The documents themselves
+            // are read through the admin-only streaming endpoint.
+            'has_id_document' => filled($this->id_document_path),
+            'has_selfie' => filled($this->selfie_path),
             'status' => $this->status?->value,
             'admin_note' => $this->admin_note,
             'submitted_at' => $this->submitted_at?->toISOString(),

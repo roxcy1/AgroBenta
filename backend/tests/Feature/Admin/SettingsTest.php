@@ -8,6 +8,7 @@ use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Contracts\Auth\Factory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SettingsTest extends TestCase
@@ -42,16 +43,14 @@ class SettingsTest extends TestCase
 
     private function seedSettings(): void
     {
-        $settings = [
-            ['key' => 'system.name', 'value' => 'AgroBenta', 'group' => 'system', 'label' => 'System Name', 'description' => 'Platform name.'],
-            ['key' => 'system.description', 'value' => 'A livestock trading platform.', 'group' => 'system', 'label' => 'System Description', 'description' => 'Platform description.'],
-            ['key' => 'admin_contact.name', 'value' => 'Administrator', 'group' => 'admin_contact', 'label' => 'Contact Name', 'description' => 'Contact name.'],
-            ['key' => 'admin_contact.email', 'value' => 'admin@example.com', 'group' => 'admin_contact', 'label' => 'Contact Email', 'description' => 'Contact email.'],
-            ['key' => 'admin_contact.phone', 'value' => '', 'group' => 'admin_contact', 'label' => 'Contact Phone', 'description' => 'Contact phone.'],
-        ];
-
-        foreach ($settings as $setting) {
-            Setting::create($setting);
+        foreach (config('settings.keys') as $key => $definition) {
+            Setting::create([
+                'key' => $key,
+                'value' => $definition['default'],
+                'group' => $definition['group'],
+                'label' => $definition['label'],
+                'description' => $definition['description'],
+            ]);
         }
     }
 
@@ -119,7 +118,7 @@ class SettingsTest extends TestCase
         $response->assertStatus(200);
 
         $groups = array_keys($response->json('data'));
-        $this->assertEquals(['admin_contact', 'system'], $groups);
+        $this->assertEquals(['admin_contact', 'listings', 'system', 'verification'], $groups);
     }
 
     // ── PUT /api/admin/settings ─────────────────────────────────────────
@@ -255,5 +254,118 @@ class SettingsTest extends TestCase
         $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
             ->getJson('/api/admin/settings');
         $response->assertStatus(200);
+    }
+
+    // ── listing and verification settings ───────────────────────────────
+
+    public function test_admin_can_update_listing_and_verification_settings(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->putJson('/api/admin/settings', [
+                'listing.max_photos' => '5',
+                'listing.max_price' => '1500.50',
+                'verification.guidance' => 'Provide clear photos of your livestock.',
+            ]);
+
+        $response->assertStatus(200);
+        $this->assertEmpty($response->json('rejected'));
+        $this->assertContains('listing.max_photos', $response->json('updated'));
+        $this->assertContains('listing.max_price', $response->json('updated'));
+        $this->assertContains('verification.guidance', $response->json('updated'));
+
+        $this->assertDatabaseHas('settings', ['key' => 'listing.max_photos', 'value' => '5']);
+        $this->assertDatabaseHas('settings', ['key' => 'listing.max_price', 'value' => '1500.50']);
+        $this->assertDatabaseHas('settings', [
+            'key' => 'verification.guidance',
+            'value' => 'Provide clear photos of your livestock.',
+        ]);
+    }
+
+    public function test_registered_keys_are_returned_by_get(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/settings');
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'data' => [
+                'listings' => [['key', 'value', 'group', 'label', 'description']],
+                'verification' => [['key', 'value', 'group', 'label', 'description']],
+            ],
+        ]);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function invalidListingSettings(): array
+    {
+        return [
+            'max photos zero' => ['listing.max_photos', '0'],
+            'max photos negative' => ['listing.max_photos', '-1'],
+            'max photos above ceiling' => ['listing.max_photos', '51'],
+            'max photos fractional' => ['listing.max_photos', '2.5'],
+            'max photos non-numeric' => ['listing.max_photos', 'many'],
+            'max price zero' => ['listing.max_price', '0'],
+            'max price negative' => ['listing.max_price', '-10'],
+            'max price above ceiling' => ['listing.max_price', '100000000000.00'],
+            'max price non-numeric' => ['listing.max_price', 'free'],
+        ];
+    }
+
+    #[DataProvider('invalidListingSettings')]
+    public function test_invalid_listing_setting_values_are_rejected(string $key, string $value): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->putJson('/api/admin/settings', [$key => $value]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors([$key]);
+    }
+
+    public function test_system_name_cannot_be_empty(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->putJson('/api/admin/settings', ['system.name' => '']);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['system.name']);
+    }
+
+    public function test_verification_guidance_max_length(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->putJson('/api/admin/settings', [
+                'verification.guidance' => str_repeat('a', 2001),
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['verification.guidance']);
+    }
+
+    public function test_a_malformed_update_does_not_partially_save(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->putJson('/api/admin/settings', [
+                'system.name' => 'Should Not Persist',
+                'listing.max_photos' => '0',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['listing.max_photos']);
+
+        $this->assertDatabaseHas('settings', ['key' => 'system.name', 'value' => 'AgroBenta']);
+        $this->assertDatabaseMissing('settings', ['key' => 'system.name', 'value' => 'Should Not Persist']);
+    }
+
+    public function test_an_update_creates_a_registered_key_that_is_missing(): void
+    {
+        Setting::query()->where('key', 'listing.max_photos')->delete();
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->putJson('/api/admin/settings', ['listing.max_photos' => '7']);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('settings', ['key' => 'listing.max_photos', 'value' => '7']);
     }
 }

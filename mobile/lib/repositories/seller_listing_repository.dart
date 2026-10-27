@@ -1,3 +1,5 @@
+import 'package:image_picker/image_picker.dart';
+
 import '../core/constants/api_constants.dart';
 import '../core/network/api_exception.dart';
 import '../models/listing.dart';
@@ -55,6 +57,31 @@ class SellerListingRepository {
 
   /// Destroys a draft or withdrawn listing.
   Future<void> delete(int id) => _service.delete(id);
+
+  /// Uploads photos to a listing the caller owns.
+  ///
+  /// [files] are the picked photos. Several parts share the `photos` field
+  /// name, which the server reads as an array.
+  /// [onProgress] reports aggregate bytes sent so the UI can show an upload
+  /// indicator.
+  Future<Listing> uploadPhotos({
+    required int listingId,
+    required List<XFile> files,
+    required void Function(int sent, int total) onProgress,
+  }) =>
+      _service.uploadPhotos(
+        listingId: listingId,
+        files: files,
+        onProgress: onProgress,
+      );
+
+  /// Removes one photo from a listing by the value the client was served
+  /// (URL or bare filename; never by index).
+  Future<Listing> removePhoto({
+    required int listingId,
+    required String photo,
+  }) =>
+      _service.removePhoto(listingId: listingId, photo: photo);
 
   static int _clampPerPage(int? perPage) {
     final int requested = perPage ?? SellerListingEndpoints.defaultPerPage;

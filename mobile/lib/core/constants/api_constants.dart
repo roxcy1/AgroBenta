@@ -5,8 +5,8 @@
 /// exposed nothing mobile-facing then, and writing a path for an endpoint that
 /// does not exist is how invented contracts start. The mobile authentication
 /// routes are implemented (`backend/routes/api.php`), and so are the buyer
-/// marketplace and seller verification routes, so those three groups exist
-/// below — and nothing else.
+/// marketplace, seller verification, seller listing and profile routes, so
+/// those groups exist below — and nothing else.
 library;
 
 abstract final class ApiConstants {
@@ -105,6 +105,29 @@ abstract final class SellerVerificationEndpoints {
   /// account that is already an approved seller.
   static const String submit = '/seller-verification';
 
+  /// `POST` — upload one evidence document (multipart). 201, plain envelope.
+  ///
+  /// The `type` is a field in the multipart body, one of
+  /// `VerificationDocumentType`'s values. Refused with a `403` for an approved
+  /// seller and a `409` while an application is already open — an upload is
+  /// only meaningful before submitting, to stage the documents the submission
+  /// will require.
+  static const String documents = '/seller-verification/documents';
+
+  /// `GET` — stream one uploaded document back. 200, raw bytes (not enveloped).
+  ///
+  /// The response is the file itself, so it is fetched through [ApiClient]'s
+  /// binary path rather than the JSON envelope machinery. `404` when no such
+  /// document exists for the caller's record.
+  static String document(String type) => '/seller-verification/documents/$type';
+
+  /// `DELETE` — remove a staged document by type. 200.
+  static String deleteDocument(String type) =>
+      '/seller-verification/documents/$type';
+
+  /// The multipart field name the document bytes travel in.
+  static const String documentFileField = 'document';
+
   /// The field names `SubmitSellerVerificationRequest` accepts.
   ///
   /// Anything else is `prohibited` server-side and answers `422`. Listed here so
@@ -168,6 +191,20 @@ abstract final class SellerListingEndpoints {
   /// deactivation: nothing here takes a live listing out of sale.
   static String destroy(int id) => '/seller/listings/$id';
 
+  /// `POST` — upload photos to a listing the caller owns. 201.
+  ///
+  /// [id] is appended. Multipart `photos[]` field; max 10 files per request and
+  /// a cumulative per-listing ceiling enforced server-side (422). Permitted only
+  /// while the listing is `draft` or `active`.
+  static String photos(int id) => '/seller/listings/$id/photos';
+
+  /// `DELETE` — remove one photo from a listing the caller owns. 200.
+  ///
+  /// [id] is appended. The photo is named by the value the client was served
+  /// (URL or bare filename both work) and sent as the `photo` field. 404 when
+  /// the named photo is not on the listing.
+  static String deletePhoto(int id) => '/seller/listings/$id/photos';
+
   /// The field names the create and update requests may contain.
   ///
   /// Listed as an explicit allow-list, and used by `SellerListingService` to
@@ -222,6 +259,287 @@ abstract final class SellerListingEndpoints {
   /// anything above this is rejected with a `422`. The repository clamps to this
   /// rather than letting a screen discover the limit by provoking an error.
   static const int maxPerPage = 50;
+}
+
+/// Transaction endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `transactions` prefix. Every one requires a `mobile`-ability Sanctum token
+/// and resolves the user from that token — no path takes a user id, and
+/// `buyer_id` / `seller_id` are refused as filters.
+///
+/// There is deliberately **no `complete` path** here. The backend answers
+/// `POST /transactions/{id}/complete` with an explicit 501 (OQ-15: the
+/// confirming actor is undecided), and the client never calls it — hiding the
+/// affordance is safer than a button that always errors.
+abstract final class TransactionEndpoints {
+  /// `GET` — the caller's transactions, newest first. 200, paginated.
+  ///
+  /// Query allow-list: `role` (`buyer`|`seller`, one side of the caller's own
+  /// records), `status` (`pending`|`completed`|`cancelled`, one tab),
+  /// `page`, `per_page`. Anything else has no path to the request.
+  static const String list = '/transactions';
+
+  /// `POST` — create a pending transaction. 201, plain envelope.
+  ///
+  /// The caller is the buyer ([D-15] rule 1). Body allow-list is exactly
+  /// `{ listing_id, quantity }`; `buyer_id`, `seller_id`, `total_amount` and
+  /// `status` are server-derived and refused with 422.
+  static const String create = '/transactions';
+
+  /// `GET` — one transaction the caller is party to. 200, plain envelope.
+  ///
+  /// [id] is a selector, not proof of party: the server re-checks and answers
+  /// 404 for a transaction the caller is not party to.
+  static String detail(int id) => '/transactions/$id';
+
+  /// `POST` — cancel a pending transaction. 200, plain envelope.
+  ///
+  /// Either party may cancel ([D-15] rule 5), pending-only, irreversible.
+  /// The body allow-list is empty; any field is 422.
+  static String cancel(int id) => '/transactions/$id/cancel';
+
+  /// Page size used when the caller does not ask for a specific one.
+  static const int defaultPerPage = 15;
+
+  /// Largest page the server will serve (`between:1,50`).
+  static const int maxPerPage = 50;
+}
+
+/// Messaging endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `conversations` and `messages` prefixes. Every one requires a
+/// `mobile`-ability Sanctum token and resolves the caller from that token —
+/// no path takes a user id as proof of identity.
+///
+/// ## Why there is no `conversation_id`
+///
+/// There is no `conversations` table. A conversation is derived from the set
+/// of messages that touch the caller, identified by the pair
+/// `(counterpart_id, listing_id)`. So the paths are built on the *counterpart*
+/// id, never on a conversation id — the id the mobile client knows is the
+/// user it wants to talk to, not a row that does not exist.
+abstract final class MessagingEndpoints {
+  /// `GET` — the caller's inbox. 200, plain envelope.
+  static const String conversations = '/conversations';
+
+  /// `GET` — the thread with one counterpart. 200, paginated.
+  static String thread(int counterpartId) =>
+      '/conversations/$counterpartId/messages';
+
+  /// `POST` — mark every unread message from a counterpart as read. 200.
+  static String markRead(int counterpartId) =>
+      '/conversations/$counterpartId/read';
+
+  /// `POST` — send a message. 201, plain envelope.
+  ///
+  /// The receiver id is in the body, not the path: the caller can start a
+  /// thread with anybody, including a user they have never messaged before.
+  static const String send = '/messages';
+
+  /// `PATCH` — mark one message as read. 200, plain envelope.
+  static String markOneRead(int messageId) => '/messages/$messageId/read';
+
+  /// Page size used when the caller does not ask for a specific one.
+  ///
+  /// Matches the server default the thread endpoint uses when `per_page` is
+  /// absent.
+  static const int defaultPerPage = 30;
+
+  /// Largest page the server will serve (`between:1,50`).
+  static const int maxPerPage = 50;
+}
+
+/// Notification endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `notifications` prefix. Every one requires a `mobile`-ability Sanctum
+/// token and resolves the caller from that token — no path takes a user id.
+///
+/// ## Why `read-all` and `unread-count` are separate paths
+///
+/// `read-all` is declared before `{id}` in the backend so a literal segment
+/// cannot be swallowed by the UUID parameter. `unread-count` exists as its
+/// own endpoint because the mobile badge must poll it cheaply — fetching a
+/// full page of notifications just to read one integer would be wasteful.
+abstract final class NotificationEndpoints {
+  /// `GET` — the caller's notifications, newest first. 200, paginated.
+  ///
+  /// Query allow-list: `type` (one of the four categories the filter chips
+  /// map to), `unread` (`0`|`1`), `page`, `per_page`.
+  static const String list = '/notifications';
+
+  /// `GET` — the caller's unread count. 200, plain envelope.
+  static const String unreadCount = '/notifications/unread-count';
+
+  /// `POST` — mark every unread notification as read. 200.
+  static const String readAll = '/notifications/read-all';
+
+  /// `PATCH` — mark one notification as read. 200, plain envelope.
+  static String read(String id) => '/notifications/$id/read';
+
+  /// `DELETE` — delete one notification. 200.
+  ///
+  /// Currently unused on mobile — no swipe-to-dismiss in the initial version.
+  /// Kept here so a future feature can reach for it without adding a new
+  /// constant group.
+  static String destroy(String id) => '/notifications/$id';
+
+  /// Page size used when the caller does not ask for a specific one.
+  ///
+  /// Matches the server default (`IndexNotificationRequest` validates
+  /// `between:1,50`).
+  static const int defaultPerPage = 15;
+
+  /// Largest page the server will serve.
+  static const int maxPerPage = 50;
+
+  /// The four categories the client's filter chips send.
+  ///
+  /// Mirrors `IndexNotificationRequest::TYPES` on the backend. `All` is not
+  /// in the list — it is the absence of a `type` query parameter.
+  static const List<String> filterTypes = <String>[
+    'transactions',
+    'inquiries',
+    'listings',
+    'system',
+  ];
+}
+
+
+
+/// Profile endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` for the
+/// caller's own account details and credentials. No path takes an id: the
+/// record is always resolved from the token, so one account cannot read or
+/// write another's profile.
+///
+/// All three require a `mobile`-ability Sanctum token. `show` and `update`
+/// are the caller's own resource; `changePassword` proves the current password
+/// before accepting a new one.
+abstract final class ProfileEndpoints {
+  /// `GET` — the caller's own profile. 200, plain envelope.
+  static const String show = '/profile';
+
+  /// `PUT` — update the caller's own profile. 200, plain envelope.
+  ///
+  /// The Form Request guards every field with `sometimes`, so a partial body
+  /// is already a patch in effect. An empty string is a real value — it clears
+  /// the column — while an absent key leaves it alone.
+  static const String update = '/profile';
+
+  /// `PUT` — change the caller's password. 200, message-only envelope.
+  ///
+  /// Refused with a `422` when `current_password` does not match, and with a
+  /// `422` when the new password fails the policy. The response carries no
+  /// `data`; the caller only needs to know the request succeeded.
+  static const String changePassword = '/profile/password';
+
+  /// The field names the update request accepts.
+  ///
+  /// Listed as an explicit allow-list so a service body is visibly exactly this
+  /// set. `role`, `seller_capability` and `id` are absent by construction: the
+  /// server marks none of them `prohibited` in a way that would answer 422, but
+  /// they are not fillable on the model, so sending them is a no-op — which is
+  /// worse than a refusal. The allow-list is what keeps them out.
+  static const List<String> writableFields = <String>[
+    'name',
+    'email',
+    'phone',
+    'location',
+    'avatar_url',
+    'bio',
+  ];
+}
+
+/// Inquiry endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `inquiries`-creating mobile group: one write path, `POST /inquiries`, the
+/// buyer's structured contact with a seller about a listing. Reading received
+/// inquiries is the seller surface in [SellerInquiryEndpoints]; triaging and
+/// re-statusing an inquiry are the Admin Web's `/admin/inquiries*` flow and are
+/// not part of this app's contract.
+///
+/// The route takes no user id. The buyer is the token and the seller is
+/// `listing.seller_id`, resolved server-side, so there is no parameter or body
+/// field that could point an inquiry at a foreign account.
+abstract final class InquiryEndpoints {
+  /// `POST` — send an inquiry about a listing. 201, plain envelope.
+  ///
+  /// Body allow-list is exactly [writableFields]; `buyer_id`, `seller_id` and
+  /// `status` are server-owned and refused with `422`. The inquiry is created
+  /// `open` and changes nothing else — not the listing's status, not a
+  /// transaction.
+  static const String create = '/inquiries';
+
+  /// The field names `StoreInquiryRequest` accepts.
+  ///
+  /// Listed as an explicit allow-list so the service body is visibly exactly
+  /// this set, and so a server-owned field cannot reach a request body by a
+  /// later change to a model. `buyer_id`, `seller_id` and `status` are absent
+  /// **by construction**: the server marks them `prohibited`.
+  ///
+  /// `listing_id` and `message` are the two the server requires; everything
+  /// after them is a nullable preference the schema stores or does not, as the
+  /// buyer filled it in.
+  static const List<String> writableFields = <String>[
+    'listing_id',
+    'message',
+    'subject',
+    'purchase_interest',
+    'transaction_method',
+    'delivery_method',
+    'delivery_fee',
+    'contact_method',
+    'preferred_schedule',
+  ];
+}
+
+/// Seller received-inquiry endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `seller` middleware group. Beyond the `mobile`-ability token they require
+/// `User::isApprovedSeller()`, so a buyer is answered `403` - the entry point is
+/// shown only on Seller Home, which already exists for approved sellers.
+///
+/// The path takes no seller id. The scope is the token, resolved server-side, so
+/// there is no parameter that could widen the list to another seller's inbox.
+abstract final class SellerInquiryEndpoints {
+  /// `GET` - the caller's received inquiries, newest first. 200, paginated.
+  ///
+  /// Query allow-list is `page` and `per_page` only. `buyer_id`, `seller_id`
+  /// and `status` are refused server-side with `422`: this list has no filters
+  /// in this phase, and the administrator-facing status is not shown to sellers.
+  static const String received = '/seller/inquiries';
+
+  /// Page size used when the caller does not ask for a specific one.
+  ///
+  /// Matches the server default, so the first request is an ordinary one rather
+  /// than a request that happens to agree with the default.
+  static const int defaultPerPage = 15;
+
+  /// Largest page the server will serve.
+  ///
+  /// `IndexSellerInquiryRequest` validates `per_page` with `between:1,50`, so
+  /// anything above this is rejected with a `422`. The repository clamps to this
+  /// rather than letting a screen discover the limit by provoking an error.
+  static const int maxPerPage = 50;
+}
+
+/// Seller dashboard endpoint, relative to the API root.
+///
+/// The response contains listing counts by status, the received-inquiry total,
+/// and the seller-side transaction total plus pending count. Revenue,
+/// conversion, and completed-transaction figures are deliberately absent.
+abstract final class SellerDashboardEndpoints {
+  /// `GET` - the authenticated seller's own summary. 200, plain envelope.
+  ///
+  /// The seller comes from the token. Ownership-shaped query parameters are
+  /// refused server-side with `422`, and this service sends no query at all.
+  static const String summary = '/seller/dashboard';
 }
 
 /// Mobile authentication endpoints, relative to the API root.

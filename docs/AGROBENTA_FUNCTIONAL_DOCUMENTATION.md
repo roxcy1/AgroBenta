@@ -1,77 +1,90 @@
 # AgroBenta — Functional & System Documentation
 
-**Status: APPROVED** (approved during project planning, extended by a later
-explicit business-decision round)
+**Status: APPROVED — aligned to the capstone manuscript (2026-10-24)**
 
 ---
 
 ## 0. Provenance and status — read this first
 
-This document is the repository's copy of the AgroBenta functional/system
-documentation that was **approved during project planning**.
+This document is the repository's working copy of the AgroBenta functional and
+system rules.
 
-It is a **transcription into the repository**, not the planning original. The
-planning original is not stored in Git; that is a documentation/governance gap,
-tracked as **DG-01** in §13.
+**The capstone manuscript is the final, authoritative source.**
 
-### 0.1 Decision round
+> *AgroBenta: A Mobile-Based Livestock Trading Application with AI-Based Price
+> Suggestion, Seller Verification, and Data Analytics* — capstone project,
+> Masters in Information Technology, State University of Northern Negros
+> (manuscript dated 2026-10-18, referred to below as **"the manuscript"**).
 
-A later round of business decisions was approved explicitly, before any mobile
-API implementation began. Those decisions are now locked into this document and
-are marked **[D-nn]** at the relevant rule:
+On 2026-10-24 the project manager confirmed that the manuscript is the final
+document. This file was rewritten to match it (see §15, Change log). The
+earlier planning transcription and its explicit decision round (D-02, D-03,
+D-15, SEC) are kept below **only where the manuscript agrees with them or is
+silent**.
 
-| Decision | Subject | Where |
-|---|---|---|
-| **D-02** | Listing publication lifecycle | §4.4 |
-| **D-03** | AI price suggestion constraints | §5 |
-| **D-15** | Transaction status and lifecycle | §6.4 |
-| **SEC** | Authorization-sensitive fields, request allow-lists, mobile resource separation | §10 |
+### 0.1 Source-of-truth order
 
-These are **approved rules, not proposals.** They resolved open items OQ-01,
-OQ-02, OQ-03, and part of OQ-09, which are marked closed in §13.
+1. **The manuscript** — its text (Chapters 1–3, Scope and Limitations,
+   Definition of Terms, Methodology) and its prototype screens, class diagrams
+   and ERD.
+2. **This document** — the repository's restatement of the manuscript, plus
+   earlier approved decisions the manuscript does not contradict.
+3. `MOBILE_API_CONTRACT_PROPOSAL.md` — a proposal; it never overrides 1 or 2.
 
-### What that means for you
+Where this document and the manuscript disagree, **the manuscript wins** and
+this document is wrong — report it and fix it here.
 
-* Every rule below is an **approved business rule**. It is authoritative under
-  the source-of-truth order in the root `AGENTS.md`.
-* Where this document and the Laravel implementation disagree, **both** are
-  recorded in §12 and in `MOBILE_API_CONTRACT_PROPOSAL.md`. Neither is
-  silently changed.
-* Sections marked **[CONFIRM]** are transcribed from an approved rule summary
-  but the **exact planning wording was not available** at transcription time.
-  The rule is not in doubt; the precise phrasing is. Confirm against the
-  planning original before treating any wording here as quotable.
-* Rules marked **[D-nn]** were decided explicitly and their wording **is**
-  quotable.
-* Where a decision was approved but left a genuine gap, the gap is recorded as
-  an open item in §13. **The gap is documented, not filled by invention.**
-* Nothing in this document may be edited to settle an argument. Report a
-  conflict instead.
+Where the manuscript **contradicts itself** (for example, a prototype screen
+against the text, or the class diagrams against the ERD), the point is recorded
+as an open item in §13 and must be answered by the manuscript's author. It is
+not settled by guessing.
 
-### Approved terminology — do not substitute
+### 0.2 Markers used in this document
 
-| Use | Never use |
+| Marker | Meaning |
 |---|---|
-| "Become a Seller" | "Switch to Seller" |
-| "buyer" / "seller" (`seller_capability`) | "buyer mode" / "seller mode" |
-| "role" / "seller capability" | "account type" |
-| "verification" / "seller verification" | "seller approval request" as a user-facing term |
+| **[MS]** | Taken from the manuscript text. Page numbers refer to the manuscript PDF. |
+| **[MS-P]** | Taken from a manuscript prototype screen (Figures 4–27). |
+| **[D-nn]** / **[SEC]** | An earlier approved decision, kept because the manuscript agrees or is silent. |
+| **[OPEN]** | Not settled. Listed in §13. Do not implement a guess. |
+
+### 0.3 Terminology
+
+| Use | Avoid |
+|---|---|
+| "Become a Seller" — the action of applying for seller verification **[MS-P]** | "Register as seller", "seller account" (there is only one account) |
+| "Seller Mode" / "Buyer Mode" — the two **views** of the app for a verified seller **[MS-P]** (§2.7) | "Seller account" / "buyer account" as if they were separate accounts |
+| "role" / "seller capability" (`seller_capability`) | "account type" |
+| "seller verification" | "seller approval request" as a user-facing term |
+| "verified seller" **[MS]** | "approved account", "certified seller" |
+| "AI-based price suggestion" — a reference price from an external AI service **[MS]** | Wording that claims AgroBenta trained its own AI model (§5.4) |
+| "inquiry" — a structured buyer question about a listing, separate from messages **[MS]** | Using "inquiry" and "message" interchangeably |
 
 ---
 
 ## 1. Purpose and scope
 
-AgroBenta is a livestock marketplace connecting **buyers** and **sellers**, with
-**seller verification** as the trust mechanism and **AI price suggestion** as a
-decision aid.
+AgroBenta is a mobile-based livestock trading application connecting
+**buyers** and **sellers**, with **seller verification** as the trust
+mechanism, an **AI-based price suggestion** as a pricing reference, and **data
+analytics** for administrators. **[MS p.2–4]**
+
+| Aspect | Rule |
+|---|---|
+| Locale | The Municipality of **Trinidad, Bohol**. **[MS p.3, p.13, p.96]** |
+| Livestock covered | **Cattle, carabao, goats and swine** only. Other categories are outside the scope. **[MS p.13, Limitation 2]** (§4.1) |
+| Target mobile platform | **Android**. **[MS Table 3]** |
+| Out of scope | Payment processing, transportation or delivery services, and independent verification of payment or delivery. **[MS p.4, Limitation 5]** (§11) |
 
 Three applications:
 
 | Application | Stack | Responsibility |
 |---|---|---|
 | Backend | Laravel REST API + MySQL | All business logic, authorization, data |
-| Admin Web | React + Vite | Administrator and staff workflows |
-| Mobile | Flutter | Buyer, seller and seller-verification workflows |
+| Admin Web | React | Administrator workflows |
+| Mobile | Flutter | Buyer and seller workflows |
+
+**[MS p.41, Figure 3]**
 
 The **backend is the only place business rules are enforced.** Neither client
 may implement a rule the server does not enforce.
@@ -80,11 +93,14 @@ may implement a rule the server does not enforce.
 
 ## 2. Single-account model
 
-**Every person has exactly one account. That account does not change when the
-person becomes a seller.**
+**Every person has exactly one account. Buying and selling happen through the
+same account.** **[MS p.41–42]**: *"The system supports users who act as
+buyers and sellers through the same account … This approach allows users to
+participate in the marketplace without requiring separate accounts for buying
+and selling."*
 
 ```text
-register ──> buyer                      role          = user
+register ──> buyer                      role              = user
                 │                        seller_capability = buyer
                 │
                 │ user chooses "Become a Seller"
@@ -93,32 +109,30 @@ register ──> buyer                      role          = user
                 │
            admin reviews
                 ▼
-             approved ──> seller        role          = user
-                                         seller_capability = seller
+             approved ──> verified       role              = user
+                          seller         seller_capability = seller
+                                         (may now use Seller Mode, §2.7)
 ```
 
 ### 2.1 Initial state
 
-Every registered user starts as a **buyer**. This is the default and is never
-negotiable at registration time.
+Every registered user starts as a **buyer**. This is never negotiable at
+registration time.
 
-### 2.2 The user-facing action
+### 2.2 Becoming a seller
 
-The only user-facing action for this transition is:
+The user-facing action is **"Become a Seller"** **[MS-P Figure 19]**. A buyer
+may start it at any time by submitting seller verification (§3).
 
-> **"Become a Seller"**
+### 2.3 Prohibited
 
-A buyer may choose to become a seller at any time by submitting seller
-verification (§3).
+* A separate buyer account and a separate seller account. **[MS p.42]**
+* A second login, second token or second user id for seller activity.
+* Granting any selling right from the client. The app's current mode (§2.7) is
+  a **display choice only**; it never grants or removes a right.
 
-### 2.3 Explicitly prohibited
-
-* A separate buyer account and a separate seller account.
-* A "Switch to Seller" control, toggle, or mode.
-* A second login, second token, or second user id for seller activity.
-* Any client-side notion of "the current role" that the server does not hold.
-
-The account a user registers with is the account they transact from, permanently.
+The account a user registers with is the account they transact from,
+permanently.
 
 ### 2.4 Role vs seller capability
 
@@ -136,49 +150,88 @@ These are **two independent fields** and must not be conflated.
 | Value | Meaning |
 |---|---|
 | `buyer` | Not a seller. The default. |
-| `seller` | Approved seller. Selling rights granted. |
+| `seller` | Verified seller. Selling rights granted. |
+
+These match the manuscript ERD (`users.role ENUM('user','admin')`,
+`users.seller_capability ENUM('buyer','seller')`). **[MS p.94]**
+
+> Note: the manuscript's Authentication class diagram (p.87) shows
+> `role: user, admin, seller`. That conflicts with the ERD and with p.41–42.
+> The ERD is followed here; see §13, MS-04.
 
 ### 2.5 The four valid combinations
 
-| `role` | `seller_capability` | Valid | Meaning |
-|---|---|---|---|
-| `user` | `buyer` | ✅ | Registered buyer. The default state. |
-| `user` | `seller` | ✅ | **Approved seller.** The normal seller. |
-| `admin` | `buyer` | ✅ | Administrator who does not transact. |
-| `admin` | `seller` | ✅ | Administrator who is also an approved seller. |
+| `role` | `seller_capability` | Meaning |
+|---|---|---|
+| `user` | `buyer` | Registered buyer. The default. |
+| `user` | `seller` | Verified seller. |
+| `admin` | `buyer` | Administrator who does not transact. |
+| `admin` | `seller` | Administrator who is also a verified seller. |
 
-An **approved seller** is `role = user` **and** `seller_capability = seller`.
-Selling rights come from `seller_capability` alone; `role` is irrelevant to them.
-
-An **administrator** is `role = admin`, regardless of `seller_capability`.
+Selling rights come from `seller_capability` alone; `role` is irrelevant to
+them. An administrator is `role = admin`, regardless of `seller_capability`.
 
 ### 2.6 Granting seller capability
 
 `seller_capability` becomes `seller` **only** when a seller verification is
-**approved** (§3). It is never set directly by the user, by a client, or by a
-registration request.
+**approved** by an administrator (§3). **[MS p.14–15, p.42]**: *"Access to
+seller functions is subject to the system's verification and approval
+requirements."*
 
-**[SEC] A user cannot become a seller merely by modifying their own account
-fields.** Specifically:
+**[SEC]** A user cannot become a seller by changing their own account fields:
 
-* A registration request must not be able to set `role` or `seller_capability`.
-  New accounts are always `role = user`, `seller_capability = buyer` (§2.1).
+* A registration request must not be able to set `role` or
+  `seller_capability`. New accounts are always `role = user`,
+  `seller_capability = buyer`.
 * A profile update must not be able to set `role` or `seller_capability`.
-* Neither field is ever accepted from an untrusted mobile request. See §10.
+* Neither field is ever accepted from a mobile request. See §10.
 
-Seller capability is granted **only** through the approved verification
-workflow. There is no other path to it.
+### 2.7 Account Mode — Seller Mode and Buyer Mode **[MS-P Figure 20]**
+
+The mobile profile shows an **Account Mode** card. A verified seller can switch
+between **Seller Mode** (*"You can list and manage your livestock"*) and
+**Buyer Mode** (*"Browse and purchase livestock"*).
+
+Rules:
+
+1. **Seller Mode is available only when the server reports
+   `seller_capability = seller`.** A user who is not a verified seller sees
+   "Become a Seller" (or their verification status) instead.
+2. **The mode is a view, not an account.** Both modes use the same account and
+   the same login token. Switching sends nothing that changes `role` or
+   `seller_capability`.
+3. **The server never trusts the mode.** Every seller action is authorised by
+   the server from `seller_capability`, exactly as if no mode existed.
+4. Seller Mode shows the seller's surfaces (seller dashboard, My Listings,
+   received inquiries, seller-side transactions) **[MS-P Figures 21, 23, 25,
+   26]**. Buyer Mode shows the marketplace and the user's own purchases.
+5. A verified seller remains able to buy. Buyer Mode is available to every
+   account.
+6. The selected mode is a per-user preference. It must be cleared on logout so
+   a different account never inherits it.
+
+### 2.8 Sign-in and account features **[MS p.5, p.13; MS-P Figures 4–5]**
+
+| Feature | Status |
+|---|---|
+| Registration with email and password | In scope. |
+| Login with email and password | In scope. |
+| Profile management (view and update personal details, change password) | In scope. **[MS-P Figure 20: Personal Information, Address, Change Password, Notification Settings]** |
+| **Forgot password** | Shown on the login prototype. In scope; the recovery method is **[OPEN]** (§13, MS-10). |
+| "Remember me" | Shown on the login prototype. **[OPEN]** (§13, MS-11). |
+| Google / Facebook sign-in | Shown on the login prototype. **[OPEN]** (§13, MS-11). |
 
 ---
 
 ## 3. Seller verification
 
-The trust mechanism. A user becomes a seller by submitting verification that an
-administrator reviews.
+**[MS p.5, p.14, p.18, p.20, p.42; MS-P Figure 19]** A user who intends to sell
+submits their information and supporting documents. An administrator reviews
+the submission through the Admin Web and approves or rejects it.
 
 ### 3.1 States
 
-Exactly four. These are the only permitted values.
+Exactly four. These match the manuscript ERD. **[MS p.94]**
 
 | State | Meaning |
 |---|---|
@@ -194,27 +247,61 @@ Exactly four. These are the only permitted values.
 > **A rejected verification may be resubmitted. Resubmission creates a new
 > record. Previous records are preserved as history.**
 
-This is load-bearing and is easy to get wrong:
-
 * A user may hold **multiple** verification records over time.
 * Each submission is a **new row**. An existing record is never updated back to
   `submitted`, and a rejected record's history is never overwritten.
 * A new submission is permitted **only** when the user's most recent
-  verification is `rejected`. A user with an open (`submitted` or
-  `pending_review`) verification cannot submit again.
-* The user's current verification state is their **most recent** record, not
-  their first and not an arbitrary one.
+  verification is `rejected`. A user with an open verification cannot submit
+  again.
+* The user's current verification state is their **most recent** record.
 * `seller_capability` is derived from the most recent record.
 
-### 3.3 What verification carries
+> The prototype's "Edit Application" button on a pending application
+> (Figure 19, last screen) is **[OPEN]** — see §13, MS-06.
+
+### 3.3 What verification carries **[MS-P Figure 19]**
+
+**Basic information**
 
 | Field | Required | Notes |
 |---|---|---|
-| `business_name` | yes | |
-| `business_location` | no | |
-| `business_description` | no | |
-| `id_document_ref` | no | **A reference, not the document itself.** No identity document is uploaded or stored. |
-| `admin_note` | — | Written by the administrator. Shown to the user on `rejected`. |
+| Full name | yes | Prefilled from the account. |
+| Phone number | yes | |
+| Address | yes | Within the locale (§1). |
+| Farm / business name | **no** — shown as optional in the prototype | The current backend requires `business_name`; see §13, MS-05. |
+| Business description | no | Existing field. |
+| `id_document_ref` | no | Existing free-text reference field. Not shown in the prototype. |
+
+**Supporting documents** — uploaded files, reviewed by an administrator:
+
+| Document | Required | Notes |
+|---|---|---|
+| **Valid ID** | yes | Government-issued (e.g. Philippine National ID, Driver's License, Passport). |
+| **Proof of Address** | yes | e.g. utility bill, barangay certificate. |
+| **Farm photos** | no | Photos of the seller's livestock or farm area. |
+
+The manuscript does **not** include a selfie. The current implementation
+collects an ID document and a selfie; see §13, MS-05.
+
+**Handling of documents [SEC]:**
+
+* Stored on **private** storage, never at a public URL.
+* Readable only by the applicant (their own documents) and by administrators.
+* Never included in any marketplace or other-user response.
+* Retention and deletion (for example after rejection) are **[OPEN]**,
+  §13, MS-07. The manuscript commits to handling personal data responsibly and
+  collecting only what the system needs **[MS p.102, p.104]**.
+
+| Field | Notes |
+|---|---|
+| `admin_note` | Written by the administrator. Shown to the user on `rejected`. |
+
+### 3.4 What a verified status means **[MS Limitation 6]**
+
+A verified status records the outcome of the platform's review. It **does not**
+guarantee livestock ownership, animal health, livestock quality, the accuracy
+of every seller statement, or the completion of a transaction. User-facing
+text must not imply otherwise.
 
 ---
 
@@ -226,320 +313,335 @@ The marketplace inventory unit. Owned by exactly one seller.
 |---|---|
 | Ownership | Exactly one seller per listing. |
 | Ownership assignment | Set by the server from the authenticated user. **Never accepted from the client.** |
-| Status | `draft`, `pending`, `active`, `sold`, `inactive`. |
+| Status | `draft`, `pending`, `active`, `sold`, `inactive`. **[MS ERD p.94]** |
 | Default status | `draft`. |
+| Category | `livestock_type`: **cattle, carabao, goat, swine** (§4.1). |
+| Title | Shown as required in the prototype **[MS-P Figure 22]**; there is no title column in the ERD — see §13, MS-08. |
+| Description | Required in the prototype (up to 500 characters). |
 | Price | `asking_price`, set by the seller. |
 | Quantity | Whole units, at least 1. |
-| Species | `livestock_type`, free text. |
-| Location | Single free-text string. |
-| Age | `age_value` + `age_unit` (`day`/`month`/`year`). Both optional. |
-| Weight | `weight_value` + `weight_unit` (`kg`/`lb`). |
-| Gender | `male`/`female`. Optional. |
-| Health | `health_status`, free text. Optional. |
+| Breed | Optional. |
+| Age | `age_value` + `age_unit` (`day` / `month` / `year`). Optional. |
+| Weight | `weight_value` + `weight_unit` (`kg` / `lb`). Optional. |
+| Sex | `gender`: `male` / `female`. Optional. |
+| Condition | `health_status`, free text. Optional. |
 | Vaccination | `vaccination`, free text. Optional. |
-| Photos | `photos`, JSON. |
+| Location | Required. Within the locale (§1). |
+| Photos | At least one photo **[MS-P Figure 22]**. Stored in `listings.photos` (JSON). |
 
-### 4.1 `livestock_type` is free text
+Listing information follows **[MS p.14]**: *"livestock category, breed, age,
+sex, weight, condition, location, images, description, and asking price."*
 
-`livestock_type` is a plain string. It is **not** an enum and **must not** become
-one without explicit approval. A controlled vocabulary is desirable for
-filtering and is listed as an open item (**OQ-04**) — but adding an enum now
-would change approved data design.
+### 4.1 Livestock categories **[MS p.13, Limitation 2]**
 
-### 4.2 Only approved sellers may create listings
+The initial implementation covers exactly **cattle, carabao, goats and swine**.
+`livestock_type` must be one of these four.
 
-Creating or managing a listing requires `seller_capability = seller`. A buyer
-browsing the marketplace is not thereby able to list livestock.
+* Enforce this in request validation and offer the four as choices in the
+  mobile form. A schema change is not required.
+* The prototype's "Others" option and the "Native Chicken" sample listing are
+  outside the written scope — see §13, MS-03.
+
+### 4.2 Only verified sellers may create listings
+
+Creating or managing a listing requires `seller_capability = seller`.
+**[MS p.14]**: *"Allows approved sellers to create, update, manage, and remove
+their livestock listings."*
 
 ### 4.3 Price is the seller's decision
 
 `asking_price` is set by the seller. The AI price suggestion (§5) informs that
-decision and never sets it (§5.2).
+decision and never sets it. **[MS Limitation 4]**
 
 ### 4.4 Publication lifecycle **[D-02]**
 
-A listing moves through a fixed lifecycle. Publication is a **moderated
-process**: a seller cannot self-publish.
-
 ```text
-  DRAFT ──submit──> PENDING ──admin approve──> ACTIVE ──> SOLD
+  DRAFT ──submit──> PENDING ──admin approve──> ACTIVE ──seller marks sold──> SOLD
                       │                          │
-                      └──admin reject──> INACTIVE<┘
+                      └──admin reject──> INACTIVE<┘ admin deactivates
 ```
-
-**Permitted transitions — and only these:**
 
 | From | To | Who |
 |---|---|---|
-| `draft` | `pending` | **Seller** submits for review |
-| `pending` | `active` | **Admin** approves |
-| `pending` | `inactive` | **Admin** rejects |
-| `active` | `inactive` | **Admin** deactivates |
-| `active` | `sold` | Seller, on completed sale |
-| `pending` | `draft` | **Not permitted** — see ambiguity A-01 |
-| `inactive` | `active` | **Not permitted** — see ambiguity A-02 |
-| `sold` | anything | **Not permitted.** `sold` is terminal. |
+| `draft` | `pending` | Seller submits for review |
+| `pending` | `active` | Admin approves |
+| `pending` | `inactive` | Admin rejects |
+| `active` | `inactive` | Admin deactivates |
+| `active` | `sold` | **Seller marks as sold** **[MS-P Figure 23]** |
 
-**Approved rules:**
+Rules:
 
-1. **Draft listings are private to the seller.** Not visible to buyers, not
-   visible in the buyer marketplace, and not enumerable by any other user.
-2. **Pending listings have been submitted for review and are not visible in the
-   buyer marketplace.**
-3. **Active listings are approved and visible in the buyer marketplace.**
-4. **Sold listings are no longer available for new transactions.**
-5. **Inactive listings are not publicly available.**
-6. **A seller cannot directly set a listing to `active`.** There is no request
-   path, and no client may send it.
-7. **Seller submission moves a valid draft to `pending`.** "Valid" means the
-   listing satisfies the field requirements in §4 — a submission that would not
-   produce a valid listing must be rejected, not queued.
-8. **Administrator approval is required before a listing becomes `active`.**
-9. **Buyers can browse only `active` listings.**
+1. Draft listings are private to the seller.
+2. Pending listings are not visible in the buyer marketplace.
+3. Active listings are visible in the buyer marketplace.
+4. Sold listings are no longer available for new transactions; the seller can
+   still view them under "Sold" **[MS-P Figure 23]**.
+5. Inactive listings are not publicly available.
+6. Buyers browse only `active` listings. The marketplace query filters to
+   `active` server-side.
+7. A seller never sends `status` directly. The server sets it from the action.
 
-**Consequences that follow from these rules:**
+> **[OPEN] MS-01 — direct publish vs admin approval.** The Add New Listing
+> prototype (Figure 22) has a seller-chosen "Status: Active" and a "Publish
+> Listing" button, which suggests a seller can publish directly. The Livestock
+> Listing class diagram (p.88) gives the administrator `approveListing` and
+> `rejectListing`. Until the author decides, the admin-approval lifecycle above
+> stays in force.
 
-* Seller create sets `draft`. A seller **never** sends `status` at all — the
-  server sets it, and the only status a seller may cause is `pending` via
-  submission.
-* The buyer marketplace query filters to `active` server-side. It is not a
-  client-supplied filter.
-* `inactive` and `draft` and `pending` are all invisible to buyers, but for
-  different reasons: `draft` is the seller's own unfinished work, `pending` is
-  in review, `inactive` was removed from sale.
-* Because approval is required, **the Admin Web needs a listing
-  approve/reject capability that does not exist today** — see §13, OQ-14.
+> **[OPEN] MS-02 — reactivation.** The prototype shows "Reactivate Listing" on
+> a sold listing (Figure 23). No transition back to `active` is defined above
+> until this is decided.
 
 **Do not invent additional listing states.** The five above are the complete
-set, and they match the existing `listings.status` enum exactly. No sixth state,
-no renamed state.
+set and match the ERD.
 
-### 4.5 Listing photos **[SEC]**
+### 4.5 Listing photos
 
-`listings.photos` is stored as **JSON** and already exists. The approved rules:
+* `listings.photos` is stored as JSON and holds filenames; the API returns
+  absolute URLs.
+* At least one photo is required to publish **[MS-P Figure 22]**; the maximum is
+  a platform setting.
+* Photos are public once the listing is active.
 
-* The mobile API **must expose listing photos** to the marketplace.
-* **Do not change the database schema** in order to expose the existing photos.
-  The column is sufficient.
-* The correct mobile response representation is to be **determined during
-  implementation** (§13, OQ-09) — it is not fixed by this decision.
+### 4.6 Search and filtering **[MS p.14; MS-P Figures 7–8]**
 
-The representation must not be decided by copying the admin view, and must not
-require a schema migration.
+Users can search and filter active listings by livestock category, location,
+asking price and other available listing characteristics.
 
 ---
 
-## 5. AI price suggestion
+## 5. AI-based price suggestion
 
-### 5.1 Purpose
+### 5.1 Purpose **[MS p.14, p.48]**
 
-A **decision-support and reference aid** for sellers when choosing an asking
-price.
+An estimated price or price range for a livestock listing, used **as a
+reference**: for sellers when setting their asking price, and for buyers when
+evaluating listings. **[MS p.48]**
 
-### 5.2 The seller decides
+### 5.2 The seller decides **[MS Limitation 4; D-03]**
 
-> The AI price suggestion is **decision-support and reference only**.
-> **The seller determines the final asking price.**
+> The suggestion is a reference only. **The seller determines the final asking
+> price.**
 
-Binding constraints:
+* The suggestion never writes, overwrites or defaults `asking_price`.
+* A seller may accept, adjust or ignore a suggestion, and may list without ever
+  requesting one. "Use suggested price" only pre-fills the editable price field
+  **[MS-P Figure 24]**.
+* A suggestion is not a valuation, a guarantee, a verified selling price or a
+  mandatory asking price.
+* The screen must say, as the prototype does, that the suggestion is a
+  reference only and the seller can still set their own selling price.
 
-* The suggestion **never** writes, overwrites, or defaults `asking_price`.
-* A seller may accept, adjust, or ignore a suggestion, and **may list without
-  ever requesting one**.
-* A suggestion is advisory output. It is not a valuation, a guarantee, an offer,
-  or an authoritative price.
-* A suggestion belongs to a specific listing and records the inputs it was
-  produced from.
+### 5.3 How it works — external AI API **[MS p.17, p.42, p.48–51]**
 
-### 5.3 Output shape
+```text
+Livestock information → Laravel backend → External AI API
+                     → Response validation → Price suggestion display
+```
 
-A suggestion is a **range** with a stated basis, not a single authoritative
-number.
+1. The seller provides the livestock details. Inputs may include livestock
+   type, breed, age, sex, weight, condition and location, as required by the
+   selected service.
+2. **The mobile app talks only to the Laravel backend.** The backend prepares
+   and sends the request to the external service and holds its credentials.
+3. The backend validates the response. Only a valid estimate in the expected
+   format is shown.
+4. If the service is unavailable, fails, or returns an invalid response, the
+   app shows a clear message that a suggestion cannot currently be generated.
+   **It never shows a made-up or placeholder number.**
 
-| Output | Meaning |
+The external provider, request format, required fields, response format and
+error handling are **[OPEN]** until the provider is chosen and tested
+(§13, MS-09). They must be documented once confirmed.
+
+### 5.4 Constraints **[MS Limitation 3; D-03]**
+
+1. The estimation is implemented as a dedicated backend service, not inline
+   controller logic and not a model method.
+2. **AgroBenta does not train its own AI model.** No code, comment, commit
+   message, screen or document may claim that it does. **[MS p.17]**: *"AgroBenta
+   will not be described as independently training an AI model when price
+   estimation is performed by the external service."*
+3. The output is a range (minimum and maximum) and/or a suggested value, with
+   a basis or explanation where the service provides one.
+4. The feature may not be described as fully operational until it has been
+   integrated and tested. **[MS p.46, p.51]**
+
+> The Definition of Terms (p.20) describes the feature as using "an artificial
+> intelligence or machine-learning model … and available historical pricing
+> data". That conflicts with Limitation 3. This document follows Limitation 3;
+> see §13, MS-09.
+
+### 5.5 Stored data
+
+| Field | Meaning |
 |---|---|
-| `estimated_min` | Lower bound of the suggested range. |
-| `estimated_max` | Upper bound of the suggested range. |
+| `estimated_min` / `estimated_max` | The suggested range. |
 | `estimated_value` | Suggested / reference value within the range. |
-| `basis` | Human-readable explanation of how the range was derived. |
-| `input_snapshot` | The inputs the estimate was computed from, captured at request time. |
+| `basis` | How the estimate was derived, as returned or summarised. |
+| `input_snapshot` | The inputs sent, captured at request time. |
 | `estimated_at` | When the estimate was produced. |
 
-`basis` is **required to be meaningful**. A range with no stated basis is not
-decision support.
-
-### 5.4 Implementation constraints **[D-03]**
-
-Approved rules governing how the estimation feature is built:
-
-1. The system **may** generate: estimated minimum, estimated maximum, a
-   suggested/reference value, and a basis/explanation. Those four outputs are
-   the whole permitted output surface — nothing more.
-2. The suggestion **does not** automatically determine the seller's asking
-   price.
-3. **The seller chooses the final asking price.**
-4. **`listings.asking_price` remains the seller's final chosen price** at all
-   times. The estimator never writes it.
-5. **The estimation process must be implemented as a dedicated service.** It is
-   not inline controller logic, and it is not a model method. The API layer
-   calls a service; the service owns the estimation.
-6. **Do not claim that a machine-learning model exists unless an actual
-   model or integration has been implemented.** This applies to code, to
-   comments, to commit messages, and to documentation. The feature is named
-   "AI price suggestion"; the approved name is not evidence of a model.
-7. **Do not invent an AI algorithm during the API implementation phase.**
-8. **The estimation method must be explicitly documented before implementing the
-   production estimator.**
-
-**What rule 8 means in practice:** the API endpoint, its request, its response
-shape, its authorization, and its persistence are specified and may be built.
-The **interior** of the estimator — how `estimated_min` / `estimated_max` /
-`estimated_value` are actually computed — is **not yet decided** and must not be
-guessed at implementation time. A stub, a documented placeholder, or an
-explicitly-failing "not yet implemented" path is acceptable; a plausible-looking
-invented formula is not.
-
-Until the method is documented (§13, OQ-03), the endpoint either returns a
-clearly-labelled unavailable response or is not exposed at all. It must never
-return a fabricated number.
+One listing may have many estimates (`ai_price_estimates`). **[MS ERD p.94]**
 
 ---
 
 ## 6. Transactions
 
-Records a completed commercial arrangement between a buyer and a seller.
+**[MS p.5, p.15, Limitation 5; MS-P Figures 13–18, 26]** A transaction records
+an agreed livestock sale between a buyer and a seller and its status.
 
 | Aspect | Rule |
 |---|---|
 | Parties | Exactly one `buyer_id` and one `seller_id`, both `users`. |
 | Listing | Exactly one `listing_id`. |
 | Quantity | Whole units. |
-| Amount | `total_amount`, fixed when the transaction is created. |
-| Status | `pending`, `completed`, `cancelled`. |
-| Default status | `pending`. |
+| Amount | `total_amount`, computed by the server. |
+| Status | `pending`, `completed`, `cancelled` (ERD). See §6.4 for the full flow. |
 
 ### 6.1 Amount is server-computed
 
-`total_amount` is derived by the server from the listing's `asking_price` and
-the agreed `quantity`. **A client-supplied amount is never trusted or stored.**
+`total_amount` is derived by the server. A client-supplied amount is never
+trusted or stored. Whether an agreed price different from the asking price is
+supported is **[OPEN]**, §13, MS-13.
 
 ### 6.2 Self-transaction
 
 A user cannot be both buyer and seller on the same transaction.
 
-### 6.3 No payment capture
+### 6.3 No payment processing, no transport service **[MS p.4, Limitation 5]**
 
-A transaction records that an arrangement was reached. It is **not** evidence of
-payment, and the system does not move money (§9.1).
+AgroBenta does not process payments and does not provide transportation or
+delivery. Buyers and sellers negotiate, arrange payment and transport, and
+complete the sale themselves. The system may **record** information users
+supply (for example "Cash (in person)", "Paper receipt" **[MS-P Figure 26]**),
+but these records do not prove that payment or delivery happened. User-facing
+text must say so (as in the prototype: *"Payment and receipt are handled
+directly between buyer and seller."*).
 
-### 6.4 Status and lifecycle **[D-15]**
-
-Exactly three states: `pending`, `completed`, `cancelled`.
+### 6.4 Flow **[MS-P Figures 13–18, 26]**
 
 ```text
-  PENDING ──confirm──> COMPLETED     (terminal)
-      │
-      └──cancel──> CANCELLED         (terminal)
+ 1. Purchase request submitted     (buyer)
+ 2. Seller accepts                 (seller)
+ 3. Livestock delivered / picked up (arranged by the parties, outside the app)
+ 4. Buyer confirms receipt         (buyer)   ──> COMPLETED
+       any point before 4 ──cancel──> CANCELLED
 ```
 
-**Approved rules:**
+Rules:
 
-1. **The buyer initiates a transaction.** A transaction is created by a buyer
-   acting on a seller's listing. A seller does not create transactions.
-2. **Newly created transactions start as `pending`.**
-3. **A seller may view and manage transactions involving the seller's own
-   listings** — and nothing else. Seller access is scoped by
-   `transactions.seller_id`, which is server-derived from the listing, never
-   from the request.
-4. **Completion requires the appropriate transaction confirmation.**
-5. **Pending transactions may be cancelled by the buyer or by the seller**,
-   according to the API's defined cancellation operation. Both parties may
-   cancel; neither may cancel a non-`pending` transaction.
-6. **`completed` is terminal.** No transition leaves it.
-7. **`cancelled` is terminal.** No transition leaves it.
-8. **No payment gateway is included in the initial scope.**
-9. **No transportation or logistics processing is included in the initial
-   scope.**
-10. **Do not invent refund, payment, shipping, or delivery workflows.**
+1. **The buyer initiates a transaction** by sending a purchase request on an
+   active listing. A seller does not create transactions.
+2. A new transaction starts as `pending` and awaits the seller.
+3. **The seller accepts** the request.
+4. **The buyer confirms receipt** of the livestock. This completes the
+   transaction. *(Closes the earlier open question A-03 / OQ-15.)*
+5. `completed` and `cancelled` are terminal.
+6. A seller sees and manages only transactions on their own listings; scoping
+   is by `transactions.seller_id`, derived from the listing.
+7. Both parties may cancel while the transaction is not yet completed. The
+   exact cut-off is **[OPEN]**, §13, MS-14.
 
-#### 6.4.1 What D-15 does and does not settle
+> **[OPEN] MS-12 — intermediate statuses.** The prototype shows "Pending Seller
+> Confirmation", "Seller Accepted", "In Delivery"/"On the way", and seller tabs
+> "Inquiry", "Negotiating", "Confirmed", "In Delivery", "Completed". The ERD
+> only has `pending`, `completed`, `cancelled`. How "seller accepted" and "in
+> delivery" are stored needs a decision before implementation.
 
-Settled, and safe to implement:
+> **[OPEN] MS-13 — delivery fee and agreed price.** The prototype shows
+> "Agreed Price", "Reference Price", "Delivery Fee" and "Total Amount". Whether
+> these are recorded, and whether they conflict with Limitation 5, needs a
+> decision.
 
-* The three states, the two transitions, and their terminality (rules 1, 2, 6, 7).
-* Cancellation by **either** party while `pending` (rule 5). The API defines the
-  operation; the contract specifies it as
-  `POST /transactions/{transaction}/cancel`.
-* Seller scoping by `seller_id` (rule 3).
+### 6.5 Nothing after completion
 
-**Not settled — recorded as ambiguity, deliberately not invented:**
-
-> **A-03 — who performs the completion confirmation, and what constitutes it.**
-> Rule 4 requires "the appropriate transaction confirmation" without naming the
-> actor or the event. It is not stated whether completion is confirmed by the
-> seller, by the buyer, or requires mutual agreement, nor what evidence (if any)
-> is required. **This must not be guessed.** The transaction feature may be
-> built up to and including `pending` and `cancelled`; the `complete`
-> transition stays unimplemented until this is answered. See §13, OQ-15.
-
-Note that rules 8–10 make this narrow. There is no payment capture to confirm, no
-delivery to await, and no refund to model, so the confirmation is a pure
-agreement step between two parties — which is exactly why the actor has to be
-stated rather than assumed.
-
-### 6.5 Nothing downstream of completion
-
-Because `completed` is terminal and there is no payment, shipping or delivery
-scope (§6.4 rules 8–10), **there is no refund, reversal, payout, shipment,
-delivery, or dispute state.** A completed transaction is a record that an
-arrangement was reached and nothing more. Adding any post-completion state
-requires a new approval.
+There is no refund, reversal, payout, shipment tracking or dispute state. A
+completed transaction is a record of an agreed sale and nothing more.
 
 ---
 
 ## 7. Notifications
 
-System-generated messages for a user.
+**[MS p.15; MS-P Figure 27]** System-generated messages for a user.
 
 | Aspect | Rule |
 |---|---|
-| Identity | A UUID, not a sequential integer. |
+| Identity | A UUID. |
 | Owner | Exactly one notifiable user. |
 | Read state | `read_at`; `null` means unread. |
-| Content | A JSON payload plus a type discriminator. |
+| Content | A JSON payload plus a type. |
 
-A user may only ever read or act on **their own** notifications. Enumerating,
-reading, or mutating another user's notifications is forbidden.
+Events that notify (from the manuscript):
 
-Which notification types exist, and what triggers them, is an open item
-(**OQ-06**).
+* Seller verification updates (approved / rejected).
+* Transaction-related status changes.
+
+Notifications for new inquiries, new messages and listing approval/rejection
+fit the same pattern; the full list and whether phone push notifications are
+used are **[OPEN]**, §13, MS-15.
+
+A user may only read or act on **their own** notifications.
 
 ---
 
-## 8. Messages
+## 8. Communication and inquiries **[MS p.5, p.15]**
 
-Direct messaging between users, optionally in the context of a listing.
+> *"Allows interested buyers and sellers to communicate about livestock
+> listings and potential purchases. Inquiries will be recorded separately from
+> ordinary messages and from agreed transaction records."* **[MS p.15]**
+
+### 8.1 Messages **[MS-P Figure 12]**
 
 | Aspect | Rule |
 |---|---|
 | Parties | Exactly one `sender_id` and one `receiver_id`. |
-| Listing context | Optional. Messages may be listing-scoped or general. |
+| Listing context | Optional. |
 | Read state | `read_at`; `null` means unread. |
-| Content | Plain text body. |
+| Content | Plain text. |
 
-### 8.1 No conversation entity
-
-There is **no conversation or thread record**. A conversation is *derived* from
-the message history between a pair of users. No conversation table is to be
-added without approval.
-
-### 8.2 Participation
+There is **no conversation table**. A conversation is derived from the
+messages between two users (and optionally a listing). This matches the ERD.
+**[MS p.94]** (The Messaging class diagram on p.89 shows a `Conversation`
+model; the ERD is followed — §13, MS-04.)
 
 A user may read and send messages only where they are the sender or the
-receiver. There is no third-party or anonymous access to a message.
+receiver.
 
-Whether messaging requires a verified seller, a transaction, or a listing
-context is an open item (**OQ-07**).
+### 8.2 Inquiries **[MS-P Figures 10, 11, 25]**
+
+An inquiry is a structured question from a buyer about a specific listing. It
+is stored separately from messages and from transactions.
+
+**The buyer sends** (Figure 10):
+
+| Field | Required |
+|---|---|
+| Subject | yes |
+| Message (up to 500 characters) | yes |
+| Interested in purchasing? (yes / no) | yes |
+| Preferred transaction method: direct deal / arrange delivery | yes |
+| Delivery method and delivery fee | when relevant — see §13, MS-13 |
+| Preferred contact method (in-app message) | yes |
+| Preferred schedule | no |
+
+**The seller views and responds** (Figure 25): availability (available / not
+available), a written response, an optional suggested price, and a delivery
+arrangement. The seller may also decline the inquiry.
+
+Rules:
+
+1. The buyer is the authenticated user; the seller is derived from the
+   listing. Neither is accepted from the request.
+2. A seller sees only inquiries about their own listings.
+3. Sending an inquiry does not change the listing, create a transaction or
+   reserve stock.
+4. Administrators may view inquiries for monitoring.
+
+### 8.3 Eligibility
+
+Whether messaging requires a listing context, and who may message whom, is
+**[OPEN]**, §13, OQ-07.
 
 ---
 
@@ -547,11 +649,7 @@ context is an open item (**OQ-07**).
 
 ### 9.1 There is no admin mobile application
 
-**The administrator interface exists only in the Admin Web.** There is no admin
-app, no admin section in the mobile app, and no admin role in the mobile client.
-
-Administrative functions include reviewing seller verification, managing users,
-viewing all listings and transactions, and reading reports and system activity.
+**[MS p.15–16]** The administrator interface is the React web dashboard only.
 
 ### 9.2 Division
 
@@ -559,224 +657,229 @@ viewing all listings and transactions, and reading reports and system activity.
 |---|---|
 | Seller verification **review** (approve / reject) | Admin Web |
 | Seller verification **submission** | Mobile |
-| Marketplace browsing | Mobile |
-| Listing creation and management | Mobile (approved sellers) |
-| AI price suggestion | Mobile (approved sellers) |
+| User management | Admin Web |
+| Listing monitoring (and moderation, §4.4) | Admin Web |
+| Transaction monitoring | Admin Web |
+| Inquiry monitoring | Admin Web |
+| Activity monitoring | Admin Web |
+| Data analytics and reports | Admin Web |
+| Platform settings | Admin Web |
+| Marketplace browsing, search and filtering | Mobile |
+| Listing creation and management | Mobile (verified sellers) |
+| AI price suggestion | Mobile (sellers; buyers see the reference, §5.1) |
+| Inquiries (send and respond) | Mobile |
+| Messages | Mobile |
 | Transactions | Mobile (both parties) |
 | Notifications | Mobile |
-| Messages | Mobile |
-| Own profile | Mobile |
-| User administration | Admin Web |
-| Reports and system activity | Admin Web |
-| Platform settings | Admin Web |
+| Own profile and Account Mode | Mobile |
+
+**[MS p.15–16; MS-P admin screens, p.83–86]**
 
 ### 9.3 The boundary is a security boundary
 
 * The mobile app must not call admin endpoints.
-* An **admin token must never authorise a mobile request**, and a **mobile token
-  must never authorise an admin request.** These are separate authorisation
-  contexts and must be separately enforced.
-* Mobile must not reproduce admin authorisation rules. It consumes admin
-  decisions; it does not make them.
+* An admin token must never authorise a mobile request, and a mobile token must
+  never authorise an admin request.
+* Whether an administrator account may sign in to the mobile app is
+  **[OPEN]**, §13, OQ-12.
+
+### 9.4 Data analytics **[MS p.6, Limitation 7]**
+
+The analytics module summarises records stored in AgroBenta — listings,
+verification statuses, transactions, livestock categories and pricing
+information. Reports describe **recorded AgroBenta activity only**, not the
+whole livestock market of Trinidad, Bohol. Amounts must not be labelled as
+revenue or payments (§6.3).
 
 ---
 
 ## 10. Security requirements **[SEC]**
 
-These are **approved requirements**, not recommendations. They apply to every
-mobile write endpoint, and they are a precondition for implementing any of
-them.
+These apply to every write endpoint.
 
 ### 10.1 Authorization-sensitive fields are never client-controlled
 
-The following fields decide **who a request acts as** or **what authority it
-carries**. They must **never** be accepted from an untrusted mobile request.
-Each is derived from the authenticated session or from a server-side
-relationship.
-
 | Field | Must be derived from |
 |---|---|
-| `users.role` | Never client-set. Assigned internally only. |
-| `users.seller_capability` | The approved verification workflow (§2.6, §3) — never a request field. |
+| `users.role` | Never client-set. |
+| `users.seller_capability` | The approved verification workflow (§2.6, §3). |
 | `listings.seller_id` | The authenticated user. |
+| `listings.status` | The server, from the action taken (§4.4). |
 | `transactions.buyer_id` | The authenticated user. |
-| `transactions.seller_id` | `listing.seller_id`, via the listing relationship. |
+| `transactions.seller_id` | `listing.seller_id`. |
+| `transactions.total_amount` | The server (§6.1). |
 | `messages.sender_id` | The authenticated user. |
-
-**A client must not be able to send:**
-
-```json
-{ "seller_capability": "seller" }
-```
-
-to become a seller. Nor may it specify another user's `seller_id` when creating
-a listing, or another user's `buyer_id` when creating a transaction.
-
-**Why this is a rule and not a code-review habit:** these fields are all
-mass-assignable in the current implementation, so an unguarded request class
-accepts them silently. The guard must be structural, not incidental.
+| Inquiry buyer / seller | The authenticated user / `listing.seller_id`. |
 
 ### 10.2 Explicit request field allow-lists
 
-Every mobile write endpoint must accept **only** an explicit list of fields.
-
-* Use a dedicated Form Request per endpoint.
-* Permit only the documented client-settable fields.
-* Do **not** pass a request body through to a mass-assignment call.
-* Do not rely on a denylist. A denylist fails open when a field is added later.
+* A dedicated Form Request per endpoint, permitting only the documented
+  client-settable fields.
+* Never pass a request body straight into a mass-assignment call.
 * Adding a field to a model must never silently make it client-settable.
 
 ### 10.3 Derived, not declared
 
-Identity and ownership are **derived from the session and from relationships**,
-never declared in the request body. This applies to reads as well as writes: a
-resource path parameter is a *selector*, not proof of ownership, and the
-ownership check still runs.
+Identity and ownership come from the session and from relationships, never
+from the request body. A path parameter is a selector, not proof of ownership.
 
-### 10.4 Mobile resource separation
+### 10.4 Response separation
 
-**Do not blindly reuse Admin Web resources for mobile responses.**
-
-* Create mobile-specific resources or response structures where necessary.
-* **Do not expose private seller email addresses through public marketplace
-  responses.** Marketplace seller information exposes only fields appropriate
-  for marketplace users.
-* Admin resources remain **admin-oriented**. They are not a shared base to be
-  trimmed per-client; trimming a shared resource is how a field gets re-added
-  for one client and silently re-exposed to the other.
-* A mobile response must never contain data that only an administrator should
-  see — reviewer identities, internal notes, other users' contact details.
+* Mobile responses use mobile-specific resources, not the admin ones.
+* Public marketplace responses never expose a seller's private email address.
+* A mobile response never contains administrator-only data: reviewer
+  identities, internal notes, another user's verification documents.
+* Counterparty contact details appear only inside a transaction or inquiry the
+  viewer is a party to.
 
 ### 10.5 Authentication separation
 
-* **Mobile authentication must be separate from Admin Web authorization.**
-* **Do not reuse the admin login flow.**
-* **Do not issue admin-authority tokens to mobile users.**
-* Mobile users receive a token appropriate for **regular user / mobile** access.
+* Mobile authentication is separate from Admin Web authentication.
+* Mobile users never receive an admin-authority token.
 
-Reinforced by §9.3: an admin token must never authorise a mobile request, and a
-mobile token must never authorise an admin request. Both directions are
-enforced, independently.
+### 10.6 Personal data **[MS p.101–104]**
+
+Only the information needed for the system's functions is collected. Personal
+data and verification documents are protected against unauthorised access and
+disclosure (§3.3).
 
 ---
 
-## 11. Initial scope exclusions
+## 11. Out of scope
 
-The following are **explicitly out of scope** for the initial release. They are
-not deferred features with designs in progress; they are not built at all.
-
-| Excluded | Note |
+| Excluded | Source |
 |---|---|
-| **Full online payment system** | No payment capture, processing, or settlement. A transaction records an arrangement, not a payment (§6.3). |
-| **Transportation / logistics system** | No shipment tracking, delivery scheduling, or carrier integration. |
-| **Separate admin mobile application** | (§9.1) |
-| **Currency column** | No currency is stored. Amounts are as entered. **[CONFIRM]** |
-| **`livestock_type` enum** | Free text unless explicitly approved later (§4.1). |
-| **Conversation records** | Derived, not stored (§8.1). |
-| **Identity document storage** | `id_document_ref` is a reference only (§3.3). |
-
-**[CONFIRM]** on the currency row: the approved data design contains no currency
-column and §12 asks for none to be added, but whether "amounts are implicitly
-PHP peso" is itself an approved statement could not be verified from the
-transcribed rules. The Admin Web formats amounts as `₱` / `en-PH`, which is
-consistent with an implicit peso but is a client-side formatting choice, not
-stored data.
+| **Payment processing** (capture, settlement, refunds) | **[MS p.4, Limitation 5]** |
+| **Transportation / delivery service** (the app does not transport or track livestock) | **[MS p.4, Limitation 5]** |
+| Independent proof of payment or delivery | **[MS Limitation 5]** |
+| Livestock categories other than cattle, carabao, goats, swine | **[MS Limitation 2]** |
+| Training an in-house AI model | **[MS Limitation 3]** |
+| Locales other than Trinidad, Bohol (initial implementation) | **[MS Limitation 1]** |
+| A separate admin mobile application | §9.1 |
+| A stored conversation table | §8.1, ERD |
+| A currency column (amounts are in Philippine pesos, ₱) | ERD; **[MS-P]** |
 
 ---
 
 ## 12. Data design
 
-The approved schema. **Preserve it.** These are the tables and their roles.
+The manuscript ERD (p.94) is the reference schema:
 
 | Table | Purpose | Key relationships |
 |---|---|---|
 | `users` | All accounts | `role`, `seller_capability` |
-| `seller_verifications` | Verification submissions and review history | many per `user` (§3.2) |
-| `listings` | Marketplace inventory | one `seller_id`; many `photos` |
+| `seller_verifications` | Verification submissions and history | many per `user` (§3.2) |
+| `listings` | Marketplace inventory | one `seller_id` |
 | `ai_price_estimates` | Price suggestion history | many per `listing` |
-| `transactions` | Commercial arrangements | one `buyer_id`, one `seller_id`, one `listing_id` |
-| `activities` | System activity log | one optional `user_id` |
+| `transactions` | Agreed sales | one `buyer_id`, one `seller_id`, one `listing_id` |
 | `messages` | Direct messages | `sender_id`, `receiver_id`, optional `listing_id` |
 | `notifications` | Per-user notifications | one notifiable; UUID identity |
+| `activities` | System activity log | one optional `user_id` |
 | `settings` | Platform settings | keyed |
+| `personal_access_tokens`, `sessions`, `password_reset_tokens` | Framework tables | — |
 
-### 12.1 Constraints on change
+### 12.1 Required by the manuscript text but not drawn in the ERD
 
-* Do **not** add a currency column. (§11)
-* Do **not** create a `livestock_type` enum. (§4.1)
-* Do **not** add a conversation table. (§8.1)
-* Do **not** add a sixth listing state. The five in §4.4 are the complete set.
-* Do **not** change the schema to expose listing photos. (§4.5)
-* Do **not** make `seller_verifications.user_id` unique. It is one-to-many by
-  the resubmission rule (§3.2), and a unique constraint would make resubmission
-  impossible.
-* Do **not** add a second account table, or split buyers and sellers into
-  separate records. (§2.3)
-* Preserve backward compatibility. Existing data must remain readable.
+| Data | Source | Note |
+|---|---|---|
+| **Inquiries** | **[MS p.15]** "recorded separately" | Stored in its own table. Add it to the manuscript ERD. |
+| **Verification documents** | **[MS p.14, p.20]** "supporting documents" | Stored privately (§3.3). Add to the manuscript ERD. |
+| Listing title | **[MS-P Figure 22]** | See §13, MS-08. |
 
-### 12.2 Implementation status
+### 12.2 Constraints on change
 
-The schema above is fully implemented in `backend/database/migrations/` and
-matches this document. Verified column by column — see
-`MOBILE_API_CONTRACT_PROPOSAL.md` §10 for the one area (listing photos) where
-the schema is correct but the API does not expose it.
+* Do **not** add a conversation table (§8.1).
+* Do **not** add a sixth listing state (§4.4).
+* Do **not** make `seller_verifications.user_id` unique — it is one-to-many
+  (§3.2).
+* Do **not** add a second account table or split buyers and sellers (§2.3).
+* Do **not** add payment-processing tables (§11).
+* Preserve backward compatibility; existing data must remain readable.
+
+### 12.3 Manuscript diagrams that conflict with the ERD
+
+The class diagrams (p.86–93) show elements that are not in the ERD and are not
+part of this design: a `Payment` model and `confirmPayment()`, a `Conversation`
+model, a `JwtService` (the system uses Laravel Sanctum tokens), `role: seller`,
+a listing status `archived`, and `AISuggestionFactor` / `modelVersion`. These
+follow the ERD and the manuscript text above, not the class diagrams — see
+§13, MS-04.
 
 ---
 
 ## 13. Open items
 
-Tracked, not answered. **Do not resolve these by guessing.**
+Not settled. **Do not resolve these by guessing.** Questions marked **MS-** are
+for the manuscript's author.
 
-### 13.1 Closed by the decision round
+### 13.1 Closed by aligning to the manuscript
 
 | ID | Item | Resolution |
 |---|---|---|
-| ~~OQ-01~~ | Transaction status transitions and who may perform each | **Partly closed by [D-15]** — states, both transitions, terminality and two-party cancellation are settled. The completion-confirmation actor remains open as **A-03 / OQ-15**. |
-| ~~OQ-02~~ | Listing publication and self-publish | **Closed by [D-02]** — moderated publication, seller cannot self-publish, admin approval required. |
-| ~~OQ-03~~ | The price-estimation method | **Closed as a *requirement*, not an answer.** [D-03] mandates a dedicated service and forbids inventing an algorithm; the method itself is still undocumented — see OQ-03 below. |
-| ~~OQ-09~~ | Listing photo delivery | **Partly closed** — no schema change permitted, and the mobile API must expose photos ([SEC] §4.5). Upload mechanism and URL scheme remain open. |
+| ~~DG-01~~ | The planning original was not in Git | The manuscript is the final document (§0). |
+| ~~OQ-03~~ | Estimation method | An **external AI API** through the backend (§5.3). The provider is still open (MS-09). |
+| ~~OQ-04~~ | Controlled vocabulary for `livestock_type` | **Cattle, carabao, goat, swine** (§4.1). |
+| ~~OQ-06~~ | Notification types (partly) | Verification updates and transaction status changes (§7). The full list is MS-15. |
+| ~~OQ-15 / A-03~~ | Who confirms completion | **Seller accepts, buyer confirms receipt** (§6.4). |
+| ~~D-13~~ | Can buyers see a price suggestion? | **Yes**, as a reference **[MS p.48]** (§5.1). |
+| ~~Former §2.3 "no mode switch"~~ | Seller Mode / Buyer Mode | Allowed as a view switch for verified sellers (§2.7). |
+| ~~Former §3.3 "no document upload"~~ | Identity documents | Supporting documents are uploaded and stored privately (§3.3). |
+| ~~Former §11 "no inquiries entity"~~ | Inquiries | Kept separate from messages and transactions (§8.2). |
 
-### 13.2 Still open
+### 13.2 Questions for the manuscript's author
+
+| ID | Question |
+|---|---|
+| **MS-01** | **Listing publication:** may a seller publish directly (prototype Figure 22, "Status: Active" / "Publish Listing"), or must an administrator approve first (class diagram p.88)? |
+| **MS-02** | **Reactivation:** may a sold or inactive listing be put back on sale ("Reactivate Listing", Figure 23)? |
+| **MS-03** | **Categories:** the prototype shows "Others", "Pig" and a "Native Chicken" sample, and omits carabao. Are only cattle, carabao, goats and swine allowed? |
+| **MS-04** | **Diagrams:** will the class diagrams (Payment, Conversation, JWT, `role: seller`, `archived`) be redrawn to match the ERD and the text? |
+| **MS-05** | **Verification documents:** confirm Valid ID + Proof of Address + Farm Photos (optional). Should the selfie the current app asks for be removed? Is the farm/business name optional? |
+| **MS-06** | **Editing an application:** may a pending application be edited ("Edit Application", Figure 19), given that resubmission creates a new record? |
+| **MS-07** | **Document retention:** who may view IDs, and when are they deleted (for example after rejection)? |
+| **MS-08** | **Listing title:** the prototype requires a title; the ERD has none. Add a title field, or derive it (e.g. type + breed)? |
+| **MS-09** | **AI service:** which external provider, who pays, who holds the key? Correct the Definition of Terms (p.20) to say "external AI service" rather than an in-house model. |
+| **MS-10** | **Forgot password:** email code or email link? Which email service? |
+| **MS-11** | **Remember me and Google/Facebook sign-in:** build them or remove them from the prototype? |
+| **MS-12** | **Transaction statuses:** how are "seller accepted" and "in delivery" stored, given the ERD has only `pending`, `completed`, `cancelled`? Do the seller tabs "Inquiry" and "Negotiating" belong to transactions or to inquiries? |
+| **MS-13** | **Agreed price and delivery fee:** can the agreed price differ from the asking price? Is a delivery fee recorded and added to the total, given Limitation 5? |
+| **MS-14** | **Cancellation:** who may cancel, and up to which step? |
+| **MS-15** | **Notifications:** the full list of events, and whether phone push notifications are required. |
+| **MS-16** | **"Verified Buyer"** appears in the seller transaction prototype (Figure 26). Is there a buyer verification, or is this label a mistake? |
+| **MS-17** | **Hosting for evaluation:** where will the system run for the 15 evaluators, and how will they install the app? |
+
+### 13.3 Still open from the earlier planning round
 
 | ID | Item |
 |---|---|
-| **DG-01** | The planning original of this document is not stored in Git. This transcription is the repository's copy. Archive the original, or confirm this file is the canonical version. |
-| **OQ-03** | The **estimation method** itself. [D-03] requires a dedicated service and forbids inventing an algorithm, but no algorithm, model, or integration exists in the repository. Must be documented before the production estimator is implemented. |
-| **OQ-04** | A controlled vocabulary for `livestock_type`, given it stays free text. (§4.1) |
-| **OQ-06** | Which notification types exist and what triggers them. (§7) |
-| **OQ-07** | Whether messaging requires a verified seller, an existing transaction, or a listing context. (§8.2) |
-| **OQ-08** | Whether marketplace browsing requires an account, or is available to signed-out visitors. |
-| **OQ-09** | **Listing photo representation**: upload mechanism, storage, URL scheme, and the exact mobile response shape. Now constrained: **no schema change** (§4.5). |
-| **OQ-10** | Identity verification strength. `id_document_ref` is a free-text reference with no verification semantics defined. |
-| **OQ-11** | Session/token lifetime policy. Tokens currently never expire. |
-| **OQ-12** | Whether an **administrator account** may authenticate through the mobile flow at all, and if so which authorisation context it carries. [SEC] §10.5 settles that a mobile token is never admin-authority; it does not settle whether a `role = admin` account may hold one. |
-| **OQ-14** | **Admin listing moderation endpoints.** [D-02] requires admin approval to move a listing to `active`, and admin rejection to move it to `inactive`. The Admin Web can only **read** listings today — there is no approve, reject, or deactivate route. This is a required capability with no existing implementation. |
-| **OQ-16** | Listing `inactive` → `active` reactivation is not a permitted transition under [D-02]. Whether a deactivated listing can ever be re-listed — and if so whether that requires a fresh `draft` → `pending` cycle — is not stated. |
-| **OQ-17** | What happens to an `active` listing when its `quantity` is exhausted by transactions. Auto-`sold`, auto-`inactive`, or left `active`? Not covered by [D-02]. |
-
-### 13.3 Ambiguities inside approved decisions
-
-Recorded rather than invented, per the D-15 instruction.
-
-| ID | Ambiguity |
-|---|---|
-| **A-01** | [D-02] defines `draft → pending` as seller submission, but does not permit `pending → draft`. A seller whose listing is rejected to `inactive` therefore has no way to revise and resubmit the same record. Whether a rejected listing can be edited and resubmitted, or must be replaced, is not stated. |
-| **A-02** | [D-02] permits `pending → inactive` and `active → inactive` but states no path back to `active`. See OQ-16. |
-| **A-03** | [D-15] rule 4 requires "the appropriate transaction confirmation" without naming the actor or the event. The `complete` transition must not be implemented until this is answered. See OQ-15. |
-| **OQ-15** | Who performs transaction completion confirmation, and what constitutes it — seller action, buyer action, or mutual agreement? |
-| **OQ-18** | [D-02] rule 4 says a `sold` listing is "no longer available for new transactions", but does not say which transition marks it `sold`, or whether quantity-based partial sales are in scope. |
+| **OQ-07** | Whether messaging requires a listing context, and who may message whom. |
+| **OQ-08** | Whether browsing requires an account. |
+| **OQ-10** | Identity verification strength beyond administrator review. |
+| **OQ-11** | Session / token lifetime. Tokens currently never expire. |
+| **OQ-12** | Whether an administrator account may sign in to the mobile app. |
+| **OQ-17** | What happens to an `active` listing when its quantity is used up by transactions. |
+| **A-01** | Whether a rejected listing can be edited and resubmitted, or must be replaced. |
 
 ---
 
 ## 14. Change control
 
-This document describes **approved** behaviour.
-
-* Do not edit it to resolve a disagreement between it and the implementation.
-* Do not use it to justify a feature that was not approved.
-* Do not extend it without going back through approval.
+* **The manuscript is authoritative.** When it changes, update this document to
+  match and add a §15 entry.
+* Do not use this document to justify a feature that is not in the manuscript.
 * If the implementation and this document disagree, that is a defect to be
-  **reported** — in the appropriate place — and not silently reconciled.
+  **reported** and fixed — not silently reconciled.
+* Where the manuscript contradicts itself, record it in §13 and ask the author.
 
-Related: `MOBILE_API_CONTRACT_PROPOSAL.md` (proposal, under review),
-`../AGENTS.md`, `../DESIGN.md`, `../mobile/AGENTS.md`.
+Related: the manuscript (PDF, kept outside the repository),
+`MOBILE_API_CONTRACT_PROPOSAL.md` (proposal), `../AGENTS.md`, `../DESIGN.md`,
+`../mobile/AGENTS.md`.
+
+---
+
+## 15. Change log
+
+| Date | Change |
+|---|---|
+| 2026-10-24 | Aligned to the capstone manuscript, confirmed by the project manager as the final document. Allowed the Seller Mode / Buyer Mode view switch (§2.7); added sign-in features (§2.8); replaced "no identity document upload" with private supporting documents (§3.3); limited livestock categories to cattle, carabao, goats and swine (§4.1); added "seller marks as sold" (§4.4); set the price suggestion to an external AI API, visible to buyers as a reference (§5); set the transaction flow to seller-accepts / buyer-confirms-receipt (§6.4); added inquiries separate from messages (§8.2); added analytics scope (§9.4); rewrote out-of-scope (§11) and open items (§13). Conflicts inside the manuscript recorded as MS-01 to MS-17. |
+| Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

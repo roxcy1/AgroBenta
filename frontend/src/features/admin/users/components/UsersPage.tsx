@@ -1,6 +1,16 @@
 import { useState } from 'react';
-import { useUsers } from '../api/useUsers';
+import { useSearchParams } from 'react-router-dom';
+import type { KeyboardEvent } from 'react';
+import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
+import { useAdminUser, useUserCounts, useUsers } from '../api/useUsers';
+import type { AdminUser } from '../api/useUsers';
+import { useUserVerificationsMap } from '../api/useUserVerifications';
+import { PAGE_ELLIPSIS, buildPageWindow } from '../pagination';
 import { Header } from '../../components/Header';
+import UserStatsCards from './UserStatsCards';
+import type { UserCardKey } from './UserStatsCards';
+import UserDetailsDialog from './UserDetailsDialog';
+import VerificationDetailsDialog from '../../seller-verification/components/VerificationDetailsDialog';
 
 const ROLE_OPTIONS = [
   { value: '', label: 'All Roles' },
@@ -23,20 +33,64 @@ function formatDate(dateString: string): string {
   });
 }
 
+function statusLabel(status: string | null): string {
+  switch (status) {
+    case 'submitted':
+      return 'Submitted';
+    case 'pending_review':
+      return 'Pending Review';
+    case 'approved':
+      return 'Approved';
+    case 'rejected':
+      return 'Rejected';
+    default:
+      return '—';
+  }
+}
+
 export function UsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [sellerFilter, setSellerFilter] = useState('');
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
+  const [verificationFilter, setVerificationFilter] = useState<
+    '' | 'submitted' | 'pending_review' | 'approved' | 'rejected' | 'none'
+  >('');
+  const [detailsId, setDetailsId] = useState<number | null>(null);
+  const [detailsUser, setDetailsUser] = useState<AdminUser | null>(null);
+  const [searchParams] = useSearchParams();
+  const linkedUserId = parsePositiveInt(searchParams.get('user'));
+  const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
 
-  const { data, isLoading, error, refetch } = useUsers({
-    search: search || undefined,
+  // The users surface has no detail screen, so a `?user=` deep link is resolved
+  // to the account and applied as a search filter. The list is derived from the
+  // URL rather than synced from the fetched record, so no effect is needed.
+  const { data: linkedUser, isError: linkedUserFailed } = useAdminUser(linkedUserId);
+  const linkedState = resolveDeepLinkedRecord({
+    entity: 'User',
+    id: linkedUserId,
+    dismissedId: dismissedLinkId,
+    record: linkedUser,
+    isError: linkedUserFailed,
+  });
+  const deepLinkedEmail = linkedState.record?.email ?? '';
+  const effectiveSearch = search || deepLinkedEmail;
+
+  const { data, isLoading, isFetching, error, refetch } = useUsers({
+    search: effectiveSearch || undefined,
     role: roleFilter || undefined,
     seller_capability: sellerFilter || undefined,
     page,
     per_page: 15,
   });
+
+  // Join with latest verification records per user (deduped server-side)
+  const { map: verificationMap, isLoading: verificationsLoading } = useUserVerificationsMap({
+    per_page: 100,
+  });
+
+  const { data: counts } = useUserCounts();
 
   const handleSearch = () => {
     setSearch(searchInput);
@@ -59,15 +113,103 @@ export function UsersPage() {
     setPage(1);
   };
 
+  // Each card selects one filter dimension: account type (buyer/seller) or role
+  // (admin). Selecting a card clears the other dimension, and selecting the
+  // active card or "Total Users" clears both, so the cards stay mutually
+  // exclusive and mirror the table's own filters.
+  const activeCardKey: UserCardKey | '' =
+    sellerFilter === 'buyer'
+      ? 'buyer'
+      : sellerFilter === 'seller'
+        ? 'seller'
+        : roleFilter === 'admin'
+          ? 'admin'
+          : roleFilter === '' && sellerFilter === ''
+            ? 'all'
+            : '';
+
+  const handleCardSelect = (key: UserCardKey) => {
+    if (key === activeCardKey && key !== 'all') {
+      setRoleFilter('');
+      setSellerFilter('');
+    } else if (key === 'buyer') {
+      setSellerFilter('buyer');
+      setRoleFilter('');
+    } else if (key === 'seller') {
+      setSellerFilter('seller');
+      setRoleFilter('');
+    } else if (key === 'admin') {
+      setRoleFilter('admin');
+      setSellerFilter('');
+    } else {
+      setRoleFilter('');
+      setSellerFilter('');
+    }
+    setPage(1);
+  };
+
+  const handleVerificationChange = (
+    value: '' | 'submitted' | 'pending_review' | 'approved' | 'rejected' | 'none',
+  ) => {
+    setVerificationFilter(value);
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchInput('');
+    setSearch('');
+    setRoleFilter('');
+    setSellerFilter('');
+    setVerificationFilter('');
+    setPage(1);
+    if (linkedUserId !== null) setDismissedLinkId(linkedUserId);
+  };
+
+  const handleDismissLinkedNotice = () => {
+    if (linkedUserId !== null) setDismissedLinkId(linkedUserId);
+  };
+
   const handlePageChange = (newPage: number) => {
+    if (isFetching) return;
+    const lastPage = data?.pagination?.last_page ?? 1;
+    if (newPage < 1 || newPage > lastPage || newPage === page) return;
     setPage(newPage);
   };
 
-  if (isLoading) {
+  const handleVerificationClick = (verificationId: number | null) => {
+    if (verificationId !== null) {
+      setDetailsId(verificationId);
+    }
+  };
+
+  const handleVerificationKeyDown = (
+    event: KeyboardEvent<HTMLSpanElement>,
+    verificationId: number | null,
+  ) => {
+    if (verificationId === null) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setDetailsId(verificationId);
+    }
+  };
+
+  const handleRowKeyDown = (
+    event: KeyboardEvent<HTMLTableRowElement>,
+    user: AdminUser,
+  ) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setDetailsUser(user);
+    }
+  };
+
+  if (isLoading || verificationsLoading) {
     return (
       <>
         <Header title="Users" subtitle="Manage platform users" />
         <div className="users-content">
+          <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
           <div className="users-loading">
             <div className="loading-spinner" />
             <span>Loading users...</span>
@@ -82,6 +224,7 @@ export function UsersPage() {
       <>
         <Header title="Users" subtitle="Manage platform users" />
         <div className="users-content">
+          <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
           <div className="users-error">
             <p className="users-error-text">Failed to load users.</p>
             <button type="button" className="users-retry-button" onClick={() => refetch()}>
@@ -96,11 +239,28 @@ export function UsersPage() {
   const users = data?.users ?? [];
   const pagination = data?.pagination;
 
+  let displayUsers = users;
+  if (verificationFilter) {
+    displayUsers = users.filter((u) => {
+      const v = verificationMap.get(u.id);
+      if (verificationFilter === 'none') {
+        return !v?.status;
+      }
+      return v?.status === verificationFilter;
+    });
+  }
+
+  const filtersActive = Boolean(
+    search || deepLinkedEmail || roleFilter || sellerFilter || verificationFilter,
+  );
+
   return (
     <>
       <Header title="Users" subtitle="Manage platform users" />
 
       <div className="users-content">
+        <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
+
         <div className="users-controls">
           <div className="users-search-row">
             <div className="users-search-wrapper">
@@ -108,7 +268,8 @@ export function UsersPage() {
                 type="text"
                 className="users-search-input"
                 placeholder="Search by name or email..."
-                value={searchInput}
+                aria-label="Search users by name or email"
+                value={searchInput || deepLinkedEmail}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
               />
@@ -124,6 +285,7 @@ export function UsersPage() {
             <div className="users-filters">
               <select
                 className="users-filter-select"
+                aria-label="Filter by role"
                 value={roleFilter}
                 onChange={(e) => handleRoleChange(e.target.value)}
               >
@@ -136,6 +298,7 @@ export function UsersPage() {
 
               <select
                 className="users-filter-select"
+                aria-label="Filter by seller capability"
                 value={sellerFilter}
                 onChange={(e) => handleSellerChange(e.target.value)}
               >
@@ -145,77 +308,223 @@ export function UsersPage() {
                   </option>
                 ))}
               </select>
+
+              <select
+                className="users-filter-select"
+                aria-label="Filter by verification status"
+                value={verificationFilter}
+                onChange={(e) =>
+                  handleVerificationChange(
+                    e.target.value as
+                      | ''
+                      | 'submitted'
+                      | 'pending_review'
+                      | 'approved'
+                      | 'rejected'
+                      | 'none',
+                  )
+                }
+              >
+                <option value="">All Verification Status</option>
+                <option value="submitted">Submitted</option>
+                <option value="pending_review">Pending Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="none">No verification</option>
+              </select>
+
+              {filtersActive && (
+                <button
+                  type="button"
+                  className="users-search-button"
+                  onClick={handleClearFilters}
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           </div>
         </div>
 
+        {linkedState.message !== null && (
+          <div className="deep-link-notice" role="alert">
+            <p className="deep-link-notice-text">{linkedState.message}</p>
+            <button
+              type="button"
+              className="deep-link-notice-dismiss"
+              onClick={handleDismissLinkedNotice}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {verificationFilter && (
+          <p className="users-filter-notice" role="note">
+            Verification status is applied to the users shown on this page only. Use the
+            pagination below to check other pages.
+          </p>
+        )}
+
         {users.length === 0 ? (
           <div className="users-empty">
-            <p>No users found.</p>
+            <p>{filtersActive ? 'No users found matching your criteria.' : 'No users found.'}</p>
           </div>
         ) : (
           <>
-            <div className="users-table-container">
-              <table className="users-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Account Type</th>
-                    <th>Joined</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr key={user.id}>
-                      <td className="users-name-cell">{user.name}</td>
-                      <td className="users-email-cell">{user.email}</td>
-                      <td>
-                        <span className={`users-badge users-badge--${user.role === 'admin' ? 'admin' : 'user'}`}>
-                          {user.role === 'admin' ? 'Administrator' : 'User'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`users-badge users-badge--${user.seller_capability}`}>
-                          {user.seller_capability === 'seller' ? 'Seller' : 'Buyer'}
-                        </span>
-                      </td>
-                      <td className="users-date-cell">{formatDate(user.created_at)}</td>
+            {displayUsers.length === 0 ? (
+              <div className="users-empty">
+                <p>No users on this page match the selected verification status.</p>
+              </div>
+            ) : (
+              <div
+                className={`users-table-container${isFetching ? ' users-table-container--fetching' : ''}`}
+                aria-busy={isFetching}
+              >
+                <table className="users-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Seller Capability</th>
+                      <th>Verification Status</th>
+                      <th>Created At</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {displayUsers.map((user) => {
+                      const v = verificationMap.get(user.id);
+                      const vStatus = v?.status ?? null;
+                      const vLabel = statusLabel(vStatus);
+                      return (
+                        <tr
+                          key={user.id}
+                          className="users-row--clickable"
+                          tabIndex={0}
+                          aria-label={`View details for ${user.name}`}
+                          onClick={() => setDetailsUser(user)}
+                          onKeyDown={(event) => handleRowKeyDown(event, user)}
+                        >
+                          <td className="users-name-cell">{user.name}</td>
+                          <td className="users-email-cell">{user.email}</td>
+                          <td>
+                            <span className={`users-badge users-badge--${user.role === 'admin' ? 'admin' : 'user'}`}>
+                              {user.role === 'admin' ? 'Administrator' : 'User'}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`users-badge users-badge--${user.seller_capability}`}>
+                              {user.seller_capability === 'seller' ? 'Seller' : 'Buyer'}
+                            </span>
+                          </td>
+                          <td>
+                            {v && v.status && v.verificationId !== null ? (
+                              <span
+                                className={`lv-badge lv-badge--${vStatus}`}
+                                role="button"
+                                tabIndex={0}
+                                style={{ cursor: 'pointer' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVerificationClick(v.verificationId);
+                                }}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  handleVerificationKeyDown(e, v.verificationId);
+                                }}
+                                aria-label={`View verification details for ${user.name}`}
+                              >
+                                {vLabel}
+                              </span>
+                            ) : (
+                              <span className="users-date-cell">—</span>
+                            )}
+                          </td>
+                          <td className="users-date-cell">{formatDate(user.created_at)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {pagination && pagination.last_page > 1 && (
-              <div className="users-pagination">
+              <nav className="users-pagination" aria-label="Users pagination">
                 <button
                   type="button"
                   className="users-page-button"
-                  disabled={pagination.current_page <= 1}
+                  disabled={isFetching || pagination.current_page <= 1}
                   onClick={() => handlePageChange(pagination.current_page - 1)}
+                  aria-label="Go to previous page"
                 >
                   Previous
                 </button>
-                <span className="users-page-info">
-                  Page {pagination.current_page} of {pagination.last_page}
-                  {' '}
-                  <span className="users-page-total">({pagination.total} users)</span>
-                </span>
+
+                {buildPageWindow(pagination.current_page, pagination.last_page).map(
+                  (item, index) =>
+                    item === PAGE_ELLIPSIS ? (
+                      <span
+                        key={`ellipsis-${index}`}
+                        className="users-page-ellipsis"
+                        aria-hidden="true"
+                      >
+                        &hellip;
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`users-page-number${
+                          item === pagination.current_page ? ' users-page-number--active' : ''
+                        }`}
+                        disabled={isFetching}
+                        aria-label={`Go to page ${item}`}
+                        aria-current={item === pagination.current_page ? 'page' : undefined}
+                        onClick={() => handlePageChange(item)}
+                      >
+                        {item}
+                      </button>
+                    ),
+                )}
+
                 <button
                   type="button"
                   className="users-page-button"
-                  disabled={pagination.current_page >= pagination.last_page}
+                  disabled={isFetching || pagination.current_page >= pagination.last_page}
                   onClick={() => handlePageChange(pagination.current_page + 1)}
+                  aria-label="Go to next page"
                 >
                   Next
                 </button>
-              </div>
+
+                <span className="users-page-info" aria-live="polite">
+                  Page {pagination.current_page} of {pagination.last_page}
+                  {' '}
+                  <span className="users-page-total">({pagination.total} users)</span>
+                  {isFetching && <span className="users-page-updating"> Updating…</span>}
+                </span>
+              </nav>
             )}
           </>
         )}
       </div>
+
+      {detailsId !== null && (
+        <VerificationDetailsDialog
+          verificationId={detailsId}
+          onClose={() => setDetailsId(null)}
+        />
+      )}
+
+      {detailsUser !== null && (
+        <UserDetailsDialog
+          user={detailsUser}
+          verificationStatus={verificationMap.get(detailsUser.id)?.status ?? null}
+          onClose={() => setDetailsUser(null)}
+        />
+      )}
     </>
   );
 }

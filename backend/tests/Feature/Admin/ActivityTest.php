@@ -232,18 +232,16 @@ class ActivityTest extends TestCase
             'seller_capability' => SellerCapability::Buyer,
         ]);
 
-        Activity::create([
+        Activity::factory()->createdAt(now()->subDays(10))->create([
             'user_id' => $user->id,
             'action' => 'old_action',
             'description' => 'Old activity',
-            'created_at' => now()->subDays(10),
         ]);
 
-        Activity::create([
+        Activity::factory()->createdAt(now()->subDays(2))->create([
             'user_id' => $user->id,
             'action' => 'new_action',
             'description' => 'New activity',
-            'created_at' => now()->subDays(2),
         ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
@@ -253,6 +251,7 @@ class ActivityTest extends TestCase
 
         $data = $response->json('data');
         $this->assertEquals(1, $data['pagination']['total']);
+        $this->assertEquals('new_action', $data['activities'][0]['action']);
     }
 
     public function test_pagination_works(): void
@@ -263,7 +262,7 @@ class ActivityTest extends TestCase
         ]);
 
         for ($i = 0; $i < 24; $i++) {
-            Activity::create([
+            Activity::factory()->create([
                 'user_id' => $user->id,
                 'action' => 'test_action',
                 'description' => "Activity {$i}",
@@ -279,7 +278,7 @@ class ActivityTest extends TestCase
         $this->assertCount(10, $data['activities']);
         $this->assertEquals(1, $data['pagination']['current_page']);
         $this->assertEquals(3, $data['pagination']['last_page']);
-        $this->assertEquals(25, $data['pagination']['total']);
+        $this->assertEquals(24, $data['pagination']['total']);
     }
 
     public function test_empty_state_works(): void
@@ -323,5 +322,151 @@ class ActivityTest extends TestCase
                 $this->assertArrayNotHasKey('remember_token', $activity['user']);
             }
         }
+    }
+
+    public function test_guest_cannot_access_activity_summary(): void
+    {
+        $response = $this->getJson('/api/admin/activities/summary');
+
+        $response->assertStatus(401);
+    }
+
+    public function test_regular_user_cannot_access_activity_summary(): void
+    {
+        $user = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        $token = $user->createToken('user_token')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/admin/activities/summary');
+
+        $response->assertStatus(403);
+    }
+
+    public function test_admin_can_access_activity_summary(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/activities/summary');
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'success',
+            'data' => [
+                'total_activities',
+                'active_actors',
+                'moderation_actions',
+                'configuration_changes',
+                'window',
+                'since',
+                'until',
+            ],
+        ]);
+    }
+
+    public function test_activity_summary_counts_last_24_hours(): void
+    {
+        $user = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        Activity::factory()->create([
+            'user_id' => $user->id,
+            'action' => 'listing_approved',
+            'created_at' => now()->subHours(2),
+        ]);
+
+        Activity::factory()->create([
+            'user_id' => $user->id,
+            'action' => 'settings_updated',
+            'created_at' => now()->subHours(3),
+        ]);
+
+        Activity::factory()->create([
+            'user_id' => $user->id,
+            'action' => 'listing_rejected',
+            'created_at' => now()->subHours(1),
+        ]);
+
+        Activity::factory()->create([
+            'user_id' => $user->id,
+            'action' => 'old_action',
+            'created_at' => now()->subDays(2),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/activities/summary');
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertEquals(3, $data['total_activities']);
+        $this->assertEquals(1, $data['active_actors']);
+        $this->assertEquals(2, $data['moderation_actions']);
+        $this->assertEquals(1, $data['configuration_changes']);
+        $this->assertEquals('last_24h', $data['window']);
+    }
+
+    public function test_activity_summary_moderation_includes_all_types(): void
+    {
+        $user = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'listing_approved', 'created_at' => now()->subHours(1)]);
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'listing_rejected', 'created_at' => now()->subHours(1)]);
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'listing_deactivated', 'created_at' => now()->subHours(1)]);
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'seller_verification_approved', 'created_at' => now()->subHours(1)]);
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'seller_verification_rejected', 'created_at' => now()->subHours(1)]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/activities/summary');
+
+        $response->assertStatus(200);
+        $this->assertEquals(5, $response->json('data.moderation_actions'));
+    }
+
+    public function test_activity_summary_active_actors_distinct(): void
+    {
+        $user1 = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+        $user2 = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        Activity::factory()->create(['user_id' => $user1->id, 'action' => 'listing_created', 'created_at' => now()->subHours(1)]);
+        Activity::factory()->create(['user_id' => $user1->id, 'action' => 'listing_updated', 'created_at' => now()->subHours(2)]);
+        Activity::factory()->create(['user_id' => $user2->id, 'action' => 'profile_updated', 'created_at' => now()->subHours(3)]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/activities/summary');
+
+        $response->assertStatus(200);
+        $this->assertEquals(2, $response->json('data.active_actors'));
+    }
+
+    public function test_activities_can_filter_by_multiple_actions(): void
+    {
+        $user = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'listing_approved']);
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'listing_rejected']);
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'profile_updated']);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/activities?actions[]=listing_approved&actions[]=listing_rejected');
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertEquals(2, $data['pagination']['total']);
     }
 }

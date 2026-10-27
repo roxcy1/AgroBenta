@@ -32,6 +32,8 @@ class DashboardResource extends JsonResource
                     ] : null,
                 ];
             }),
+            'recent_listings' => ListingResource::collection($this->resource['recent_listings']),
+            'recent_transactions' => TransactionResource::collection($this->resource['recent_transactions']),
         ];
     }
 }

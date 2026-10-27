@@ -7,6 +7,7 @@ services:
     working_dir: /var/www/html
     volumes:
       - ./backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor
       - ./docker/php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini
       - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf
     environment:
@@ -132,6 +133,7 @@ volumes:
   mysql_data:
   redis_data:
   node_modules:
+  backend_vendor:
 
 networks:
   app_network:

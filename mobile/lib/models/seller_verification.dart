@@ -56,6 +56,24 @@ enum SellerVerificationStatus {
   }
 }
 
+/// Which evidence document an upload or fetch refers to.
+///
+/// Mirrors `backend/app/Enums/SellerVerificationDocumentType.php`. The wire
+/// value is the enum case's lowercase string, and it is what the API expects in
+/// the `type` multipart field and what appears in the `/documents/{type}` path.
+enum VerificationDocumentType {
+  /// A photo of a government-issued identity document.
+  idDocument('id_document'),
+
+  /// A selfie of the applicant holding the same identity document.
+  selfie('selfie');
+
+  const VerificationDocumentType(this.value);
+
+  /// The exact lowercase string the API sends and expects.
+  final String value;
+}
+
 /// The authenticated user's own seller verification, as returned by
 /// `GET /api/seller-verification/me` and `POST /api/seller-verification`.
 ///
@@ -83,6 +101,8 @@ class SellerVerification {
     required this.adminNote,
     required this.submittedAt,
     required this.reviewedAt,
+    this.hasIdDocument = false,
+    this.hasSelfie = false,
   });
 
   /// Field names the mobile resource must not contain.
@@ -115,6 +135,8 @@ class SellerVerification {
       adminNote: readNullableString(json, 'admin_note'),
       submittedAt: readNullableDateTime(json, 'submitted_at'),
       reviewedAt: readNullableDateTime(json, 'reviewed_at'),
+      hasIdDocument: _readBool(json, 'has_id_document'),
+      hasSelfie: _readBool(json, 'has_selfie'),
     );
   }
 
@@ -149,6 +171,33 @@ class SellerVerification {
 
   /// When the administrator decided. `null` while the record is still open.
   final DateTime? reviewedAt;
+
+  /// Whether an identity document has been uploaded for this application.
+  ///
+  /// The resource exposes only this boolean — never a path or URL — because the
+  /// document is private and streamed through an authenticated endpoint. `false`
+  /// when the key is absent, so the model keeps working against an older resource
+  /// that predates the documents migration.
+  final bool hasIdDocument;
+
+  /// Whether a selfie has been uploaded for this application.
+  final bool hasSelfie;
+
+  /// Reads a boolean the resource always sends.
+  ///
+  /// A missing key is a contract change — the resource emits both flags on every
+  /// record — so it throws rather than defaulting, matching the strictness of
+  /// the rest of this model's parsing.
+  static bool _readBool(Map<String, dynamic> json, String key) {
+    final Object? value = json[key];
+    if (value is bool) {
+      return value;
+    }
+    throw FormatException(
+      'Expected field "$key" to be a bool, got ${value.runtimeType}.',
+      json.toString(),
+    );
+  }
 
   /// Whether the account is waiting on an administrator.
   bool get isAwaitingReview => status.isOpen;

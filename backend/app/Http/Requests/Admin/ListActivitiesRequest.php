@@ -15,7 +15,9 @@ class ListActivitiesRequest extends FormRequest
     {
         return [
             'search' => ['nullable', 'string', 'max:255'],
-            'action' => ['nullable', 'string', 'max:255'],
+            'action' => ['nullable'],
+            'actions' => ['nullable', 'array'],
+            'actions.*' => ['string', 'max:255'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'date_from' => ['nullable', 'date', 'before_or_equal:today'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],

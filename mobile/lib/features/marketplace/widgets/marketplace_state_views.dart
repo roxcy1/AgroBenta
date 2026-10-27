@@ -80,6 +80,7 @@ class MarketplaceErrorState extends StatelessWidget {
   const MarketplaceErrorState({
     required this.message,
     required this.onRetry,
+    this.title = 'Could not load listings',
     super.key,
   });
 
@@ -87,6 +88,11 @@ class MarketplaceErrorState extends StatelessWidget {
   final String message;
 
   final VoidCallback onRetry;
+
+  /// The heading above [message]. Defaults to the marketplace's own copy; a
+  /// non-marketplace caller (for example the transaction detail screen) passes
+  /// its own noun so the error never names the wrong thing.
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +107,7 @@ class MarketplaceErrorState extends StatelessWidget {
             const Icon(Icons.error_outline, size: 40, color: AppColors.error),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'Could not load listings',
+              title,
               style: theme.textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
@@ -115,141 +121,6 @@ class MarketplaceErrorState extends StatelessWidget {
             FilledButton(onPressed: onRetry, child: const Text('Try again')),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// The footer under the last page of results: a spinner while loading, an error
-/// with a retry if that page failed, and nothing at all when the server has said
-/// there is no next page.
-///
-/// Rendering nothing at the true end of the list is deliberate. A permanent
-/// "You've reached the end" footer adds a row of text to every screen for no
-/// information — the absence of a spinner is already the signal.
-class LoadMoreFooter extends StatelessWidget {
-  const LoadMoreFooter({
-    required this.isLoading,
-    required this.hasMore,
-    required this.errorMessage,
-    required this.onLoadMore,
-    super.key,
-  });
-
-  final bool isLoading;
-  final bool hasMore;
-  final String? errorMessage;
-  final VoidCallback onLoadMore;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    if (errorMessage != null) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenGutter,
-          AppSpacing.md,
-          AppSpacing.screenGutter,
-          AppSpacing.lg,
-        ),
-        child: Column(
-          children: <Widget>[
-            Text(
-              errorMessage!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.error,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            OutlinedButton(
-              onPressed: onLoadMore,
-              child: const Text('Try again'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-        child: Center(
-          child: SizedBox.square(
-            dimension: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-
-    if (!hasMore) {
-      return const SizedBox(height: AppSpacing.lg);
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenGutter,
-        AppSpacing.md,
-        AppSpacing.screenGutter,
-        AppSpacing.lg,
-      ),
-      child: OutlinedButton(
-        onPressed: onLoadMore,
-        child: const Text('Load more'),
-      ),
-    );
-  }
-}
-
-/// A pull-to-refresh that failed, shown above results that are still on screen.
-///
-/// Distinct from [MarketplaceErrorState] on purpose: nothing is wrong with the
-/// list the user is looking at, the *newer* copy of it could not be fetched, and
-/// replacing those cards with an error page would be a worse outcome than
-/// briefly stale data. The wording says so rather than leaving the user to guess
-/// whether what they see is current.
-class RefreshFailedNotice extends StatelessWidget {
-  const RefreshFailedNotice({
-    required this.message,
-    required this.onRetry,
-    super.key,
-  });
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.06),
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.sync_problem_outlined, size: 18, color: AppColors.error),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.text),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
       ),
     );
   }

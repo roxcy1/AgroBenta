@@ -192,11 +192,15 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final bool canEdit = SellerListingController.canEdit(listing);
+    // The list card offers exactly one action per status:
+    //   draft -> Edit + Submit for review
+    //   active -> Edit
+    //   inactive -> Delete
+    // pending / sold have no client-side action at all; see the no-action branch.
     final bool canSubmit = SellerListingController.canSubmit(listing);
-    final bool canDelete = SellerListingController.canDelete(listing);
+    final bool canDelete = listing.status == ListingStatus.inactive;
 
-    if (!canEdit && !canSubmit && !canDelete) {
+    if (!canSubmit && !canDelete) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(
@@ -215,50 +219,72 @@ class _ActionBar extends StatelessWidget {
       );
     }
 
+    Widget actionWidget = const SizedBox.shrink();
+    switch (listing.status) {
+      case ListingStatus.draft:
+        // A draft is unfinished work: the seller may keep editing it or send
+        // it for review. They are separate buttons rather than one flow
+        // because editing stays a draft while submitting leaves it.
+        actionWidget = busy
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            : Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit'),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: onSubmit,
+                      icon: const Icon(Icons.send_outlined, size: 18),
+                      label: const Text('Submit for review'),
+                    ),
+                  ),
+                ],
+              );
+        break;
+      case ListingStatus.active:
+        actionWidget = busy
+            ? const SizedBox.shrink()
+            : TextButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Edit'),
+              );
+        break;
+      case ListingStatus.inactive:
+        actionWidget = busy
+            ? const SizedBox.shrink()
+            : TextButton.icon(
+                onPressed: onDelete,
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Delete'),
+              );
+        break;
+      default:
+        // pending / sold: no action — the early return above already displayed a
+        // reason. Included to keep the switch exhaustive.
+        break;
+    }
+
     return Container(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      child: Row(
-        children: <Widget>[
-          if (canEdit)
-            Expanded(
-              child: TextButton.icon(
-                onPressed: busy ? null : onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Edit'),
-              ),
-            ),
-          if (canSubmit)
-            Expanded(
-              child: busy
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                        child: SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    )
-                  : TextButton.icon(
-                      onPressed: onSubmit,
-                      icon: const Icon(Icons.send_outlined, size: 18),
-                      label: const Text('Submit'),
-                    ),
-            ),
-          if (canDelete)
-            Expanded(
-              child: TextButton.icon(
-                onPressed: busy ? null : onDelete,
-                style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Delete'),
-              ),
-            ),
-        ],
-      ),
+      child: actionWidget,
     );
   }
 }

@@ -2,14 +2,17 @@
 
 namespace App\Services;
 
+use App\Enums\ActivityAction;
 use App\Models\User;
 use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Hash;
 
 class AuthService
 {
-    public function __construct(private readonly UserRepository $users)
-    {
+    public function __construct(
+        private readonly UserRepository $users,
+        private readonly ActivityLogger $activity,
+    ) {
         //
     }
 
@@ -29,9 +32,20 @@ class AuthService
             return null;
         }
 
+        $token = $user->createToken('admin_token', ['admin']);
+
+        // Best-effort: a login that succeeds but cannot be audited must still
+        // hand the administrator their token, so the failure is swallowed.
+        $this->activity->logSafely(
+            $user,
+            ActivityAction::AdminLoggedIn,
+            'Administrator signed in.',
+            ['context' => ['guard' => 'admin']],
+        );
+
         return [
             'user' => $user,
-            'token' => $user->createToken('admin_token', ['admin'])->plainTextToken,
+            'token' => $token->plainTextToken,
         ];
     }
 

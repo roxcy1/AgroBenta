@@ -62,29 +62,32 @@ class ListingPhoto extends StatelessWidget {
       width: width,
       child: url == null
           ? _Placeholder(hasPhotos: listing.photos.isNotEmpty)
-          : Image.network(
-              url,
-              fit: BoxFit.cover,
-              height: height,
-              width: width,
-              // A failed load must not leave a broken-image glyph. Falling back
-              // to the same placeholder is indistinguishable from "no photo",
-              // which is the truth from the buyer's point of view.
-              errorBuilder:
-                  (BuildContext context, Object error, StackTrace? _) =>
-                      _Placeholder(hasPhotos: true),
-              loadingBuilder:
-                  (
-                    BuildContext context,
-                    Widget child,
-                    ImageChunkEvent? progress,
-                  ) => progress == null
-                  ? child
-                  : _Placeholder(hasPhotos: true, showSpinner: true),
-              // A decorative, redundant image: the livestock type and breed are
-              // already rendered as text beside it, so announcing the picture
-              // too would just repeat them to a screen reader.
-              excludeFromSemantics: true,
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Image.network(
+                url,
+                fit: BoxFit.cover,
+                height: height,
+                width: width,
+                // A failed load must not leave a broken-image glyph. Falling back
+                // to the same placeholder is indistinguishable from "no photo",
+                // which is the truth from the buyer's point of view.
+                errorBuilder:
+                    (BuildContext context, Object error, StackTrace? _) =>
+                        _Placeholder(hasPhotos: true),
+                loadingBuilder:
+                    (
+                      BuildContext context,
+                      Widget child,
+                      ImageChunkEvent? progress,
+                    ) => progress == null
+                    ? child
+                    : _Placeholder(hasPhotos: true, showSpinner: true),
+                // A decorative, redundant image: the livestock type and breed are
+                // already rendered as text beside it, so announcing the picture
+                // too would just repeat them to a screen reader.
+                excludeFromSemantics: true,
+              ),
             ),
     );
   }
@@ -124,21 +127,25 @@ class _Placeholder extends StatelessWidget {
               )
             : Padding(
                 padding: const EdgeInsets.all(AppSpacing.xs),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      Icons.image_not_supported_outlined,
-                      size: 20,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(
-                      hasPhotos ? 'Photo unavailable' : 'No photo',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.labelSmall,
-                    ),
-                  ],
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 20,
+                        color: AppColors.textSecondary,
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        hasPhotos ? 'Photo unavailable' : 'No photo',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    ],
+                  ),
                 ),
               ),
       ),

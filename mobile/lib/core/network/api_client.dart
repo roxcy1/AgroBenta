@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -58,6 +59,81 @@ class ApiClient {
     Map<String, dynamic>? query,
   }) {
     return _send<T>(method: 'GET', path: path, parse: parse, query: query);
+  }
+
+  /// Performs a `GET` for a raw binary body — an image, a document — rather than
+  /// a JSON envelope.
+  ///
+  /// Laravel's `streamDownload` endpoints answer with the file bytes and none of
+  /// the `{ success, message, data }` envelope, so they cannot go through
+  /// [_dispatch]. This method keeps the parts that must not be duplicated: the
+  /// bearer token, the timeout, and the translation of `401` (token cleared),
+  /// `403`, `404`, `409`, `422`, `429` and `5xx` into [ApiException]. A `200`
+  /// returns the body verbatim.
+  ///
+  /// Errors still arrive as JSON — Laravel renders them through the exception
+  /// handler even on a route whose success path is a stream — so the same
+  /// [ApiException] surface applies, and a caller can distinguish "no document"
+  /// (`notFound`) from "could not fetch" without inspecting a status code.
+  Future<Uint8List> getBytes(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
+
+    final Map<String, String> headers = <String, String>{
+      'Accept': ApiConstants.acceptJson,
+    };
+
+    final String? token = await _tokenStorage.read();
+    final bool authenticated = token != null && token.isNotEmpty;
+    if (authenticated) {
+      headers[ApiConstants.authorizationHeader] =
+          '${ApiConstants.bearerPrefix} $token';
+    }
+
+    final http.Request request = http.Request('GET', uri)
+      ..headers.addAll(headers);
+
+    http.StreamedResponse streamed;
+    try {
+      streamed = await _httpClient.send(request).timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException.network(
+        message:
+            'The request timed out after ${_timeout.inSeconds}s. '
+            'Check that the API is reachable at $baseUrl.',
+      );
+    } on http.ClientException catch (error) {
+      throw ApiException.network(
+        message:
+            'Could not reach the server. Check your connection and that the '
+            'API is running at $baseUrl.',
+        cause: error,
+      );
+    }
+
+    if (_isSuccessStatus(streamed.statusCode)) {
+      return Uint8List.fromList(await streamed.stream.toBytes());
+    }
+
+    // An error path. Read the body so Laravel's message is preserved, then
+    // translate it exactly as a JSON request would.
+    final http.Response response = await http.Response.fromStream(streamed);
+
+    bool decodeFailed = false;
+    Object? decoded;
+    try {
+      decoded = _decodeBody(response);
+    } on ApiException {
+      decodeFailed = true;
+    }
+
+    throw await _toApiException(
+      response,
+      decodeFailed ? null : decoded,
+      authenticated: authenticated,
+    );
   }
 
   /// Performs a `POST` and returns the unwrapped `data` payload.
@@ -145,8 +221,70 @@ class ApiClient {
     required T Function(Object? data) parse,
     Map<String, dynamic>? query,
   }) async {
-    final (response: http.Response response, authenticated: bool sentToken) =
-        await _perform(method: method, path: path, body: body, query: query);
+    final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
+
+    final Map<String, String> headers = <String, String>{
+      'Accept': ApiConstants.acceptJson,
+    };
+
+    if (body != null) {
+      headers['Content-Type'] = ApiConstants.contentTypeJson;
+    }
+
+    // Attach the bearer token when one exists. A request without a token is
+    // legitimate (a login request, for instance), so a missing token is not an
+    // error here — the server decides.
+    final String? token = await _tokenStorage.read();
+    final bool authenticated = token != null && token.isNotEmpty;
+    if (authenticated) {
+      headers[ApiConstants.authorizationHeader] =
+          '${ApiConstants.bearerPrefix} $token';
+    }
+
+    final http.Request request = http.Request(method, uri)
+      ..headers.addAll(headers);
+
+    if (body != null) {
+      request.body = jsonEncode(body);
+    }
+
+    return _dispatch<T>(
+      request: request,
+      authenticated: authenticated,
+      parse: parse,
+    );
+  }
+
+  /// Sends an already-built request, unmasks the `{success, message, data}`
+  /// envelope, and translates failures into [ApiException].
+  ///
+  /// Used by every JSON request through [_send] and by multipart uploads
+  /// through [postMultipart], so transport error handling lives in exactly one
+  /// place.
+  Future<T> _dispatch<T>({
+    required http.BaseRequest request,
+    required bool authenticated,
+    required T Function(Object? data) parse,
+  }) async {
+    http.StreamedResponse streamed;
+    try {
+      streamed = await _httpClient.send(request).timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException.network(
+        message:
+            'The request timed out after ${_timeout.inSeconds}s. '
+            'Check that the API is reachable at $baseUrl.',
+      );
+    } on http.ClientException catch (error) {
+      throw ApiException.network(
+        message:
+            'Could not reach the server. Check your connection and that the '
+            'API is running at $baseUrl.',
+        cause: error,
+      );
+    }
+
+    final http.Response response = await http.Response.fromStream(streamed);
 
     // 204 and 205 carry no body by definition. Laravel uses 204 for deletes.
     if (response.statusCode == 204 || response.statusCode == 205) {
@@ -200,14 +338,24 @@ class ApiClient {
     throw await _toApiException(
       response,
       decodeFailed ? null : decoded,
-      authenticated: sentToken,
+      authenticated: authenticated,
     );
   }
 
-  Future<({http.Response response, bool authenticated})> _perform({
-    required String method,
+  /// Performs a `POST` with `multipart/form-data` and returns the unwrapped
+  /// `data` payload.
+  ///
+  /// [files] is keyed by form field name. [onProgress] reports aggregate bytes
+  /// sent as the request is uploaded, so the UI can show upload progress.
+  ///
+  /// Transport error handling (token, timeout, envelope unmarshaling,
+  /// [ApiException]) is shared with [_dispatch], so uploads behave identically
+  /// to JSON requests.
+  Future<T> postMultipart<T>({
     required String path,
-    Object? body,
+    required List<http.MultipartFile> files,
+    Map<String, String>? fields,
+    required T Function(Object? data) parse,
     Map<String, dynamic>? query,
   }) async {
     final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
@@ -216,13 +364,6 @@ class ApiClient {
       'Accept': ApiConstants.acceptJson,
     };
 
-    if (body != null) {
-      headers['Content-Type'] = ApiConstants.contentTypeJson;
-    }
-
-    // Attach the bearer token when one exists. A request without a token is
-    // legitimate (a login request, for instance), so a missing token is not an
-    // error here — the server decides.
     final String? token = await _tokenStorage.read();
     final bool authenticated = token != null && token.isNotEmpty;
     if (authenticated) {
@@ -230,35 +371,20 @@ class ApiClient {
           '${ApiConstants.bearerPrefix} $token';
     }
 
-    final http.Request request = http.Request(method, uri)
+    final http.MultipartRequest request = http.MultipartRequest('POST', uri)
       ..headers.addAll(headers);
 
-    if (body != null) {
-      request.body = jsonEncode(body);
+    if (fields != null) {
+      request.fields.addAll(fields);
     }
 
-    try {
-      final http.StreamedResponse streamed = await _httpClient
-          .send(request)
-          .timeout(_timeout);
-      return (
-        response: await http.Response.fromStream(streamed),
-        authenticated: authenticated,
-      );
-    } on TimeoutException {
-      throw ApiException.network(
-        message:
-            'The request timed out after ${_timeout.inSeconds}s. '
-            'Check that the API is reachable at $baseUrl.',
-      );
-    } on http.ClientException catch (error) {
-      throw ApiException.network(
-        message:
-            'Could not reach the server. Check your connection and that the '
-            'API is running at $baseUrl.',
-        cause: error,
-      );
-    }
+    request.files.addAll(files);
+
+    return _dispatch<T>(
+      request: request,
+      authenticated: authenticated,
+      parse: parse,
+    );
   }
 
   /// Normalises a decoded 2xx body into a shape [ApiEnvelope] accepts.

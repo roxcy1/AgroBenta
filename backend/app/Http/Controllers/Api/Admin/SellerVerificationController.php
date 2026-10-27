@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\SellerVerificationDocumentType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListSellerVerificationsRequest;
 use App\Http\Requests\Admin\RejectSellerVerificationRequest;
@@ -9,12 +10,16 @@ use App\Http\Requests\Admin\ReviewSellerVerificationRequest;
 use App\Http\Resources\SellerVerificationResource;
 use App\Models\SellerVerification;
 use App\Services\Admin\AdminSellerVerificationService;
+use App\Services\SellerVerification\SellerVerificationDocumentService;
 use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SellerVerificationController extends Controller
 {
-    public function __construct(private readonly AdminSellerVerificationService $verifications)
-    {
+    public function __construct(
+        private readonly AdminSellerVerificationService $verifications,
+        private readonly SellerVerificationDocumentService $documents,
+    ) {
         //
     }
 
@@ -61,13 +66,33 @@ class SellerVerificationController extends Controller
     }
 
     /**
+     * Stream one submitted document for review (government ID or selfie).
+     *
+     * Administrator-only: this route lives inside the `admin` group, and the
+     * file itself is on private storage the web server cannot address. The
+     * response is streamed with `Cache-Control: private, no-store` so a shared
+     * cache or proxy never retains a government ID. A document that a legacy
+     * record never had answers 404 rather than an empty 200.
+     */
+    public function document(
+        SellerVerification $sellerVerification,
+        string $type,
+    ): StreamedResponse {
+        $documentType = SellerVerificationDocumentType::tryFrom($type);
+
+        abort_if($documentType === null, 404, 'Unknown document type.');
+
+        return $this->documents->response($sellerVerification, $documentType);
+    }
+
+    /**
      * Approve a seller verification request.
      */
     public function approve(SellerVerification $sellerVerification, ReviewSellerVerificationRequest $request): JsonResponse
     {
         $result = $this->verifications->approve(
             $sellerVerification,
-            $request->user()->id,
+            $request->user(),
             $request->validated('admin_note'),
         );
 
@@ -85,7 +110,7 @@ class SellerVerificationController extends Controller
     {
         $result = $this->verifications->reject(
             $sellerVerification,
-            $request->user()->id,
+            $request->user(),
             $request->validated('admin_note'),
         );
 

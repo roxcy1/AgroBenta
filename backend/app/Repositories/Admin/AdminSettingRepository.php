@@ -4,6 +4,7 @@ namespace App\Repositories\Admin;
 
 use App\Models\Setting;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AdminSettingRepository
 {
@@ -37,16 +38,25 @@ class AdminSettingRepository
     }
 
     /**
-     * Upsert multiple settings by key.
+     * Upsert multiple settings by key, atomically.
      *
-     * @param  array<string, string>  $values  key => value pairs
+     * The whole batch runs in one transaction so a failure part-way through
+     * leaves none of the settings changed, rather than a request that reports
+     * failure and has still half-applied to the database.
+     *
+     * `updateOrCreate`, not an update-only `where('key')`: a key that is
+     * registered but somehow absent from the table (a deployment that has not
+     * been seeded) is created rather than silently skipped, so an accepted
+     * update is always visible in the next read.
+     *
+     * @param  array<string, array{value: string, group: string, label: string, description: ?string}>  $rows
      */
-    public function updateMany(array $values): void
+    public function updateMany(array $rows): void
     {
-        foreach ($values as $key => $value) {
-            Setting::query()
-                ->where('key', $key)
-                ->update(['value' => $value]);
-        }
+        DB::transaction(function () use ($rows): void {
+            foreach ($rows as $key => $attributes) {
+                Setting::query()->updateOrCreate(['key' => $key], $attributes);
+            }
+        });
     }
 }

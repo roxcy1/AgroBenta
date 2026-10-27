@@ -14,10 +14,11 @@ import 'seller_listing_form_screen.dart';
 /// The seller's own listings: "My Listings".
 ///
 /// The one screen a seller lands on to manage what they have put up, and the
-/// entry point for creating a listing. Reached from Home, not from the bottom
-/// navigation — `mobile/DESIGN.md` forbids building navigation for screens a
-/// buyer cannot use, and My Listings is unreachable for a buyer by definition
-/// (the server answers `403`).
+/// entry point for creating a listing. In Seller Mode it is a tab in
+/// `SellerShell`; the buyer shell keeps it off its bottom navigation because a
+/// buyer cannot reach it (the server answers `403`). In Buyer Mode the same
+/// screen is reached through the Home entry card, which only verified sellers
+/// see.
 ///
 /// A plain [StatefulWidget] rather than a `Consumer` on a provider: it reads the
 /// controller once in `initState` and rebuilds from [ListenableBuilder], so a
@@ -234,9 +235,8 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                   onRefresh: _controller.refresh,
                   child: switch (state.status) {
                     SellerListingStatus.initial ||
-                    SellerListingStatus.loading => const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    SellerListingStatus.loading =>
+                      const SellerListingsSkeleton(),
                     // A scroll view even on a full-screen error, so
                     // pull-to-refresh works there as well as on the list.
                     SellerListingStatus.failed => ListView(
@@ -409,22 +409,17 @@ class _ListFooter extends StatelessWidget {
   }
 }
 
-/// The status filter chips, "All" first.
 class _StatusFilterBar extends StatelessWidget {
   const _StatusFilterBar({required this.selected, required this.onSelected});
 
   final ListingStatus? selected;
   final ValueChanged<ListingStatus?> onSelected;
 
-  /// Every status, in the order a seller's listings move through them, plus the
-  /// terminal states last. "All" is first because it is the default view.
-  static const List<ListingStatus?> _filters = <ListingStatus?>[
-    null,
-    ListingStatus.draft,
-    ListingStatus.pending,
+  static const List<ListingStatus> _filters = <ListingStatus>[
     ListingStatus.active,
+    ListingStatus.pending,
     ListingStatus.sold,
-    ListingStatus.inactive,
+    ListingStatus.draft,
   ];
 
   @override
@@ -440,10 +435,10 @@ class _StatusFilterBar extends StatelessWidget {
         separatorBuilder: (BuildContext context, int index) =>
             const SizedBox(width: AppSpacing.xs),
         itemBuilder: (BuildContext context, int index) {
-          final ListingStatus? status = _filters[index];
+          final ListingStatus status = _filters[index];
           final bool isSelected = status == selected;
-          final String label = status == null
-              ? 'All'
+          final String label = status == ListingStatus.draft
+              ? 'Drafts'
               : listingStatusLabel(status);
 
           return Center(

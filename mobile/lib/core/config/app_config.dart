@@ -89,13 +89,18 @@ abstract final class AppConfig {
   /// repository root `README.md`). The API is mounted under `/api`.
   static const String localApiBaseUrl = 'http://localhost:8001/api';
 
-  /// Default for a **physical-device** Android development build is no longer
-  /// hardcoded. A physical Android build must be provided via
-  /// `--dart-define=API_BASE_URL` (pointing to your machine's LAN IP).
-  static const String _missingPhysicalAndroidApiBaseUrlError =
-      'API_BASE_URL must be provided via --dart-define for a physical Android '
-      'build. See mobile/README.md for examples (e.g. '
-      '--dart-define=API_BASE_URL=http://192.168.0.108:8001/api).';
+  /// Default for a **physical-device** Android development build: the
+  /// development machine's LAN IP, which a phone on the same Wi-Fi network
+  /// reaches directly.
+  ///
+  /// This is the Android default precisely because the emulator's `10.0.2.2`
+  /// loopback alias does not exist on a real phone — a physical build that
+  /// falls back to it fails every request. If this machine's LAN IP ever
+  /// changes, update this constant. Staging and production are expressed with
+  /// `--dart-define=API_BASE_URL`, never by editing this constant.
+  /// CHANGE_THIS_DEV_LAN_IP: the development machine's address in
+  /// `ipconfig`.
+  static const String physicalAndroidApiBaseUrl = 'http://192.168.1.14:8001/api';
 
   /// `10.0.2.2` is the Android emulator's alias for the host machine's loopback
   /// interface. Selected **only** when the build opts in with

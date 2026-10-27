@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:agrobenta_mobile/features/auth/view/register_screen.dart';
 import 'package:agrobenta_mobile/features/auth/view/sign_in_screen.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
+import 'package:agrobenta_mobile/features/profile/view/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -125,7 +126,8 @@ void main() {
         'ana@example.test',
       );
       await tester.enterText(find.byType(TextFormField).at(1), 'correct horse');
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Log In'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Log In'));
       await settleAuth(tester);
 
       expect(find.byType(BuyerHomeScreen), findsOneWidget);
@@ -152,7 +154,8 @@ void main() {
         'ana@example.test',
       );
       await tester.enterText(find.byType(TextFormField).at(1), 'wrong');
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Log In'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Log In'));
       await settleAuth(tester);
 
       expect(find.byType(SignInScreen), findsOneWidget);
@@ -169,7 +172,8 @@ void main() {
         handler: (_) async => fail('the API must not be called with no input'),
       );
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Log In'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Log In'));
       await settleAuth(tester);
 
       expect(harness.recorded, isEmpty);
@@ -190,7 +194,8 @@ void main() {
         'ana@example.test',
       );
       await tester.enterText(find.byType(TextFormField).at(1), 'wrong');
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Log In'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Log In'));
       await settleAuth(tester);
 
       final TextField field = tester.widget<TextField>(
@@ -216,7 +221,8 @@ void main() {
         ),
       );
 
-      await tester.tap(find.widgetWithText(TextButton, 'Create an account'));
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Sign Up'));
+      await tester.tap(find.widgetWithText(TextButton, 'Sign Up'));
       await settleAuth(tester);
       expect(find.byType(RegisterScreen), findsOneWidget);
 
@@ -227,7 +233,13 @@ void main() {
       );
       await tester.enterText(find.byType(TextFormField).at(2), 'correct horse');
       await tester.enterText(find.byType(TextFormField).at(3), 'correct horse');
-      await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+      await tester.ensureVisible(find.byType(Checkbox));
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Create Account'),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
       await settleAuth(tester);
 
       expect(find.byType(BuyerHomeScreen), findsOneWidget);
@@ -263,7 +275,8 @@ void main() {
         ),
       );
 
-      await tester.tap(find.widgetWithText(TextButton, 'Create an account'));
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Sign Up'));
+      await tester.tap(find.widgetWithText(TextButton, 'Sign Up'));
       await settleAuth(tester);
       await tester.enterText(find.byType(TextFormField).at(0), 'Ana Reyes');
       await tester.enterText(
@@ -272,7 +285,13 @@ void main() {
       );
       await tester.enterText(find.byType(TextFormField).at(2), 'correct horse');
       await tester.enterText(find.byType(TextFormField).at(3), 'correct horse');
-      await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+      await tester.ensureVisible(find.byType(Checkbox));
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Create Account'),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
       await settleAuth(tester);
 
       expect(find.byType(RegisterScreen), findsOneWidget);
@@ -289,7 +308,8 @@ void main() {
         handler: (_) async => fail('the API must not be called on a mismatch'),
       );
 
-      await tester.tap(find.widgetWithText(TextButton, 'Create an account'));
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Sign Up'));
+      await tester.tap(find.widgetWithText(TextButton, 'Sign Up'));
       await settleAuth(tester);
       await tester.enterText(find.byType(TextFormField).at(0), 'Ana Reyes');
       await tester.enterText(
@@ -301,7 +321,10 @@ void main() {
         find.byType(TextFormField).at(3),
         'battery staple',
       );
-      await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Create Account'),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
       await settleAuth(tester);
 
       expect(find.text('The passwords do not match.'), findsOneWidget);
@@ -318,7 +341,8 @@ void main() {
             fail('the API must not be called on a short password'),
       );
 
-      await tester.tap(find.widgetWithText(TextButton, 'Create an account'));
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Sign Up'));
+      await tester.tap(find.widgetWithText(TextButton, 'Sign Up'));
       await settleAuth(tester);
       await tester.enterText(find.byType(TextFormField).at(0), 'Ana Reyes');
       await tester.enterText(
@@ -327,7 +351,10 @@ void main() {
       );
       await tester.enterText(find.byType(TextFormField).at(2), 'short');
       await tester.enterText(find.byType(TextFormField).at(3), 'short');
-      await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Create Account'),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
       await settleAuth(tester);
 
       expect(find.text('Use at least 8 characters.'), findsOneWidget);
@@ -343,13 +370,13 @@ void main() {
         handler: (_) async => fail('no request expected'),
       );
 
-      await tester.tap(find.widgetWithText(TextButton, 'Create an account'));
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Sign Up'));
+      await tester.tap(find.widgetWithText(TextButton, 'Sign Up'));
       await settleAuth(tester);
       expect(find.byType(RegisterScreen), findsOneWidget);
 
-      await tester.tap(
-        find.widgetWithText(TextButton, 'I already have an account'),
-      );
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Log In'));
+      await tester.tap(find.widgetWithText(TextButton, 'Log In'));
       await settleAuth(tester);
 
       expect(find.byType(SignInScreen), findsOneWidget);
@@ -384,7 +411,18 @@ void main() {
 
       expect(find.byType(BuyerHomeScreen), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Sign out'));
+      // Log out lives on the profile screen now, under "Other"; the header's
+      // profile action is the path to it from Home.
+      await tester.tap(find.byTooltip('Profile'));
+      await settleAuth(tester);
+
+      expect(find.byType(ProfileScreen), findsOneWidget);
+
+      await tester.ensureVisible(find.widgetWithText(ListTile, 'Log Out'));
+      // A frame for the zero-duration scroll to reach the render tree — tap
+      // hit-tests against the last laid-out geometry, not the new offset.
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.widgetWithText(ListTile, 'Log Out'));
       await settleAuth(tester);
 
       expect(find.byType(SignInScreen), findsOneWidget);

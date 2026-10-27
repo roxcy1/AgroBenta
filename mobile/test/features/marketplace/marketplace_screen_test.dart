@@ -302,7 +302,7 @@ void main() {
   });
 
   group('filters', () {
-    testWidgets('opens a sheet and applies a price bound', (
+    testWidgets('opens the filter screen and applies a price bound', (
       WidgetTester tester,
     ) async {
       final harness = await MarketplaceHarness.pump(
@@ -315,13 +315,13 @@ void main() {
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
 
-      expect(find.text('Filters'), findsOneWidget);
+      expect(find.text('Filter Livestock'), findsOneWidget);
 
       await tester.enterText(
         find.widgetWithText(TextField, 'Min price'),
         '10000',
       );
-      await tester.tap(find.text('Apply filters'));
+      await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester, frames: 12);
 
       expect(harness.recorded.length, afterLoad + 1);
@@ -349,7 +349,7 @@ void main() {
         find.widgetWithText(TextField, 'Max price'),
         '10000',
       );
-      await tester.tap(find.text('Apply filters'));
+      await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester);
 
       expect(
@@ -374,18 +374,15 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Livestock type'),
-        'Cattle',
-      );
-      await tester.tap(find.text('Apply filters'));
+      await tester.tap(find.byKey(const ValueKey<String>('animal-type-Cattle')));
+      await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester, frames: 12);
 
-      // The count, not the values — the sheet shows the values.
+      // The count, not the values — the filter screen shows the values.
       expect(find.text('1'), findsOneWidget);
     });
 
-    testWidgets('clearing all filters from the sheet reloads unfiltered', (
+    testWidgets('reset then apply clears the filters and reloads', (
       WidgetTester tester,
     ) async {
       final harness = await MarketplaceHarness.pump(
@@ -396,16 +393,14 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Livestock type'),
-        'Cattle',
-      );
-      await tester.tap(find.text('Apply filters'));
+      await tester.tap(find.byKey(const ValueKey<String>('animal-type-Cattle')));
+      await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester, frames: 12);
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.tap(find.text('Clear all'));
+      await tester.tap(find.text('Reset'));
+      await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester, frames: 12);
 
       expect(

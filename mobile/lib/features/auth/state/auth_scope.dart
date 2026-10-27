@@ -26,4 +26,14 @@ class AuthScope extends InheritedNotifier<AuthController> {
     assert(scope != null, 'No AuthScope found above this widget.');
     return scope!.notifier!;
   }
+
+  /// The controller, or `null` when there is no [AuthScope] above [context].
+  ///
+  /// For widgets that can render without a session — a screen mounted alone in
+  /// a test, or a sub-tree that only degrades when it needs the current user.
+  /// The same shape as `MessagingScope`'s `of`/`readOf` pair: one accessor
+  /// asserts, the other lets the caller decide what absence means.
+  static AuthController? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<AuthScope>()?.notifier;
+  }
 }

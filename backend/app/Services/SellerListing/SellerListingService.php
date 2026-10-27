@@ -2,14 +2,21 @@
 
 namespace App\Services\SellerListing;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Http\Requests\SellerListing\SellerListingRules;
 use App\Models\Listing;
 use App\Models\User;
 use App\Repositories\SellerListing\SellerListingRepository;
+use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * The rules for what a seller may do to a listing, and from which state.
@@ -58,6 +65,7 @@ class SellerListingService
 
     public function __construct(
         private readonly SellerListingRepository $listingRepository,
+        private readonly ActivityLogger $activity,
     ) {}
 
     /**
@@ -92,10 +100,27 @@ class SellerListingService
      */
     public function create(User $seller, array $attributes): Listing
     {
-        return $this->listingRepository->createForSeller(
-            $seller,
-            $this->withStorageDefaults($attributes),
-        );
+        return DB::transaction(function () use ($seller, $attributes): Listing {
+            $listing = $this->listingRepository->createForSeller(
+                $seller,
+                $this->withStorageDefaults($attributes),
+            );
+
+            $this->activity->log(
+                $seller,
+                ActivityAction::ListingCreated,
+                sprintf('Listing #%d created as a draft.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => [
+                        'status' => ['from' => null, 'to' => ListingStatus::Draft->value],
+                    ],
+                ],
+            );
+
+            return $listing;
+        });
     }
 
     /**
@@ -107,7 +132,28 @@ class SellerListingService
     {
         $this->ensureStatusIs($listing, self::EDITABLE_STATUSES, 'Only a draft or an active listing can be edited.');
 
-        return $this->listingRepository->update($listing, $attributes);
+        return DB::transaction(function () use ($listing, $attributes): Listing {
+            $before = $listing->getAttributes();
+
+            $updated = $this->listingRepository->update($listing, $attributes);
+
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingUpdated,
+                sprintf('Listing #%d updated.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => $this->changedAttributes(
+                        $before,
+                        $updated->getAttributes(),
+                        array_keys($attributes),
+                    ),
+                ],
+            );
+
+            return $updated;
+        });
     }
 
     /**
@@ -124,10 +170,27 @@ class SellerListingService
     {
         $this->ensureSubmittable($listing);
 
-        $listing->status = ListingStatus::Pending;
-        $listing->save();
+        return DB::transaction(function () use ($listing): Listing {
+            $previousStatus = $listing->status->value;
 
-        return $listing;
+            $listing->status = ListingStatus::Pending;
+            $listing->save();
+
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingSubmitted,
+                sprintf('Listing #%d submitted for review.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => [
+                        'status' => ['from' => $previousStatus, 'to' => ListingStatus::Pending->value],
+                    ],
+                ],
+            );
+
+            return $listing;
+        });
     }
 
     /**
@@ -139,7 +202,170 @@ class SellerListingService
     {
         $this->ensureStatusIs($listing, self::DELETABLE_STATUSES, 'Only a draft or an inactive listing can be deleted.');
 
-        $this->listingRepository->delete($listing);
+        DB::transaction(function () use ($listing): void {
+            $targetId = $listing->getKey();
+            $sellerId = $listing->seller_id;
+            $previousStatus = $listing->status->value;
+            $livestockType = $listing->livestock_type;
+
+            $this->listingRepository->delete($listing);
+
+            $this->activity->log(
+                $sellerId,
+                ActivityAction::ListingDeleted,
+                sprintf('Listing #%d deleted.', $targetId),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $targetId,
+                    'context' => ['livestock_type' => $livestockType],
+                    'changes' => ['status' => ['from' => $previousStatus, 'to' => null]],
+                ],
+            );
+        });
+    }
+
+    /**
+     * Add photos to a listing the seller owns.
+     *
+     * Files are written to the `listing-photos` disk under `listings/{id}/`
+     * (functional documentation §4.5, D-10); only the generated filenames are
+     * stored in the JSON column, and `MobileListingResource` turns them back
+     * into absolute URLs on the way out.
+     *
+     * The per-listing ceiling is checked here, against the stored count,
+     * rather than in the Form Request: the request sees only its own body, so
+     * a cumulative limit is a service question — and checking it after the
+     * controller's ownership lookup means an over-limit request from a
+     * non-owner is a 404, never a 422 that confirms the listing exists.
+     *
+     * @param  array<int, UploadedFile>  $files
+     *
+     * @throws ValidationException if existing photos plus these files exceed the limit
+     */
+    public function addPhotos(Listing $listing, array $files): Listing
+    {
+        $this->ensureStatusIs(
+            $listing,
+            self::EDITABLE_STATUSES,
+            'Photos can only be changed on a draft or an active listing.',
+        );
+
+        $stored = $listing->storedPhotoFilenames();
+        $limit = $this->photoLimit();
+        $previousCount = count($stored);
+
+        if (count($stored) + count($files) > $limit) {
+            throw ValidationException::withMessages([
+                'photos' => 'A listing may have at most '.$limit.' photos.',
+            ]);
+        }
+
+        $disk = Storage::disk(Listing::PHOTO_DISK);
+        $directory = (string) $listing->getKey();
+
+        foreach ($files as $file) {
+            $filename = $file->hashName();
+
+            // The disk is configured not to throw, so a failed write returns
+            // false; that must not look like a successful upload until a buyer
+            // discovers a broken image.
+            if (! $disk->putFileAs($directory, $file, $filename)) {
+                throw new RuntimeException('Failed to store a listing photo.');
+            }
+
+            $stored[] = $filename;
+        }
+
+        $updated = $this->listingRepository->update($listing, ['photos' => $stored]);
+
+        // Same target/changes shape as the other listing writes, and written
+        // only once the photos are actually stored and the row is updated, so a
+        // refused or half-written upload can never be recorded as a success.
+        // The files themselves are never named — only how many the listing
+        // gained — so the audit holds no filename that could describe a stored
+        // path.
+        if ($files !== []) {
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingPhotoAdded,
+                sprintf(
+                    '%d %s added to listing #%d.',
+                    count($files),
+                    Str::plural('photo', count($files)),
+                    $listing->getKey(),
+                ),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => [
+                        'photos' => ['from' => $previousCount, 'to' => count($stored)],
+                    ],
+                ],
+            );
+        }
+
+        return $updated;
+    }
+
+    /**
+     * Remove one photo from a listing the seller owns.
+     *
+     * The client names the photo with the value it was served — the full URL
+     * or the bare filename — and either collapses to the same filename, so a
+     * client never has to parse its own URL to delete from it.
+     *
+     * @throws ValidationException if the listing is not in an editable state
+     */
+    public function removePhoto(Listing $listing, string $photo): Listing
+    {
+        $this->ensureStatusIs(
+            $listing,
+            self::EDITABLE_STATUSES,
+            'Photos can only be changed on a draft or an active listing.',
+        );
+
+        $filename = basename(str_replace('\\', '/', trim($photo)));
+        $stored = $listing->storedPhotoFilenames();
+
+        // 404, not 422: the listing is the seller's own, but a name that is
+        // not on it names a photo that does not exist — the same absence as a
+        // listing id that was never theirs.
+        if (! in_array($filename, $stored, true)) {
+            abort(404, 'Photo not found.');
+        }
+
+        $updated = DB::transaction(function () use ($listing, $filename, $stored): Listing {
+            $updated = $this->listingRepository->update($listing, [
+                'photos' => array_values(array_filter(
+                    $stored,
+                    static fn (string $stored): bool => $stored !== $filename,
+                )),
+            ]);
+
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingPhotoRemoved,
+                sprintf('Photo removed from listing #%d.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'context' => ['photo' => $filename],
+                    'changes' => [
+                        'photos' => ['from' => count($stored), 'to' => count($stored) - 1],
+                    ],
+                ],
+            );
+
+            return $updated;
+        });
+
+        // The database is the source of truth, so it is written before the
+        // file is deleted: if the delete fails the worst case is an orphaned
+        // file nothing references, while the reverse order would leave the
+        // API advertising a photo that is gone.
+        Storage::disk(Listing::PHOTO_DISK)->delete($listing->getKey().'/'.$filename);
+
+        return $updated;
     }
 
     /**
@@ -158,7 +384,15 @@ class SellerListingService
             [
                 'livestock_type' => $listing->livestock_type,
                 'breed' => $listing->breed,
-                'age_value' => $listing->age_value,
+                // The `decimal:1` cast on the model turns a whole stored age into
+                // the string "2.0", which the contract's `integer` rule would
+                // reject even though nothing is wrong with the listing. An
+                // integral value is therefore normalised back to an int before
+                // validation; a genuinely fractional one is left exactly as it
+                // is, so a row written outside this API with an age of 2.5 still
+                // fails the rule instead of being silently truncated into
+                // submittability.
+                'age_value' => $this->wholeNumberOrNull($listing->age_value),
                 'age_unit' => $listing->age_unit,
                 'gender' => $listing->gender,
                 'weight_value' => $listing->weight_value,
@@ -184,6 +418,27 @@ class SellerListingService
             [ListingStatus::Draft],
             'Only a draft listing can be submitted for review.',
         );
+    }
+
+    /**
+     * Normalise a stored numeric value to int, but only when it is a whole
+     * number.
+     *
+     * Null, a fraction, or a non-numeric string is returned unchanged, so the
+     * `integer` rule keeps rejecting those; only the cast artefact ("2.0" for
+     * a perfectly integral age) is repaired.
+     */
+    private function wholeNumberOrNull(mixed $value): mixed
+    {
+        if ($value === null || ! is_numeric($value)) {
+            return $value;
+        }
+
+        $numeric = (float) $value;
+
+        // Loose comparison on purpose: the question is numeric equality with
+        // its integer self, not type identity.
+        return (int) $numeric == $numeric ? (int) $numeric : $value;
     }
 
     /**
@@ -225,5 +480,58 @@ class SellerListingService
         $attributes['weight_unit'] ??= 'kg';
 
         return $attributes;
+    }
+
+    /**
+     * Before/after pairs for the attributes a write actually changed.
+     *
+     * Only keys that differ are returned, so the audit records a real edit
+     * rather than echoing the whole request. `photos` is reported as a count:
+     * the stored value is a JSON array of filenames, and a reordering is not a
+     * meaningful change to the listing.
+     *
+     * @param  array<string, mixed>  $before
+     * @param  array<string, mixed>  $after
+     * @param  list<string>  $keys
+     * @return array<string, array{from: mixed, to: mixed}>
+     */
+    private function changedAttributes(array $before, array $after, array $keys): array
+    {
+        $changes = [];
+
+        foreach ($keys as $key) {
+            $old = $before[$key] ?? null;
+            $new = $after[$key] ?? null;
+
+            if ($key === 'photos') {
+                $oldCount = $this->photoCount($old);
+                $newCount = $this->photoCount($new);
+
+                if ($oldCount !== $newCount) {
+                    $changes['photos'] = ['from' => $oldCount, 'to' => $newCount];
+                }
+
+                continue;
+            }
+
+            if ($old !== $new) {
+                $changes[$key] = ['from' => $old, 'to' => $new];
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Count the filenames in a stored `photos` value, whether it arrives as the
+     * raw JSON string from the attributes array or an already-decoded array.
+     */
+    private function photoCount(mixed $value): int
+    {
+        if (is_string($value)) {
+            $value = json_decode($value, true);
+        }
+
+        return is_array($value) ? count($value) : 0;
     }
 }

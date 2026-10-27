@@ -52,7 +52,7 @@ Color listingStatusAccent(ListingStatus status) => switch (status) {
   ListingStatus.draft => AppColors.textSecondary,
   ListingStatus.pending => AppColors.warning,
   ListingStatus.active => AppColors.success,
-  ListingStatus.sold => AppColors.textSecondary,
+  ListingStatus.sold => AppColors.sold,
   ListingStatus.inactive => AppColors.textSecondary,
 };
 
@@ -185,8 +185,7 @@ class SellerListingsEmptyState extends StatelessWidget {
             Text(
               isFiltered
                   ? 'Try a different search, or clear the status filter.'
-                  : 'Create your first listing as a draft, then submit it for '
-                        'review when it is ready.',
+                  : 'No listings yet — Create your first listing',
               style: theme.textTheme.bodySmall,
               textAlign: TextAlign.center,
             ),
@@ -203,6 +202,93 @@ class SellerListingsEmptyState extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Placeholder rows shown while the first page loads.
+///
+/// Bone-coloured boxes in the shape of a [SellerListingCard] — thumbnail,
+/// title, price and chip — so the layout does not jump when the real rows
+/// land. Three rows fill a typical viewport without scrolling.
+class SellerListingsSkeleton extends StatelessWidget {
+  const SellerListingsSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // A plain Column, not a ListView: this widget sits inside the screen's
+    // Column where a scrolling list would take unbounded height and fail
+    // layout. Three fixed rows fill a typical viewport without scrolling.
+    return const Padding(
+      padding: EdgeInsets.all(AppSpacing.screenGutter),
+      child: Column(
+        children: <Widget>[
+          _SkeletonCard(),
+          SizedBox(height: AppSpacing.sm),
+          _SkeletonCard(),
+          SizedBox(height: AppSpacing.sm),
+          _SkeletonCard(),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Card(
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _Bone(width: 88, height: 88, radius: AppRadius.sm),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _Bone(width: 64, height: 20, radius: 6),
+                  SizedBox(height: AppSpacing.xs),
+                  _Bone(width: double.infinity, height: 16, radius: 4),
+                  SizedBox(height: AppSpacing.xxs),
+                  _Bone(width: 120, height: 16, radius: 4),
+                  SizedBox(height: AppSpacing.xs),
+                  _Bone(width: 90, height: 14, radius: 4),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Bone extends StatelessWidget {
+  const _Bone({
+    required this.width,
+    required this.height,
+    required this.radius,
+  });
+
+  final double width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.border,
+        borderRadius: BorderRadius.circular(radius),
       ),
     );
   }

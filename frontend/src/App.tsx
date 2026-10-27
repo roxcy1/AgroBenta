@@ -7,6 +7,7 @@ import UsersPage from './pages/UsersPage'
 import LivestockPage from './pages/LivestockPage'
 import SellerVerificationPage from './pages/SellerVerificationPage'
 import TransactionsPage from './pages/TransactionsPage'
+import InquiriesPage from './pages/InquiriesPage'
 import ActivitiesPage from './pages/ActivitiesPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
@@ -22,9 +23,11 @@ export default function App() {
           <Route path="/livestock" element={<LivestockPage />} />
           <Route path="/seller-verification" element={<SellerVerificationPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
+          <Route path="/inquiries" element={<InquiriesPage />} />
           <Route path="/activities" element={<ActivitiesPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/admin/settings" element={<Navigate to="/settings" replace />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

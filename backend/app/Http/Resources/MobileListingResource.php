@@ -44,7 +44,7 @@ class MobileListingResource extends JsonResource
             'vaccination' => $this->vaccination,
             'short_description' => $this->short_description,
             'additional_notes' => $this->additional_notes,
-            'photos' => $this->photoPaths(),
+            'photos' => $this->photoUrls(),
             'status' => $this->status?->value,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
@@ -52,22 +52,22 @@ class MobileListingResource extends JsonResource
     }
 
     /**
-     * The stored `listings.photos` JSON, normalised to a flat list of strings.
+     * The stored `listings.photos` JSON, projected as absolute URLs.
      *
-     * The column already holds a JSON array of photo paths and the schema is
-     * explicitly not to be changed in order to expose it (functional
-     * documentation §4.5). Values are therefore returned exactly as stored.
+     * The read half of the D-10 decision (functional documentation §4.5): the
+     * column stores bare filenames and `Listing`'s accessor resolves each one
+     * through the `listing-photos` disk's URL scheme, so what arrives here is
+     * already a fetchable absolute URL — never a storage-relative path a
+     * mobile client could not resolve. The schema is untouched; the column was
+     * sufficient.
      *
-     * No URL is synthesised: no upload endpoint writes to this column, no
-     * storage disk is bound to it and no URL scheme has been decided (OQ-09 /
-     * D-10). Prefixing a base URL would invent a storage mechanism this phase
-     * is not permitted to create. The `photos.*` write contract is a list of
-     * strings, so non-string entries are dropped rather than surfaced as an
-     * unexpected shape to the client.
+     * The string filter is defence in depth: the model accessor only emits
+     * strings, so this can only ever drop something another code path wrote
+     * malformed, which is preferable to handing a client an unexpected shape.
      *
      * @return list<string>
      */
-    private function photoPaths(): array
+    private function photoUrls(): array
     {
         $photos = $this->resource->photos;
 

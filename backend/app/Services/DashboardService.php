@@ -4,21 +4,34 @@ namespace App\Services;
 
 use App\Enums\ListingStatus;
 use App\Enums\SellerCapability;
+use App\Enums\SellerVerificationStatus;
 use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
 use App\Models\Activity;
 use App\Models\Listing;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Repositories\Admin\AdminSellerVerificationRepository;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class DashboardService
 {
     /**
+     * Number of rows shown in each "recent" dashboard table.
+     */
+    private const RECENT_LIMIT = 5;
+
+    public function __construct(
+        private readonly AdminSellerVerificationRepository $sellerVerifications,
+    ) {
+        //
+    }
+
+    /**
      * Get the complete dashboard data.
      *
-     * @return array{summary: array, listings: array, transactions: array, transaction_trend: array, livestock_distribution: array, recent_activities: array}
+     * @return array{summary: array, listings: array, transactions: array, transaction_trend: array, livestock_distribution: array, recent_activities: array, recent_listings: Collection, recent_transactions: Collection}
      */
     public function getDashboardData(): array
     {
@@ -29,6 +42,8 @@ class DashboardService
             'transaction_trend' => $this->getTransactionTrend(),
             'livestock_distribution' => $this->getLivestockDistribution(),
             'recent_activities' => $this->getRecentActivities(),
+            'recent_listings' => $this->getRecentListings(),
+            'recent_transactions' => $this->getRecentTransactions(),
         ];
     }
 
@@ -47,6 +62,8 @@ class DashboardService
             'total_listings' => Listing::count(),
             'active_listings' => Listing::where('status', ListingStatus::Active)->count(),
             'total_transactions' => Transaction::count(),
+            'pending_verifications' => $this->sellerVerifications
+                ->countLatestByStatus(SellerVerificationStatus::PendingReview),
         ];
     }
 
@@ -137,6 +154,34 @@ class DashboardService
         return Activity::with('user:id,name')
             ->orderByDesc('created_at')
             ->limit(10)
+            ->get();
+    }
+
+    /**
+     * Get the most recently created livestock listings.
+     *
+     * @return Collection<int, Listing>
+     */
+    private function getRecentListings(): Collection
+    {
+        return Listing::with('seller:id,name,email')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(self::RECENT_LIMIT)
+            ->get();
+    }
+
+    /**
+     * Get the most recently created transactions.
+     *
+     * @return Collection<int, Transaction>
+     */
+    private function getRecentTransactions(): Collection
+    {
+        return Transaction::with(['buyer:id,name,email', 'seller:id,name,email', 'listing:id,livestock_type,breed'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(self::RECENT_LIMIT)
             ->get();
     }
 }

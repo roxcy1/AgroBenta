@@ -108,9 +108,8 @@ class AuthFormScaffold extends StatelessWidget {
 
 /// The AgroBenta wordmark and tagline, centred above the form.
 ///
-/// The app has no logo asset yet, so the wordmark is rendered directly in the
-/// brand green using the same scale the app bar titles use. The tagline is the
-/// one from `mobile/DESIGN.md` §11.1.
+/// Displays the existing AgroBenta logo above the tagline, preserving
+/// its original colors and aspect ratio.
 class _AuthBrandHeader extends StatelessWidget {
   const _AuthBrandHeader();
 
@@ -120,10 +119,17 @@ class _AuthBrandHeader extends StatelessWidget {
 
     return Column(
       children: <Widget>[
+        Image.asset(
+          'assets/images/AgroBentaLogo.png',
+          height: 64,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: AppSpacing.xxs),
         Text(
           'AgroBenta',
-          style: theme.textTheme.headlineMedium?.copyWith(
-            color: AppColors.primary,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: AppColors.primaryDark,
           ),
         ),
         const SizedBox(height: AppSpacing.xxs),
