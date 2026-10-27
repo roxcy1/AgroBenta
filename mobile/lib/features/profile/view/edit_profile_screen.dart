@@ -98,7 +98,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     String? currentPassword;
 
     if (emailChanged) {
-      final String? password = await _promptCurrentPassword();
+      final String? password = await _promptCurrentPassword(
+        error: _controller.state.errorFor('current_password'),
+      );
       if (password == null || password.isEmpty) {
         return;
       }
@@ -117,14 +119,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (saved && mounted) {
       Navigator.of(context).pop(true);
+      return;
+    }
+
+    // If save failed with current_password error and email changed, prompt again
+    if (!saved && mounted && emailChanged) {
+      final String? error = _controller.state.errorFor('current_password');
+      if (error != null) {
+        final String? password = await _promptCurrentPassword(error: error);
+        if (password == null || password.isEmpty) {
+          return;
+        }
+        final bool savedAgain = await _controller.save(
+          name: name == _initial.name ? null : name,
+          email: emailChanged ? email : null,
+          phone: phone == (_initial.phone ?? '') ? null : phone,
+          location: location == (_initial.location ?? '') ? null : location,
+          avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
+          bio: bio == (_initial.bio ?? '') ? null : bio,
+          currentPassword: password,
+        );
+        if (savedAgain && mounted) {
+          Navigator.of(context).pop(true);
+        }
+      }
     }
   }
 
-  Future<String?> _promptCurrentPassword() async {
+  Future<String?> _promptCurrentPassword({String? error}) async {
     final String? result = await showDialog<String>(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return const _CurrentPasswordDialog();
+        return _CurrentPasswordDialog(error: error);
       },
     );
     if (result == null || result.isEmpty) {
@@ -347,7 +374,9 @@ class _FormErrorBanner extends StatelessWidget {
 
 
 class _CurrentPasswordDialog extends StatefulWidget {
-  const _CurrentPasswordDialog();
+  const _CurrentPasswordDialog({this.error});
+
+  final String? error;
 
   @override
   State<_CurrentPasswordDialog> createState() => _CurrentPasswordDialogState();
@@ -372,13 +401,20 @@ class _CurrentPasswordDialogState extends State<_CurrentPasswordDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Confirm your password'),
-      content: TextField(
-        controller: _controller,
-        obscureText: true,
-        autofocus: true,
-        decoration: const InputDecoration(
-          labelText: 'Current password',
-        ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          TextField(
+            controller: _controller,
+            obscureText: true,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Current password',
+              errorText: widget.error,
+            ),
+          ),
+        ],
       ),
       actions: <Widget>[
         TextButton(
