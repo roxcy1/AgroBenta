@@ -401,13 +401,13 @@ itself, not your development machine.
 
 | Where the app runs | Base URL to use |
 |---|---|
-| Android — physical device (same Wi-Fi) | `http://192.168.1.8:8001/api` (**the default**) |
+| Android — physical device (same Wi-Fi) | `http://<your-lan-ip>:8001/api` (**the default**) |
 | Android — emulator | `http://10.0.2.2:8001/api` (opt in with `ANDROID_RUN_TARGET=emulator`) |
 | iOS simulator | `http://localhost:8001/api` |
 | Staging / production | `https://…/api` |
 
 `AppConfig.apiBaseUrl` already resolves this per platform. The address in
-`AppConfig.physicalAndroidApiBaseUrl` is this development machine's LAN IP
+`<your-lan-ip>` is this development machine's LAN IP
 (flagged `CHANGE_THIS_DEV_LAN_IP`); update it if the machine's IP ever changes.
 
 ### Never scatter URLs
