@@ -169,8 +169,7 @@ export function ReportsPage() {
 
   return (
     <div className="dashboard-content">
-      {filtersPanel}
-
+      
       <div className="dashboard-section">
         <h2 className="dashboard-section-title">Marketplace Overview</h2>
         <div className="dashboard-stats-grid">
@@ -212,6 +211,8 @@ export function ReportsPage() {
           </div>
         </div>
       </div>
+
+      {filtersPanel}
 
       <div className="dashboard-section">
         <h2 className="dashboard-section-title">Users &amp; Sellers</h2>
