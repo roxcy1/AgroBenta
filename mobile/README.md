@@ -46,8 +46,8 @@ Project-wide rules live in the repository root: `../AGENTS.md`, `../DESIGN.md`,
 ```sh
 flutter pub get
 
-# Physical device (default) — resolves to http://192.168.1.8:8001/api
-flutter run --dart-define=API_BASE_URL=http://192.168.1.14:8001/api
+# Physical device (default) — resolves to http://<your-lan-ip>:8001/api
+flutter run --dart-define=API_BASE_URL=http://<your-lan-ip>:8001/api
 
 # Android emulator — opt into the host alias explicitly
 flutter run --dart-define=ANDROID_RUN_TARGET=emulator
@@ -57,7 +57,7 @@ flutter run -d <ios-device-id>
 ```
 
 The base URL is resolved by `lib/core/config/app_config.dart`. A native Android
-build defaults to the **physical-device** address — `http://192.168.1.8:8001/api`,
+build defaults to the **physical-device** address — `http://<your-lan-ip>:8001/api`,
 this machine's LAN IP. The emulator's `10.0.2.2` alias is chosen **only** with
 `--dart-define=ANDROID_RUN_TARGET=emulator`, so a physical build can never
 silently fall back to it. Override the URL per build rather than editing
