@@ -27,7 +27,7 @@ import '../widgets/transaction_status_badge.dart';
 class TransactionStatusContent extends StatelessWidget {
   const TransactionStatusContent({
     required this.transaction,
-    required this.onMessageSeller,
+    required this.onMessageCounterparty,
     super.key,
   });
 
@@ -35,13 +35,15 @@ class TransactionStatusContent extends StatelessWidget {
 
   /// Opens the existing conversation with the counterparty, from the payload's
   /// real counterparty id. Never an invented endpoint or contact.
-  final VoidCallback onMessageSeller;
+  final VoidCallback onMessageCounterparty;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool isSeller = transaction.role == TransactionRole.seller;
     final List<TimelineStep> steps = TransactionTimeline.stepsFor(
       transaction.status,
+      role: transaction.role,
     );
 
     return ListView(
@@ -64,9 +66,9 @@ class TransactionStatusContent extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: onMessageSeller,
+                  onPressed: onMessageCounterparty,
                   icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                  label: const Text('Message Seller'),
+                  label: Text(isSeller ? 'Message Buyer' : 'Message Seller'),
                 ),
               ),
             ],
@@ -154,6 +156,7 @@ class _MetadataCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool isSeller = transaction.role == TransactionRole.seller;
 
     return Container(
       width: double.infinity,
@@ -168,19 +171,22 @@ class _MetadataCard extends StatelessWidget {
         children: <Widget>[
           _MetadataRow(
             icon: Icons.confirmation_number_outlined,
-            label: 'Request ID',
+            label: isSeller ? 'Sale ID' : 'Request ID',
             value: transaction.displayId,
           ),
           const SizedBox(height: AppSpacing.sm),
           _MetadataRow(
             icon: Icons.event_outlined,
-            label: 'Requested',
+            label: isSeller ? 'Recorded' : 'Requested',
             value: AppFormatters.formatDateTime(transaction.createdAt),
           ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
-            'The time this request was created. It is the only recorded '
-            'timestamp; individual steps are not timed.',
+            isSeller
+                ? 'The time this sale was recorded. It is the only recorded '
+                      'timestamp; individual steps are not timed.'
+                : 'The time this request was created. It is the only recorded '
+                      'timestamp; individual steps are not timed.',
             style: theme.textTheme.bodySmall,
           ),
         ],
@@ -250,7 +256,7 @@ class _HistoryUnavailableNote extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'This tracker summarises the request\'s current status. The '
+              'This tracker summarises the record\'s current status. The '
               'system records only the current status, not a dated history of '
               'each step, so no per-step dates are shown.',
               style: theme.textTheme.bodySmall?.copyWith(color: AppColors.text),

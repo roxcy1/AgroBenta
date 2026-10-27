@@ -109,7 +109,7 @@ class _DetailBodyState extends State<_DetailBody> {
           canCancel: state.canCancel,
           onCancel: () => _confirmCancel(transaction),
           onDismissCancelError: _controller.clearCancelError,
-          onMessageSeller: () => _openThread(context, transaction),
+          onMessageCounterparty: () => _openThread(context, transaction),
           onViewStatus: () => _openStatus(context, transaction),
         );
       },
@@ -128,17 +128,21 @@ class _DetailBodyState extends State<_DetailBody> {
 
   /// Opens the existing chat thread with the counterparty.
   ///
-  /// The counterparty id is the seller's (for a buyer) straight from the
-  /// payload, so this routes to a real, server-identifiable user. `ChatScreen`
-  /// reads `MessagingScope` in its own `initState`, so this screen builds
-  /// without one — the same split `ListingDetailScreen` uses.
+  /// The counterparty id comes straight from the payload: it is the seller for
+  /// a buyer and the buyer for a seller, so this routes to a real,
+  /// server-identifiable user. `ChatScreen` reads `MessagingScope` in its own
+  /// `initState`, so this screen builds without one — the same split
+  /// `ListingDetailScreen` uses.
   void _openThread(BuildContext context, Transaction transaction) {
     final int? viewerId = AuthScope.maybeOf(context)?.state.user?.id;
     if (viewerId == null) {
       // Without a session id the chat cannot label its own messages correctly,
       // so the action is not offered as if it would work.
+      final String counterparty = transaction.role == TransactionRole.seller
+          ? 'buyer'
+          : 'seller';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in again to message the seller.')),
+        SnackBar(content: Text('Sign in again to message the $counterparty.')),
       );
       return;
     }
@@ -160,22 +164,25 @@ class _DetailBodyState extends State<_DetailBody> {
 
   /// Confirms before calling: the transition is irreversible.
   Future<void> _confirmCancel(Transaction transaction) async {
+    final bool isSeller = transaction.role == TransactionRole.seller;
+    final String recordNoun = isSeller ? 'sale' : 'request';
+
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: const Text('Cancel this request?'),
-        content: const Text(
-          'This cannot be undone. A cancelled request stays cancelled.',
+        title: Text('Cancel this $recordNoun?'),
+        content: Text(
+          'This cannot be undone. A cancelled $recordNoun stays cancelled.',
         ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep request'),
+            child: Text('Keep $recordNoun'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Cancel request'),
+            child: Text('Cancel $recordNoun'),
           ),
         ],
       ),

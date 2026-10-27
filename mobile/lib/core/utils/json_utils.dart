@@ -92,6 +92,28 @@ int? readNullableInt(Map<String, dynamic> json, String key) {
   );
 }
 
+/// Reads a required nullable boolean.
+bool? readNullableBool(Map<String, dynamic> json, String key) {
+  final Object? value = json[key];
+  if (value == null || value is bool) {
+    return value as bool?;
+  }
+  throw FormatException(
+    'Expected field "$key" to be a bool or null, got ${value.runtimeType}.',
+    json.toString(),
+  );
+}
+
+/// Reads a nullable enum value through [parse], or `null` when absent.
+T? readNullableEnum<T>(
+  Map<String, dynamic> json,
+  String key,
+  T Function(String) parse,
+) {
+  final String? raw = readNullableString(json, key);
+  return raw == null ? null : parse(raw);
+}
+
 /// Reads a required decimal column, which the API serialises as a string.
 ///
 /// Returns the raw string so the value is not silently rounded through a
@@ -109,6 +131,15 @@ String readDecimalString(Map<String, dynamic> json, String key) {
     'Expected field "$key" to be a decimal string, got ${value.runtimeType}.',
     json.toString(),
   );
+}
+
+/// Reads a nullable decimal column, returning the raw string.
+String? readNullableDecimalString(Map<String, dynamic> json, String key) {
+  final Object? value = json[key];
+  if (value == null) {
+    return null;
+  }
+  return readDecimalString(json, key);
 }
 
 /// Reads a required ISO-8601 timestamp and converts it to a local [DateTime].

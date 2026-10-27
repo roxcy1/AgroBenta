@@ -12,7 +12,7 @@ import '../state/transaction_detail_state.dart';
 import '../state/transaction_scope.dart';
 import 'transaction_status_content.dart';
 
-/// The buyer-facing **Transaction Status** screen.
+/// The transaction status screen.
 ///
 /// A distinct screen from `TransactionDetailScreen`: it presents the current
 /// status and a progress tracker for the same record, reached from the detail
@@ -109,7 +109,7 @@ class _StatusBodyState extends State<_StatusBody> {
 
         return TransactionStatusContent(
           transaction: transaction,
-          onMessageSeller: () => _openThread(context, transaction),
+          onMessageCounterparty: () => _openThread(context, transaction),
         );
       },
     );
@@ -122,8 +122,11 @@ class _StatusBodyState extends State<_StatusBody> {
   void _openThread(BuildContext context, Transaction transaction) {
     final int? viewerId = AuthScope.maybeOf(context)?.state.user?.id;
     if (viewerId == null) {
+      final String counterparty = transaction.role == TransactionRole.seller
+          ? 'buyer'
+          : 'seller';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in again to message the seller.')),
+        SnackBar(content: Text('Sign in again to message the $counterparty.')),
       );
       return;
     }

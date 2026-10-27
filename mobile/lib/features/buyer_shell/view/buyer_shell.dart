@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/transaction.dart';
 import '../../home/view/buyer_home_screen.dart';
 import '../../marketplace/views/marketplace_screen.dart';
 import '../../messaging/state/conversations_controller.dart';
@@ -53,7 +54,7 @@ class _BuyerShellState extends State<BuyerShell> {
           ),
           const MarketplaceScreen(),
           const ConversationsScreen(),
-          const TransactionsScreen(),
+          const TransactionsScreen(role: TransactionRole.buyer),
           const ProfileScreen(),
         ],
       ),

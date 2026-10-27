@@ -46,6 +46,35 @@ class TransactionRepository
     }
 
     /**
+     * Count the transactions where the caller is the seller.
+     *
+     * Only the total and pending counts are exposed. A completed count is not
+     * returned because transaction completion is outside the documented
+     * seller-dashboard scope (OQ-15).
+     *
+     * @return array{total: int, pending: int}
+     */
+    public function countsForSeller(User $seller): array
+    {
+        $counts = Transaction::query()
+            ->where('seller_id', $seller->getKey())
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $total = 0;
+
+        foreach ($counts as $count) {
+            $total += (int) $count;
+        }
+
+        return [
+            'total' => $total,
+            'pending' => (int) ($counts[TransactionStatus::Pending->value] ?? 0),
+        ];
+    }
+
+    /**
      * Find one transaction the caller is a party to, or null.
      *
      * Returns null both when the transaction does not exist and when the

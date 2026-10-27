@@ -7,8 +7,8 @@ use App\Models\SellerVerification;
 use App\Models\User;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Private storage for seller verification documents.
@@ -152,6 +152,19 @@ class SellerVerificationDocumentService
         $this->disk()->deleteDirectory($this->stagingDirectory($user));
 
         return $paths;
+    }
+
+    /**
+     * Remove files promoted for a submission that did not commit.
+     *
+     * The database transaction owns the record, but the filesystem move is not
+     * transactional. If anything after `promote()` fails, the record is rolled
+     * back and this removes the directory that would otherwise become an orphan.
+     * It must never be called for a committed verification.
+     */
+    public function discardPromoted(SellerVerification $verification): void
+    {
+        $this->disk()->deleteDirectory("verifications/{$verification->getKey()}");
     }
 
     /**

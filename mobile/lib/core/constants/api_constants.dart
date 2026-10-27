@@ -458,9 +458,10 @@ abstract final class ProfileEndpoints {
 ///
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `inquiries`-creating mobile group: one write path, `POST /inquiries`, the
-/// buyer's structured contact with a seller about a listing. Reading,
-/// triaging and re-statusing an inquiry are the Admin Web's `/admin/inquiries*`
-/// flow and are not part of this app's contract.
+/// buyer's structured contact with a seller about a listing. Reading received
+/// inquiries is the seller surface in [SellerInquiryEndpoints]; triaging and
+/// re-statusing an inquiry are the Admin Web's `/admin/inquiries*` flow and are
+/// not part of this app's contract.
 ///
 /// The route takes no user id. The buyer is the token and the seller is
 /// `listing.seller_id`, resolved server-side, so there is no parameter or body
@@ -495,6 +496,50 @@ abstract final class InquiryEndpoints {
     'contact_method',
     'preferred_schedule',
   ];
+}
+
+/// Seller received-inquiry endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under the
+/// `seller` middleware group. Beyond the `mobile`-ability token they require
+/// `User::isApprovedSeller()`, so a buyer is answered `403` - the entry point is
+/// shown only on Seller Home, which already exists for approved sellers.
+///
+/// The path takes no seller id. The scope is the token, resolved server-side, so
+/// there is no parameter that could widen the list to another seller's inbox.
+abstract final class SellerInquiryEndpoints {
+  /// `GET` - the caller's received inquiries, newest first. 200, paginated.
+  ///
+  /// Query allow-list is `page` and `per_page` only. `buyer_id`, `seller_id`
+  /// and `status` are refused server-side with `422`: this list has no filters
+  /// in this phase, and the administrator-facing status is not shown to sellers.
+  static const String received = '/seller/inquiries';
+
+  /// Page size used when the caller does not ask for a specific one.
+  ///
+  /// Matches the server default, so the first request is an ordinary one rather
+  /// than a request that happens to agree with the default.
+  static const int defaultPerPage = 15;
+
+  /// Largest page the server will serve.
+  ///
+  /// `IndexSellerInquiryRequest` validates `per_page` with `between:1,50`, so
+  /// anything above this is rejected with a `422`. The repository clamps to this
+  /// rather than letting a screen discover the limit by provoking an error.
+  static const int maxPerPage = 50;
+}
+
+/// Seller dashboard endpoint, relative to the API root.
+///
+/// The response contains listing counts by status, the received-inquiry total,
+/// and the seller-side transaction total plus pending count. Revenue,
+/// conversion, and completed-transaction figures are deliberately absent.
+abstract final class SellerDashboardEndpoints {
+  /// `GET` - the authenticated seller's own summary. 200, plain envelope.
+  ///
+  /// The seller comes from the token. Ownership-shaped query parameters are
+  /// refused server-side with `422`, and this service sends no query at all.
+  static const String summary = '/seller/dashboard';
 }
 
 /// Mobile authentication endpoints, relative to the API root.

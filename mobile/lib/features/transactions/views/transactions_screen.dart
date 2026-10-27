@@ -10,10 +10,11 @@ import '../state/transactions_state.dart';
 import '../widgets/transaction_filter_bar.dart';
 import 'transaction_tab.dart';
 
-/// The authenticated buyer's purchases, filtered by lifecycle state.
+/// The authenticated user's transactions, filtered by lifecycle state.
 ///
-/// Every query sends `role=buyer`: this screen is **My Purchases**, not a
-/// combined ledger, so a seller's sale must never appear here. The server
+/// Buyer Mode passes [TransactionRole.buyer] and calls the screen **My
+/// Purchases**; Seller Mode passes [TransactionRole.seller] and calls it **My
+/// Sales**. Every query sends that role, so the two sides never mix. The server
 /// derives the caller from the token; no user id is sent.
 ///
 /// "All" is the default and sends no `status`; the three working filters send
@@ -26,7 +27,11 @@ import 'transaction_tab.dart';
 /// OQ-15), and that is correct rather than a bug to work around by faking a
 /// completion path.
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({super.key});
+  const TransactionsScreen({required this.role, super.key});
+
+  /// The side of the caller's records this screen shows. Fixed for the
+  /// screen's life because the shell selects it from the Account Mode.
+  final TransactionRole role;
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -46,7 +51,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         filter: TransactionsController(
           repository,
           filter.status,
-          role: TransactionRole.buyer,
+          role: widget.role,
         ),
     };
     _controllers[TransactionsFilter.all]!.loadInitial();
@@ -76,6 +81,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final String sectionTitle = widget.role == TransactionRole.seller
+        ? 'My Sales'
+        : 'My Purchases';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Transactions')),
@@ -90,7 +98,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 AppSpacing.screenGutter,
                 AppSpacing.xs,
               ),
-              child: Text('My Purchases', style: theme.textTheme.titleLarge),
+              child: Text(sectionTitle, style: theme.textTheme.titleLarge),
             ),
             TransactionFilterBar(selected: _filter, onSelected: _select),
             const SizedBox(height: AppSpacing.xs),
@@ -101,6 +109,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 key: ValueKey<TransactionsFilter>(_filter),
                 controller: _controllers[_filter]!,
                 filter: _filter,
+                role: widget.role,
               ),
             ),
           ],

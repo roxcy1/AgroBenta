@@ -203,9 +203,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
             HomeHeader(user: user, onOpenProfile: widget.onOpenProfile),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.only(
-                  bottom: AppSpacing.xl,
-                ),
+                padding: const EdgeInsets.only(bottom: AppSpacing.xl),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 560),
@@ -245,15 +243,18 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                             padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.screenGutter,
                             ),
-                            child: AuthErrorBanner(message: state.errorMessage!),
+                            child: AuthErrorBanner(
+                              message: state.errorMessage!,
+                            ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
                         ],
                         // Seller-only, and only when `/auth/me` says the
                         // account is a seller. A buyer never sees it, which is
-                        // also why My Listings is not a tab in the bottom
-                        // navigation: the tab would exist for them and lead to
-                        // a screen whose every request is a 403.
+                        // also why My Listings is not a tab in the buyer shell's
+                        // bottom navigation: the tab would exist for them and
+                        // lead to a screen whose every request is a 403. Seller
+                        // Mode has its own shell and a real My Listings tab.
                         if (user.isSeller)
                           Padding(
                             padding: const EdgeInsets.symmetric(
@@ -371,4 +372,3 @@ class _SearchBar extends StatelessWidget {
     );
   }
 }
-

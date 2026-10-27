@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
+import 'package:agrobenta_mobile/features/account_mode/state/account_mode_controller.dart';
+import 'package:agrobenta_mobile/features/account_mode/state/account_mode_scope.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/auth/view/auth_gate.dart';
@@ -88,6 +90,11 @@ class AuthTestHarness {
 
     addTearDown(controller.dispose);
 
+    final AccountModeController accountModeController = AccountModeController(
+      controller,
+    );
+    addTearDown(accountModeController.dispose);
+
     // Canned transports for the scopes Home reads but the auth tests do not
     // exercise: an empty marketplace page and a zero unread count.
     final MarketplaceRepository marketplaceRepository = MarketplaceRepository(
@@ -121,22 +128,23 @@ class AuthTestHarness {
     );
     addTearDown(marketplaceController.dispose);
 
-    final NotificationRepository notificationRepository = NotificationRepository(
-      NotificationService(
-        ApiClient(
-          tokenStorage: tokenStore,
-          httpClient: MockClient(
-            (_) async => http.Response(
-              jsonEncode(
-                successEnvelope(data: <String, dynamic>{'count': 0}),
+    final NotificationRepository notificationRepository =
+        NotificationRepository(
+          NotificationService(
+            ApiClient(
+              tokenStorage: tokenStore,
+              httpClient: MockClient(
+                (_) async => http.Response(
+                  jsonEncode(
+                    successEnvelope(data: <String, dynamic>{'count': 0}),
+                  ),
+                  200,
+                  headers: <String, String>{'content-type': 'application/json'},
+                ),
               ),
-              200,
-              headers: <String, String>{'content-type': 'application/json'},
             ),
           ),
-        ),
-      ),
-    );
+        );
     final NotificationsController notificationsController =
         NotificationsController(notificationRepository);
     addTearDown(notificationsController.dispose);
@@ -168,19 +176,22 @@ class AuthTestHarness {
       // neither is what the auth tests are about.
       AuthScope(
         controller: controller,
-        child: MarketplaceScope(
-          repository: marketplaceRepository,
-          controller: marketplaceController,
-          child: NotificationsScope(
-            repository: notificationRepository,
-            controller: notificationsController,
-            child: NeverSubmittedVerificationScope(
-              child: ProfileScope(
-                repository: profileRepository,
-                controller: profileController,
-                child: MaterialApp(
-                  theme: AppTheme.light(),
-                  home: const AuthGate(authenticatedView: _signedInView),
+        child: AccountModeScope(
+          controller: accountModeController,
+          child: MarketplaceScope(
+            repository: marketplaceRepository,
+            controller: marketplaceController,
+            child: NotificationsScope(
+              repository: notificationRepository,
+              controller: notificationsController,
+              child: NeverSubmittedVerificationScope(
+                child: ProfileScope(
+                  repository: profileRepository,
+                  controller: profileController,
+                  child: MaterialApp(
+                    theme: AppTheme.light(),
+                    home: const AuthGate(authenticatedView: _signedInView),
+                  ),
                 ),
               ),
             ),

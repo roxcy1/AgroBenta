@@ -4,7 +4,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../models/user.dart';
 import '../view/seller_listings_screen.dart';
 
-/// The seller's entry point into listing management, on the Home screen.
+/// The seller's entry point into listing management.
 ///
 /// **Shown only when [User.isSeller] is true**, and that value comes from
 /// `/auth/me` — the server's own statement about the account, never something
@@ -13,18 +13,22 @@ import '../view/seller_listings_screen.dart';
 /// from a seller or offers one to a buyer whose every request would be refused
 /// with a `403`.
 ///
-/// In context on Home rather than in the bottom navigation. `mobile/DESIGN.md` is
-/// explicit that navigation must not be built for screens a user cannot reach, and
-/// My Listings is by definition unreachable for a buyer: the route requires the
-/// approved-seller capability. A permanent tab would sit there answering `403`.
+/// In Buyer Mode it sits on Home because the buyer shell has no My Listings tab:
+/// a permanent destination would exist for buyers whose every request the server
+/// answers with `403`. In Seller Mode the shell owns a real My Listings tab, so
+/// [onManage] switches to that tab instead of pushing a second copy.
 ///
 /// No count and no request. This card is a link, and making it load the list just
 /// to show a number would turn a navigation element into a request on every Home
 /// build.
 class SellerListingsEntryCard extends StatelessWidget {
-  const SellerListingsEntryCard({required this.user, super.key});
+  const SellerListingsEntryCard({required this.user, this.onManage, super.key});
 
   final User user;
+
+  /// Opens My Listings. When null, the card pushes the screen itself, which is
+  /// what the buyer shell's Home does.
+  final VoidCallback? onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -52,12 +56,14 @@ class SellerListingsEntryCard extends StatelessWidget {
               // The button's own context, not a field on the widget: a
               // `StatelessWidget` has none, and the builder's is guaranteed to be
               // a descendant of the `Navigator`.
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (BuildContext context) =>
-                      const SellerListingsScreen(),
-                ),
-              ),
+              onPressed:
+                  onManage ??
+                  () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) =>
+                          const SellerListingsScreen(),
+                    ),
+                  ),
               icon: const Icon(Icons.storefront_outlined, size: 18),
               label: const Text('Manage my listings'),
             ),

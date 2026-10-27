@@ -154,6 +154,31 @@ class MobileTransactionTest extends TestCase
     }
 
     #[Test]
+    public function a_seller_sales_list_excludes_their_purchases_and_foreign_sales(): void
+    {
+        $ownListing = $this->createListing($this->seller);
+        $sale = $this->createTransaction($ownListing, $this->buyer);
+
+        $otherListing = $this->createListing($this->stranger);
+        $purchase = $this->createTransaction($otherListing, $this->seller);
+        $foreignSale = $this->createTransaction($otherListing, $this->buyer);
+
+        $transactions = $this->list(['role' => 'seller'], $this->seller)
+            ->assertOk()
+            ->json('data.transactions');
+        $ids = array_column($transactions, 'id');
+
+        $this->assertSame([$sale->id], $ids);
+        $this->assertNotContains($purchase->id, $ids);
+        $this->assertNotContains($foreignSale->id, $ids);
+        $this->assertSame('seller', $transactions[0]['role']);
+        $this->assertSame(
+            $this->buyer->id,
+            $transactions[0]['counterparty']['id'],
+        );
+    }
+
+    #[Test]
     public function ownership_filters_are_refused(): void
     {
         $this->list(['buyer_id' => $this->buyer->id])->assertStatus(422);

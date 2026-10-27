@@ -18,6 +18,8 @@ use App\Http\Controllers\Api\Messaging\ConversationController;
 use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
 use App\Http\Controllers\Api\Profile\ProfileController;
+use App\Http\Controllers\Api\SellerDashboard\SellerDashboardController;
+use App\Http\Controllers\Api\SellerInquiry\SellerInquiryController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
@@ -114,6 +116,29 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     Route::delete('/{listing}/photos', [SellerListingController::class, 'destroyPhoto']);
 });
 
+// Inquiries received by the caller as a seller. Read-only in this phase:
+// responding and declining are later work, and no status transition is exposed
+// here.
+//
+// No route takes a seller id. The scope is the token's user and is applied in
+// the repository, so a seller can see only inquiries about their own listings
+// (functional documentation section 8.2 rule 2). `buyer_id`, `seller_id` and `status`
+// are refused as query parameters: none of them is a filter this list supports.
+Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
+    ->prefix('seller/inquiries')
+    ->group(function (): void {
+        Route::get('/', [SellerInquiryController::class, 'index']);
+    });
+
+// The seller dashboard aggregates the caller's own listings, received
+// inquiries, and sales. The seller is the token's user. No route or query
+// parameter takes a seller id, and no revenue or conversion metric is exposed.
+Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
+    ->prefix('seller/dashboard')
+    ->group(function (): void {
+        Route::get('/', [SellerDashboardController::class, 'show']);
+    });
+
 // Transactions — the caller's own transactions as buyer or seller.
 //
 // No route here takes a user id. Both counterparties are resolved from the
@@ -135,9 +160,10 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
 
 // Inquiries — the buyer's structured contact with a seller about a listing.
 //
-// Write path only. Reading, triaging, re-statusing and deleting an inquiry
-// belong to the administrator block below; its route comment reserves creation
-// for the buyer's mobile client, and this is that path.
+// The buyer's write path. Reading received inquiries is the seller route above;
+// triaging, re-statusing and deleting an inquiry belong to the administrator
+// block below; its route comment reserves creation for the buyer's mobile
+// client, and this is that path.
 //
 // No route here takes a user id. The buyer is resolved from the token and the
 // seller from `listing.seller_id` inside the service, so there is no parameter

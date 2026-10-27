@@ -7,9 +7,9 @@ import '../../../models/listing.dart';
 import '../../../models/transaction.dart';
 import 'transaction_status_badge.dart';
 
-/// One purchase in the My Purchases list.
+/// One transaction in My Purchases or My Sales.
 ///
-/// A card the buyer can judge at a glance: TRX-ID and date, what it is, the
+/// A card either party can judge at a glance: TRX-ID and date, what it is, the
 /// server's agreed amount with a label that cannot be mistaken for the
 /// listing's asking price, and an unmistakable status badge. Deliberately
 /// **not** every column — quantity and the counterparty belong on the detail
@@ -18,7 +18,7 @@ import 'transaction_status_badge.dart';
 /// The amount is `total_amount` from the API (the server's `asking_price ×
 /// quantity`). It is never computed here: any client-side arithmetic that
 /// differed from the server would be a trust bug. It is shown exactly, with
-/// cents, because this is a purchase record rather than a browsable listing.
+/// cents, because this is a transaction record rather than a browsable listing.
 ///
 /// There is no location row: `MobileTransactionResource` does not expose one.
 ///
