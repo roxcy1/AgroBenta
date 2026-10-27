@@ -87,6 +87,8 @@ void main() {
 
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
+    await profileController.load();
+    await tester.pumpAndSettle();
 
     await tester.pumpWidget(
       AuthScope(
@@ -313,8 +315,6 @@ void main() {
       reason: 'a failed sign-out must not silently drop the session',
     );
   });
-}
-
 
   testWidgets('edit profile prompts for current password when email changes and sends it', (
     WidgetTester tester,
@@ -324,9 +324,16 @@ void main() {
       ProfileService(
         ApiClient(
           tokenStorage: tokenStore,
-          httpClient: MockClient((RecordedRequest request) async {
-            requests.add(request);
-            if (request.method == 'PUT' && request.apiPath == '/profile') {
+          httpClient: MockClient((http.Request request) async {
+            if (request.method == 'GET' && request.url.path.endsWith('/profile')) {
+              return http.Response(
+                jsonEncode(successEnvelope(data: userJson())),
+                200,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+            if (request.method == 'PUT' && request.url.path.endsWith('/profile')) {
+              requests.add(RecordedRequest(request));
               return http.Response(
                 jsonEncode(successEnvelope(
                   data: userJson(email: 'new@example.test'),
@@ -356,6 +363,8 @@ void main() {
 
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
+    await profileController.load();
+    await tester.pumpAndSettle();
 
     await tester.pumpWidget(
       AuthScope(
@@ -372,9 +381,12 @@ void main() {
         ),
       ),
     );
-    await settleAuth(tester, frames: 12);
+    await profileController.load();
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.widgetWithText(TextFormField, 'Email address'), 'new@example.test');
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
     await tester.pumpAndSettle();
 
@@ -386,14 +398,16 @@ void main() {
     expect(requests.where((r) => r.method == 'PUT' && r.apiPath == '/profile').isEmpty, isTrue);
 
     // Try again and confirm
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).last, 'password123');
+    await tester.enterText(find.widgetWithText(AlertDialog, 'Confirm your password').first.evaluate().isEmpty ? find.byType(TextField).last : find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)).first, 'password123');
     await tester.tap(find.text('Confirm'));
     await tester.pumpAndSettle();
 
     final RecordedRequest putReq = requests.firstWhere((r) => r.method == 'PUT' && r.apiPath == '/profile');
-    final Map<String, dynamic> body = jsonDecode(putReq.body) as Map<String, dynamic>;
+    final Map<String, dynamic> body = putReq.body;
     expect(body['email'], 'new@example.test');
     expect(body['current_password'], 'password123');
   });
@@ -406,9 +420,16 @@ void main() {
       ProfileService(
         ApiClient(
           tokenStorage: tokenStore,
-          httpClient: MockClient((RecordedRequest request) async {
-            requests.add(request);
-            if (request.method == 'PUT' && request.apiPath == '/profile') {
+          httpClient: MockClient((http.Request request) async {
+            if (request.method == 'GET' && request.url.path.endsWith('/profile')) {
+              return http.Response(
+                jsonEncode(successEnvelope(data: userJson())),
+                200,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+            if (request.method == 'PUT' && request.url.path.endsWith('/profile')) {
+              requests.add(RecordedRequest(request));
               return http.Response(
                 jsonEncode(successEnvelope(
                   data: userJson(name: 'New Name'),
@@ -438,6 +459,8 @@ void main() {
 
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
+    await profileController.load();
+    await tester.pumpAndSettle();
 
     await tester.pumpWidget(
       AuthScope(
@@ -454,29 +477,43 @@ void main() {
         ),
       ),
     );
-    await settleAuth(tester, frames: 12);
+    await profileController.load();
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.widgetWithText(TextFormField, 'Full name'), 'New Name');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
+    final Finder saveBtn = find.widgetWithText(FilledButton, 'Save changes');
+    await tester.ensureVisible(saveBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(saveBtn, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
     expect(find.text('Confirm your password'), findsNothing);
-    final RecordedRequest putReq = requests.firstWhere((r) => r.method == 'PUT' && r.apiPath == '/profile');
-    final Map<String, dynamic> body = jsonDecode(putReq.body) as Map<String, dynamic>;
+    print('REQUESTS: ${requests.length}');
+    expect(requests.where((r) => r.method == 'PUT').isNotEmpty, isTrue);
+    final RecordedRequest putReq = requests.firstWhere((r) => r.method == 'PUT');
+    final Map<String, dynamic> body = putReq.body;
     expect(body.containsKey('current_password'), isFalse);
   });
 
   testWidgets('edit profile displays server current_password validation error', (
     WidgetTester tester,
   ) async {
-    final List<RecordedRequest> requests = <RecordedRequest>[];
     final ProfileRepository profileRepository = ProfileRepository(
       ProfileService(
         ApiClient(
           tokenStorage: tokenStore,
-          httpClient: MockClient((RecordedRequest request) async {
-            requests.add(request);
-            if (request.method == 'PUT' && request.apiPath == '/profile') {
+          httpClient: MockClient((http.Request request) async {
+            if (request.method == 'GET' && request.url.path.endsWith('/profile')) {
+              return http.Response(
+                jsonEncode(successEnvelope(data: userJson())),
+                200,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+            if (request.method == 'PUT' && request.url.path.endsWith('/profile')) {
               return http.Response(
                 jsonEncode(<String, dynamic>{
                   'success': false,
@@ -510,6 +547,8 @@ void main() {
 
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
+    await profileController.load();
+    await tester.pumpAndSettle();
 
     await tester.pumpWidget(
       AuthScope(
@@ -526,9 +565,12 @@ void main() {
         ),
       ),
     );
-    await settleAuth(tester, frames: 12);
+    await profileController.load();
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.widgetWithText(TextFormField, 'Email address'), 'new@example.test');
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'wrong');
@@ -536,5 +578,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('The current password is incorrect.'), findsOneWidget);
+    expect(find.text('Confirm your password'), findsOneWidget);
   });
-
+}
