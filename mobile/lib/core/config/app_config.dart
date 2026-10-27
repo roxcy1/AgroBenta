@@ -95,7 +95,7 @@ abstract final class AppConfig {
   static const String _missingPhysicalAndroidApiBaseUrlError =
       'API_BASE_URL must be provided via --dart-define for a physical Android '
       'build. See mobile/README.md for examples (e.g. '
-      '--dart-define=API_BASE_URL=http://<your-lan-ip>:8001/api).';
+      '--dart-define=API_BASE_URL=http://192.168.0.108:8001/api).';
 
   /// `10.0.2.2` is the Android emulator's alias for the host machine's loopback
   /// interface. Selected **only** when the build opts in with

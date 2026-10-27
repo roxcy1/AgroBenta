@@ -14,10 +14,15 @@ import 'auth_validators.dart';
 /// and no role choice: this app has one account per person, so there is one
 /// way in and no way to pick a different kind of user here.
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({required this.onRegister, super.key});
+  const SignInScreen({
+    required this.onRegister,
+    required this.onForgotPassword,
+    super.key,
+  });
 
   /// Switches to the registration form.
   final VoidCallback onRegister;
+  final VoidCallback onForgotPassword;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -119,6 +124,14 @@ class _SignInScreenState extends State<SignInScreen> {
                 validator: validateRequiredPassword,
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: state.isSubmitting ? null : widget.onForgotPassword,
+            child: const Text('Forgot password?'),
           ),
         ),
       ],
