@@ -314,3 +314,227 @@ void main() {
     );
   });
 }
+
+
+  testWidgets('edit profile prompts for current password when email changes and sends it', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> requests = <RecordedRequest>[];
+    final ProfileRepository profileRepository = ProfileRepository(
+      ProfileService(
+        ApiClient(
+          tokenStorage: tokenStore,
+          httpClient: MockClient((RecordedRequest request) async {
+            requests.add(request);
+            if (request.method == 'PUT' && request.apiPath == '/profile') {
+              return http.Response(
+                jsonEncode(successEnvelope(
+                  data: userJson(email: 'new@example.test'),
+                )),
+                200,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+            return http.Response(
+              jsonEncode(successEnvelope(data: userJson())),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }),
+        ),
+      ),
+    );
+    final ProfileController profileController = ProfileController(profileRepository);
+    addTearDown(profileController.dispose);
+
+    final AuthController authController = AuthController(
+      buildAuthRepository(tokenStore, (_) async => http.Response(jsonEncode(successEnvelope(data: userJson())), 200), recorded: recorded),
+    );
+    addTearDown(authController.dispose);
+    final AccountModeController accountModeController = AccountModeController(authController);
+    addTearDown(accountModeController.dispose);
+
+    tokenStore.token = 'stored-token';
+    await authController.restoreSession();
+
+    await tester.pumpWidget(
+      AuthScope(
+        controller: authController,
+        child: AccountModeScope(
+          controller: accountModeController,
+          child: NeverSubmittedVerificationScope(
+            child: ProfileScope(
+              repository: profileRepository,
+              controller: profileController,
+              child: const MaterialApp(home: EditProfileScreen()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await settleAuth(tester, frames: 12);
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email address'), 'new@example.test');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm your password'), findsOneWidget);
+
+    // Cancel prevents submission
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(requests.where((r) => r.method == 'PUT' && r.apiPath == '/profile').isEmpty, isTrue);
+
+    // Try again and confirm
+    await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'password123');
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+
+    final RecordedRequest putReq = requests.firstWhere((r) => r.method == 'PUT' && r.apiPath == '/profile');
+    final Map<String, dynamic> body = jsonDecode(putReq.body) as Map<String, dynamic>;
+    expect(body['email'], 'new@example.test');
+    expect(body['current_password'], 'password123');
+  });
+
+  testWidgets('edit profile does not require current password when email unchanged', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> requests = <RecordedRequest>[];
+    final ProfileRepository profileRepository = ProfileRepository(
+      ProfileService(
+        ApiClient(
+          tokenStorage: tokenStore,
+          httpClient: MockClient((RecordedRequest request) async {
+            requests.add(request);
+            if (request.method == 'PUT' && request.apiPath == '/profile') {
+              return http.Response(
+                jsonEncode(successEnvelope(
+                  data: userJson(name: 'New Name'),
+                )),
+                200,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+            return http.Response(
+              jsonEncode(successEnvelope(data: userJson())),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }),
+        ),
+      ),
+    );
+    final ProfileController profileController = ProfileController(profileRepository);
+    addTearDown(profileController.dispose);
+
+    final AuthController authController = AuthController(
+      buildAuthRepository(tokenStore, (_) async => http.Response(jsonEncode(successEnvelope(data: userJson())), 200), recorded: recorded),
+    );
+    addTearDown(authController.dispose);
+    final AccountModeController accountModeController = AccountModeController(authController);
+    addTearDown(accountModeController.dispose);
+
+    tokenStore.token = 'stored-token';
+    await authController.restoreSession();
+
+    await tester.pumpWidget(
+      AuthScope(
+        controller: authController,
+        child: AccountModeScope(
+          controller: accountModeController,
+          child: NeverSubmittedVerificationScope(
+            child: ProfileScope(
+              repository: profileRepository,
+              controller: profileController,
+              child: const MaterialApp(home: EditProfileScreen()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await settleAuth(tester, frames: 12);
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Full name'), 'New Name');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm your password'), findsNothing);
+    final RecordedRequest putReq = requests.firstWhere((r) => r.method == 'PUT' && r.apiPath == '/profile');
+    final Map<String, dynamic> body = jsonDecode(putReq.body) as Map<String, dynamic>;
+    expect(body.containsKey('current_password'), isFalse);
+  });
+
+  testWidgets('edit profile displays server current_password validation error', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> requests = <RecordedRequest>[];
+    final ProfileRepository profileRepository = ProfileRepository(
+      ProfileService(
+        ApiClient(
+          tokenStorage: tokenStore,
+          httpClient: MockClient((RecordedRequest request) async {
+            requests.add(request);
+            if (request.method == 'PUT' && request.apiPath == '/profile') {
+              return http.Response(
+                jsonEncode(<String, dynamic>{
+                  'success': false,
+                  'message': 'The given data was invalid.',
+                  'errors': <String, dynamic>{
+                    'current_password': <String>['The current password is incorrect.'],
+                  },
+                }),
+                422,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+            return http.Response(
+              jsonEncode(successEnvelope(data: userJson())),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }),
+        ),
+      ),
+    );
+    final ProfileController profileController = ProfileController(profileRepository);
+    addTearDown(profileController.dispose);
+
+    final AuthController authController = AuthController(
+      buildAuthRepository(tokenStore, (_) async => http.Response(jsonEncode(successEnvelope(data: userJson())), 200), recorded: recorded),
+    );
+    addTearDown(authController.dispose);
+    final AccountModeController accountModeController = AccountModeController(authController);
+    addTearDown(accountModeController.dispose);
+
+    tokenStore.token = 'stored-token';
+    await authController.restoreSession();
+
+    await tester.pumpWidget(
+      AuthScope(
+        controller: authController,
+        child: AccountModeScope(
+          controller: accountModeController,
+          child: NeverSubmittedVerificationScope(
+            child: ProfileScope(
+              repository: profileRepository,
+              controller: profileController,
+              child: const MaterialApp(home: EditProfileScreen()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await settleAuth(tester, frames: 12);
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email address'), 'new@example.test');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'wrong');
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('The current password is incorrect.'), findsOneWidget);
+  });
+

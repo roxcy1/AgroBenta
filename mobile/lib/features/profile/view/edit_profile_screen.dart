@@ -48,24 +48,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   /// does not re-validate for nothing.
   Map<String, List<String>> _displayedErrors = const <String, List<String>>{};
 
-  @override
-  void initState() {
-    super.initState();
-    // `readOf`, not `of`: a dependency cannot be registered from `initState`.
-    _controller = ProfileScope.readOf(context);
-    _initial =
-        _controller.state.user ??
-        (throw StateError(
-          'EditProfileScreen opened without a loaded profile.',
-        ));
 
-    _name = TextEditingController(text: _initial.name);
-    _email = TextEditingController(text: _initial.email);
-    _phone = TextEditingController(text: _initial.phone ?? '');
-    _location = TextEditingController(text: _initial.location ?? '');
-    _avatarUrl = TextEditingController(text: _initial.avatarUrl ?? '');
-    _bio = TextEditingController(text: _initial.bio ?? '');
-  }
 
   @override
   void dispose() {
@@ -111,18 +94,87 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String avatarUrl = _avatarUrl.text.trim();
     final String bio = _bio.text.trim();
 
+    final bool emailChanged = email != _initial.email;
+    String? currentPassword;
+
+    if (emailChanged) {
+      final String? password = await _promptCurrentPassword();
+      if (password == null || password.isEmpty) {
+        return;
+      }
+      currentPassword = password;
+    }
+
     final bool saved = await _controller.save(
       name: name == _initial.name ? null : name,
-      email: email == _initial.email ? null : email,
+      email: emailChanged ? email : null,
       phone: phone == (_initial.phone ?? '') ? null : phone,
       location: location == (_initial.location ?? '') ? null : location,
       avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
       bio: bio == (_initial.bio ?? '') ? null : bio,
+      currentPassword: currentPassword,
     );
 
     if (saved && mounted) {
       Navigator.of(context).pop(true);
     }
+  }
+
+  Future<String?> _promptCurrentPassword() async {
+    final TextEditingController controller = TextEditingController();
+    try {
+      final String? result = await showDialog<String>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Confirm your password'),
+            content: TextField(
+              controller: controller,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Current password',
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(controller.text),
+                child: const Text('Confirm'),
+              ),
+            ],
+          );
+        },
+      );
+      if (result == null || result.isEmpty) {
+        return null;
+      }
+      return result;
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // `readOf`, not `of`: a dependency cannot be registered from `initState`.
+    _controller = ProfileScope.readOf(context);
+    _initial =
+        _controller.state.user ??
+        (throw StateError(
+          'EditProfileScreen opened without a loaded profile.',
+        ));
+
+    _name = TextEditingController(text: _initial.name);
+    _email = TextEditingController(text: _initial.email);
+    _phone = TextEditingController(text: _initial.phone ?? '');
+    _location = TextEditingController(text: _initial.location ?? '');
+    _avatarUrl = TextEditingController(text: _initial.avatarUrl ?? '');
+    _bio = TextEditingController(text: _initial.bio ?? '');
   }
 
   @override
@@ -193,6 +245,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   return state.errorFor('email');
                                 },
                               ),
+
                               const SizedBox(height: AppSpacing.md),
                               TextFormField(
                                 controller: _phone,
