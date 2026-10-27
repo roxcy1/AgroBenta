@@ -407,6 +407,8 @@ abstract final class NotificationEndpoints {
   ];
 }
 
+
+
 /// Profile endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the

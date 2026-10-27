@@ -178,7 +178,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // session-scoped so the buyer shell's unread badge and the Conversations
     // screen read the same state. The chat controller is per-screen and lives
     // inside the chat screen itself.
-    _messagingService = MessagingService(_apiClient);
+        _messagingService = MessagingService(_apiClient);
     _messagingRepository = MessagingRepository(_messagingService);
     _conversationsController = ConversationsController(_messagingRepository);
 
@@ -198,7 +198,6 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _inquiryService = InquiryService(_apiClient);
     _inquiryRepository = InquiryRepository(_inquiryService);
   }
-
   @override
   void dispose() {
     // The controllers own no transport of their own, and the client they were

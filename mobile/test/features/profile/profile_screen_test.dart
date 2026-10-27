@@ -123,8 +123,10 @@ void main() {
   ) async {
     await pumpProfile(
       tester,
-      handler: (_) async =>
-          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: userJson())),
+        200,
+      ),
     );
 
     // Identity comes from the API payload, never a hardcoded sample.
@@ -202,8 +204,10 @@ void main() {
   ) async {
     await pumpProfile(
       tester,
-      handler: (_) async =>
-          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: userJson())),
+        200,
+      ),
     );
 
     await tester.tap(find.widgetWithText(TextButton, 'Edit'));
@@ -222,8 +226,10 @@ void main() {
   ) async {
     await pumpProfile(
       tester,
-      handler: (_) async =>
-          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: userJson())),
+        200,
+      ),
     );
 
     await tapAction(tester, 'Change Password');
@@ -235,8 +241,10 @@ void main() {
   ) async {
     await pumpProfile(
       tester,
-      handler: (_) async =>
-          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: userJson())),
+        200,
+      ),
     );
 
     await tester.ensureVisible(find.text('Start Seller Verification'));

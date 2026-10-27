@@ -82,26 +82,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (!mounted) {
                 return;
               }
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(success)));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(success)),
+              );
               _controller.consumeSuccess();
             });
           }
 
           return switch (state.status) {
             ProfileUiStatus.initial || ProfileUiStatus.loading => const Center(
-              child: CircularProgressIndicator(),
-            ),
+                child: CircularProgressIndicator(),
+              ),
             ProfileUiStatus.failed => _ErrorState(
-              message: state.errorMessage ?? 'Something went wrong.',
-              onRetry: _controller.load,
-            ),
+                message: state.errorMessage ?? 'Something went wrong.',
+                onRetry: _controller.load,
+              ),
             _ => _ProfileBody(
-              user: state.user!,
-              onEdit: _openEdit,
-              onChangePassword: _openChangePassword,
-            ),
+                user: state.user!,
+                onEdit: _openEdit,
+                onChangePassword: _openChangePassword,
+              ),
           };
         },
       ),
@@ -220,8 +220,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (user.location != null &&
-                      user.location!.isNotEmpty) ...<Widget>[
+                  if (user.location != null && user.location!.isNotEmpty) ...<Widget>[
                     const SizedBox(height: AppSpacing.xxs),
                     Row(
                       children: <Widget>[
@@ -241,7 +240,10 @@ class _ProfileSummaryCard extends StatelessWidget {
                 ],
               ),
             ),
-            TextButton(onPressed: onEdit, child: const Text('Edit')),
+            TextButton(
+              onPressed: onEdit,
+              child: const Text('Edit'),
+            ),
           ],
         ),
       ),
@@ -411,19 +413,10 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
     }
 
     final (Color color, String text) = switch (verification.status) {
-      SellerVerificationStatus.approved => (
-        AppColors.success,
-        'Verification approved',
-      ),
-      SellerVerificationStatus.rejected => (
-        AppColors.error,
-        'Verification not approved',
-      ),
+      SellerVerificationStatus.approved => (AppColors.success, 'Verification approved'),
+      SellerVerificationStatus.rejected => (AppColors.error, 'Verification not approved'),
       SellerVerificationStatus.submitted ||
-      SellerVerificationStatus.pendingReview => (
-        AppColors.warning,
-        'Verification under review',
-      ),
+      SellerVerificationStatus.pendingReview => (AppColors.warning, 'Verification under review'),
     };
 
     return Row(
@@ -434,9 +427,7 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: AppSpacing.xs),
-        Expanded(
-          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
-        ),
+        Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
       ],
     );
   }
@@ -465,17 +456,17 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
 
     return switch (state.status) {
       SellerVerificationUiStatus.notSubmitted => FilledButton(
-        onPressed: _openVerification,
-        child: const Text('Start Seller Verification'),
-      ),
+          onPressed: _openVerification,
+          child: const Text('Start Seller Verification'),
+        ),
       SellerVerificationUiStatus.rejected => FilledButton(
-        onPressed: _openVerification,
-        child: const Text('Resubmit Verification'),
-      ),
+          onPressed: _openVerification,
+          child: const Text('Resubmit Verification'),
+        ),
       _ => OutlinedButton(
-        onPressed: _openVerification,
-        child: const Text('View status'),
-      ),
+          onPressed: _openVerification,
+          child: const Text('View status'),
+        ),
     };
   }
 }
@@ -656,7 +647,10 @@ class _Avatar extends StatelessWidget {
         ),
       );
     }
-    return CircleAvatar(radius: 32, backgroundImage: NetworkImage(src));
+    return CircleAvatar(
+      radius: 32,
+      backgroundImage: NetworkImage(src),
+    );
   }
 }
 
