@@ -152,6 +152,23 @@ class Listing extends Model
         return array_values(array_filter($photos, 'is_string'));
     }
 
+    /**
+     * A short, human-readable name for this listing.
+     *
+     * A listing has no `title` column: the seller supplies a species and a
+     * breed, and the breed is the more specific of the two. `breed` is
+     * non-null but may be blank, so the species is the fallback rather than an
+     * empty label. The approval and rejection notifications both name the same
+     * record, so they resolve the label here instead of each carrying its own
+     * copy of the rule.
+     */
+    public function displayLabel(): string
+    {
+        $breed = trim((string) $this->breed);
+
+        return $breed === '' ? (string) $this->livestock_type : $breed;
+    }
+
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id');

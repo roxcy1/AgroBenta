@@ -18,8 +18,7 @@ class ListingApproved extends Notification
 
     public function __construct(
         public readonly Listing $listing,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<int, string>
@@ -37,7 +36,7 @@ class ListingApproved extends Notification
         return [
             'type' => 'listing',
             'title' => 'Listing approved',
-            'body' => "\"{$this->listing->title}\" is now live in the marketplace.",
+            'body' => "\"{$this->listing->displayLabel()}\" is now live in the marketplace.",
             'action' => 'listing',
             'action_id' => $this->listing->getKey(),
         ];
