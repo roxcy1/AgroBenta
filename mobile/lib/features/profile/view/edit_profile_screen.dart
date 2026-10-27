@@ -48,8 +48,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   /// does not re-validate for nothing.
   Map<String, List<String>> _displayedErrors = const <String, List<String>>{};
 
-
-
   @override
   void dispose() {
     _name.dispose();
@@ -95,53 +93,49 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String bio = _bio.text.trim();
 
     final bool emailChanged = email != _initial.email;
-    String? currentPassword;
 
-    if (emailChanged) {
+    Future<bool> doSave({String? currentPassword}) {
+      return _controller.save(
+        name: name == _initial.name ? null : name,
+        email: emailChanged ? email : null,
+        phone: phone == (_initial.phone ?? '') ? null : phone,
+        location: location == (_initial.location ?? '') ? null : location,
+        avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
+        bio: bio == (_initial.bio ?? '') ? null : bio,
+        currentPassword: currentPassword,
+      );
+    }
+
+    if (!emailChanged) {
+      final bool saved = await doSave();
+      if (saved && mounted) {
+        Navigator.of(context).pop(true);
+      }
+      return;
+    }
+
+    String? currentPassword;
+    while (true) {
       final String? password = await _promptCurrentPassword(
-        error: _controller.state.errorFor('current_password'),
+        error: currentPassword == null
+            ? null
+            : _controller.state.errorFor('current_password'),
       );
       if (password == null || password.isEmpty) {
         return;
       }
       currentPassword = password;
-    }
-
-    final bool saved = await _controller.save(
-      name: name == _initial.name ? null : name,
-      email: emailChanged ? email : null,
-      phone: phone == (_initial.phone ?? '') ? null : phone,
-      location: location == (_initial.location ?? '') ? null : location,
-      avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
-      bio: bio == (_initial.bio ?? '') ? null : bio,
-      currentPassword: currentPassword,
-    );
-
-    if (saved && mounted) {
-      Navigator.of(context).pop(true);
-      return;
-    }
-
-    // If save failed with current_password error and email changed, prompt again
-    if (!saved && mounted && emailChanged) {
+      final bool saved = await doSave(currentPassword: currentPassword);
+      if (saved && mounted) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
       final String? error = _controller.state.errorFor('current_password');
-      if (error != null) {
-        final String? password = await _promptCurrentPassword(error: error);
-        if (password == null || password.isEmpty) {
-          return;
-        }
-        final bool savedAgain = await _controller.save(
-          name: name == _initial.name ? null : name,
-          email: emailChanged ? email : null,
-          phone: phone == (_initial.phone ?? '') ? null : phone,
-          location: location == (_initial.location ?? '') ? null : location,
-          avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
-          bio: bio == (_initial.bio ?? '') ? null : bio,
-          currentPassword: password,
-        );
-        if (savedAgain && mounted) {
-          Navigator.of(context).pop(true);
-        }
+      if (error == null) {
+        return;
       }
     }
   }
@@ -222,7 +216,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   helperText: 'Required.',
                                 ),
                                 validator: (String? value) {
-                                  if (value == null || value.trim().length < 2) {
+                                  if (value == null ||
+                                      value.trim().length < 2) {
                                     return 'Please enter your name.';
                                   }
                                   return state.errorFor('name');
@@ -371,7 +366,6 @@ class _FormErrorBanner extends StatelessWidget {
     );
   }
 }
-
 
 class _CurrentPasswordDialog extends StatefulWidget {
   const _CurrentPasswordDialog({this.error});
