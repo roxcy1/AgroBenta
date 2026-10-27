@@ -659,6 +659,115 @@ void main() {
     });
   });
 }
+group('photo reorder', () {
+      test('moves a photo up one position', () {
+        final harness = buildRecordedController(
+          (RecordedRequest request) async => listingNotFoundResponse(),
+        );
+        addTearDown(harness.controller.dispose);
+
+        // Start with 3 photos at indices 0, 1, 2
+        _controller.addPickedPhotos(<XFile[
+          XFile(path: 'photo1.jpg'),
+          XFile(path: 'photo2.jpg'),
+          XFile(path: 'photo3.jpg'),
+        ]);
+
+        // Move photo at index 2 (third) up to index 1
+        _controller.reorderPhotos(2, 1);
+
+        final List<ListingPhotoItem> reordered = _controller.photos;
+        expect(reordered.length, 3);
+        // Third photo should now be at index 1, second photo shifts to index 2
+        expect(reordered[0].path, 'photo1.jpg');
+        expect(reordered[1].path, 'photo3.jpg');
+        expect(reordered[2].path, 'photo2.jpg');
+      });
+
+      test('moves a photo down one position', () {
+        final harness = buildRecordedController(
+          (RecordedRequest request) async => listingNotFoundResponse(),
+        );
+        addTearDown(harness.controller.dispose);
+
+        // Start with 3 photos at indices 0, 1, 2
+        _controller.addPickedPhotos(<XFile[
+          XFile(path: 'photo1.jpg'),
+          XFile(path: 'photo2.jpg'),
+          XFile(path: 'photo3.jpg'),
+        ]);
+
+        // Move photo at index 1 (second) down to index 2
+        _controller.reorderPhotos(1, 2);
+
+        final List<ListingPhotoItem> reordered = _controller.photos;
+        expect(reordered.length, 3);
+        // Second photo should now be at index 2, third photo shifts to index 1
+        expect(reordered[0].path, 'photo1.jpg');
+        expect(reordered[1].path, 'photo3.jpg');
+        expect(reordered[2].path, 'photo2.jpg');
+      });
+
+      test('does nothing when old index equals new index', () {
+        final harness = buildRecordedController(
+          (RecordedRequest request) async => listingNotFoundResponse(),
+        );
+        addTearDown(harness.controller.dispose);
+
+        _controller.addPickedPhotos(<XFile[
+          XFile(path: 'photo1.jpg'),
+          XFile(path: 'photo2.jpg'),
+        ]);
+
+        // Attempt to move photo at index 0 to index 0 (no-op)
+        _controller.reorderPhotos(0, 0);
+
+        final List<ListingPhotoItem> photos = _controller.photos;
+        expect(photos.length, 2);
+        expect(photos[0].path, 'photo1.jpg');
+        expect(photos[1].path, 'photo2.jpg');
+      });
+
+      test('does nothing when old index is out of bounds', () {
+        final harness = buildRecordedController(
+          (RecordedRequest request) async => listingNotFoundResponse(),
+        );
+        addTearDown(harness.controller.dispose);
+
+        _controller.addPickedPhotos(<XFile[
+          XFile(path: 'photo1.jpg'),
+        ]);
+
+        // Attempt to move from index 5 (out of bounds)
+        _controller.reorderPhotos(5, 0);
+
+        final List<ListingPhotoItem> photos = _controller.photos;
+        expect(photos.length, 1);
+        expect(photos[0].path, 'photo1.jpg');
+      });
+
+      test('does nothing when new index is out of bounds', () {
+        final harness = buildRecordedController(
+          (RecordedRequest request) async => listingNotFoundResponse(),
+        );
+        addTearDown(harness.controller.dispose);
+
+        _controller.addPickedPhotos(<XFile[
+          XFile(path: 'photo1.jpg'),
+          XFile(path: 'photo2.jpg'),
+        ]);
+
+        // Attempt to move from index 0 to index 5 (out of bounds)
+        _controller.reorderPhotos(0, 5);
+
+        final List<ListingPhotoItem> photos = _controller.photos;
+        expect(photos.length, 2);
+        expect(photos[0].path, 'photo1.jpg');
+        expect(photos[1].path, 'photo2.jpg');
+      });
+    });
+  });
+}
 
 /// A draft that is only used for its status.
 Listing _listing(ListingStatus status) =>
