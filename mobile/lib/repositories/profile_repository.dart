@@ -23,6 +23,7 @@ class ProfileRepository {
     String? location,
     String? avatarUrl,
     String? bio,
+    String? currentPassword,
   }) {
     return _service.update(
       name: name,
@@ -31,6 +32,7 @@ class ProfileRepository {
       location: location,
       avatarUrl: avatarUrl,
       bio: bio,
+      currentPassword: currentPassword,
     );
   }
 

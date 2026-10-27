@@ -111,6 +111,7 @@ class ProfileController extends ChangeNotifier {
     String? location,
     String? avatarUrl,
     String? bio,
+    String? currentPassword,
   }) async {
     if (_state.isBusy) {
       return false;
@@ -133,6 +134,7 @@ class ProfileController extends ChangeNotifier {
         location: location,
         avatarUrl: avatarUrl,
         bio: bio,
+        currentPassword: currentPassword,
       );
 
       if (_disposed) {
