@@ -21,13 +21,12 @@ import 'package:flutter/foundation.dart';
 /// | iOS simulator        | `localhost` (or `127.0.0.1`)   |
 /// | Web / desktop        | `localhost`                    |
 ///
-/// The defaults are deliberately **physical-device-first**. A native Android
-/// build resolves to [physicalAndroidApiBaseUrl] unless the build opts into
-/// the emulator host alias with `--dart-define=ANDROID_RUN_TARGET=emulator`,
-/// so a physical-device development build can never silently fall back to the
-/// emulator-only `10.0.2.2` address. Web is resolved from [kIsWeb] rather
-/// than from the browser's user agent — see the note on [apiBaseUrl] for why
-/// that distinction matters.
+/// A native Android build **requires** `--dart-define=API_BASE_URL` unless the
+/// build opts into the emulator host alias with
+/// `--dart-define=ANDROID_RUN_TARGET=emulator`. There is no hardcoded developer
+/// IP in source control — pass it per build or use a gitignored local config.
+/// Web is resolved from [kIsWeb] rather than from the browser's user agent —
+/// see the note on [apiBaseUrl] for why that distinction matters.
 ///
 /// ## Browser origins
 ///
@@ -57,8 +56,8 @@ import 'package:flutter/foundation.dart';
 /// build must point somewhere other than the built-in defaults:
 ///
 /// ```sh
-/// # Physical device on the same Wi-Fi network (this is already the default)
-/// flutter run --dart-define=API_BASE_URL=http://192.168.1.8:8001/api
+/// # Physical device on the same Wi-Fi network
+/// flutter run --dart-define=API_BASE_URL=http://192.168.1.14:8001/api
 ///
 /// # Android emulator
 /// flutter run --dart-define=ANDROID_RUN_TARGET=emulator \
@@ -80,7 +79,8 @@ abstract final class AppConfig {
   ///
   /// Only the value `emulator` opts into [androidEmulatorApiBaseUrl]; any
   /// other value — or an unset define — is a physical-device build and
-  /// resolves to [physicalAndroidApiBaseUrl]. See [resolveApiBaseUrl].
+  /// requires [API_BASE_URL] to be supplied via `--dart-define`. See
+  /// [resolveApiBaseUrl].
   static const String _androidRunTarget = String.fromEnvironment(
     'ANDROID_RUN_TARGET',
   );
@@ -89,18 +89,19 @@ abstract final class AppConfig {
   /// repository root `README.md`). The API is mounted under `/api`.
   static const String localApiBaseUrl = 'http://localhost:8001/api';
 
-  /// Default for a **physical-device** Android development build: the
-  /// development machine's LAN IP, which a phone on the same Wi-Fi network
-  /// reaches directly.
-  ///
-  /// This is the Android default precisely because the emulator's `10.0.2.2`
-  /// loopback alias does not exist on a real phone — a physical build that
-  /// falls back to it fails every request. If this machine's LAN IP ever
-  /// changes, update this constant. Staging and production are expressed with
-  /// `--dart-define=API_BASE_URL`, never by editing this constant.
-  /// CHANGE_THIS_DEV_LAN_IP: the development machine's address in
-  /// `ipconfig`.
-  static const String physicalAndroidApiBaseUrl = 'http://192.168.1.8:8001/api';
+  /// Production HTTPS base URL placeholder. Override via
+  /// `--dart-define=API_BASE_URL` for release builds (e.g.
+  /// `https://api.yourdomain.com/api`).
+  static const String productionHttpsApiBaseUrl =
+      'https://CHANGE_THIS_PRODUCTION_API_BASE_URL/api';
+
+  /// Default for a **physical-device** Android development build is no longer
+  /// hardcoded. A physical Android build must be provided via
+  /// `--dart-define=API_BASE_URL` (pointing to your machine's LAN IP).
+  static const String _missingPhysicalAndroidApiBaseUrlError =
+      'API_BASE_URL must be provided via --dart-define for a physical Android '
+      'build. See mobile/README.md for examples (e.g. '
+      '--dart-define=API_BASE_URL=http://<your-lan-ip>:8001/api).';
 
   /// `10.0.2.2` is the Android emulator's alias for the host machine's loopback
   /// interface. Selected **only** when the build opts in with
@@ -110,10 +111,11 @@ abstract final class AppConfig {
 
   /// Resolved API root, without a trailing slash.
   ///
-  /// Resolution order:
+/// Resolution order:
   ///   1. the `API_BASE_URL` dart-define, when supplied;
-  ///   2. a native Android build — [physicalAndroidApiBaseUrl] by default, or
-  ///      [androidEmulatorApiBaseUrl] when `ANDROID_RUN_TARGET` is `emulator`;
+  ///   2. a native Android build — [androidEmulatorApiBaseUrl] only when
+  ///      `ANDROID_RUN_TARGET` is `emulator`; otherwise a physical Android build
+  ///      requires `API_BASE_URL` via `--dart-define`;
   ///   3. [localApiBaseUrl] everywhere else, which includes Flutter Web.
   static String get apiBaseUrl => resolveApiBaseUrl(
     isWeb: kIsWeb,
@@ -161,7 +163,7 @@ abstract final class AppConfig {
             // cannot influence it.
             TargetPlatform.android when !isWeb => androidTarget == 'emulator'
                 ? androidEmulatorApiBaseUrl
-                : physicalAndroidApiBaseUrl,
+                : throw StateError(_missingPhysicalAndroidApiBaseUrlError),
             _ => localApiBaseUrl,
           };
 

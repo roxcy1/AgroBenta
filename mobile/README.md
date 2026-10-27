@@ -47,7 +47,7 @@ Project-wide rules live in the repository root: `../AGENTS.md`, `../DESIGN.md`,
 flutter pub get
 
 # Physical device (default) — resolves to http://192.168.1.8:8001/api
-flutter run
+flutter run --dart-define=API_BASE_URL=http://192.168.1.14:8001/api
 
 # Android emulator — opt into the host alias explicitly
 flutter run --dart-define=ANDROID_RUN_TARGET=emulator
@@ -66,6 +66,11 @@ source:
 ```sh
 # Point anywhere explicitly (staging, another machine, etc.)
 flutter run --dart-define=API_BASE_URL=https://api.staging.example.test/api
+
+# Production (HTTPS placeholder)
+flutter build apk --release --dart-define=API_BASE_URL=https://CHANGE_THIS_PRODUCTION_API_BASE_URL/api
+# or
+flutter build ios --release --dart-define=API_BASE_URL=https://CHANGE_THIS_PRODUCTION_API_BASE_URL/api
 ```
 
 > **Android emulator → host is `10.0.2.2`, not `localhost`.** The emulator runs

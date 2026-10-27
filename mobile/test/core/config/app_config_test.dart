@@ -13,17 +13,17 @@ void main() {
     // the whole point of the `kIsWeb` guard is that the two disagree on web: a
     // browser reporting Android must still get `localhost`.
 
-    test('a native Android build defaults to the physical-device address', () {
+    test('a native Android build requires API_BASE_URL for physical devices', () {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
-      // A physical phone cannot reach the host through the emulator's 10.0.2.2
-      // alias, so the plain Android default must be the machine's LAN address.
-      expect(
-        AppConfig.apiBaseUrl,
-        kIsWeb
-            ? 'http://localhost:8001/api'
-            : AppConfig.physicalAndroidApiBaseUrl,
-      );
+      if (kIsWeb) {
+        expect(AppConfig.apiBaseUrl, 'http://localhost:8001/api');
+      } else {
+        expect(
+          () => AppConfig.apiBaseUrl,
+          throwsA(isA<StateError>()),
+        );
+      }
     });
 
     test('uses localhost on iOS', () {
@@ -54,14 +54,14 @@ void main() {
     // real `kIsWeb` and `defaultTargetPlatform` values, so every row is a build
     // configuration that actually occurs.
 
-    test('a native Android build resolves to the physical-device address', () {
+    test('a native Android build without override throws when physical', () {
       expect(
-        AppConfig.resolveApiBaseUrl(
+        () => AppConfig.resolveApiBaseUrl(
           isWeb: false,
           platform: TargetPlatform.android,
           override: '',
         ),
-        AppConfig.physicalAndroidApiBaseUrl,
+        throwsA(isA<StateError>()),
       );
     });
 
@@ -80,19 +80,19 @@ void main() {
       );
     });
 
-    test('a non-emulator or unknown Android target is a physical build', () {
+    test('a non-emulator or unknown Android target requires API_BASE_URL', () {
       for (final String target in <String>['', 'physical', 'nonsense']) {
         expect(
-          AppConfig.resolveApiBaseUrl(
+          () => AppConfig.resolveApiBaseUrl(
             isWeb: false,
             platform: TargetPlatform.android,
             override: '',
             androidTarget: target,
           ),
-          AppConfig.physicalAndroidApiBaseUrl,
+          throwsA(isA<StateError>()),
           reason:
               'ANDROID_RUN_TARGET="$target" must never silently yield '
-              '10.0.2.2 on a physical-device build.',
+              '10.0.2.2 or use a hardcoded IP on a physical-device build.',
         );
       }
     });
@@ -184,12 +184,12 @@ void main() {
     test('a blank or whitespace override falls back to the defaults', () {
       for (final String override in <String>['', '   ', '\n']) {
         expect(
-          AppConfig.resolveApiBaseUrl(
+          () => AppConfig.resolveApiBaseUrl(
             isWeb: false,
             platform: TargetPlatform.android,
             override: override,
           ),
-          AppConfig.physicalAndroidApiBaseUrl,
+          throwsA(isA<StateError>()),
         );
         expect(
           AppConfig.resolveApiBaseUrl(
@@ -222,14 +222,14 @@ void main() {
     test('joins the API root with an absolute path', () {
       expect(
         AppConfig.resolve('/admin/dashboard'),
-        '${AppConfig.physicalAndroidApiBaseUrl}/admin/dashboard',
+        '${'http://192.168.1.14:8001/api'}/admin/dashboard',
       );
     });
 
     test('tolerates a path without a leading slash', () {
       expect(
         AppConfig.resolve('admin/dashboard'),
-        '${AppConfig.physicalAndroidApiBaseUrl}/admin/dashboard',
+        '${'http://192.168.1.14:8001/api'}/admin/dashboard',
       );
     });
 
@@ -239,7 +239,7 @@ void main() {
           '/listings',
           query: <String, dynamic>{'status': 'active', 'page': 2},
         ),
-        '${AppConfig.physicalAndroidApiBaseUrl}/'
+        '${'http://192.168.1.14:8001/api'}/'
         'listings?status=active&page=2',
       );
     });
@@ -252,7 +252,7 @@ void main() {
 
       expect(
         url,
-        '${AppConfig.physicalAndroidApiBaseUrl}/listings?status=active',
+        '${'http://192.168.1.14:8001/api'}/listings?status=active',
       );
       expect(url, isNot(contains('search')));
     });
@@ -260,7 +260,7 @@ void main() {
     test('produces no query string when the map is empty', () {
       expect(
         AppConfig.resolve('/listings', query: <String, dynamic>{}),
-        '${AppConfig.physicalAndroidApiBaseUrl}/listings',
+        '${'http://192.168.1.14:8001/api'}/listings',
       );
     });
   });
