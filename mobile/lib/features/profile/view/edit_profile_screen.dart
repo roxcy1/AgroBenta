@@ -121,41 +121,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<String?> _promptCurrentPassword() async {
-    final TextEditingController controller = TextEditingController();
-    try {
-      final String? result = await showDialog<String>(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: const Text('Confirm your password'),
-            content: TextField(
-              controller: controller,
-              obscureText: true,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Current password',
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(null),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(controller.text),
-                child: const Text('Confirm'),
-              ),
-            ],
-          );
-        },
-      );
-      if (result == null || result.isEmpty) {
-        return null;
-      }
-      return result;
-    } finally {
-      controller.dispose();
+    final String? result = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return const _CurrentPasswordDialog();
+      },
+    );
+    if (result == null || result.isEmpty) {
+      return null;
     }
+    return result;
   }
 
   @override
@@ -366,6 +341,55 @@ class _FormErrorBanner extends StatelessWidget {
           Expanded(child: Text(message, style: theme.textTheme.bodySmall)),
         ],
       ),
+    );
+  }
+}
+
+
+class _CurrentPasswordDialog extends StatefulWidget {
+  const _CurrentPasswordDialog();
+
+  @override
+  State<_CurrentPasswordDialog> createState() => _CurrentPasswordDialogState();
+}
+
+class _CurrentPasswordDialogState extends State<_CurrentPasswordDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Confirm your password'),
+      content: TextField(
+        controller: _controller,
+        obscureText: true,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Current password',
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Confirm'),
+        ),
+      ],
     );
   }
 }
