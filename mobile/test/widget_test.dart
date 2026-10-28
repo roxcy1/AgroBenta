@@ -37,7 +37,7 @@ void main() {
     // flutter_test runs with defaultTargetPlatform == android and no
     // ANDROID_RUN_TARGET define, so the native-Android default must resolve to
     // the physical-device LAN address — never the emulator host alias.
-    expect(AppConfig.apiBaseUrl, AppConfig.physicalAndroidApiBaseUrl);
+    expect(AppConfig.apiBaseUrl, 'http://192.168.1.100:8001/api');
     expect(AppConfig.apiBaseUrl, isNot(contains('10.0.2.2')));
 
     await tester.pumpWidget(AgroBentaApp(tokenStore: FakeTokenStore()));

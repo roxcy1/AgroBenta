@@ -30,10 +30,15 @@ import 'auth_validators.dart';
 ///    the buttons are rendered disabled rather than implying a capability that
 ///    is not there.
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({required this.onRegister, super.key});
+  const SignInScreen({
+    required this.onRegister,
+    required this.onForgotPassword,
+    super.key,
+  });
 
   /// Switches to the registration form.
   final VoidCallback onRegister;
+  final VoidCallback onForgotPassword;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
