@@ -117,9 +117,7 @@ class SellerListingCard extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          AppFormatters.formatMoneyCompact(
-                                  listing.askingPrice,
-                                ) ??
+                          AppFormatters.formatMoneyCompact(listing.askingPrice) ??
                               listing.askingPrice,
                           style: theme.textTheme.titleSmall?.copyWith(
                             color: AppColors.primary,

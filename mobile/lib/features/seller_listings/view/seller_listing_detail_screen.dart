@@ -111,6 +111,36 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
     if (!SellerListingController.canMarkSold(current)) {
       return;
     }
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Mark this listing as sold?'),
+        content: const Text(
+          'The sale is complete. This listing will stay on your record as sold '
+          'and can no longer be edited or deleted. It will no longer appear in '
+          'the marketplace.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.sold,
+            ),
+            child: const Text('Mark as sold'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
     final Listing? marked = await _controller.markSold(current.id);
     if (!mounted || marked == null) {
       return;
@@ -417,11 +447,53 @@ class _ActionBar extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sm),
               ],
               switch ((canSubmit, canMarkSold, canDelete)) {
-                (true, _, _) => FilledButton(
-                      onPressed: busy || !hasPhotos ? null : onSubmit,
-                      child: const Text('Submit for review'),
+                // A draft may be deleted or submitted for review; both buttons
+                // share the busy flag so a second action while one is running
+                // lands on a 409 waiting to happen.
+                (true, false, true) => Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: busy ? null : onDelete,
+                            child: const Text('Delete listing'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          flex: 2,
+                          child: FilledButton(
+                            onPressed: busy || !hasPhotos ? null : onSubmit,
+                            child: busy
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Submit for review'),
+                          ),
+                        ),
+                      ],
                     ),
-                (false, true, _) => OutlinedButton.icon(
+                // Unreachable in practice (a draft is always deletable), but the
+                // switch must be exhaustive.
+                (true, false, false) => FilledButton(
+                      onPressed: busy || !hasPhotos ? null : onSubmit,
+                      child: busy
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Submit for review'),
+                    ),
+                // `active`: only `markSold`. A listing cannot be both `draft`
+                // and `active`, so `(true, true, ...)` is unreachable — but the
+                // switch must be exhaustive, so this wildcard covers it.
+                (_, true, _) => OutlinedButton.icon(
                       onPressed: busy ? null : onMarkSold,
                       icon: const Icon(Icons.done_outline, size: 18),
                       label: const Text('Mark as sold'),
@@ -429,6 +501,7 @@ class _ActionBar extends StatelessWidget {
                         foregroundColor: AppColors.sold,
                       ),
                     ),
+                // `inactive`: only Delete.
                 (false, false, true) => OutlinedButton(
                       onPressed: busy ? null : onDelete,
                       child: const Text('Delete listing'),

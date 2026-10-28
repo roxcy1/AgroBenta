@@ -108,6 +108,13 @@ abstract final class AppConfig {
   /// default. See the class documentation for the full address table.
   static const String androidEmulatorApiBaseUrl = 'http://10.0.2.2:8001/api';
 
+  /// Error thrown when a physical-device Android build does not supply
+  /// `API_BASE_URL` via `--dart-define`. A real phone cannot reach `10.0.2.2`
+  /// (that alias exists only inside an Android emulator), so the URL must be
+  /// provided explicitly.
+  static const String _missingPhysicalAndroidApiBaseUrlError =
+      'A physical-device Android build requires --dart-define=API_BASE_URL (e.g. http://<lan-ip>:8001/api). The emulator alias 10.0.2.2 does not exist on a real phone.';
+
   /// Resolved API root, without a trailing slash.
   ///
   /// Resolution order:

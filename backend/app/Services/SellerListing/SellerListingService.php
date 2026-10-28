@@ -221,36 +221,57 @@ class SellerListingService
      * `active → sold`. Terminal for the listing: no new transactions can be
      * created against it afterwards.
      *
+     * The status check is performed inside a `DB::transaction()` against a
+     * row-level `lockForUpdate()` read of the listing, so a concurrent
+     * transaction creation cannot move the listing out of `active` between the
+     * check and the status write. `TransactionService::create()` takes the same
+     * listing-row lock, so both operations serialize on the listing row with a
+     * consistent lock order and no deadlock risk.
+     *
      * @throws ValidationException if the listing is not active
      */
     public function markSold(Listing $listing): Listing
     {
-        $this->ensureStatusIs(
-            $listing,
-            [ListingStatus::Active],
-            'Only an active listing can be marked as sold.'
-        );
-
         return DB::transaction(function () use ($listing): Listing {
-            $previousStatus = $listing->status->value;
+            // Reload inside the transaction with a row lock so that ownership
+            // and status are validated against the persisted row, not against
+            // the model the controller passed in (which could be stale).
+            $locked = Listing::query()
+                ->where('id', $listing->getKey())
+                ->lockForUpdate()
+                ->first();
 
-            $listing->status = ListingStatus::Sold;
-            $listing->save();
+            if ($locked === null) {
+                abort(404, 'Listing not found.');
+            }
+
+            if ((int) $locked->seller_id !== (int) $listing->seller_id) {
+                abort(404, 'Listing not found.');
+            }
+
+            if ($locked->status !== ListingStatus::Active) {
+                abort(409, 'Only an active listing can be marked as sold.');
+            }
+
+            $previousStatus = $locked->status->value;
+
+            $locked->status = ListingStatus::Sold;
+            $locked->save();
 
             $this->activity->log(
-                $listing->seller_id,
+                $locked->seller_id,
                 ActivityAction::ListingMarkedSold,
-                sprintf('Listing #%d marked as sold.', $listing->getKey()),
+                sprintf('Listing #%d marked as sold.', $locked->getKey()),
                 [
                     'target_type' => 'listing',
-                    'target_id' => $listing->getKey(),
+                    'target_id' => $locked->getKey(),
                     'changes' => [
                         'status' => ['from' => $previousStatus, 'to' => ListingStatus::Sold->value],
                     ],
                 ],
             );
 
-            return $listing;
+            return $locked;
         });
     }
 
