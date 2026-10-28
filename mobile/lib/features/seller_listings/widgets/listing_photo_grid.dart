@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/local_image_preview.dart';
 import '../state/listing_photo_item.dart';
 import '../state/seller_listing_controller.dart';
 import '../state/seller_listing_scope.dart';
@@ -25,17 +24,34 @@ class ListingPhotoGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final SellerListingController controller = _controller(context);
     final List<ListingPhotoItem> photos = controller.photos;
+    final int failedCount = photos
+        .where(
+          (ListingPhotoItem photo) => photo.status == ListingPhotoStatus.failed,
+        )
+        .length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        ...photos.asMap().entries.map<Widget>((MapEntry<int, ListingPhotoItem> entry) {
+        if (failedCount > 0) ...<Widget>[
+          _FailedUploadsNotice(
+            count: failedCount,
+            onRetry: controller.retryFailedPhotos,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        ...photos.asMap().entries.map<Widget>((
+          MapEntry<int, ListingPhotoItem> entry,
+        ) {
           final int index = entry.key;
           final ListingPhotoItem photo = entry.value;
           return _Tile(
             key: ValueKey<String>(photo.id),
             photo: photo,
             onRemove: () => controller.removePhotoItem(photo.id),
+            onRetry: photo.status == ListingPhotoStatus.failed
+                ? controller.retryFailedPhotos
+                : null,
             onMoveUp: index > 0
                 ? () => controller.reorderPhotos(index, index - 1)
                 : null,
@@ -70,12 +86,16 @@ class _Tile extends StatelessWidget {
     super.key,
     required this.photo,
     required this.onRemove,
+    this.onRetry,
     this.onMoveUp,
     this.onMoveDown,
   });
 
   final ListingPhotoItem photo;
   final VoidCallback onRemove;
+
+  /// Retries the batch when this tile's upload failed.
+  final VoidCallback? onRetry;
   final VoidCallback? onMoveUp;
   final VoidCallback? onMoveDown;
 
@@ -87,6 +107,8 @@ class _Tile extends StatelessWidget {
         _Thumbnail(photo: photo),
         if (photo.status == ListingPhotoStatus.uploading)
           _UploadIndicator(progress: photo.progress ?? 0.0),
+        if (photo.status == ListingPhotoStatus.failed)
+          Positioned.fill(child: _FailedOverlay(onRetry: onRetry)),
         Positioned(
           right: -AppSpacing.xxs,
           top: -AppSpacing.xxs,
@@ -102,7 +124,10 @@ class _Tile extends StatelessWidget {
           Positioned(
             left: -AppSpacing.xxs,
             bottom: -AppSpacing.xxs,
-            child: _MoveButton(icon: Icons.arrow_downward, onPressed: onMoveDown),
+            child: _MoveButton(
+              icon: Icons.arrow_downward,
+              onPressed: onMoveDown,
+            ),
           ),
       ],
     );
@@ -120,13 +145,27 @@ class _Thumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget child;
     if (photo.status == ListingPhotoStatus.uploaded && photo.url != null) {
-      return _NetworkImage(url: photo.url!);
+      child = _NetworkImage(url: photo.url!);
+    } else if (photo.file != null) {
+      child = LocalImagePreview(
+        file: photo.file!,
+        fit: BoxFit.cover,
+        fallback: const _Placeholder(),
+      );
+    } else {
+      child = const _Placeholder();
     }
-    if (photo.file != null) {
-      return _FileImage(file: photo.file!);
-    }
-    return const _Placeholder(showSpinner: false);
+
+    return SizedBox(
+      width: _tileSize,
+      height: _tileSize,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: child,
+      ),
+    );
   }
 }
 
@@ -146,40 +185,111 @@ class _NetworkImage extends StatelessWidget {
         fit: BoxFit.cover,
         width: _tileSize,
         height: _tileSize,
-        errorBuilder:
-            (BuildContext context, Object error, StackTrace? _) =>
-                const _Placeholder(showSpinner: false),
-        loadingBuilder: (
-          BuildContext context,
-          Widget child,
-          ImageChunkEvent? progress,
-        ) =>
-            progress == null ? child : const _Placeholder(showSpinner: true),
+        errorBuilder: (BuildContext context, Object error, StackTrace? _) =>
+            const _Placeholder(showSpinner: false),
+        loadingBuilder:
+            (BuildContext context, Widget child, ImageChunkEvent? progress) =>
+                progress == null
+                ? child
+                : const _Placeholder(showSpinner: true),
         excludeFromSemantics: true,
       ),
     );
   }
 }
 
-/// Renders a locally-picked file as a thumbnail.
-class _FileImage extends StatelessWidget {
-  const _FileImage({required this.file});
+/// A failed tile: the state is stated in words, and tapping retries.
+class _FailedOverlay extends StatelessWidget {
+  const _FailedOverlay({this.onRetry});
 
-  final XFile file;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Image.file(
-        File(file.path),
-        fit: BoxFit.cover,
-        width: _tileSize,
-        height: _tileSize,
-        errorBuilder:
-            (BuildContext context, Object error, StackTrace? _) =>
-                const _Placeholder(showSpinner: false),
-        excludeFromSemantics: true,
+      child: Material(
+        color: AppColors.error.withValues(alpha: 0.88),
+        child: InkWell(
+          onTap: onRetry,
+          child: SizedBox(
+            width: _tileSize,
+            height: _tileSize,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xxs),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  const Icon(Icons.refresh, color: Colors.white, size: 20),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    'Upload failed',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Tap to retry',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// States how many photos failed, and offers one retry for the whole batch.
+///
+/// The photos were sent in one multipart request, so they failed together and
+/// are retried together; a per-file retry would send the same list again and
+/// could duplicate a file that had actually been stored before the request
+/// failed.
+class _FailedUploadsNotice extends StatelessWidget {
+  const _FailedUploadsNotice({required this.count, required this.onRetry});
+
+  final int count;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.06),
+        border: const Border(
+          left: BorderSide(color: AppColors.error, width: 3),
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(Icons.error_outline, size: 20, color: AppColors.error),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              count == 1
+                  ? '1 photo failed to upload.'
+                  : '$count photos failed to upload.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
       ),
     );
   }
@@ -268,7 +378,11 @@ class _DeleteButton extends StatelessWidget {
         ],
       ),
       child: IconButton(
-        icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+        icon: const Icon(
+          Icons.delete_outline,
+          size: 20,
+          color: AppColors.error,
+        ),
         onPressed: onPressed,
         tooltip: 'Remove photo',
       ),
@@ -300,7 +414,11 @@ class _MoveButton extends StatelessWidget {
         ],
       ),
       child: IconButton(
-        icon: Icon(icon, size: 18, color: enabled ? AppColors.text : AppColors.textSecondary),
+        icon: Icon(
+          icon,
+          size: 18,
+          color: enabled ? AppColors.text : AppColors.textSecondary,
+        ),
         onPressed: onPressed,
       ),
     );
@@ -346,5 +464,3 @@ class _AddTile extends StatelessWidget {
     );
   }
 }
-
-

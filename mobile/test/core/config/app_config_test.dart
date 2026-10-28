@@ -48,6 +48,29 @@ void main() {
     });
   });
 
+  group('apiOrigin', () {
+    test('strips the /api mount path from the base URL', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      expect(AppConfig.apiOrigin, 'http://localhost:8001');
+    });
+
+    test('keeps a non-default port', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+      // physicalAndroidApiBaseUrl is http://192.168.1.14:8001/api
+      expect(AppConfig.apiOrigin, 'http://192.168.1.14:8001');
+    });
+
+    test('never includes a path', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      final Uri origin = Uri.parse(AppConfig.apiOrigin);
+      expect(origin.path, isEmpty);
+      expect(origin.hasAuthority, isTrue);
+    });
+  });
+
   group('resolveApiBaseUrl platform matrix', () {
     // This is the table the whole connectivity fix rests on, so it is asserted
     // exhaustively rather than one platform at a time. The arguments are the

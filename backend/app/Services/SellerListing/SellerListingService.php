@@ -100,6 +100,19 @@ class SellerListingService
      */
     public function create(User $seller, array $attributes): Listing
     {
+        // A listing that does not exist yet has no directory to upload into and
+        // no id to scope a filename to, so any supplied photo is a claim this
+        // server cannot verify. A draft stays photo-optional: absent or `[]` is
+        // valid, and the client uploads once the draft is saved (D-10).
+        $photos = $attributes['photos'] ?? [];
+        $photos = is_array($photos) ? $photos : [];
+
+        if (Listing::normalisePhotoFilenames($photos) !== []) {
+            throw ValidationException::withMessages([
+                'photos' => 'Photos cannot be attached when a listing is created. Save the draft first, then upload photos.',
+            ]);
+        }
+
         return DB::transaction(function () use ($seller, $attributes): Listing {
             $listing = $this->listingRepository->createForSeller(
                 $seller,
@@ -126,11 +139,19 @@ class SellerListingService
     /**
      * Edit the content of a listing the seller owns.
      *
-     * @throws ValidationException if the listing is not in an editable state
+     * A `photos` value is accepted only when every name was actually uploaded
+     * to this listing; see [validatedPhotoFilenames()].
+     *
+     * @throws ValidationException if the listing is not in an editable state or
+     *                             a supplied photo is not stored on it
      */
     public function update(Listing $listing, array $attributes): Listing
     {
         $this->ensureStatusIs($listing, self::EDITABLE_STATUSES, 'Only a draft or an active listing can be edited.');
+
+        if (array_key_exists('photos', $attributes)) {
+            $attributes['photos'] = $this->validatedPhotoFilenames($listing, $attributes['photos']);
+        }
 
         return DB::transaction(function () use ($listing, $attributes): Listing {
             $before = $listing->getAttributes();
@@ -159,10 +180,13 @@ class SellerListingService
     /**
      * Move a draft into review.
      *
-     * Re-validates the stored listing against the create rules before queueing
-     * it, as §5.4 requires: a draft that predates a rule change, or one written
-     * outside this API, is rejected with 422 rather than being sent to a moderator
-     * in a state the moderator cannot render.
+     * Re-validates the stored listing against the publication rules before
+     * queueing it, as §5.4 requires: a draft that predates a rule change, or one
+     * written outside this API, is rejected with 422 rather than being sent to a
+     * moderator in a state the moderator cannot render. Those rules are
+     * [SellerListingRules::submissionRules()] plus the photo minimum, which
+     * applies at submission only [DEC-03]. A listing whose stored photo files
+     * are missing from the disk is refused as well.
      *
      * @throws ValidationException if the stored listing is not submittable
      */
@@ -314,6 +338,10 @@ class SellerListingService
      * or the bare filename — and either collapses to the same filename, so a
      * client never has to parse its own URL to delete from it.
      *
+     * An active listing may lose a photo but not its last one: publication
+     * depends on at least one stored photo [DEC-03], so emptying a live
+     * listing is a 409 rather than a valid edit.
+     *
      * @throws ValidationException if the listing is not in an editable state
      */
     public function removePhoto(Listing $listing, string $photo): Listing
@@ -324,7 +352,7 @@ class SellerListingService
             'Photos can only be changed on a draft or an active listing.',
         );
 
-        $filename = basename(str_replace('\\', '/', trim($photo)));
+        $filename = Listing::normalisePhotoFilename($photo) ?? '';
         $stored = $listing->storedPhotoFilenames();
 
         // 404, not 422: the listing is the seller's own, but a name that is
@@ -332,6 +360,13 @@ class SellerListingService
         // listing id that was never theirs.
         if (! in_array($filename, $stored, true)) {
             abort(404, 'Photo not found.');
+        }
+
+        // A published listing is approved on the strength of at least one
+        // stored photo [DEC-03], so seller photo management must not be the
+        // route that empties it. A draft may still lose its last photo.
+        if ($listing->status === ListingStatus::Active && count($stored) === 1) {
+            abort(409, 'The last photo of an active listing cannot be removed.');
         }
 
         $updated = DB::transaction(function () use ($listing, $filename, $stored): Listing {
@@ -369,12 +404,14 @@ class SellerListingService
     }
 
     /**
-     * Check the stored listing against the create rules, on the model itself.
+     * Check the stored listing against the publication rules, on the model
+     * itself.
      *
      * The data is the row, not the request, so a listing that could not be
      * created through this endpoint can still be caught before a moderator sees
      * it. Error keys are the column names, which is what the client's form is
-     * built from.
+     * built from. The photo minimum and the physical-file check are both applied
+     * here, after the field rules, so an empty listing cannot reach review.
      *
      * @throws ValidationException
      */
@@ -395,10 +432,14 @@ class SellerListingService
                 'age_value' => $this->wholeNumberOrNull($listing->age_value),
                 'age_unit' => $listing->age_unit,
                 'gender' => $listing->gender,
-                'weight_value' => $listing->weight_value,
+                // The `decimal:2` cast rounds on read, so a row that stores a
+                // third decimal would look valid and slip past the rule DEC-02
+                // exists to enforce. The raw stored value is what is validated;
+                // the cast value is only a fallback for an unsaved attribute.
+                'weight_value' => $listing->getRawOriginal('weight_value', $listing->weight_value),
                 'weight_unit' => $listing->weight_unit,
                 'quantity' => $listing->quantity,
-                'asking_price' => $listing->asking_price,
+                'asking_price' => $listing->getRawOriginal('asking_price', $listing->asking_price),
                 'location' => $listing->location,
                 'health_status' => $listing->health_status,
                 'vaccination' => $listing->vaccination,
@@ -406,7 +447,10 @@ class SellerListingService
                 'additional_notes' => $listing->additional_notes,
                 'photos' => $listing->photos,
             ],
-            $this->submissionRules(),
+            // Publication, not merely submission: the photo minimum is a submit
+            // action rule [DEC-03], so it belongs to the rule set rather than to
+            // a check bolted on after it.
+            $this->publicationRules(),
         );
 
         if ($validator->fails()) {
@@ -418,6 +462,57 @@ class SellerListingService
             [ListingStatus::Draft],
             'Only a draft listing can be submitted for review.',
         );
+
+        // The column is a declaration; the disk is the evidence. A row can name
+        // a photo the upload endpoint never wrote, or one that has since been
+        // removed by an operator or a storage lifecycle rule, and review must
+        // not begin on images a buyer cannot load.
+        if ($listing->missingPhotoFilenames() !== []) {
+            throw ValidationException::withMessages([
+                'photos' => 'One or more listing photos are missing. Remove and re-upload them before submitting.',
+            ]);
+        }
+    }
+
+    /**
+     * Normalise a client-supplied photo list and require every filename to be
+     * present in this listing's own directory.
+     *
+     * The column stores bare filenames and the directory is derived from the
+     * listing's key, so a name the upload endpoint never wrote here is a claim
+     * the API cannot honour — including a filename that belongs to another
+     * listing. The whole set is compared against one directory listing, so a
+     * client that echoes the URL it was served still round-trips losslessly.
+     *
+     * A `photos` edit that empties an active listing is refused for the same
+     * reason removal of its last photo is: a published listing must keep at
+     * least one photo [DEC-03], and an edit is not a route around that rule.
+     *
+     * @return list<string>
+     *
+     * @throws ValidationException if a name is not stored on this listing
+     */
+    private function validatedPhotoFilenames(Listing $listing, mixed $photos): array
+    {
+        $filenames = Listing::normalisePhotoFilenames(is_array($photos) ? $photos : []);
+
+        if ($filenames === []) {
+            if ($listing->status === ListingStatus::Active) {
+                throw ValidationException::withMessages([
+                    'photos' => 'An active listing must keep at least one photo.',
+                ]);
+            }
+
+            return [];
+        }
+
+        if (array_diff($filenames, $listing->photoFilenamesOnDisk()) !== []) {
+            throw ValidationException::withMessages([
+                'photos' => 'Only photos uploaded to this listing can be saved. Upload the photo first.',
+            ]);
+        }
+
+        return $filenames;
     }
 
     /**

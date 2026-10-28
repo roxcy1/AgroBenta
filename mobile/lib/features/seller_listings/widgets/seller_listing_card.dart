@@ -18,9 +18,10 @@ import '../view/seller_listing_views.dart';
 /// accept are on the card rather than one tap away.
 ///
 /// The thumbnail reuses [ListingPhoto] unchanged. It already handles a listing
-/// with no photos by drawing a labelled placeholder, which is what every draft
-/// and `pending` listing currently is: photo upload is not in the contract yet
-/// (GAP-06), so the placeholder is the normal case, not an edge case.
+/// with no photos by drawing a labelled placeholder. A draft may have none, but
+/// it cannot be submitted for review until it does (DEC-03), so the draft's
+/// submit action is blocked with an inline reason rather than failing at the
+/// server.
 ///
 /// Tappable as a whole, with the row as the only tap target. The action buttons
 /// are a separate footer rather than icons inside the row, because a delete that
@@ -199,6 +200,7 @@ class _ActionBar extends StatelessWidget {
     // pending / sold have no client-side action at all; see the no-action branch.
     final bool canSubmit = SellerListingController.canSubmit(listing);
     final bool canDelete = listing.status == ListingStatus.inactive;
+    final bool hasPhotos = SellerListingController.hasSubmissionPhotos(listing);
 
     if (!canSubmit && !canDelete) {
       return Container(
@@ -235,21 +237,33 @@ class _ActionBar extends StatelessWidget {
                   ),
                 ),
               )
-            : Row(
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Expanded(
-                    child: TextButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text('Edit'),
+                  if (!hasPhotos) ...<Widget>[
+                    const Padding(
+                      padding: EdgeInsets.only(top: AppSpacing.sm),
+                      child: ListingPhotoRequirementNotice(),
                     ),
-                  ),
-                  Expanded(
-                    child: TextButton.icon(
-                      onPressed: onSubmit,
-                      icon: const Icon(Icons.send_outlined, size: 18),
-                      label: const Text('Submit for review'),
-                    ),
+                    const SizedBox(height: AppSpacing.xxs),
+                  ],
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: onEdit,
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          label: const Text('Edit'),
+                        ),
+                      ),
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: hasPhotos ? onSubmit : null,
+                          icon: const Icon(Icons.send_outlined, size: 18),
+                          label: const Text('Submit for review'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               );

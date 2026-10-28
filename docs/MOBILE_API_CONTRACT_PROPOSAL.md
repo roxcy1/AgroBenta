@@ -1,8 +1,9 @@
 # Mobile API Contract — Proposal
 
 **Status: PROPOSAL — NOT APPROVED, NOT IMPLEMENTED**
-**Business rules: FINALIZED** (D-02, D-03, D-15 and the security requirements are
-approved and locked in `AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`)
+**Business rules: FINALIZED** (D-02, D-03, D-15, DEC-01 to DEC-03 and the
+security requirements are approved and recorded in
+`AGROBENTA_FUNCTIONAL_DOCUMENTATION.md`)
 
 Nothing in this document may be implemented, in `backend/` or in `mobile/`, until
 it is approved. See `docs/AGENTS.md`.
@@ -24,6 +25,7 @@ longer blocked on those questions:
 | **D-03** price suggestion | `§5.5` changed from "not implementable" to "interface specified, estimator blocked". |
 | **D-15** transaction status | `§5.6` split: `cancel` is now fully specified; `complete` remains blocked. |
 | **SEC** security requirements | New `§4.5` (authorization model), `§6.2` (allow-lists), and `§8.1` (resource separation) are now binding requirements, not recommendations. |
+| **DEC-01 to DEC-03** listing inputs | `§5.4`/`§5.4a` now carry the unit-aware age maximum, the two-decimal limit and the submit-time photo minimum. **Not yet implemented** — see `§10`. |
 
 Endpoint contracts previously marked **blocked** on D-02, D-03 or D-15 have been
 revised. Remaining blockers are listed in `§9`.
@@ -593,7 +595,7 @@ Unlike §5.2, a seller sees **all** their own statuses including `draft` and
 | **Authentication** | Required |
 | **Ability** | `mobile` |
 | **Request fields** | `livestock_type` **required**<br>`location` **required**<br>`asking_price` **required**<br>`quantity` **required**<br>`breed`, `age_value`, `age_unit`, `gender`, `weight_value`, `weight_unit`, `health_status`, `vaccination`, `short_description`, `additional_notes` (all optional)<br>`photos` optional array, default `[]`<br>**`status` is NOT accepted.** |
-| **Validation** | `livestock_type` `required`,`string`,`max:255` — free text, no enum (functional doc §4.1)<br>`location` `required`,`string`,`max:255`<br>`asking_price` `required`,`numeric`,`min:0`,`max:99999999999.99`<br>`quantity` `required`,`integer`,`min:1`<br>`age_value` `sometimes`,`integer`,`min:0`<br>`age_unit` `sometimes`,`Rule::in(['day','month','year'])`<br>`gender` `sometimes`,`Rule::in(['male','female'])`<br>`weight_value` `sometimes`,`numeric`,`min:0`<br>`weight_unit` `sometimes`,`Rule::in(['kg','lb'])`<br>`age_value`↔`age_unit` and `weight_value`↔`weight_unit` must be supplied together — `required_with`<br>`photos` `sometimes`,`array`,`max:10`<br>`photos.*` `string`,`max:2048`<br>**`status` and `seller_id` must be rejected if present** — [SEC] §4.5 |
+| **Validation** | `livestock_type` `required`,`string`,`max:255` — free text, no enum (functional doc §4.1)<br>`location` `required`,`string`,`max:255`<br>`asking_price` `required`,`numeric`,`min:0`,`max:99999999999.99`,`decimal:0,2` **[DEC-02]**<br>`quantity` `required`,`integer`,`min:1`<br>`age_value` `sometimes`,`integer`,`min:0`, maximum by unit — `9125` day / `300` month / `25` year **[DEC-01]**<br>`age_unit` `sometimes`,`Rule::in(['day','month','year'])`<br>`gender` `sometimes`,`Rule::in(['male','female'])`<br>`weight_value` `sometimes`,`numeric`,`min:0`,`decimal:0,2` **[DEC-02]**<br>`weight_unit` `sometimes`,`Rule::in(['kg','lb'])`<br>`age_value`↔`age_unit` and `weight_value`↔`weight_unit` must be supplied together — `required_with`<br>`photos` `sometimes`,`array`,`max:10` — an empty array is valid on create **[DEC-03]**<br>`photos.*` `string`,`max:2048`<br>**`status` and `seller_id` must be rejected if present** — [SEC] §4.5 |
 | **Response** | `201`, §3.1. `data` = listing, `status` is `draft` |
 | **Errors** | `401`, `403` not an approved seller, `422` |
 | **Authorization** | `seller_capability = seller` |
@@ -630,9 +632,9 @@ neither path can exceed it. A storage-relative path never leaves the API.
 | **Authentication** | Required |
 | **Ability** | `mobile` |
 | **Request fields** | None. The listing's own fields are the submission content. |
-| **Validation** | N/A — the listing must satisfy the §5.4 create rules. **[D-02] rule 7: submission moves a *valid* draft to `pending`.** An invalid listing is rejected with `422`, not queued. |
+| **Validation** | The listing must satisfy the §5.4 create rules **and have at least one stored photo** (§5.4a). **[D-02] rule 7; [DEC-03]:** submission moves a *valid* draft to `pending`. An invalid listing — including one with zero photos — is rejected with `422`, not queued. |
 | **Response** | `200`, §3.1, listing with `status: "pending"` |
-| **Errors** | `401`, `403`, `404` not yours<br>`409` not currently `draft` — already `pending`, `active`, `sold` or `inactive` |
+| **Errors** | `401`, `403`, `404` not yours<br>`409` not currently `draft` — already `pending`, `active`, `sold` or `inactive`<br>`422` the stored listing fails the create rules or has no photo |
 | **Authorization** | `seller_capability = seller` |
 | **Ownership** | `listing.seller_id === $me->id`, else `404` |
 
@@ -726,6 +728,13 @@ resolved by a `Listing` accessor over the `listing-photos` disk.
 Files are written under `listings/{id}/` on the `listing-photos` disk; only
 the generated filenames are stored in the column. Photos are content: editable
 only in `draft` and `active` (D-24), exactly like `PATCH`.
+
+A draft may have no photos. At least one photo must be stored before
+`POST /seller/listings/{listing}/submit` succeeds; an empty set is a `422`
+**[DEC-03]**. Admin approval must apply the same check as a legacy guard, because
+a `pending` row created before this rule could otherwise become publicly visible
+with no photo. No schema change is involved: the minimum is a rule over the
+existing JSON column.
 
 #### `DELETE /seller/listings/{listing}/photos`
 
@@ -1405,6 +1414,9 @@ serialise `total_amount` as a string.
 | D-15 | **[D-15] / OQ-15** | Transaction states, both transitions, terminality, two-party cancellation and buyer-initiated creation are settled. **The completion-confirmation actor is still open** — see 9.2. |
 | — | **[SEC]** | Mass-assignment exposure (F-11) and admin-resource email leakage (F-08) are now binding approved requirements, not findings awaiting a decision. |
 | D-16 (photos) | **D-10** | **Closed.** No schema change permitted (§4.5); mobile must expose photos. [D-10] settled at implementation: filenames stored, absolute URLs served, `listing-photos` disk, upload/delete endpoints (§5.4a). |
+| — | **[DEC-01]** | **Approved 2026-10-27.** Unit-aware age maximum: 25 years / 300 months / 9,125 days. The manuscript was unavailable; recorded as a project-owner decision in the functional documentation §4.7. See §9.4. |
+| — | **[DEC-02]** | **Approved 2026-10-27.** At most two decimal places for weight and asking price; a third decimal is rejected, not rounded. See §9.4. |
+| — | **[DEC-03]** | **Approved 2026-10-27.** Photos optional on a draft; at least one required at submit; admin approval refuses a zero-photo `pending` listing as a legacy guard. See §9.4. |
 
 ### 9.2 Still blocking implementation
 
@@ -1442,6 +1454,10 @@ directly from functional documentation §3.2 and is now reinforced by the
 explicit rule that a user cannot become a seller by modifying their own account
 fields. Implement as specified.
 
+**Not in the table above:** the three listing-input decisions **DEC-01** to
+**DEC-03** were **approved on 2026-10-27** and are recorded in §9.4. They no
+longer block implementation; the code does not enforce them yet (§10).
+
 ### 9.3 Non-blocking implementation notes
 
 | Item | Note |
@@ -1454,6 +1470,68 @@ fields. Implement as specified.
 | `GET /api/user` | Remove or admin-gate (F-06) |
 | `AdminUserResource` | Delete as dead code (F-14) |
 | CORS | **Do not change** (F-16) |
+
+### 9.4 Approved listing-input decisions (DEC-01 to DEC-03)
+
+> **Status: APPROVED by the project owner on 2026-10-27.** The final manuscript
+> was not available when they were adopted, and the draft on hand states no age
+> maximum, decimal limit or photo stage. They are therefore **project-owner
+> decisions, not manuscript rules**. They are binding as contract requirements
+> and are recorded in `AGROBENTA_FUNCTIONAL_DOCUMENTATION.md` §4.4, §4.5 and
+> §4.7 with the **[DEC-nn]** marker. Re-check them against the manuscript when
+> it is available; if it states a different rule, the manuscript wins.
+
+| ID | Decision | Status |
+|---|---|---|
+| **DEC-01** | Unit-aware age maximum: `age_value` ≤ 9,125 when `age_unit = day`, ≤ 300 when `month`, ≤ 25 when `year`. | **APPROVED** |
+| **DEC-02** | Weight and asking price accept at most two decimal places, enforced by the client and the backend; a third decimal is rejected, not rounded. | **APPROVED** |
+| **DEC-03** | Photos optional on a draft; at least one photo required at seller submission; admin approval refuses a zero-photo `pending` listing as a legacy guard. | **APPROVED** |
+
+**DEC-01 — unit-aware age maximum.** *Rationale:* 25 years = 300 months = 9,125
+days, and a unit-blind `max:25` would reject a valid 30-month-old animal because
+`age_value` carries its unit in a separate field. *Rule:* the maximum is applied
+in the selected unit; no unit conversion. *Current state:* `age_value` is
+`integer`, `min:0` in `SellerListingRules`; the column is `decimal(5,1)` (maximum
+9999.9), so a 30-year day value (10,950) is unstorable while every value below
+that is accepted. *Effect:* `422` above the unit's maximum; existing drafts above
+it fail submit re-validation; the mobile age control offers only Month and Year,
+so the day limit is unreachable until a Day option is added.
+
+**DEC-02 — at most two decimal places.** *Rationale:* the columns are
+`decimal(10,2)` (`weight_value`) and `decimal(14,2)` (`asking_price`), but the
+API validates `numeric` only, so a third decimal is accepted and then rounded by
+storage — the value the seller typed and the value stored and served can differ.
+*Rule:* reject a third decimal rather than round it, so the stored amount equals
+what the seller entered. *Current state:* no such rule client or server; the
+form's validators are not currently invoked. *Effect:* `422` for a third decimal;
+values already stored are unaffected.
+
+**DEC-03 — when the photo minimum applies.** *Rationale:* functional
+documentation §4.5 says "at least one photo is required to publish", but
+"publish" is ambiguous while **MS-01** is open, and the app creates the listing
+before uploading photos. *Rule:* a draft may have no photos;
+`POST /seller/listings/{listing}/submit` is refused until at least one is stored;
+admin approval refuses a zero-photo `pending` listing, because such a row can
+only predate the submit rule. *Current state:* no minimum is enforced at create,
+submit or approve, and `MobileSellerListingTest` posts `photos: []`. *Effect:* a
+submit-only rule set is required — `contentRules()` is shared with create and
+must not be tightened; the test must be updated; the admin approval path gains a
+check.
+
+**Verification checklist — for the implementation phase. Nothing below is implemented yet.**
+
+- [ ] API rejects `age_value` above the selected unit's maximum with `422` (9,125 / 300 / 25).
+- [ ] API rejects weight or price with three decimal places with `422`, instead of storing a rounded value.
+- [ ] `POST /seller/listings/{id}/submit` returns `422` when the listing has no stored photo.
+- [ ] Admin approval refuses a `pending` listing with no stored photo.
+- [ ] Client blocks submit with zero photos and states why.
+- [ ] Client form validates the age maximum and two-decimal input — the current form has no `Form`/validate call, so wiring it is a prerequisite.
+- [ ] `MobileSellerListingTest` and the photo tests are updated in the change that implements the rules.
+- [ ] No title field or `title` column is added while **MS-08** is open.
+
+No schema change is involved in DEC-01 to DEC-03. The §5.4 request field list and
+the `listings` table remain as they are; the title question stays open in the
+functional documentation §12.1 and §13.2.
 
 ## 10. Verification status
 
@@ -1469,6 +1547,7 @@ fields. Implement as specified.
 | Token expiry policy | **Unspecified** — F-12 / D-11 |
 | Email verification | **Unimplemented** — F-04 |
 | Listing photo delivery | **Stored, not exposed** — F-13. Schema change now forbidden. |
+| Listing input limits (DEC-01–DEC-03) | **Approved 2026-10-27 — not implemented.** The age maximum, two-decimal precision and submit-time photo minimum are contract rules; the backend and mobile form do not enforce them yet (§9.4). |
 | Mobile auth | **Does not exist** — F-02 |
 | Messaging | **No resources, no endpoints** — F-15 |
 | Notifications | **No resources, no endpoints** — F-15 |

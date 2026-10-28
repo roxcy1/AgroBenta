@@ -122,6 +122,28 @@ abstract final class AppConfig {
     androidTarget: _androidRunTarget,
   );
 
+  /// The API origin (scheme + host + port, no path) derived from [apiBaseUrl].
+  ///
+  /// Used to resolve listing photo URLs that Laravel embeds using its own
+  /// `APP_URL` (typically `http://localhost:8001/...`). On an Android emulator
+  /// `localhost` means the emulator itself, not the development machine, so
+  /// those embedded URLs cannot be fetched. Rewriting the host to [apiOrigin]
+  /// makes each photo URL point at the address the current client can reach.
+  ///
+  /// No address is hardcoded: whatever `--dart-define=API_BASE_URL` or the
+  /// platform default resolves to, this follows. The `/api` mount path is
+  /// stripped, so resolving `/storage/...` against this origin never produces
+  /// `/api/storage/...`.
+  static String get apiOrigin {
+    final Uri base = Uri.parse(apiBaseUrl);
+    if (base.host.isEmpty) {
+      return apiBaseUrl;
+    }
+    final int defaultPort = base.scheme == 'https' ? 443 : 80;
+    final String port = base.port == defaultPort ? '' : ':${base.port}';
+    return '${base.scheme}://${base.host}$port';
+  }
+
   /// The base-URL decision itself, as a pure function.
   ///
   /// Kept separate from [apiBaseUrl] so the platform matrix can be tested

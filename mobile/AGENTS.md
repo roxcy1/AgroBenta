@@ -404,6 +404,7 @@ itself, not your development machine.
 | Android — physical device (same Wi-Fi) | `http://192.168.1.8:8001/api` (**the default**) |
 | Android — emulator | `http://10.0.2.2:8001/api` (opt in with `ANDROID_RUN_TARGET=emulator`) |
 | iOS simulator | `http://localhost:8001/api` |
+| Chrome / Edge (Flutter Web) | `http://localhost:8001/api` (already the default) |
 | Staging / production | `https://…/api` |
 
 `AppConfig.apiBaseUrl` already resolves this per platform. The address in
@@ -448,6 +449,31 @@ with a comment — never flip the base config to `true`.
 The main `AndroidManifest.xml` declares `android.permission.INTERNET`. The
 `debug` and `profile` manifests also declare it, but those are not merged into
 a release build, so the main manifest must keep it.
+
+### Flutter Web (development target)
+
+The repository has a configured Flutter web target: `web/` exists, `.metadata`
+lists `web`, and `flutter build web` succeeds. It is a **development and
+browser-verification target** — not a claim that the web build is a shipped
+client, and not evidence that a browser flow has been verified.
+
+* `backend/config/cors.php` allows `http://localhost:8080`, the default port of
+  `flutter run -d chrome`. Starting the dev server on another port with
+  `--web-port` requires adding that origin there too, or the browser refuses
+  the response.
+* `AppConfig` resolves web to `http://localhost:8001/api` from `kIsWeb`; it
+  deliberately does not trust the browser's user agent.
+* Photo picking uses `image_picker`, which has web support, and local previews
+  read `XFile` bytes through `LocalImagePreview` instead of `Image.file`, so the
+  composer does not depend on `dart:io`.
+* Token storage uses `flutter_secure_storage`'s web backend, which is browser
+  storage — not the Android Keystore or iOS Keychain. Do not describe web token
+  storage as equivalent to the native platforms.
+* Windows and Linux desktop are **not** configured targets: there is no
+  `windows/` or `linux/` runner in this repository.
+* A successful build proves compilation only. Sign-in, listing submission,
+  photo upload and CORS round trips still need manual browser verification
+  before any flow is reported as working on web.
 
 ---
 

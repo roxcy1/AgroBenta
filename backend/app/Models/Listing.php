@@ -53,6 +53,54 @@ class Listing extends Model
     }
 
     /**
+     * The canonical stored form of one client-supplied photo value.
+     *
+     * `basename()` is the entire normalisation and it is deliberately
+     * forgiving: a client may echo the URL it was handed by the API, send a
+     * storage-relative path, or send a bare filename — all three collapse to
+     * the filename, so a read-modify-write round trip is lossless. `../`
+     * traversal cannot survive it.
+     *
+     * Returns null for a value that carries no filename at all, so callers can
+     * drop it rather than persist an empty entry.
+     */
+    public static function normalisePhotoFilename(string $photo): ?string
+    {
+        $filename = basename(str_replace('\\', '/', trim($photo)));
+
+        return in_array($filename, ['', '.', '..'], true) ? null : $filename;
+    }
+
+    /**
+     * The canonical stored form of a client-supplied photo list.
+     *
+     * The single definition of the write-side representation, shared by the
+     * mutator below and by `SellerListingService`, so the filenames a service
+     * checks against storage are exactly the filenames that will be persisted.
+     *
+     * @param  array<int, mixed>  $photos
+     * @return list<string>
+     */
+    public static function normalisePhotoFilenames(array $photos): array
+    {
+        $filenames = [];
+
+        foreach ($photos as $photo) {
+            if (! is_string($photo)) {
+                continue;
+            }
+
+            $filename = self::normalisePhotoFilename($photo);
+
+            if ($filename !== null) {
+                $filenames[] = $filename;
+            }
+        }
+
+        return array_values(array_unique($filenames));
+    }
+
+    /**
      * Store photo *filenames* in the JSON column — never a path or a URL.
      *
      * [SEC] §4.5 / D-10 (read- and write-side representation): the column holds
@@ -60,13 +108,9 @@ class Listing extends Model
      * the URL scheme are derived at read time. That is what lets this ticket
      * change disks or hosting without a migration — the column is sufficient.
      *
-     * `basename()` is the entire normalisation and it is deliberately
-     * forgiving: a client may echo the URL it was handed by the API, send a
-     * storage-relative path, or send a bare filename — all three collapse to
-     * the filename, so a read-modify-write round trip is lossless. `../`
-     * traversal cannot survive it, and non-string or empty entries are dropped
-     * rather than persisted (the API boundary rejects them with a 422 before
-     * reaching here; this is the model's own defence for direct writes).
+     * Non-string or empty entries are dropped rather than persisted (the API
+     * boundary rejects them with a 422 before reaching here; this is the
+     * model's own defence for direct writes).
      *
      * A classic set-mutator replaces the cast entirely — the connection
      * returns before the `array` cast runs — so this method writes the JSON
@@ -76,21 +120,7 @@ class Listing extends Model
      */
     protected function setPhotosAttribute(mixed $value): array
     {
-        $filenames = [];
-
-        foreach (is_array($value) ? $value : [] as $photo) {
-            if (! is_string($photo) || trim($photo) === '') {
-                continue;
-            }
-
-            $filename = basename(str_replace('\\', '/', trim($photo)));
-
-            if ($filename !== '' && $filename !== '.' && $filename !== '..') {
-                $filenames[] = $filename;
-            }
-        }
-
-        $filenames = array_values(array_unique($filenames));
+        $filenames = self::normalisePhotoFilenames(is_array($value) ? $value : []);
 
         $this->attributes['photos'] = json_encode($filenames);
 
@@ -150,6 +180,59 @@ class Listing extends Model
         }
 
         return array_values(array_filter($photos, 'is_string'));
+    }
+
+    /**
+     * Whether at least one photo is stored on this listing.
+     *
+     * Reads the persisted JSON column rather than `$listing->photos`, which is
+     * a list of absolute URLs built for clients: the DEC-03 photo rule is about
+     * what the server actually stored, not about a URL list a caller could
+     * supply. A draft may have none; submission for review and administrator
+     * approval both require one (functional documentation §4.5).
+     */
+    public function hasStoredPhotos(): bool
+    {
+        return $this->storedPhotoFilenames() !== [];
+    }
+
+    /**
+     * The filenames that actually exist in this listing's photo directory.
+     *
+     * One directory listing for the whole record — never an `exists()` call per
+     * filename — so ten photos cost one filesystem read locally and one request
+     * on a remote disk. An unsaved model has no directory to read.
+     *
+     * @return list<string>
+     */
+    public function photoFilenamesOnDisk(): array
+    {
+        if ($this->getKey() === null) {
+            return [];
+        }
+
+        return array_values(array_map(
+            static fn (string $path): string => basename($path),
+            Storage::disk(self::PHOTO_DISK)->files((string) $this->getKey()),
+        ));
+    }
+
+    /**
+     * The stored photo filenames with no matching file on the photo disk.
+     *
+     * The persisted JSON column is a declaration; this is the only method that
+     * checks it against storage. A failed read is indistinguishable from an
+     * empty directory, so the caller fails closed rather than admitting a
+     * listing whose images may be dead (functional documentation §4.5).
+     *
+     * @return list<string>
+     */
+    public function missingPhotoFilenames(): array
+    {
+        return array_values(array_diff(
+            $this->storedPhotoFilenames(),
+            $this->photoFilenamesOnDisk(),
+        ));
     }
 
     /**

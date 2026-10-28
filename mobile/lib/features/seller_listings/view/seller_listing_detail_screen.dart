@@ -94,7 +94,12 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
   }
 
   Future<void> _submit() async {
-    final Listing? submitted = await _controller.submit(_listing.id);
+    final Listing current = _current();
+    if (!SellerListingController.canSubmit(current) ||
+        !SellerListingController.hasSubmissionPhotos(current)) {
+      return;
+    }
+    final Listing? submitted = await _controller.submit(current.id);
     if (!mounted || submitted == null) {
       return;
     }
@@ -217,10 +222,7 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                                 ) ??
                                 listing.askingPrice,
                           ),
-                          DetailRow(
-                            label: 'Location',
-                            value: listing.location,
-                          ),
+                          DetailRow(label: 'Location', value: listing.location),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
@@ -378,6 +380,7 @@ class _ActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool canSubmit = SellerListingController.canSubmit(listing);
     final bool canDelete = SellerListingController.canDelete(listing);
+    final bool hasPhotos = SellerListingController.hasSubmissionPhotos(listing);
 
     return Container(
       width: double.infinity,
@@ -389,46 +392,56 @@ class _ActionBar extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.sm),
-          child: switch ((canSubmit, canDelete)) {
-            (true, true) => Row(
-              children: <Widget>[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: busy ? null : onDelete,
-                    child: const Text('Delete'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton(
-                    onPressed: busy ? null : onSubmit,
-                    child: busy
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Submit for review'),
-                  ),
-                ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (canSubmit && !hasPhotos) ...<Widget>[
+                const ListingPhotoRequirementNotice(),
+                const SizedBox(height: AppSpacing.sm),
               ],
-            ),
-            (true, false) => FilledButton(
-              onPressed: busy ? null : onSubmit,
-              child: const Text('Submit for review'),
-            ),
-            (false, true) => OutlinedButton(
-              onPressed: busy ? null : onDelete,
-              child: const Text('Delete listing'),
-            ),
-            // Neither. A `pending` listing is in an administrator's queue, a
-            // `sold` one is a record. Either way the seller has nothing to do,
-            // and the panel above already says so.
-            (false, false) => const SizedBox.shrink(),
-          },
+              switch ((canSubmit, canDelete)) {
+                (true, true) => Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: busy ? null : onDelete,
+                        child: const Text('Delete'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        onPressed: busy || !hasPhotos ? null : onSubmit,
+                        child: busy
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Submit for review'),
+                      ),
+                    ),
+                  ],
+                ),
+                (true, false) => FilledButton(
+                  onPressed: busy || !hasPhotos ? null : onSubmit,
+                  child: const Text('Submit for review'),
+                ),
+                (false, true) => OutlinedButton(
+                  onPressed: busy ? null : onDelete,
+                  child: const Text('Delete listing'),
+                ),
+                // Neither. A `pending` listing is in an administrator's queue, a
+                // `sold` one is a record. Either way the seller has nothing to
+                // do, and the panel above already says so.
+                (false, false) => const SizedBox.shrink(),
+              },
+            ],
+          ),
         ),
       ),
     );

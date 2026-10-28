@@ -57,8 +57,9 @@ class SellerListingDraft {
       livestockType: listing.livestockType,
       breed: listing.breed,
       // Decimals are trimmed of a trailing `.0` so the field does not open
-      // showing `2.0` for an age the seller entered as `2`.
-      ageValue: listing.ageValue ?? '',
+      // showing `2.0` for an age the seller entered as `2`. Age is an integer
+      // in the contract, so the fraction only exists in the column.
+      ageValue: _trimTrailingDecimalZero(listing.ageValue),
       ageUnit: listing.ageUnit,
       gender: listing.gender,
       weightValue: listing.weightValue ?? '',
@@ -112,10 +113,15 @@ class SellerListingDraft {
         case 'breed':
           put(key, breed);
         case 'age_value':
-          // Integer per the contract. The validators reject anything else before
-          // this is reached, so `int.parse` here cannot fail.
-          if (ageValue.trim().isNotEmpty) {
-            body[key] = int.parse(ageValue.trim());
+          // Integer per the contract. Parsed with `tryParse` rather than
+          // `parse`: the form validates before it gets here, but a draft can
+          // also be built from server data or by other callers, and a
+          // FormatException escaping a request body builder would be a crash
+          // rather than a field error. An unparseable age is omitted, which
+          // leaves the server to answer with its own `422`.
+          final int? age = int.tryParse(ageValue.trim());
+          if (age != null) {
+            body[key] = age;
           }
         case 'age_unit':
           // Only alongside its value. A unit on its own is not a listing anyone
@@ -136,8 +142,11 @@ class SellerListingDraft {
             body[key] = weightUnit;
           }
         case 'quantity':
-          if (quantity.trim().isNotEmpty) {
-            body[key] = int.parse(quantity.trim());
+          // Same guard as `age_value`: the contract holds this to an integer,
+          // and an unparseable value is left out rather than thrown on.
+          final int? amount = int.tryParse(quantity.trim());
+          if (amount != null) {
+            body[key] = amount;
           }
         case 'asking_price':
           // Sent as the seller's own digits. Not parsed, not reformatted.
@@ -169,4 +178,16 @@ class SellerListingDraft {
       .requiredFields
       .where((String field) => !toRequestBody().containsKey(field))
       .toList(growable: false);
+}
+
+/// Removes a trailing `.0` (or `.00`) from a whole decimal, e.g. `18.0` → `18`.
+///
+/// The API sends `age_value` as a decimal string because the column is
+/// `decimal(5,1)`, while the age field is an integer. Only a *whole* value is
+/// trimmed: `18.5` is not a valid age and must reach the validators intact so
+/// the seller is told so, rather than being silently rounded.
+String _trimTrailingDecimalZero(String? value) {
+  final String trimmed = (value ?? '').trim();
+  final RegExpMatch? whole = RegExp(r'^(\d+)\.0+$').firstMatch(trimmed);
+  return whole?.group(1) ?? trimmed;
 }

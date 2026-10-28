@@ -213,11 +213,15 @@ abstract final class SellerListingEndpoints {
   /// construction**: the server marks both `prohibited` and answers `422`, and
   /// no code path in this app can put them in a body.
   ///
-  /// `photos` is deliberately absent from the write surface even though the
-  /// server accepts the array. D-10 leaves both the upload mechanism and the
-  /// stored representation undecided, so a text box asking a seller to type
-  /// photo URLs would invent a scheme the contract has not chosen. The mobile
-  /// client sends no photos until that decision is made.
+  /// `photos` is deliberately absent from this JSON body because photos are
+  /// associated out of band — `SellerListingService.uploadPhotos` posts them as
+  /// multipart to `POST /seller/listings/{id}/photos`, and
+  /// `SellerListingService.removePhoto` deletes one by its served URL or
+  /// filename — rather than being typed into a field. A draft is created
+  /// without photos; locally picked photos are uploaded once the draft has an
+  /// id, and the server returns the listing with the absolute URLs it now
+  /// serves. Keeping the array out of the create/update body means an unrelated
+  /// save cannot rewrite the stored set.
   static const List<String> writableFields = <String>[
     'livestock_type',
     'breed',
