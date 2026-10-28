@@ -126,6 +126,13 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
   }
 
   Future<void> _confirmSubmit(Listing listing) async {
+    // The row disables this action and explains why. This is the guard for any
+    // path that bypasses the row, so the client never claims a submission the
+    // DEC-03 photo rule forbids.
+    if (!SellerListingController.hasSubmissionPhotos(listing)) {
+      return;
+    }
+
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(

@@ -193,6 +193,12 @@ class SellerListingService {
   /// indicator. The server returns the stored listing, whose `photos` holds the
   /// newly-served absolute URLs.
   ///
+  /// The part **name** is wire-significant: Laravel validates `photos` as an
+  /// array, so every part must be named `photos[]`. PHP's multipart parser turns
+  /// that suffix into an array; a bracket-less `photos` arrives as a single
+  /// scalar upload and the request is rejected with a `422` before mime or size
+  /// rules run.
+  ///
   /// Throws [ApiException]:
   ///  * `validation` on a `422` — the per-request or cumulative photo limit was
   ///    exceeded, or a file failed the mime/size rules.
@@ -212,7 +218,11 @@ class SellerListingService {
     for (final XFile file in files) {
       parts.add(
         http.MultipartFile(
-          'photos',
+          // `photos[]` — not `photos`. Laravel's `StoreListingPhotoRequest`
+          // validates `photos` with the `array` rule, and PHP only builds an
+          // array from bracket-suffixed part names. Sending `photos` makes the
+          // request fail with "The photos field must be an array." (422).
+          'photos[]',
           _wrapWithProgress(file.openRead(), (int chunk) {
             sentBytes += chunk;
             onProgress(sentBytes, totalBytes);

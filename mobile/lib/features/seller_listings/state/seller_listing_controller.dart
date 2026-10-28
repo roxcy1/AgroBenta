@@ -436,12 +436,14 @@ class SellerListingController extends ChangeNotifier {
   /// items. The list order is the display order.
   void startPhotoComposer(int? listingId, List<String> existingUrls) {
     if (_state.isActioning) return;
-    _set(_state.copyWith(
-      actionListingId: listingId,
-      photos: existingUrls
-          .map((String url) => ListingPhotoItem.uploaded(url))
-          .toList(growable: false),
-    ));
+    _set(
+      _state.copyWith(
+        actionListingId: listingId,
+        photos: existingUrls
+            .map((String url) => ListingPhotoItem.uploaded(url))
+            .toList(growable: false),
+      ),
+    );
   }
 
   /// Whether the composer can accept another photo, mirroring the server's
@@ -454,12 +456,14 @@ class SellerListingController extends ChangeNotifier {
     final int room = maxListingPhotos - _state.photos.length;
     if (room <= 0) return;
     final List<XFile> toAdd = picked.take(room).toList(growable: false);
-    _set(_state.copyWith(
-      photos: <ListingPhotoItem>[
-        ..._state.photos,
-        ...ListingPhotoItem.fromPicked(toAdd),
-      ],
-    ));
+    _set(
+      _state.copyWith(
+        photos: <ListingPhotoItem>[
+          ..._state.photos,
+          ...ListingPhotoItem.fromPicked(toAdd),
+        ],
+      ),
+    );
   }
 
   /// Removes one item from the composer by id.
@@ -481,11 +485,13 @@ class SellerListingController extends ChangeNotifier {
 
     final bool wasUploaded = item.status == ListingPhotoStatus.uploaded;
 
-    _set(_state.copyWith(
-      photos: _state.photos
-          .where((ListingPhotoItem p) => p.id != itemId)
-          .toList(growable: false),
-    ));
+    _set(
+      _state.copyWith(
+        photos: _state.photos
+            .where((ListingPhotoItem p) => p.id != itemId)
+            .toList(growable: false),
+      ),
+    );
 
     if (!wasUploaded || item.deleteValue == null) {
       return;
@@ -510,10 +516,12 @@ class SellerListingController extends ChangeNotifier {
       if (_disposed) return;
       final List<ListingPhotoItem> photos = List.of(_state.photos)
         ..insert(itemIndex, item);
-      _set(_state.copyWith(
-        photos: photos,
-        actionErrorMessage: 'Something went wrong. Please try again.',
-      ));
+      _set(
+        _state.copyWith(
+          photos: photos,
+          actionErrorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
     }
   }
 
@@ -537,16 +545,26 @@ class SellerListingController extends ChangeNotifier {
   /// Uploads every locally-picked photo for the listing being edited.
   ///
   /// Files are sent in one `multipart/form-data` request as the `photos` array,
-  /// in composer order. Each pending item shows an upload indicator while the
-  /// request is in flight. On success the composer is rebuilt from the URLs the
-  /// server served, so client and server agree. On failure the pending items
-  /// are marked `failed` and can be retried.
-  Future<void> uploadComposerPhotos(int listingId) async {
-    if (_state.isActioning) return;
+  /// in composer order. Both `pending` and previously `failed` items are
+  /// included, so a retry resends the batch that failed rather than only the
+  /// photos that were never attempted. Each item shows an upload indicator while
+  /// the request is in flight. On success the composer is rebuilt from the URLs
+  /// the server served, so client and server agree.
+  ///
+  /// Returns `true` only when the server stored every file. On failure the items
+  /// are marked `failed`, [SellerListingState.actionListingId] is preserved so
+  /// [retryFailedPhotos] can still reach the listing, and this returns `false`;
+  /// the caller must not report success or close the form.
+  Future<bool> uploadComposerPhotos(int listingId) async {
+    if (_state.isActioning) return false;
     final List<ListingPhotoItem> pending = _state.photos
-        .where((ListingPhotoItem p) => p.status == ListingPhotoStatus.pending)
+        .where(
+          (ListingPhotoItem p) =>
+              p.status == ListingPhotoStatus.pending ||
+              p.status == ListingPhotoStatus.failed,
+        )
         .toList(growable: false);
-    if (pending.isEmpty) return;
+    if (pending.isEmpty) return false;
 
     _beginAction(SellerListingAction.uploadingPhotos, listingId: listingId);
 
@@ -561,79 +579,87 @@ class SellerListingController extends ChangeNotifier {
         onProgress: (int sent, int total) {
           if (_disposed) return;
           final double progress = total == 0 ? 0.0 : sent / total;
-          _set(_state.copyWith(
-            photos: _state.photos
-                .map((ListingPhotoItem p) {
-                  if (p.status != ListingPhotoStatus.pending) {
-                    return p;
-                  }
-                  return ListingPhotoItem(
-                    id: p.id,
-                    status: ListingPhotoStatus.uploading,
-                    file: p.file,
-                    url: p.url,
-                    progress: progress,
-                    error: p.error,
-                  );
-                })
-                .toList(growable: false),
-          ));
+          _set(
+            _state.copyWith(
+              photos: _state.photos
+                  .map((ListingPhotoItem p) {
+                    if (p.status != ListingPhotoStatus.pending &&
+                        p.status != ListingPhotoStatus.failed) {
+                      return p;
+                    }
+                    return ListingPhotoItem(
+                      id: p.id,
+                      status: ListingPhotoStatus.uploading,
+                      file: p.file,
+                      url: p.url,
+                      progress: progress,
+                      error: p.error,
+                    );
+                  })
+                  .toList(growable: false),
+            ),
+          );
         },
       );
 
-      if (_disposed) return;
+      if (_disposed) return false;
       _endAction(message: 'Photos uploaded.');
-      _set(_state.copyWith(
-        actionListingId: listingId,
-        photos: updated.photos
-            .map((String url) => ListingPhotoItem.uploaded(url))
-            .toList(growable: false),
-      ));
+      _set(
+        _state.copyWith(
+          actionListingId: listingId,
+          photos: updated.photos
+              .map((String url) => ListingPhotoItem.uploaded(url))
+              .toList(growable: false),
+        ),
+      );
+      return true;
     } on ApiException catch (error) {
-      if (_disposed) return;
-      _set(_state.copyWith(
-        photos: _state.photos
-            .map((ListingPhotoItem p) {
-              if (p.status == ListingPhotoStatus.pending ||
-                  p.status == ListingPhotoStatus.uploading) {
-                return ListingPhotoItem(
-                  id: p.id,
-                  status: ListingPhotoStatus.failed,
-                  file: p.file,
-                  url: p.url,
-                  progress: null,
-                  error: error.message,
-                );
-              }
-              return p;
-            })
-            .toList(growable: false),
-      ));
-      _failAction(error);
+      if (_disposed) return false;
+      _set(_state.copyWith(photos: _markUploadsFailed(error.message)));
+      _failAction(error, keepActionListingId: true);
+      return false;
     } on Object {
-      if (_disposed) return;
-      _set(_state.copyWith(
-        photos: _state.photos
-            .map((ListingPhotoItem p) {
-              if (p.status == ListingPhotoStatus.pending ||
-                  p.status == ListingPhotoStatus.uploading) {
-                return ListingPhotoItem(
-                  id: p.id,
-                  status: ListingPhotoStatus.failed,
-                  file: p.file,
-                  url: p.url,
-                  progress: null,
-                  error: 'Upload failed. Please try again.',
-                );
-              }
-              return p;
-            })
-            .toList(growable: false),
-        action: SellerListingAction.none,
-        clearActionListingId: true,
-        actionErrorMessage: 'Something went wrong. Please try again.',
-      ));
+      if (_disposed) return false;
+      _set(
+        _state.copyWith(
+          photos: _markUploadsFailed('Upload failed. Please try again.'),
+          action: SellerListingAction.none,
+          actionListingId: listingId,
+          actionErrorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
+      return false;
     }
+  }
+
+  /// Retries the photos that failed for the listing currently open.
+  ///
+  /// Returns `false` when there is no listing to attach them to, or when the
+  /// retry fails; the caller stays on the form in either case.
+  Future<bool> retryFailedPhotos() async {
+    final int? listingId = _state.actionListingId;
+    if (listingId == null) return false;
+    return uploadComposerPhotos(listingId);
+  }
+
+  /// Rebuilds the composer with every in-flight item marked `failed`.
+  List<ListingPhotoItem> _markUploadsFailed(String message) {
+    return _state.photos
+        .map((ListingPhotoItem p) {
+          if (p.status == ListingPhotoStatus.pending ||
+              p.status == ListingPhotoStatus.uploading) {
+            return ListingPhotoItem(
+              id: p.id,
+              status: ListingPhotoStatus.failed,
+              file: p.file,
+              url: p.url,
+              progress: null,
+              error: message,
+            );
+          }
+          return p;
+        })
+        .toList(growable: false);
   }
 
   /// Discards a form-level message so a retry starts clean.
@@ -669,6 +695,13 @@ class SellerListingController extends ChangeNotifier {
   /// submitted cannot be recalled by the seller.
   static bool canSubmit(Listing listing) =>
       listing.status == ListingStatus.draft;
+
+  /// Whether the listing has the photo DEC-03 requires before submission.
+  ///
+  /// A draft may have none; a listing may not enter review without one stored
+  /// photo. The client mirrors that rule so the submit action is not offered
+  /// when the server would refuse it, while the server remains the authority.
+  static bool hasSubmissionPhotos(Listing listing) => listing.photos.isNotEmpty;
 
   /// Whether a listing can be deleted right now.
   ///
@@ -843,12 +876,16 @@ class SellerListingController extends ChangeNotifier {
   /// view has moved on from the screen's — a listing already submitted, or one
   /// that has since been approved. The list is re-read so the row settles on the
   /// truth rather than on a status the client still believes.
-  void _failAction(ApiException error, {bool reloadAfterConflict = false}) {
+  void _failAction(
+    ApiException error, {
+    bool reloadAfterConflict = false,
+    bool keepActionListingId = false,
+  }) {
     if (error.kind == ApiErrorKind.conflict) {
       _set(
         _state.copyWith(
           action: SellerListingAction.none,
-          clearActionListingId: true,
+          clearActionListingId: !keepActionListingId,
           conflictMessage: error.message,
         ),
       );
@@ -862,7 +899,7 @@ class SellerListingController extends ChangeNotifier {
       _set(
         _state.copyWith(
           action: SellerListingAction.none,
-          clearActionListingId: true,
+          clearActionListingId: !keepActionListingId,
           actionErrorMessage: error.message,
           validationErrors: error.validationErrors,
         ),
@@ -873,7 +910,7 @@ class SellerListingController extends ChangeNotifier {
     _set(
       _state.copyWith(
         action: SellerListingAction.none,
-        clearActionListingId: true,
+        clearActionListingId: !keepActionListingId,
         actionErrorMessage: error.message,
       ),
     );

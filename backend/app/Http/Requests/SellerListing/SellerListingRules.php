@@ -4,6 +4,7 @@ namespace App\Http\Requests\SellerListing;
 
 use App\Enums\ListingStatus;
 use App\Models\Listing;
+use App\Rules\MaximumAgeForUnit;
 use App\Services\SettingService;
 
 /**
@@ -27,7 +28,7 @@ trait SellerListingRules
     /**
      * The writable content fields, with no required/sometimes decision.
      *
-     * @return array<string, list<string>>
+     * @return array<string, list<mixed>>
      */
     protected function contentRules(): array
     {
@@ -47,25 +48,29 @@ trait SellerListingRules
             // the column is `decimal(5,1)`: the contract is authoritative for what
             // a client may send, and a looser column is not a licence to send
             // fractions.
-            'age_value' => ['integer', 'min:0'],
+            //
+            // `max:9125` is the unit-independent ceiling — the day limit — while
+            // [MaximumAgeForUnit] applies the ceiling for the unit actually
+            // selected (25 years / 300 months / 9,125 days) [DEC-01].
+            'age_value' => ['integer', 'min:0', 'max:9125', new MaximumAgeForUnit],
             'age_unit' => ['in:day,month,year'],
 
             'gender' => ['in:male,female'],
 
             // Bounded to the column's own range (`decimal(10,2)`) so an
             // out-of-range weight is a 422 with a readable message rather than a
-            // database error the seller cannot act on.
-            'weight_value' => ['numeric', 'min:0', 'max:99999999.99'],
+            // database error the seller cannot act on. `decimal:0,2` rejects a
+            // third decimal instead of letting storage round it, so the amount
+            // the seller typed is the amount stored [DEC-02].
+            'weight_value' => ['numeric', 'decimal:0,2', 'min:0', 'max:99999999.99'],
             'weight_unit' => ['in:kg,lb'],
 
             'quantity' => ['integer', 'min:1'],
 
-            // `numeric`, not `decimal`, and bounded by the configurable ceiling,
-            // for the same reason. Precision is not truncated to two places
-            // here: the column does that, and rounding a seller's price in the
-            // request layer would hide the behaviour from the test that should
-            // catch it.
-            'asking_price' => ['numeric', 'min:0', 'max:'.$this->maxAskingPrice()],
+            // `decimal:0,2` rejects a third decimal instead of letting storage
+            // round it [DEC-02]; the ceiling stays configurable, and the column
+            // (`decimal(14,2)`) supplies the fallback when the setting is absent.
+            'asking_price' => ['numeric', 'decimal:0,2', 'min:0', 'max:'.$this->maxAskingPrice()],
 
             'location' => ['string', 'max:255'],
             'health_status' => ['nullable', 'string', 'max:255'],
@@ -157,7 +162,7 @@ trait SellerListingRules
      * a `status` and a `seller_id`, and validating those against the
      * client-input rules would reject every existing row.
      *
-     * @return array<string, list<string>>
+     * @return array<string, list<mixed>>
      */
     public function submissionRules(): array
     {
@@ -165,6 +170,37 @@ trait SellerListingRules
             $this->contentRules(),
             $this->pairRules(),
             $this->requiredFieldRules(),
+        );
+    }
+
+    /**
+     * The rules a listing must satisfy to enter review.
+     *
+     * Submission is the first point at which a listing is shown to a moderator,
+     * so it is the first point at which the photo minimum applies [DEC-03].
+     * Expressed as an extension of [submissionRules()] rather than as another
+     * copy of the content rules: everything a draft must be, plus the one field
+     * that submission tightens.
+     *
+     * Deliberately *not* part of [contentRules()]: a draft is photo-optional,
+     * and tightening the shared rules would make creating one stricter than the
+     * contract says. This method has exactly one caller —
+     * [SellerListingService::submit()] — and the admin approval path keeps its
+     * own guard, so the minimum is not imposed on create, update or moderation.
+     *
+     * `required` and `min:1` are both stated because an empty array counts as
+     * empty for `required`; `min:1` records the intent without relying on that
+     * detail.
+     *
+     * @return array<string, list<mixed>>
+     */
+    public function publicationRules(): array
+    {
+        return $this->mergeRules(
+            $this->submissionRules(),
+            [
+                'photos' => ['required', 'array', 'min:1'],
+            ],
         );
     }
 
@@ -182,8 +218,13 @@ trait SellerListingRules
      * each rule set stays readable on its own and the combination is the union of
      * what they all say.
      *
-     * @param  array<string, list<string>>  ...$sets
-     * @return array<string, list<string>>
+     * The de-duplication is `SORT_REGULAR` because a rule is not always a string:
+     * [MaximumAgeForUnit] is a rule object, and the default string comparison
+     * would try to cast it to one. `SORT_REGULAR` compares the values as they
+     * are, which is what "the same rule twice" means here.
+     *
+     * @param  array<string, list<mixed>>  ...$sets
+     * @return array<string, list<mixed>>
      */
     protected function mergeRules(array ...$sets): array
     {
@@ -194,7 +235,7 @@ trait SellerListingRules
                 $merged[$field] = array_values(array_unique([
                     ...($merged[$field] ?? []),
                     ...$rules,
-                ]));
+                ], SORT_REGULAR));
             }
         }
 

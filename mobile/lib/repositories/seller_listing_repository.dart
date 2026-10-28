@@ -60,8 +60,8 @@ class SellerListingRepository {
 
   /// Uploads photos to a listing the caller owns.
   ///
-  /// [files] are the picked photos. Several parts share the `photos` field
-  /// name, which the server reads as an array.
+  /// [files] are the picked photos. Several parts share the `photos[]` field
+  /// name, which PHP parses into the array Laravel validates.
   /// [onProgress] reports aggregate bytes sent so the UI can show an upload
   /// indicator.
   Future<Listing> uploadPhotos({

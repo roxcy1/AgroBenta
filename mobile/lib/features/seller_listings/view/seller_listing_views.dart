@@ -134,6 +134,24 @@ class ListingActionErrorBanner extends StatelessWidget {
   }
 }
 
+/// Why a zero-photo draft cannot be submitted, stated in one place.
+const String listingPhotoRequirementMessage =
+    'Add at least one photo before submitting this listing for review.';
+
+/// Shown wherever a draft's submit action is blocked by DEC-03.
+class ListingPhotoRequirementNotice extends StatelessWidget {
+  const ListingPhotoRequirementNotice({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const NoticeBanner(
+      accent: AppColors.warning,
+      icon: Icons.photo_camera_outlined,
+      message: listingPhotoRequirementMessage,
+    );
+  }
+}
+
 /// The seller has no listings at all.
 class SellerListingsEmptyState extends StatelessWidget {
   const SellerListingsEmptyState({

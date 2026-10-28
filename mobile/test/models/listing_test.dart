@@ -117,17 +117,19 @@ void main() {
       expect(Listing.fromJson(listingJson()..remove('photos')).photos, isEmpty);
     });
 
-    test('keeps stored photo paths exactly as the server sent them', () {
+    test('resolves stored photo paths against the configured API origin', () {
       final Listing listing = Listing.fromJson(
         listingJson(
           photos: <Object?>['listings/12/front.jpg', 'listings/12/side.jpg'],
         ),
       );
 
-      expect(listing.photos, <String>[
-        'listings/12/front.jpg',
-        'listings/12/side.jpg',
-      ]);
+      expect(listing.photos, hasLength(2));
+      // Relative paths become absolute, fetchable URLs — never `/api/...`.
+      expect(listing.photos, everyElement(startsWith('http://')));
+      expect(listing.photos, everyElement(isNot(contains('/api/'))));
+      expect(listing.photos.first, endsWith('/listings/12/front.jpg'));
+      expect(listing.photos.last, endsWith('/listings/12/side.jpg'));
     });
 
     test('fails loudly on an unrecognised status', () {
@@ -218,13 +220,133 @@ void main() {
       );
     });
 
-    test('hasLoadablePhoto is false when only relative paths are present', () {
+    test('resolves relative photo paths against the configured API origin', () {
       final Listing listing = Listing.fromJson(
         listingJson(photos: <Object?>['listings/12/front.jpg']),
       );
 
       expect(listing.photos, isNotEmpty);
-      expect(listing.hasLoadablePhoto, isFalse);
+      // A relative path becomes an absolute, fetchable URL against the API
+      // origin — never `/api/storage/...` or another malformed shape.
+      expect(listing.photos.first, startsWith('http://'));
+      expect(listing.photos.first, isNot(contains('/api/')));
+
+      expect(listing.hasLoadablePhoto, isTrue);
+    });
+
+    test('preserves absolute external photo URLs unchanged', () {
+      final Listing listing = Listing.fromJson(
+        listingJson(
+          photos: <Object?>['https://cdn.example.test/photos/front.jpg'],
+        ),
+      );
+
+      expect(listing.photos, <String>['https://cdn.example.test/photos/front.jpg']);
+      expect(listing.hasLoadablePhoto, isTrue);
+    });
+  });
+
+  group('Listing.resolvePhotoUrl', () {
+    test('rewrites localhost to the configured API origin', () {
+      expect(
+        Listing.resolvePhotoUrl(
+          'http://localhost:8001/storage/listings/9/foo.jpg',
+          apiOrigin: 'http://10.0.2.2:8001',
+        ),
+        'http://10.0.2.2:8001/storage/listings/9/foo.jpg',
+      );
+    });
+
+    test('rewrites 127.0.0.1 to the configured API origin', () {
+      expect(
+        Listing.resolvePhotoUrl(
+          'http://127.0.0.1:8001/storage/listings/9/foo.jpg',
+          apiOrigin: 'http://192.168.1.14:8001',
+        ),
+        'http://192.168.1.14:8001/storage/listings/9/foo.jpg',
+      );
+    });
+
+    test('preserves external CDN/S3 URLs unchanged', () {
+      expect(
+        Listing.resolvePhotoUrl(
+          'https://cdn.example.test/photos/front.jpg',
+          apiOrigin: 'http://10.0.2.2:8001',
+        ),
+        'https://cdn.example.test/photos/front.jpg',
+      );
+
+      expect(
+        Listing.resolvePhotoUrl(
+          'https://s3.us-east-1.amazonaws.com/bucket/photo.jpg',
+          apiOrigin: 'http://localhost:8001',
+        ),
+        'https://s3.us-east-1.amazonaws.com/bucket/photo.jpg',
+      );
+    });
+
+    test('resolves a path with a leading slash against the origin', () {
+      expect(
+        Listing.resolvePhotoUrl(
+          '/storage/listings/9/foo.jpg',
+          apiOrigin: 'http://10.0.2.2:8001',
+        ),
+        'http://10.0.2.2:8001/storage/listings/9/foo.jpg',
+      );
+    });
+
+    test('resolves a path without a leading slash against the origin', () {
+      expect(
+        Listing.resolvePhotoUrl(
+          'storage/listings/9/foo.jpg',
+          apiOrigin: 'http://10.0.2.2:8001',
+        ),
+        'http://10.0.2.2:8001/storage/listings/9/foo.jpg',
+      );
+    });
+
+    test('does not duplicate /api when resolving /storage paths', () {
+      expect(
+        Listing.resolvePhotoUrl(
+          '/storage/listings/9/foo.jpg',
+          apiOrigin: 'http://10.0.2.2:8001',
+        ),
+        isNot(contains('/api/storage')),
+      );
+    });
+
+    test('keeps query string and fragment on rewritten URLs', () {
+      expect(
+        Listing.resolvePhotoUrl(
+          'http://localhost:8001/storage/listings/9/foo.jpg?token=abc#x',
+          apiOrigin: 'http://10.0.2.2:8001',
+        ),
+        'http://10.0.2.2:8001/storage/listings/9/foo.jpg?token=abc#x',
+      );
+    });
+
+    test('uses https when the origin is https', () {
+      expect(
+        Listing.resolvePhotoUrl(
+          'http://localhost/storage/foo.jpg',
+          apiOrigin: 'https://api.staging.agrobenta.test',
+        ),
+        'https://api.staging.agrobenta.test/storage/foo.jpg',
+      );
+    });
+
+    test('returns an empty string unchanged', () {
+      expect(
+        Listing.resolvePhotoUrl('', apiOrigin: 'http://localhost:8001'),
+        '',
+      );
+    });
+
+    test('treats unparseable input as unchanged', () {
+      expect(
+        Listing.resolvePhotoUrl('not a url', apiOrigin: 'http://localhost:8001'),
+        'not a url',
+      );
     });
   });
 
