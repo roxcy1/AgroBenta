@@ -307,6 +307,49 @@ class MobileTransactionTest extends TestCase
     }
 
     #[Test]
+    public function a_sold_listing_cannot_be_transacted(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Sold]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(409);
+
+        // No transaction was persisted for the sold listing.
+        $this->assertDatabaseMissing('transactions', [
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->buyer->id,
+        ]);
+    }
+
+    #[Test]
+    public function an_active_listing_can_be_transacted_control(): void
+    {
+        $listing = $this->createListing($this->seller);
+
+        $data = $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(201)
+            ->json('data');
+
+        $this->assertSame('pending', $data['status']);
+
+        // The transaction was persisted.
+        $this->assertDatabaseHas('transactions', [
+            'id' => $data['id'],
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->buyer->id,
+            'status' => TransactionStatus::Pending->value,
+        ]);
+    }
+
+    #[Test]
     public function insufficient_stock_is_refused(): void
     {
         $listing = $this->createListing($this->seller, ['quantity' => 1]);

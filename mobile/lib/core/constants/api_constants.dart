@@ -151,10 +151,8 @@ abstract final class SellerVerificationEndpoints {
 ///
 /// No path here takes a seller id. The scope is the token, resolved server-side,
 /// so there is no way for a client to name somebody else's inventory. There is
-/// also no `activate`, no `deactivate` and no `sold` path: `active` is an
-/// administrator decision, `active → inactive` is too, and a sold listing is a
-/// transaction. The seller lifecycle ends at `pending` and this group reflects
-/// that by having no route for going further.
+/// also no `activate` path: `active` is an administrator decision. A seller may
+/// mark one of their own `active` listings as `sold` through `markSold`.
 abstract final class SellerListingEndpoints {
   /// `GET` — the caller's own listings, in every status. 200, paginated
   /// envelope.
@@ -183,6 +181,13 @@ abstract final class SellerListingEndpoints {
   /// and it is one-way: the server answers `409` for a listing that is not a
   /// draft.
   static String submit(int id) => '/seller/listings/$id/submit';
+
+  /// `POST` — mark an active listing as sold. 200, plain envelope.
+  ///
+  /// [id] is appended. Permitted only while the listing is `active`; the server
+  /// answers `409` otherwise. Terminal for the listing: no new transactions can
+  /// be created against it afterwards.
+  static String markSold(int id) => '/seller/listings/$id/mark-sold';
 
   /// `DELETE` — destroy a draft or withdrawn listing. 200.
   ///

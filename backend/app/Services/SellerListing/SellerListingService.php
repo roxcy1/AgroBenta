@@ -29,13 +29,11 @@ use RuntimeException;
  *  - `draft` becomes `pending` on submit, and that is the only way out of it;
  *  - `draft` and `active` are editable [D-24];
  *  - `draft` and `inactive` are destroyable [D-25];
- *  - `active → inactive` is an **administrator** action, and `sold` belongs to a
- *    transaction rather than a seller. Neither is reachable from here, and
- *    neither is approximated by anything this class does.
+ *  - `active → inactive` is an **administrator** action;
+ *  - `active → sold` is a seller action via `markSold()`;
  *
  * A seller therefore cannot publish a listing. Approval is a moderation step this
- * phase does not implement (OQ-14), and no method below offers a substitute for
- * it.
+ * phase does not implement (OQ-14).
  */
 class SellerListingService
 {
@@ -209,6 +207,45 @@ class SellerListingService
                     'target_id' => $listing->getKey(),
                     'changes' => [
                         'status' => ['from' => $previousStatus, 'to' => ListingStatus::Pending->value],
+                    ],
+                ],
+            );
+
+            return $listing;
+        });
+    }
+
+    /**
+     * Mark a listing the seller owns as sold.
+     *
+     * `active → sold`. Terminal for the listing: no new transactions can be
+     * created against it afterwards.
+     *
+     * @throws ValidationException if the listing is not active
+     */
+    public function markSold(Listing $listing): Listing
+    {
+        $this->ensureStatusIs(
+            $listing,
+            [ListingStatus::Active],
+            'Only an active listing can be marked as sold.'
+        );
+
+        return DB::transaction(function () use ($listing): Listing {
+            $previousStatus = $listing->status->value;
+
+            $listing->status = ListingStatus::Sold;
+            $listing->save();
+
+            $this->activity->log(
+                $listing->seller_id,
+                ActivityAction::ListingMarkedSold,
+                sprintf('Listing #%d marked as sold.', $listing->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $listing->getKey(),
+                    'changes' => [
+                        'status' => ['from' => $previousStatus, 'to' => ListingStatus::Sold->value],
                     ],
                 ],
             );

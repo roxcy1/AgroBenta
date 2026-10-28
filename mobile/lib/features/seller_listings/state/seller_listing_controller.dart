@@ -374,6 +374,49 @@ class SellerListingController extends ChangeNotifier {
     }
   }
 
+  /// Marks [listingId] as sold. Returns the updated listing, or `null`.
+  ///
+  /// Permitted only while the listing is `active`, and one-way: the server
+  /// answers `409` for anything else, which lands in
+  /// [SellerListingState.conflictMessage] with the list re-read behind it.
+  Future<Listing?> markSold(int listingId) async {
+    if (_state.isActioning) {
+      return null;
+    }
+
+    _beginAction(SellerListingAction.markingSold, listingId: listingId);
+
+    try {
+      final Listing marked = await _repository.markSold(listingId);
+
+      if (_disposed) {
+        return null;
+      }
+
+      _endAction(message: 'Listing marked as sold.');
+      _replaceListing(marked);
+      return marked;
+    } on ApiException catch (error) {
+      if (_disposed) {
+        return null;
+      }
+      _failAction(error, reloadAfterConflict: true);
+      return null;
+    } on Object {
+      if (_disposed) {
+        return null;
+      }
+      _set(
+        _state.copyWith(
+          action: SellerListingAction.none,
+          clearActionListingId: true,
+          actionErrorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
+      return null;
+    }
+  }
+
   /// Destroys [listingId]. Returns `true` when the server confirmed it.
   ///
   /// A draft or withdrawn listing only. This is a deletion and **not** a
@@ -695,6 +738,13 @@ class SellerListingController extends ChangeNotifier {
   /// submitted cannot be recalled by the seller.
   static bool canSubmit(Listing listing) =>
       listing.status == ListingStatus.draft;
+
+  /// Whether a listing can be marked as sold right now.
+  ///
+  /// Only an `active` listing. The transition is one-way and terminal: no new
+  /// transactions can be created against a sold listing.
+  static bool canMarkSold(Listing listing) =>
+      listing.status == ListingStatus.active;
 
   /// Whether the listing has the photo DEC-03 requires before submission.
   ///

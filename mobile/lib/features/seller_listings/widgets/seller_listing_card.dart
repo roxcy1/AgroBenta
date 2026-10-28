@@ -31,6 +31,7 @@ class SellerListingCard extends StatelessWidget {
     required this.listing,
     required this.onTap,
     required this.onSubmit,
+    required this.onMarkSold,
     required this.onEdit,
     required this.onDelete,
     this.busy = false,
@@ -42,6 +43,9 @@ class SellerListingCard extends StatelessWidget {
 
   /// Submits the draft for review.
   final VoidCallback onSubmit;
+
+  /// Marks the listing as sold.
+  final VoidCallback onMarkSold;
 
   /// Edits the listing.
   final VoidCallback onEdit;
@@ -114,8 +118,8 @@ class SellerListingCard extends StatelessWidget {
                         const SizedBox(height: AppSpacing.xs),
                         Text(
                           AppFormatters.formatMoneyCompact(
-                                listing.askingPrice,
-                              ) ??
+                                  listing.askingPrice,
+                                ) ??
                               listing.askingPrice,
                           style: theme.textTheme.titleSmall?.copyWith(
                             color: AppColors.primary,
@@ -144,6 +148,7 @@ class SellerListingCard extends StatelessWidget {
             listing: listing,
             busy: busy,
             onSubmit: onSubmit,
+            onMarkSold: onMarkSold,
             onEdit: onEdit,
             onDelete: onDelete,
           ),
@@ -180,6 +185,7 @@ class _ActionBar extends StatelessWidget {
     required this.listing,
     required this.busy,
     required this.onSubmit,
+    required this.onMarkSold,
     required this.onEdit,
     required this.onDelete,
   });
@@ -187,22 +193,24 @@ class _ActionBar extends StatelessWidget {
   final Listing listing;
   final bool busy;
   final VoidCallback onSubmit;
+  final VoidCallback onMarkSold;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    // The list card offers exactly one action per status:
+    // The list card offers actions per status:
     //   draft -> Edit + Submit for review
-    //   active -> Edit
+    //   active -> Edit + Mark as sold
     //   inactive -> Delete
     // pending / sold have no client-side action at all; see the no-action branch.
     final bool canSubmit = SellerListingController.canSubmit(listing);
+    final bool canMarkSold = SellerListingController.canMarkSold(listing);
     final bool canDelete = listing.status == ListingStatus.inactive;
     final bool hasPhotos = SellerListingController.hasSubmissionPhotos(listing);
 
-    if (!canSubmit && !canDelete) {
+    if (!canSubmit && !canMarkSold && !canDelete) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(
@@ -271,10 +279,26 @@ class _ActionBar extends StatelessWidget {
       case ListingStatus.active:
         actionWidget = busy
             ? const SizedBox.shrink()
-            : TextButton.icon(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Edit'),
+            : Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit'),
+                    ),
+                  ),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onMarkSold,
+                      icon: const Icon(Icons.done_outline, size: 18),
+                      label: const Text('Mark as sold'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.sold,
+                      ),
+                    ),
+                  ),
+                ],
               );
         break;
       case ListingStatus.inactive:

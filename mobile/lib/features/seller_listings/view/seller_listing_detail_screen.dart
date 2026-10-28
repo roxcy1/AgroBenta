@@ -106,6 +106,18 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
     setState(() => _listing = submitted);
   }
 
+  Future<void> _markSold() async {
+    final Listing current = _current();
+    if (!SellerListingController.canMarkSold(current)) {
+      return;
+    }
+    final Listing? marked = await _controller.markSold(current.id);
+    if (!mounted || marked == null) {
+      return;
+    }
+    setState(() => _listing = marked);
+  }
+
   Future<void> _delete() async {
     final Listing current = _current();
     final bool? confirmed = await showDialog<bool>(
@@ -280,6 +292,7 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                   listing: listing,
                   busy: busy,
                   onSubmit: _submit,
+                  onMarkSold: _markSold,
                   onDelete: _delete,
                 ),
               ],
@@ -368,17 +381,20 @@ class _ActionBar extends StatelessWidget {
     required this.listing,
     required this.busy,
     required this.onSubmit,
+    required this.onMarkSold,
     required this.onDelete,
   });
 
   final Listing listing;
   final bool busy;
   final VoidCallback onSubmit;
+  final VoidCallback onMarkSold;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final bool canSubmit = SellerListingController.canSubmit(listing);
+    final bool canMarkSold = SellerListingController.canMarkSold(listing);
     final bool canDelete = SellerListingController.canDelete(listing);
     final bool hasPhotos = SellerListingController.hasSubmissionPhotos(listing);
 
@@ -400,45 +416,27 @@ class _ActionBar extends StatelessWidget {
                 const ListingPhotoRequirementNotice(),
                 const SizedBox(height: AppSpacing.sm),
               ],
-              switch ((canSubmit, canDelete)) {
-                (true, true) => Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: busy ? null : onDelete,
-                        child: const Text('Delete'),
+              switch ((canSubmit, canMarkSold, canDelete)) {
+                (true, _, _) => FilledButton(
+                      onPressed: busy || !hasPhotos ? null : onSubmit,
+                      child: const Text('Submit for review'),
+                    ),
+                (false, true, _) => OutlinedButton.icon(
+                      onPressed: busy ? null : onMarkSold,
+                      icon: const Icon(Icons.done_outline, size: 18),
+                      label: const Text('Mark as sold'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.sold,
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton(
-                        onPressed: busy || !hasPhotos ? null : onSubmit,
-                        child: busy
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text('Submit for review'),
-                      ),
+                (false, false, true) => OutlinedButton(
+                      onPressed: busy ? null : onDelete,
+                      child: const Text('Delete listing'),
                     ),
-                  ],
-                ),
-                (true, false) => FilledButton(
-                  onPressed: busy || !hasPhotos ? null : onSubmit,
-                  child: const Text('Submit for review'),
-                ),
-                (false, true) => OutlinedButton(
-                  onPressed: busy ? null : onDelete,
-                  child: const Text('Delete listing'),
-                ),
                 // Neither. A `pending` listing is in an administrator's queue, a
                 // `sold` one is a record. Either way the seller has nothing to
                 // do, and the panel above already says so.
-                (false, false) => const SizedBox.shrink(),
+                (false, false, false) => const SizedBox.shrink(),
               },
             ],
           ),

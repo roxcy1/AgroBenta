@@ -190,6 +190,72 @@ void main() {
     );
     expect(submit.onPressed, isNull);
   });
+
+  testWidgets('an active listing offers Mark as sold from the list', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(id: 1, livestockType: 'Cattle', status: 'active'),
+        ],
+        total: 1,
+      ),
+    );
+
+    expect(find.text('Mark as sold'), findsOneWidget);
+  });
+
+  testWidgets('a pending listing does not offer Mark as sold', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(id: 1, livestockType: 'Cattle', status: 'pending'),
+        ],
+        total: 1,
+      ),
+    );
+
+    expect(find.text('Mark as sold'), findsNothing);
+  });
+
+  testWidgets('confirming Mark as sold shows sold status', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath.endsWith('/mark-sold')) {
+          return sellerListingResponse(
+            listing: listingJson(id: 1, status: 'sold'),
+          );
+        }
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 1, livestockType: 'Cattle', status: 'active'),
+          ],
+          total: 1,
+        );
+      },
+    );
+
+    await tester.tap(find.text('Mark as sold'));
+    await sellerListingsSettle(tester);
+
+    // Confirmation dialog appears.
+    expect(find.text('Mark this listing as sold?'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark as sold'));
+    await sellerListingsSettle(tester);
+
+    // The sold listing is reflected in the list.
+    expect(find.text('Sold'), findsWidgets);
+  });
 }
 
 Future<void> sellerListingsSettle(
