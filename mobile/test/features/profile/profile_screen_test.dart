@@ -535,7 +535,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Confirm your password'), findsNothing);
-      print('REQUESTS: ${requests.length}');
       expect(requests.where((r) => r.method == 'PUT').isNotEmpty, isTrue);
       final RecordedRequest putReq = requests.firstWhere(
         (r) => r.method == 'PUT',

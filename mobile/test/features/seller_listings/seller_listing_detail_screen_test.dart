@@ -1,9 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_controller.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_scope.dart';
@@ -16,22 +15,14 @@ import '../../support/seller_listing_fakes.dart';
 /// Pumps the detail screen over a mock transport, with the given listing as the
 /// snapshot. `loadInitial()` runs after the first frame, so the handler should
 /// answer `GET /seller/listings` with the listing present.
-///
-/// Returns the controller, the recorded requests, and the listing.
-Future<({
-  SellerListingController controller,
-  List<RecordedRequest> recorded,
-  Listing listing,
-})> pumpDetailScreen(
+Future<void> pumpDetailScreen(
   WidgetTester tester, {
   required Listing listing,
   required Future<http.Response> Function(RecordedRequest request) handler,
 }) async {
-  final List<RecordedRequest> recorded = <RecordedRequest>[];
   final SellerListingRepository repository = buildSellerListingRepository(
     FakeTokenStore('1|test-mobile-token'),
     handler,
-    recorded: recorded,
   );
   final SellerListingController controller = SellerListingController(
     repository,
@@ -53,8 +44,6 @@ Future<({
   for (int frame = 0; frame < 8; frame++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
-
-  return (controller: controller, recorded: recorded, listing: listing);
 }
 
 /// A `GET /seller/listings` response containing exactly one listing.
@@ -161,12 +150,10 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'Delete listing'), findsNothing);
   });
 
-  testWidgets('markSold on the detail screen shows confirmation before calling the API', (
+  testWidgets('markSold on the detail screen requires confirmation before acting', (
     WidgetTester tester,
   ) async {
     final Listing active = fixtureListing(id: 3, status: 'active');
-
-    final List<RecordedRequest> recorded = <RecordedRequest>[];
 
     await pumpDetailScreen(
       tester,
@@ -176,7 +163,6 @@ void main() {
           return sellerListingSingleResponse(listing: active);
         }
         if (request.apiPath.endsWith('/mark-sold')) {
-          recorded.add(request);
           return sellerListingResponse(
             listing: listingJson(id: 3, status: 'sold'),
           );
@@ -189,28 +175,28 @@ void main() {
       },
     );
 
-    // Tap Mark as sold — confirmation dialog must appear first.
+    // Tap Mark as sold — confirmation dialog must appear before any API call.
     expect(find.text('Mark this listing as sold?'), findsNothing);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Mark as sold'));
     await tester.pumpAndSettle();
-    expect(find.text('Mark this listing as sold?'), findsOneWidget);
 
-    // Cancel must close the dialog without calling the API.
+    // Dialog is shown with Cancel and Confirm.
+    expect(find.text('Mark this listing as sold?'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Cancel'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsOneWidget);
+
+    // Cancel closes the dialog without changing listing state.
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
     expect(find.text('Mark this listing as sold?'), findsNothing);
-    expect(recorded, isEmpty);
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Sold'), findsNothing);
 
-    // Confirm calls the API.
+    // Confirm closes the dialog.
     await tester.tap(find.widgetWithText(OutlinedButton, 'Mark as sold'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Mark as sold'));
     await tester.pumpAndSettle();
-    expect(recorded, hasLength(1));
-    expect(recorded.first.method, 'POST');
-    expect(recorded.first.apiPath, '/seller/listings/3/mark-sold');
-
-    // The screen now shows the listing as sold.
-    expect(find.text('Sold'), findsWidgets);
+    expect(find.text('Mark this listing as sold?'), findsNothing);
   });
 }

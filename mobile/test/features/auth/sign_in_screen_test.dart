@@ -43,7 +43,7 @@ void main() {
         theme: AppTheme.light(),
         home: AuthScope(
           controller: controller,
-          child: SignInScreen(onRegister: onRegister ?? () {}),
+          child: SignInScreen(onRegister: onRegister ?? () {}, onForgotPassword: () {}),
         ),
       ),
     );
