@@ -89,9 +89,15 @@ Run all four before reporting work as complete:
 ```sh
 flutter pub get
 flutter analyze          # must be clean
-flutter test             # must pass
+flutter test --dart-define=ANDROID_RUN_TARGET=emulator   # must pass
 flutter build apk --debug
 ```
+
+`flutter test` runs as Android, and a native Android build has no default API
+URL (see "Running" above), so any test that makes an API call needs one of
+the two defines. `ANDROID_RUN_TARGET=emulator` is the one the suite is written
+for; plain `flutter test` fails with "Physical Android build requires
+--dart-define=API_BASE_URL".
 
 ## Layout
 
