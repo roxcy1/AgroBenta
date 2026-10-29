@@ -5,6 +5,7 @@ import 'package:agrobenta_mobile/core/theme/app_colors.dart';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
+import 'package:agrobenta_mobile/features/auth/state/auth_state.dart';
 import 'package:agrobenta_mobile/features/auth/view/sign_in_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,12 +21,24 @@ import '../../support/auth_fakes.dart';
 /// nothing to do with signing in. The end-to-end paths — sign in, wrong
 /// password, empty form, the registration round trip — are covered by
 /// `auth_gate_test.dart`. This file covers what the gate cannot: the
-/// presentation contract of the screen itself, especially the three controls
-/// in the reference design that the backend does not support.
+/// presentation contract of the screen itself, especially the reference
+/// controls the backend does not support (remember me and social sign-in).
 void main() {
   late FakeTokenStore tokenStore;
 
   setUp(() => tokenStore = FakeTokenStore());
+
+  // Widget tests default to Android, where AppConfig deliberately throws
+  // without an API_BASE_URL define. These are screen tests, not physical-device
+  // builds, so run each on a non-Android target whose default is loopback. The
+  // mock transport still intercepts every request; no network is used.
+  void signInTest(String description, WidgetTesterCallback callback) {
+    testWidgets(
+      description,
+      callback,
+      variant: TargetPlatformVariant.only(TargetPlatform.linux),
+    );
+  }
 
   Future<AuthController> pumpSignIn(
     WidgetTester tester, {
@@ -43,7 +56,10 @@ void main() {
         theme: AppTheme.light(),
         home: AuthScope(
           controller: controller,
-          child: SignInScreen(onRegister: onRegister ?? () {}, onForgotPassword: () {}),
+          child: SignInScreen(
+            onRegister: onRegister ?? () {},
+            onForgotPassword: () {}, // No-op: there is no forgot password flow
+          ),
         ),
       ),
     );
@@ -86,7 +102,7 @@ void main() {
       )
       .obscureText;
 
-  testWidgets('renders the branded hero, welcome heading and sign-up link', (
+  signInTest('renders the branded hero, welcome heading and sign-up link', (
     WidgetTester tester,
   ) async {
     await pumpSignIn(tester, handler: (_) async => fail('no request expected'));
@@ -99,7 +115,7 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Sign Up'), findsOneWidget);
   });
 
-  testWidgets('the password is hidden by default and the toggle reveals it', (
+  signInTest('the password is hidden by default and the toggle reveals it', (
     WidgetTester tester,
   ) async {
     await pumpSignIn(tester, handler: (_) async => fail('no request expected'));
@@ -124,7 +140,7 @@ void main() {
     expect(obscureOf(tester), isTrue, reason: 'password hides again');
   });
 
-  testWidgets('remember me and forgot password are shown but inert', (
+  signInTest('remember me is inert and forgot password uses link styling', (
     WidgetTester tester,
   ) async {
     final List<RecordedRequest> recorded = <RecordedRequest>[];
@@ -144,8 +160,6 @@ void main() {
       reason: 'remember-me must not imply it changes session persistence',
     );
 
-    // Forgot Password?: styled green but with no interactive ancestor — no
-    // approved password-recovery destination exists to navigate to.
     final Finder forgot = find.text('Forgot Password?');
     expect(forgot, findsOneWidget);
     expect(
@@ -156,7 +170,7 @@ void main() {
     expect(
       find.ancestor(of: forgot, matching: find.byType(TextButton)),
       findsNothing,
-      reason: 'not tappable — there is no recovery endpoint',
+      reason: 'this screen renders the label, not a tappable button',
     );
     expect(
       find.ancestor(of: forgot, matching: find.byType(InkWell)),
@@ -169,7 +183,7 @@ void main() {
     expect(recorded, isEmpty);
   });
 
-  testWidgets('social sign-in is shown but disabled', (
+  signInTest('social sign-in is shown but disabled', (
     WidgetTester tester,
   ) async {
     await pumpSignIn(tester, handler: (_) async => fail('no request expected'));
@@ -194,7 +208,7 @@ void main() {
     expect(find.text('Social sign-in is not available yet.'), findsOneWidget);
   });
 
-  testWidgets('a repeat tap during an active request is ignored', (
+  signInTest('a repeat tap during an active request is ignored', (
     WidgetTester tester,
   ) async {
     final Completer<http.Response> flight = Completer<http.Response>();
@@ -213,9 +227,7 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(
-      tester
-          .widget<FilledButton>(find.byType(FilledButton))
-          .onPressed,
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
       reason: 'the button must be disabled while the request is in flight',
     );
@@ -227,13 +239,18 @@ void main() {
     expect(recorded, hasLength(1));
 
     flight.complete(
-      http.Response(
-        jsonEncode(successEnvelope(data: authSessionJson())),
-        200,
-      ),
+      http.Response(jsonEncode(successEnvelope(data: authSessionJson())), 200),
     );
     await settle(tester);
 
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+      reason: 'the button must be usable again after success',
+    );
+    expect(find.widgetWithText(FilledButton, 'Log In'), findsOneWidget);
+    expect(controller.state.isSubmitting, isFalse);
     expect(controller.state.isSignedIn, isTrue);
     expect(tokenStore.token, '1|test-mobile-token');
     expect(recorded.single.apiPath, '/auth/login');
@@ -243,7 +260,36 @@ void main() {
     });
   });
 
-  testWidgets('the Sign Up action hands back to the caller', (
+  signInTest('the loading state ends after a failed sign-in', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> recorded = <RecordedRequest>[];
+    final AuthController controller = await pumpSignIn(
+      tester,
+      recorded: recorded,
+      handler: (_) async =>
+          http.Response(jsonEncode('Invalid credentials.'), 401),
+    );
+
+    await fillFields(tester);
+    await tapLogIn(tester);
+    await settle(tester);
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+      reason: 'the button must be usable again after a failure',
+    );
+    expect(find.widgetWithText(FilledButton, 'Log In'), findsOneWidget);
+    expect(find.text('Invalid credentials.'), findsOneWidget);
+    expect(controller.state.isSubmitting, isFalse);
+    expect(controller.state.status, AuthStatus.signedOut);
+    expect(tokenStore.token, isNull);
+    expect(recorded, hasLength(1));
+  });
+
+  signInTest('the Sign Up action hands back to the caller', (
     WidgetTester tester,
   ) async {
     bool handedBack = false;

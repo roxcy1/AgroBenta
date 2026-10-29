@@ -363,6 +363,39 @@ void main() {
       );
     });
 
+    test('5xx never shows the server exception text to the user', () async {
+      final ApiException error = await captureStatus(500, <String, dynamic>{
+        'message':
+            'Target class [App\\Http\\Controllers\\Api\\X] does not exist.',
+      });
+
+      expect(error.message, 'Something went wrong on the server.');
+      expect(error.serverMessage, contains('Target class'));
+    });
+
+    test('a 403 calls onForbidden, and other statuses do not', () async {
+      int forbiddenCalls = 0;
+      final ApiClient client = ApiClient(
+        tokenStorage: tokenStore,
+        httpClient: MockClient(
+          (http.Request request) async => http.Response(
+            '{}',
+            request.url.path.endsWith('/denied') ? 403 : 404,
+          ),
+        ),
+        onForbidden: () => forbiddenCalls++,
+      );
+
+      for (final String path in <String>['/missing', '/denied']) {
+        await expectLater(
+          client.get<Object?>(path, parse: (Object? data) => data),
+          throwsA(isA<ApiException>()),
+        );
+      }
+
+      expect(forbiddenCalls, 1);
+    });
+
     test(
       'falls back to a default message when the body carries none',
       () async {

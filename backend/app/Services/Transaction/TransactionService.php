@@ -70,31 +70,16 @@ class TransactionService
      * the buyer's own, and must have stock for the quantity. A well-formed
      * request against a listing in the wrong state is a 409, not a 422.
      *
-     * The listing status check happens inside a `DB::transaction()` against a
-     * row-level `lockForUpdate()` read, so a concurrent `markSold()` cannot
-     * flip the listing to `sold` between the check and the transaction create.
-     * `SellerListingService::markSold()` takes the same listing-row lock, so
-     * both operations serialize on the listing row with a consistent lock order
-     * and no deadlock risk.
-     *
-     * The pre-transaction seller/quantity checks are early rejects against the
-     * model the caller holds; the authoritative status and stock checks run
-     * inside the transaction against the locked row.
+     * Every guard runs inside a `DB::transaction()` against a row-level
+     * `lockForUpdate()` read, so status, ownership and stock come from the
+     * persisted row rather than the caller's model. A concurrent `markSold()`
+     * therefore cannot flip the listing to `sold` between the check and the
+     * transaction create. `SellerListingService::markSold()` takes the same
+     * listing-row lock, so both operations serialize on the listing row with a
+     * consistent lock order and no deadlock risk.
      */
     public function create(User $buyer, Listing $listing, int $quantity): Transaction
     {
-        if ((int) $listing->seller_id === (int) $buyer->getKey()) {
-            abort(409, 'You cannot transact on your own listing.');
-        }
-
-        if ($quantity < 1) {
-            abort(409, 'Quantity must be at least one.');
-        }
-
-        if ((int) $listing->quantity < $quantity) {
-            abort(409, 'There is not enough stock for the requested quantity.');
-        }
-
         return DB::transaction(function () use ($buyer, $listing, $quantity): Transaction {
             // Reload with a row lock so a concurrent markSold() cannot flip the
             // listing to `sold` between the status check and transaction create.
@@ -109,6 +94,18 @@ class TransactionService
 
             if ($locked->status !== ListingStatus::Active) {
                 abort(409, 'This listing is not available for new transactions.');
+            }
+
+            if ((int) $locked->seller_id === (int) $buyer->getKey()) {
+                abort(409, 'You cannot transact on your own listing.');
+            }
+
+            if ($quantity < 1) {
+                abort(409, 'Quantity must be at least one.');
+            }
+
+            if ((int) $locked->quantity < $quantity) {
+                abort(409, 'There is not enough stock for the requested quantity.');
             }
 
             // Server-derived total amount from the locked listing's current price.

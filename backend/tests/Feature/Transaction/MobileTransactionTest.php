@@ -8,9 +8,11 @@ use App\Enums\UserRole;
 use App\Models\Listing;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Transaction\TransactionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
@@ -291,6 +293,11 @@ class MobileTransactionTest extends TestCase
                 'quantity' => 1,
             ])
             ->assertStatus(409);
+
+        $this->assertDatabaseMissing('transactions', [
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->seller->id,
+        ]);
     }
 
     #[Test]
@@ -360,6 +367,34 @@ class MobileTransactionTest extends TestCase
                 'quantity' => 2,
             ])
             ->assertStatus(409);
+
+        $this->assertDatabaseMissing('transactions', [
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->buyer->id,
+        ]);
+    }
+
+    #[Test]
+    public function stock_is_checked_against_the_locked_listing_not_a_stale_model(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 5]);
+        $stale = Listing::query()->findOrFail($listing->id);
+
+        // Change the stored quantity after the caller loaded its model. The
+        // service must read the locked row, not this stale quantity.
+        Listing::query()->whereKey($listing->id)->update(['quantity' => 1]);
+
+        try {
+            app(TransactionService::class)->create($this->buyer, $stale, 2);
+            $this->fail('The stale quantity must not authorise the transaction.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $this->assertDatabaseMissing('transactions', [
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->buyer->id,
+        ]);
     }
 
     #[Test]

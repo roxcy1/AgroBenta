@@ -98,6 +98,11 @@ abstract final class AppConfig {
   /// falls back to it fails every request. If this machine's LAN IP ever
   /// changes, update this constant. Staging and production are expressed with
   /// `--dart-define=API_BASE_URL`, never by editing this constant.
+  static const String _missingPhysicalAndroidApiBaseUrlError =
+      'Physical Android build requires --dart-define=API_BASE_URL '
+      'pointing to a reachable backend. Get your machine\'s LAN IP '
+      '(e.g. `ipconfig` on Windows, `ip addr` on Linux/macOS) and run:'
+          ' flutter run --dart-define=API_BASE_URL=http://<your-LAN-IP>:8001/api';
   /// CHANGE_THIS_DEV_LAN_IP: the development machine's address in
   /// `ipconfig`.
   static const String physicalAndroidApiBaseUrl = 'http://192.168.1.14:8001/api';
@@ -107,13 +112,6 @@ abstract final class AppConfig {
   /// `--dart-define=ANDROID_RUN_TARGET=emulator`; it is never an Android
   /// default. See the class documentation for the full address table.
   static const String androidEmulatorApiBaseUrl = 'http://10.0.2.2:8001/api';
-
-  /// Error thrown when a physical-device Android build does not supply
-  /// `API_BASE_URL` via `--dart-define`. A real phone cannot reach `10.0.2.2`
-  /// (that alias exists only inside an Android emulator), so the URL must be
-  /// provided explicitly.
-  static const String _missingPhysicalAndroidApiBaseUrlError =
-      'A physical-device Android build requires --dart-define=API_BASE_URL (e.g. http://<lan-ip>:8001/api). The emulator alias 10.0.2.2 does not exist on a real phone.';
 
   /// Resolved API root, without a trailing slash.
   ///

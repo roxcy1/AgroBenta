@@ -446,71 +446,61 @@ class _ActionBar extends StatelessWidget {
                 const ListingPhotoRequirementNotice(),
                 const SizedBox(height: AppSpacing.sm),
               ],
-              switch ((canSubmit, canMarkSold, canDelete)) {
+              // The three flags are mutually constrained by the listing
+              // lifecycle: `canSubmit` is draft-only, `canMarkSold` is
+              // active-only, and `canDelete` covers draft/inactive. Checking
+              // them in priority order avoids enumerating impossible boolean
+              // combinations or hiding one behind a wildcard.
+              if (canMarkSold)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : onMarkSold,
+                  icon: const Icon(Icons.done_outline, size: 18),
+                  label: const Text('Mark as sold'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.sold,
+                  ),
+                )
+              else if (canSubmit)
                 // A draft may be deleted or submitted for review; both buttons
                 // share the busy flag so a second action while one is running
                 // lands on a 409 waiting to happen.
-                (true, false, true) => Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: busy ? null : onDelete,
-                            child: const Text('Delete listing'),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          flex: 2,
-                          child: FilledButton(
-                            onPressed: busy || !hasPhotos ? null : onSubmit,
-                            child: busy
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text('Submit for review'),
-                          ),
-                        ),
-                      ],
-                    ),
-                // Unreachable in practice (a draft is always deletable), but the
-                // switch must be exhaustive.
-                (true, false, false) => FilledButton(
-                      onPressed: busy || !hasPhotos ? null : onSubmit,
-                      child: busy
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Submit for review'),
-                    ),
-                // `active`: only `markSold`. A listing cannot be both `draft`
-                // and `active`, so `(true, true, ...)` is unreachable — but the
-                // switch must be exhaustive, so this wildcard covers it.
-                (_, true, _) => OutlinedButton.icon(
-                      onPressed: busy ? null : onMarkSold,
-                      icon: const Icon(Icons.done_outline, size: 18),
-                      label: const Text('Mark as sold'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.sold,
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: busy ? null : onDelete,
+                        child: const Text('Delete listing'),
                       ),
                     ),
-                // `inactive`: only Delete.
-                (false, false, true) => OutlinedButton(
-                      onPressed: busy ? null : onDelete,
-                      child: const Text('Delete listing'),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        onPressed: busy || !hasPhotos ? null : onSubmit,
+                        child: busy
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Submit for review'),
+                      ),
                     ),
-                // Neither. A `pending` listing is in an administrator's queue, a
-                // `sold` one is a record. Either way the seller has nothing to
-                // do, and the panel above already says so.
-                (false, false, false) => const SizedBox.shrink(),
-              },
+                  ],
+                )
+              else if (canDelete)
+                // `inactive`: only Delete.
+                OutlinedButton(
+                  onPressed: busy ? null : onDelete,
+                  child: const Text('Delete listing'),
+                )
+              else
+                // A `pending` listing is in an administrator's queue, a `sold`
+                // one is a record. Either way the seller has nothing to do, and
+                // the panel above already says so.
+                const SizedBox.shrink(),
             ],
           ),
         ),

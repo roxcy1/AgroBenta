@@ -199,4 +199,56 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Mark this listing as sold?'), findsNothing);
   });
+
+  testWidgets('an inactive detail screen offers Delete only', (
+    WidgetTester tester,
+  ) async {
+    final Listing inactive = fixtureListing(id: 4, status: 'inactive');
+
+    await pumpDetailScreen(
+      tester,
+      listing: inactive,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath == '/seller/listings') {
+          return sellerListingSingleResponse(listing: inactive);
+        }
+        return http.Response(
+          jsonEncode(<String, dynamic>{'success': true, 'message': null, 'data': null}),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      },
+    );
+
+    expect(find.widgetWithText(OutlinedButton, 'Delete listing'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Submit for review'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Mark as sold'), findsNothing);
+  });
+
+  for (final String status in <String>['pending', 'sold']) {
+    testWidgets('a $status detail screen offers no action', (
+      WidgetTester tester,
+    ) async {
+      final Listing listing = fixtureListing(id: 5, status: status);
+
+      await pumpDetailScreen(
+        tester,
+        listing: listing,
+        handler: (RecordedRequest request) async {
+          if (request.apiPath == '/seller/listings') {
+            return sellerListingSingleResponse(listing: listing);
+          }
+          return http.Response(
+            jsonEncode(<String, dynamic>{'success': true, 'message': null, 'data': null}),
+            200,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        },
+      );
+
+      expect(find.widgetWithText(OutlinedButton, 'Delete listing'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Submit for review'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, 'Mark as sold'), findsNothing);
+    });
+  }
 }
