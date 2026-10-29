@@ -55,6 +55,9 @@ enum SellerListingAction {
   /// `POST /seller/listings/{id}/submit`.
   submitting,
 
+  /// `POST /seller/listings/{id}/mark-sold`.
+  markingSold,
+
   /// `DELETE /seller/listings/{id}`.
   deleting,
 

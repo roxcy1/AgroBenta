@@ -69,34 +69,57 @@ class TransactionService
      * Guards, in order: the listing must exist, must be `active`, must not be
      * the buyer's own, and must have stock for the quantity. A well-formed
      * request against a listing in the wrong state is a 409, not a 422.
+     *
+     * Every guard runs inside a `DB::transaction()` against a row-level
+     * `lockForUpdate()` read, so status, ownership and stock come from the
+     * persisted row rather than the caller's model. A concurrent `markSold()`
+     * therefore cannot flip the listing to `sold` between the check and the
+     * transaction create. `SellerListingService::markSold()` takes the same
+     * listing-row lock, so both operations serialize on the listing row with a
+     * consistent lock order and no deadlock risk.
      */
     public function create(User $buyer, Listing $listing, int $quantity): Transaction
     {
-        if ($listing->status !== ListingStatus::Active) {
-            abort(409, 'This listing is not available for new transactions.');
-        }
+        return DB::transaction(function () use ($buyer, $listing, $quantity): Transaction {
+            // Reload with a row lock so a concurrent markSold() cannot flip the
+            // listing to `sold` between the status check and transaction create.
+            $locked = Listing::query()
+                ->where('id', $listing->getKey())
+                ->lockForUpdate()
+                ->first();
 
-        if ((int) $listing->seller_id === (int) $buyer->getKey()) {
-            abort(409, 'You cannot transact on your own listing.');
-        }
+            if ($locked === null) {
+                abort(404, 'Listing not found.');
+            }
 
-        if ($quantity < 1) {
-            abort(409, 'Quantity must be at least one.');
-        }
+            if ($locked->status !== ListingStatus::Active) {
+                abort(409, 'This listing is not available for new transactions.');
+            }
 
-        if ((int) $listing->quantity < $quantity) {
-            abort(409, 'There is not enough stock for the requested quantity.');
-        }
+            if ((int) $locked->seller_id === (int) $buyer->getKey()) {
+                abort(409, 'You cannot transact on your own listing.');
+            }
 
-        // Server-derived: `asking_price × quantity`, two decimals. The client
-        // sends only the quantity and never a price.
-        $totalAmount = number_format((float) $listing->asking_price * $quantity, 2, '.', '');
+            if ($quantity < 1) {
+                abort(409, 'Quantity must be at least one.');
+            }
 
-        return DB::transaction(function () use ($buyer, $listing, $quantity, $totalAmount): Transaction {
+            if ((int) $locked->quantity < $quantity) {
+                abort(409, 'There is not enough stock for the requested quantity.');
+            }
+
+            // Server-derived total amount from the locked listing's current price.
+            $totalAmount = number_format(
+                (float) $locked->asking_price * $quantity,
+                2,
+                '.',
+                '',
+            );
+
             $transaction = $this->transactions->createPending(
                 $buyer,
-                (int) $listing->seller_id,
-                (int) $listing->getKey(),
+                (int) $locked->seller_id,
+                (int) $locked->getKey(),
                 $quantity,
                 $totalAmount,
             );
@@ -107,14 +130,14 @@ class TransactionService
                 sprintf(
                     'Transaction #%d created for listing #%d.',
                     $transaction->getKey(),
-                    $listing->getKey(),
+                    $locked->getKey(),
                 ),
                 [
                     'target_type' => 'transaction',
                     'target_id' => $transaction->getKey(),
                     'context' => [
-                        'listing_id' => $listing->getKey(),
-                        'seller_id' => (int) $listing->seller_id,
+                        'listing_id' => $locked->getKey(),
+                        'seller_id' => (int) $locked->seller_id,
                         'quantity' => $quantity,
                     ],
                     'changes' => [

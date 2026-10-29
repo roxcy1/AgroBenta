@@ -106,6 +106,48 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
     setState(() => _listing = submitted);
   }
 
+  Future<void> _markSold() async {
+    final Listing current = _current();
+    if (!SellerListingController.canMarkSold(current)) {
+      return;
+    }
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Mark this listing as sold?'),
+        content: const Text(
+          'The sale is complete. This listing will stay on your record as sold '
+          'and can no longer be edited or deleted. It will no longer appear in '
+          'the marketplace.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.sold,
+            ),
+            child: const Text('Mark as sold'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final Listing? marked = await _controller.markSold(current.id);
+    if (!mounted || marked == null) {
+      return;
+    }
+    setState(() => _listing = marked);
+  }
+
   Future<void> _delete() async {
     final Listing current = _current();
     final bool? confirmed = await showDialog<bool>(
@@ -280,6 +322,7 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                   listing: listing,
                   busy: busy,
                   onSubmit: _submit,
+                  onMarkSold: _markSold,
                   onDelete: _delete,
                 ),
               ],
@@ -368,17 +411,20 @@ class _ActionBar extends StatelessWidget {
     required this.listing,
     required this.busy,
     required this.onSubmit,
+    required this.onMarkSold,
     required this.onDelete,
   });
 
   final Listing listing;
   final bool busy;
   final VoidCallback onSubmit;
+  final VoidCallback onMarkSold;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final bool canSubmit = SellerListingController.canSubmit(listing);
+    final bool canMarkSold = SellerListingController.canMarkSold(listing);
     final bool canDelete = SellerListingController.canDelete(listing);
     final bool hasPhotos = SellerListingController.hasSubmissionPhotos(listing);
 
@@ -400,13 +446,30 @@ class _ActionBar extends StatelessWidget {
                 const ListingPhotoRequirementNotice(),
                 const SizedBox(height: AppSpacing.sm),
               ],
-              switch ((canSubmit, canDelete)) {
-                (true, true) => Row(
+              // The three flags are mutually constrained by the listing
+              // lifecycle: `canSubmit` is draft-only, `canMarkSold` is
+              // active-only, and `canDelete` covers draft/inactive. Checking
+              // them in priority order avoids enumerating impossible boolean
+              // combinations or hiding one behind a wildcard.
+              if (canMarkSold)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : onMarkSold,
+                  icon: const Icon(Icons.done_outline, size: 18),
+                  label: const Text('Mark as sold'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.sold,
+                  ),
+                )
+              else if (canSubmit)
+                // A draft may be deleted or submitted for review; both buttons
+                // share the busy flag so a second action while one is running
+                // lands on a 409 waiting to happen.
+                Row(
                   children: <Widget>[
                     Expanded(
                       child: OutlinedButton(
                         onPressed: busy ? null : onDelete,
-                        child: const Text('Delete'),
+                        child: const Text('Delete listing'),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -426,20 +489,18 @@ class _ActionBar extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-                (true, false) => FilledButton(
-                  onPressed: busy || !hasPhotos ? null : onSubmit,
-                  child: const Text('Submit for review'),
-                ),
-                (false, true) => OutlinedButton(
+                )
+              else if (canDelete)
+                // `inactive`: only Delete.
+                OutlinedButton(
                   onPressed: busy ? null : onDelete,
                   child: const Text('Delete listing'),
-                ),
-                // Neither. A `pending` listing is in an administrator's queue, a
-                // `sold` one is a record. Either way the seller has nothing to
-                // do, and the panel above already says so.
-                (false, false) => const SizedBox.shrink(),
-              },
+                )
+              else
+                // A `pending` listing is in an administrator's queue, a `sold`
+                // one is a record. Either way the seller has nothing to do, and
+                // the panel above already says so.
+                const SizedBox.shrink(),
             ],
           ),
         ),

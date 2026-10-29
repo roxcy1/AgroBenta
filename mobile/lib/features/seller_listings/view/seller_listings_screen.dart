@@ -160,6 +160,38 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
     await _controller.submit(listing.id);
   }
 
+  Future<void> _confirmMarkSold(Listing listing) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Mark this listing as sold?'),
+        content: const Text(
+          'The sale is complete. This listing will stay on your record as sold '
+          'and can no longer be edited or deleted. It will no longer appear in '
+          'the marketplace.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.sold,
+            ),
+            child: const Text('Mark as sold'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+    await _controller.markSold(listing.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -278,6 +310,7 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                       scrollController: _scrollController,
                       onOpen: _openDetail,
                       onSubmit: _confirmSubmit,
+                      onMarkSold: _confirmMarkSold,
                       onDelete: _confirmDelete,
                     ),
                   },
@@ -299,6 +332,7 @@ class _ListingList extends StatelessWidget {
     required this.scrollController,
     required this.onOpen,
     required this.onSubmit,
+    required this.onMarkSold,
     required this.onDelete,
   });
 
@@ -307,6 +341,7 @@ class _ListingList extends StatelessWidget {
   final ScrollController scrollController;
   final ValueChanged<Listing> onOpen;
   final ValueChanged<Listing> onSubmit;
+  final ValueChanged<Listing> onMarkSold;
   final ValueChanged<Listing> onDelete;
 
   @override
@@ -335,6 +370,7 @@ class _ListingList extends StatelessWidget {
           busy: state.isActioning && state.actionListingId == listing.id,
           onTap: () => onOpen(listing),
           onSubmit: () => onSubmit(listing),
+          onMarkSold: () => onMarkSold(listing),
           // The row's context, which is a descendant of the `Navigator`. A
           // `StatelessWidget` has no `context` of its own to reach for, and
           // holding the enclosing `State`'s would outlive the row.
