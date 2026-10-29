@@ -102,7 +102,7 @@ void main() {
       await controller.load();
 
       expect(controller.state.status, TransactionDetailStatus.failed);
-      expect(controller.state.errorMessage, 'Server error.');
+      expect(controller.state.errorMessage, 'Something went wrong on the server.');
       expect(controller.state.transaction, isNull);
     });
 
@@ -232,7 +232,7 @@ void main() {
       expect(cancelled, isFalse);
       expect(controller.state.status, TransactionDetailStatus.ready);
       expect(controller.state.transaction!.status, TransactionStatus.pending);
-      expect(controller.state.cancelErrorMessage, 'Server error.');
+      expect(controller.state.cancelErrorMessage, 'Something went wrong on the server.');
       expect(controller.state.canCancel, isTrue);
     });
 

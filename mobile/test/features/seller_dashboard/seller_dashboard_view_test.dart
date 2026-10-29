@@ -125,7 +125,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Could not load your dashboard'), findsOneWidget);
-    expect(find.text('Server error.'), findsOneWidget);
+    expect(find.text('Something went wrong on the server.'), findsOneWidget);
 
     await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
@@ -152,7 +152,7 @@ void main() {
     await refresh;
 
     expect(find.text('3 inquiries'), findsOneWidget);
-    expect(find.text('Server error.'), findsOneWidget);
+    expect(find.text('Something went wrong on the server.'), findsOneWidget);
     expect(find.text('Try again'), findsNothing);
   });
 

@@ -39,6 +39,7 @@ class ApiClient {
     required this._tokenStorage,
     http.Client? httpClient,
     Duration? timeout,
+    this.onForbidden,
   }) : _httpClient = httpClient ?? http.Client(),
        _ownsHttpClient = httpClient == null,
        _timeout = timeout ?? ApiConstants.defaultTimeout;
@@ -47,6 +48,14 @@ class ApiClient {
   final http.Client _httpClient;
   final bool _ownsHttpClient;
   final Duration _timeout;
+
+  /// Called whenever the server answers `403`.
+  ///
+  /// A `403` can mean the account lost a capability it was granted — for
+  /// example seller rights — while the app still shows the old state. The app
+  /// uses this to re-read the account from the server; the request itself still
+  /// fails with [ApiErrorKind.forbidden].
+  final void Function()? onForbidden;
 
   /// The API root this client is pointed at. Exposed for diagnostics and
   /// tests; never used to construct URLs outside [AppConfig].
@@ -466,6 +475,10 @@ class ApiClient {
       );
     }
 
+    if (response.statusCode == 403) {
+      onForbidden?.call();
+    }
+
     return switch (response.statusCode) {
       403 => ApiException(
         kind: ApiErrorKind.forbidden,
@@ -502,9 +515,12 @@ class ApiClient {
         statusCode: 429,
         serverMessage: _messageFrom(decoded),
       ),
+      // The server's own text for a 5xx is an exception message such as
+      // "Target class [...] does not exist". It stays in [serverMessage] for
+      // logs and is never shown to the user.
       _ when response.statusCode >= 500 => ApiException(
         kind: ApiErrorKind.server,
-        message: _messageFrom(decoded) ?? 'Something went wrong on the server.',
+        message: 'Something went wrong on the server.',
         statusCode: response.statusCode,
         serverMessage: _messageFrom(decoded),
       ),

@@ -306,7 +306,12 @@ class _AccountModeCard extends StatelessWidget {
               ],
               selected: <AccountMode>{mode},
               onSelectionChanged: (Set<AccountMode> selection) {
-                controller.select(selection.first);
+                final AccountMode next = selection.first;
+                if (next == AccountMode.seller) {
+                  controller.requestSellerMode();
+                } else {
+                  controller.select(next);
+                }
               },
               showSelectedIcon: false,
               expandedInsets: EdgeInsets.zero,
