@@ -29,44 +29,51 @@ Show the selected listing's real data:
 - Listing photo, only if a valid supported image URL or local asset is available.
 - Livestock/listing title.
 - Asking price in Philippine pesos (₱).
+- Seller name, from the listing's existing `seller` projection (`MobileSellerResource`: `id` and `name` only).
 - Location.
 - Category and other attributes only when supplied by the real listing data.
 
 Requirements:
 - Preserve the actual listing ID throughout the workflow.
 - Populate the card from the listing selected on the previous screen.
+- Show the seller name from the listing already in hand; do not add an endpoint or a response field for it.
 - Preserve image proportions and show an appropriate placeholder/error state when no usable image is available.
 - Do not fabricate photo URLs or infer missing listing attributes.
 - Treat the asking price as reference-only, not as a confirmed transaction price.
 
-### 3.3 Your Inquiry
+### 3.3 Additional Message
 
-#### Subject
-- Label: **Subject**.
-- Dropdown with **General Inquiry** as the initial selection.
-- Add other subject options only if supported by approved requirements.
-- Persist the selected value only if the backend contract supports it.
-
-#### Message
+- Section title: **Additional Message**.
 - Label: **Message \\***.
-- Multiline text input, required, maximum 500 characters.
-- Show a live character counter in `currentLength/500` format.
+- Multiline text input, four to six visible lines, required, maximum 500 characters.
+- Show a live character counter in `currentLength/500` format, starting at `0/500`.
 - Placeholder: `Type your inquiry here...`
-- Optional helper text may give examples such as asking about availability, additional photos, or the asking price.
-- Reject whitespace-only messages and show a clear validation message.
+- Helper text: `Ask about availability, additional photos, or the asking price.`
+- Reject empty and whitespace-only messages with a clear validation message.
 - Preserve entered text after failed submission.
 
-#### Purchase Interest
-- Label: **Are you interested in purchasing? \\***.
-- Required Yes/No choice using accessible radio controls.
-- Do not assume a selection unless approved requirements specify a default.
-- Include the selected value in the request only if supported by the backend contract.
+#### Message Templates
 
-### 3.4 Transaction Method (Preferred)
+Under **Message templates**, offer four starter messages:
 
-Present two selectable cards:
-1. **Direct Deal** — “I will transact directly with the seller.”
-2. **Arrange Delivery** — “I will arrange for the transportation.”
+1. **Check availability** — `Hello! Is this livestock still available?`
+2. **Discuss the price** — `Hello! I'm interested in this livestock. Is the price negotiable?`
+3. **Visit the farm** — `Hello! Can I visit your farm to inspect this livestock?`
+4. **Payment and pickup** — `Hello! I'm interested in this livestock. Can we discuss payment and collection arrangements?`
+
+Behavior:
+- Selecting a template replaces the field contents with that exact message and updates the counter.
+- Selecting a template never submits the inquiry.
+- The filled text remains fully editable, and the buyer may replace it with a custom message.
+- A template that supplies text clears a stale required-message error.
+
+### 3.4 Preferred Payment Method
+
+Present four selectable cards:
+1. **Cash** — “Pay with cash.”
+2. **GCash** — “Pay with GCash.”
+3. **Maya** — “Pay with Maya.”
+4. **Other / Discuss with seller** — “Agree payment with the seller.”
 
 Visual behavior:
 - Two cards side by side when space permits.
@@ -77,47 +84,29 @@ Visual behavior:
 
 Business behavior:
 - Treat the selection as the buyer's preference only.
-- It must not create or confirm a transaction, payment, delivery booking, or seller agreement.
-- Do not invent a default selection if requirements do not define one.
-- Enforce required selection only if the approved workflow requires it; do not infer requiredness solely from the screenshot's asterisk.
+- It must not create or confirm a transaction, payment, or seller agreement; AgroBenta does not process payments.
+- The selection is required: the buyer must choose one before sending, and the server rejects an inquiry without it.
+- Store the chosen value in `inquiries.payment_method` through the verified contract.
 
-### 3.5 Delivery Details
+### 3.5 Preferred Livestock Collection
 
-Implement conditional behavior only to the extent supported by approved requirements and the existing backend.
+Present three selectable cards:
+1. **Farm Pickup** — “Pick up from the seller's farm.”
+2. **Arrange Transport** — “Arrange my own livestock transportation.”
+3. **Discuss** — “Discuss arrangements with the seller.”
 
-#### Delivery Method
-- Dropdown styled consistently with the other controls.
-- Buyer pickup description: **Buyer Pickup (I will get the livestock)**.
-- Show arranged delivery only if the approved workflow supports it.
-- Do not imply that AgroBenta provides transportation, booking, dispatch, or tracking.
-
-#### Delivery Fee (₱)
-- Numeric amount input with a peso label or prefix.
-- Reject negative and nonnumeric values.
-- For buyer pickup, display ₱0 and prevent inconsistent nonzero input.
-- For arranged delivery, accept an amount only if approved requirements permit the buyer to enter a proposed/agreed fee.
-- Do not imply the fee is calculated, guaranteed, or confirmed by AgroBenta.
-- Do not add the fee to the asking price as a checkout total.
-- Persist the value only if the API supports it.
-
-#### Preferred Contact Method
-- The screenshot shows **In-app Message**.
-- Reuse this option if it matches actual messaging functionality.
-- Show other contact methods only when supported and approved.
-- Do not reveal private seller contact details to populate this field.
-
-#### Preferred Schedule (Optional)
-- Optional date selector with a calendar icon.
-- Allow the field to remain empty.
-- Apply past-date restrictions only if they match approved requirements.
-- A selected date is a preference/request, not a confirmed appointment.
-- Persist the date only if the backend supports it.
+Business behavior:
+- Treat the selection as the buyer's preference only.
+- It must not book transportation, dispatch a rider, or imply that AgroBenta provides delivery or tracking.
+- The selection is required: the buyer must choose one before sending, and the server rejects an inquiry without it.
+- Store the chosen value in `inquiries.collection_method` through the verified contract.
 
 ### 3.6 Bottom Actions
 
 Buttons:
 - **Cancel** — outlined green button.
 - **Send Inquiry** — filled green primary button.
+- Helper text below the actions: `The seller will reply through AgroBenta messages.`
 
 Cancel behavior:
 - Navigate back to the previous screen.
@@ -125,16 +114,21 @@ Cancel behavior:
 - Never submit data when cancelling.
 
 Send Inquiry behavior:
-- Validate required fields.
+- Check for an existing inquiry for this buyer and listing before showing the form.
+  If one exists in any status, show **Inquiry Already Sent** with **Go to Messages**
+  and **Back to Browse** instead of the form.
+- Validate the required message, including the 500-character ceiling and whitespace-only rejection.
+- Require both the preferred payment method and the preferred collection method, with an inline error beside each section when missing.
 - Prevent repeated taps while a request is in progress.
 - Display a loading state during submission.
 - Use the existing authenticated API client and real backend contract.
+- Send only the supported fields: `listing_id`, `message`, `payment_method`, and `collection_method`.
 - Show success only after the server confirms successful persistence.
 - Show useful validation, authorization, network, timeout, and server errors.
 - Preserve form input on failed submission.
 - Do not fabricate success or silently discard unsupported fields.
 
-If no backend endpoint and persistence model exist, do not invent one or repurpose messaging/transaction endpoints. Complete the UI and local validation that can be supported, then document the exact backend gap. Do not claim end-to-end completion until real server-side submission is implemented.
+The obsolete Subject, purchase-interest, Transaction Method, Delivery Details, delivery fee, contact method and schedule controls are not part of the approved screen and are not sent. If a future requirement needs one, verify the backend contract first rather than re-adding the control.
 
 ## 4. Visual Design Guidance
 
@@ -195,9 +189,10 @@ Before coding:
 3. Check Git status and preserve unrelated modifications.
 
 Implement:
-- Screen layout and components.
-- Form state and validation.
-- Conditional delivery behavior.
+- Screen layout and components, including the seller name in the listing summary.
+- Form state and validation: required message, 500-character ceiling, whitespace rejection.
+- Message templates that fill the field without submitting.
+- Optional payment and collection preference selections.
 - API integration only using verified endpoints and supported fields.
 - Loading, success, and error states.
 - Correct navigation.

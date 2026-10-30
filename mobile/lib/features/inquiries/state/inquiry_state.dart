@@ -29,14 +29,23 @@ enum InquiryUiStatus {
 ///
 /// [inquiry] is the server's own record from the create response — never an
 /// optimistic guess — and it exists only in
-/// [InquiryUiStatus.succeeded]. There is no read endpoint for an inquiry, so
-/// this response is the single source of truth the confirmation view has.
+/// [InquiryUiStatus.succeeded]. There is no read endpoint for a saved inquiry,
+/// so this response is the single source of truth the confirmation view has.
+///
+/// [existingInquiry] is the separate pre-check result: the record the buyer
+/// already sent about this listing, in any status. It is fetched before the
+/// form is rendered, so the buyer is never offered a second form they cannot
+/// submit. [existingCheckError] records a failed pre-check; the form still
+/// renders because the server remains the authority on the duplicate rule.
 class InquiryState {
   const InquiryState({
     this.status = InquiryUiStatus.initial,
     this.inquiry,
     this.errorMessage,
     this.validationErrors = const <String, List<String>>{},
+    this.isCheckingExisting = false,
+    this.existingInquiry,
+    this.existingCheckError,
   });
 
   final InquiryUiStatus status;
@@ -51,6 +60,19 @@ class InquiryState {
   /// (`message`, `listing_id`, …). Merged into the field validators so a
   /// server-side rule the client did not model still lands beside its field.
   final Map<String, List<String>> validationErrors;
+
+  /// Whether the pre-check request is in flight.
+  final bool isCheckingExisting;
+
+  /// The inquiry the buyer already sent about this listing, if any.
+  final Inquiry? existingInquiry;
+
+  /// A displayable failure from the pre-check, or `null`.
+  ///
+  /// The form is still rendered after a failed pre-check: the backend's
+  /// duplicate guard is authoritative, so a network failure must not make the
+  /// screen unusable.
+  final String? existingCheckError;
 
   /// Whether a request of ours is in flight.
   bool get isBusy => status == InquiryUiStatus.submitting;
@@ -72,18 +94,31 @@ class InquiryState {
     Inquiry? inquiry,
     String? errorMessage,
     Map<String, List<String>>? validationErrors,
+    bool? isCheckingExisting,
+    Inquiry? existingInquiry,
+    String? existingCheckError,
     bool clearInquiry = false,
     bool clearError = false,
+    bool clearExistingInquiry = false,
+    bool clearExistingCheckError = false,
   }) {
     return InquiryState(
       status: status ?? this.status,
       inquiry: clearInquiry ? null : (inquiry ?? this.inquiry),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       validationErrors: validationErrors ?? this.validationErrors,
+      isCheckingExisting: isCheckingExisting ?? this.isCheckingExisting,
+      existingInquiry: clearExistingInquiry
+          ? null
+          : (existingInquiry ?? this.existingInquiry),
+      existingCheckError: clearExistingCheckError
+          ? null
+          : (existingCheckError ?? this.existingCheckError),
     );
   }
 
   @override
   String toString() =>
-      'InquiryState(${status.name}, ${inquiry?.id ?? 'no inquiry'})';
+      'InquiryState(${status.name}, ${inquiry?.id ?? 'no inquiry'}, '
+      'existing: ${existingInquiry?.id ?? 'none'})';
 }

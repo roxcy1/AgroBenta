@@ -1,12 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/constants/api_constants.dart';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
+import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
+import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/view/inquire_screen.dart';
+import 'package:agrobenta_mobile/features/inquiries/view/inquiry_already_sent_view.dart';
+import 'package:agrobenta_mobile/features/inquiries/view/inquiry_validators.dart';
+import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
+import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
+import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
 import 'package:agrobenta_mobile/models/inquiry.dart';
 import 'package:agrobenta_mobile/models/listing.dart';
 import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
+import 'package:agrobenta_mobile/repositories/messaging_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -14,10 +23,36 @@ import 'package:http/http.dart' as http;
 import '../../support/auth_fakes.dart';
 import '../../support/inquiry_fakes.dart';
 import '../../support/marketplace_fakes.dart';
+import '../../support/messaging_fakes.dart';
 
 /// The Inquiry Sent screen's heading. Every success assertion keys on this;
 /// the failure assertions use it as the "not shown" probe.
 const String successHeading = 'Your inquiry has been sent to the seller.';
+
+/// The four approved starter messages, copied verbatim from the design spec.
+/// A template that drifts from this copy fails here rather than in review.
+const String checkAvailabilityTemplate =
+    'Hello! Is this livestock still available?';
+const String discussPriceTemplate =
+    "Hello! I'm interested in this livestock. Is the price negotiable?";
+const String visitFarmTemplate =
+    'Hello! Can I visit your farm to inspect this livestock?';
+const String paymentPickupTemplate =
+    "Hello! I'm interested in this livestock. Can we discuss payment and "
+    'collection arrangements?';
+
+const Map<String, String> approvedTemplates = <String, String>{
+  'Check availability': checkAvailabilityTemplate,
+  'Discuss the price': discussPriceTemplate,
+  'Visit the farm': visitFarmTemplate,
+  'Payment and pickup': paymentPickupTemplate,
+};
+
+/// The exact approved copy of the already-sent state. A drift from this fails
+/// here rather than in review.
+const String alreadySentCopy =
+    "You've already sent an inquiry about this livestock. You can continue "
+    'the conversation in Messages.';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -37,18 +72,54 @@ void main() {
   Listing testListing() => Listing.fromJson(listingJson());
 
   /// Pumps the screen exactly as the app opens it: pushed on top of a stand-in
-  /// entry route, with only the scope the screen actually reads above
+  /// entry route, with the scopes the screen and its destinations read above
   /// `MaterialApp`. The transport answers `POST /inquiries` through the same
   /// [ApiClient] chain production uses.
+  ///
+  /// `GET /inquiries/listing/{id}` is routed to [checkHandler] — default: the
+  /// buyer has sent none — so a test's [handler] only ever answers the writes
+  /// and reads it means to describe. Messaging and auth are wired because the
+  /// confirmation's "Go to Messages" pushes the real inbox.
   Future<void> pushInquire(
     WidgetTester tester, {
     required Future<http.Response> Function(RecordedRequest request) handler,
+    Future<http.Response> Function(RecordedRequest request)? checkHandler,
+    Future<http.Response> Function(RecordedRequest request)? messagingHandler,
   }) async {
+    Future<http.Response> routed(RecordedRequest request) {
+      if (request.method == 'GET' &&
+          request.apiPath.startsWith('/inquiries/listing/')) {
+        return (checkHandler ?? (_) async => inquiryCheckResponse())(request);
+      }
+      return handler(request);
+    }
+
     final InquiryRepository repository = buildInquiryRepository(
       tokenStore,
-      handler,
+      routed,
       recorded: recorded,
     );
+
+    final MessagingRepository messagingRepository = buildMessagingRepository(
+      tokenStore,
+      messagingHandler ?? (_) async => conversationsResponse(),
+    );
+    final ConversationsController conversationsController =
+        ConversationsController(messagingRepository);
+    addTearDown(conversationsController.dispose);
+
+    final AuthController authController = AuthController(
+      buildAuthRepository(
+        tokenStore,
+        (_) async => http.Response(
+          jsonEncode(successEnvelope(data: userJson(id: 7))),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        ),
+      ),
+    );
+    addTearDown(authController.dispose);
+    await authController.restoreSession();
 
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1.0;
@@ -57,10 +128,17 @@ void main() {
     await tester.pumpWidget(
       InquiryScope(
         repository: repository,
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: Scaffold(
-            appBar: AppBar(title: const Text('Listing detail stand-in')),
+        child: MessagingScope(
+          repository: messagingRepository,
+          conversationsController: conversationsController,
+          child: AuthScope(
+            controller: authController,
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: Scaffold(
+                appBar: AppBar(title: const Text('Listing detail stand-in')),
+              ),
+            ),
           ),
         ),
       ),
@@ -80,6 +158,9 @@ void main() {
 
   Finder messageField() => find.widgetWithText(TextFormField, 'Message *');
 
+  TextEditingController messageController(WidgetTester tester) =>
+      tester.widget<TextFormField>(messageField()).controller!;
+
   Future<void> typeMessage(WidgetTester tester, String text) async {
     await tester.ensureVisible(messageField());
     await tester.pump(const Duration(milliseconds: 50));
@@ -87,11 +168,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   }
 
-  Future<void> chooseYes(WidgetTester tester) async {
-    final Finder yes = find.widgetWithText(RadioListTile<bool>, 'Yes');
-    await tester.ensureVisible(yes);
+  Future<void> tapTemplate(WidgetTester tester, String label) async {
+    final Finder template = find.widgetWithText(OutlinedButton, label);
+    await tester.ensureVisible(template);
     await tester.pump(const Duration(milliseconds: 50));
-    await tester.tap(yes);
+    await tester.tap(template);
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+
+  /// Taps a preference card by its visible title. The whole card is the tap
+  /// target, so tapping the title exercises the same InkWell a buyer does.
+  Future<void> chooseOption(WidgetTester tester, String label) async {
+    final Finder option = find.text(label);
+    await tester.ensureVisible(option);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(option);
     await tester.pump(const Duration(milliseconds: 50));
   }
 
@@ -103,9 +194,70 @@ void main() {
     await settle(tester);
   }
 
+  /// Chooses both required preferences with the first option in each section,
+  /// plus a collection-date option (now required to submit).
+  Future<void> chooseRequiredPreferences(WidgetTester tester) async {
+    await chooseOption(tester, 'Cash');
+    await chooseOption(tester, 'Farm Pickup');
+    await chooseOption(tester, 'Next few days');
+  }
+
   List<RecordedRequest> posts() => recorded
       .where((RecordedRequest r) => r.method == 'POST')
       .toList(growable: false);
+
+  group('validateInquiryMessage', () {
+    test('requires a message', () {
+      expect(
+        validateInquiryMessage(null),
+        'Please enter a message for the seller.',
+      );
+      expect(
+        validateInquiryMessage(''),
+        'Please enter a message for the seller.',
+      );
+    });
+
+    test('refuses whitespace-only text', () {
+      expect(validateInquiryMessage('   '), 'A message cannot be only spaces.');
+      expect(
+        validateInquiryMessage(' \n\t '),
+        'A message cannot be only spaces.',
+      );
+    });
+
+    test('accepts exactly the 500-character ceiling', () {
+      expect(validateInquiryMessage('a' * kInquiryMessageMax), isNull);
+    });
+
+    test('refuses anything over the 500-character ceiling', () {
+      expect(
+        validateInquiryMessage('a' * (kInquiryMessageMax + 1)),
+        'A message may be at most $kInquiryMessageMax characters.',
+      );
+    });
+  });
+
+  group('validateInquiryPreferences', () {
+    test('requires a payment method', () {
+      expect(
+        validateInquiryPaymentMethod(null),
+        'Please choose a preferred payment method.',
+      );
+      expect(validateInquiryPaymentMethod(InquiryPaymentMethod.cash), isNull);
+    });
+
+    test('requires a collection method', () {
+      expect(
+        validateInquiryCollectionMethod(null),
+        'Please choose a preferred collection method.',
+      );
+      expect(
+        validateInquiryCollectionMethod(InquiryCollectionMethod.farmPickup),
+        isNull,
+      );
+    });
+  });
 
   group('renders', () {
     testWidgets('the real listing summary and nothing invented', (
@@ -118,6 +270,11 @@ void main() {
       expect(find.text('Holstein'), findsOneWidget);
       expect(find.text('₱42,500.00'), findsOneWidget);
       expect(
+        find.text('Rizal Farms'),
+        findsOneWidget,
+        reason: 'the seller name comes from the listing model',
+      );
+      expect(
         find.text('18 months · 320.5 kg · Female'),
         findsOneWidget,
         reason: 'the attributes come from the API, capitalised like detail',
@@ -128,61 +285,86 @@ void main() {
       expect(find.text('No photo'), findsOneWidget);
     });
 
-    testWidgets('every section the design spec asks for', (
+    testWidgets('the approved sections and controls', (
       WidgetTester tester,
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
 
-      expect(find.text('Your Inquiry'), findsOneWidget);
-      expect(find.text('Subject'), findsOneWidget);
-      expect(
-        find.text('General Inquiry'),
-        findsAtLeastNWidgets(1),
-        reason: 'the one subject the form offers, selected by default',
-      );
+      // Additional Message: a visible field, the live counter and the four
+      // templates the design spec names.
+      expect(find.text('Additional Message'), findsOneWidget);
       expect(find.text('Message *'), findsOneWidget);
       expect(find.text('Type your inquiry here...'), findsOneWidget);
-      expect(find.text('0/500'), findsOneWidget);
-      expect(find.text('Are you interested in purchasing? *'), findsOneWidget);
-
-      expect(find.text('Transaction Method (Preferred)'), findsOneWidget);
       expect(
         find.text(
-          'Your preference only — this does not create a transaction, '
-          'payment, or delivery booking.',
+          'Ask about availability, additional photos, or the asking price.',
         ),
         findsOneWidget,
       );
-      expect(find.text('Direct Deal'), findsOneWidget);
-      expect(
-        find.text('I will transact directly with the seller.'),
-        findsOneWidget,
-      );
-      expect(find.text('Arrange Delivery'), findsOneWidget);
-      expect(
-        find.text('I will arrange for the transportation.'),
-        findsOneWidget,
-      );
+      expect(find.text('0/500'), findsOneWidget);
+      expect(find.text('Message templates'), findsOneWidget);
+      for (final String label in approvedTemplates.keys) {
+        expect(
+          find.widgetWithText(OutlinedButton, label),
+          findsOneWidget,
+          reason: 'the "$label" template is offered',
+        );
+      }
 
-      expect(find.text('Delivery Details'), findsOneWidget);
-      expect(find.text('Delivery Method'), findsOneWidget);
+      // Payment preferences.
+      expect(find.text('Preferred Payment Method *'), findsOneWidget);
       expect(
-        find.text('Buyer Pickup (I will get the livestock)'),
-        findsAtLeastNWidgets(1),
-        reason: 'buyer pickup is the default delivery method',
-      );
-      expect(find.text('Delivery Fee (₱)'), findsOneWidget);
-      expect(
-        find.text('Buyer pickup — there is no delivery fee.'),
+        find.text('How would you prefer to pay the seller?'),
         findsOneWidget,
       );
-      expect(find.text('Preferred Contact Method'), findsOneWidget);
-      expect(find.text('In-app Message'), findsOneWidget);
-      expect(find.text('Preferred Schedule (Optional)'), findsOneWidget);
-      expect(find.text('No date chosen'), findsOneWidget);
+      expect(find.text('Cash'), findsOneWidget);
+      expect(find.text('GCash'), findsOneWidget);
+      expect(find.text('Maya'), findsOneWidget);
+      expect(find.text('Other / Discuss with seller'), findsOneWidget);
+
+      // Collection preferences.
+      expect(find.text('Preferred Livestock Collection *'), findsOneWidget);
+      expect(
+        find.text('How do you plan to receive the livestock?'),
+        findsOneWidget,
+      );
+      expect(find.text('Farm Pickup'), findsOneWidget);
+      expect(find.text('Arrange Transport'), findsOneWidget);
+      expect(find.text('Discuss'), findsOneWidget);
 
       expect(find.widgetWithText(OutlinedButton, 'Cancel'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsOneWidget);
+      expect(
+        find.text('The seller will reply through AgroBenta messages.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the obsolete fields are gone', (WidgetTester tester) async {
+      await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
+
+      for (final String obsolete in <String>[
+        'Subject',
+        'General Inquiry',
+        'Are you interested in purchasing? *',
+        'Transaction Method (Preferred)',
+        'Direct Deal',
+        'Arrange Delivery',
+        'Delivery Details',
+        'Delivery Method',
+        'Delivery Fee (₱)',
+        'Preferred Contact Method',
+        'In-app Message',
+        'Preferred Schedule (Optional)',
+        'No date chosen',
+        'Your Inquiry',
+      ]) {
+        expect(
+          find.text(obsolete),
+          findsNothing,
+          reason: '"$obsolete" is not part of the approved screen',
+        );
+      }
     });
 
     testWidgets('collects nothing the API cannot store', (
@@ -202,12 +384,228 @@ void main() {
     });
   });
 
+  group('existing inquiry pre-check', () {
+    testWidgets('checks before offering the form and sends nothing', (
+      WidgetTester tester,
+    ) async {
+      final Completer<http.Response> gate = Completer<http.Response>();
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(),
+        checkHandler: (_) => gate.future,
+      );
+
+      // The first frame is the check. The form is not offered, because the
+      // buyer must not start typing an inquiry they cannot submit.
+      expect(find.text('Checking your inquiries...'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsNothing);
+      expect(find.text('Inquire About Livestock'), findsOneWidget);
+      expect(posts(), isEmpty);
+
+      gate.complete(inquiryCheckResponse());
+      await settle(tester);
+
+      expect(find.text('Checking your inquiries...'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsOneWidget);
+      expect(posts(), isEmpty);
+    });
+
+    testWidgets('shows Inquiry Already Sent instead of a second form', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(),
+        checkHandler: (_) async => inquiryCheckResponse(
+          inquiry: inquiryJson(id: 21, message: 'Already asked.'),
+        ),
+      );
+
+      // The app bar title and the view heading both name the state.
+      expect(find.text('Inquiry Already Sent'), findsNWidgets(2));
+      expect(
+        find.descendant(
+          of: find.byType(InquiryAlreadySentView),
+          matching: find.text('Inquiry Already Sent'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(alreadySentCopy), findsOneWidget);
+      expect(
+        find.text(
+          'You\'ve already sent an inquiry about this livestock. '
+          'You can continue the conversation in Messages.',
+        ),
+        findsOneWidget,
+      );
+
+      // No second form, and no send.
+      expect(find.text('Inquire About Livestock'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsNothing);
+      expect(find.text('Message *'), findsNothing);
+      expect(posts(), isEmpty);
+
+      // The real listing is still named, and both actions are offered.
+      expect(find.text('CATTLE'), findsOneWidget);
+      expect(find.text('Holstein'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Go to Messages'),
+        findsOneWidget,
+      );
+      expect(
+        find.widgetWithText(OutlinedButton, 'Back to Browse'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Go to Messages opens the exact chat from the already-sent state', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(),
+        checkHandler: (_) async =>
+            inquiryCheckResponse(inquiry: inquiryJson(id: 21)),
+      );
+
+      final Finder goToMessages = find.widgetWithText(
+        FilledButton,
+        'Go to Messages',
+      );
+      await tester.ensureVisible(goToMessages);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(goToMessages);
+      await settle(tester);
+
+      expect(find.byType(ChatScreen), findsOneWidget);
+      expect(find.text('Rizal Farms'), findsOneWidget);
+      // MS-04: Go to Messages opens the exact buyer–seller conversation.
+      // Opening the chat creates no inquiry and sends no message.
+      expect(posts(), isEmpty);
+    });
+
+    testWidgets('Back to Browse leaves the already-sent state', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(),
+        checkHandler: (_) async =>
+            inquiryCheckResponse(inquiry: inquiryJson(id: 21)),
+      );
+
+      final Finder backToBrowse = find.widgetWithText(
+        OutlinedButton,
+        'Back to Browse',
+      );
+      await tester.ensureVisible(backToBrowse);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(backToBrowse);
+      await settle(tester);
+
+      expect(find.byType(InquireScreen), findsNothing);
+      expect(find.text('Listing detail stand-in'), findsOneWidget);
+      expect(posts(), isEmpty);
+    });
+
+    testWidgets('a failed check still renders a usable form with a notice', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(
+          inquiry: inquiryJson(
+            message: 'Sent after a failed check',
+            paymentMethod: 'cash',
+            collectionMethod: 'farm_pickup',
+          ),
+        ),
+        checkHandler: (_) async =>
+            throw http.ClientException('connection refused'),
+      );
+
+      // The backend's duplicate guard is authoritative, so a check failure
+      // must not make the screen unusable — it explains itself and shows the
+      // form.
+      expect(find.textContaining('Could not reach the server'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsOneWidget);
+
+      await typeMessage(tester, 'Sent after a failed check');
+      await chooseOption(tester, 'Cash');
+      await chooseOption(tester, 'Farm Pickup');
+      await chooseOption(tester, 'Next few days');
+      await submit(tester);
+
+      expect(posts(), hasLength(1));
+      expect(find.text(successHeading), findsOneWidget);
+    });
+  });
+
+  group('message templates', () {
+    testWidgets('each template writes its exact approved message', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
+
+      for (final MapEntry<String, String> template
+          in approvedTemplates.entries) {
+        await tapTemplate(tester, template.key);
+        expect(
+          messageController(tester).text,
+          template.value,
+          reason: '"${template.key}" writes the approved copy',
+        );
+        expect(
+          find.text('${template.value.length}/500'),
+          findsOneWidget,
+          reason: 'the counter follows the template text',
+        );
+      }
+
+      // Filling the field is not sending it.
+      expect(posts(), isEmpty);
+      expect(find.text(successHeading), findsNothing);
+    });
+
+    testWidgets('a template replaces the field instead of appending', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
+
+      await typeMessage(tester, 'My own words');
+      await tapTemplate(tester, 'Check availability');
+
+      expect(messageController(tester).text, checkAvailabilityTemplate);
+      expect(
+        messageController(tester).text,
+        isNot(contains('My own words')),
+        reason: 'selecting a template replaces, never appends',
+      );
+      expect(posts(), isEmpty);
+    });
+
+    testWidgets('the template text stays editable', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
+
+      await tapTemplate(tester, 'Visit the farm');
+      await typeMessage(tester, 'Actually, can I visit on Saturday?');
+
+      expect(
+        messageController(tester).text,
+        'Actually, can I visit on Saturday?',
+      );
+      expect(find.text('34/500'), findsOneWidget);
+    });
+  });
+
   group('client validation', () {
     testWidgets('refuses an empty message and sends nothing', (
       WidgetTester tester,
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
-      await chooseYes(tester);
       await submit(tester);
 
       expect(
@@ -223,54 +621,83 @@ void main() {
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
       await typeMessage(tester, '     ');
-      await chooseYes(tester);
       await submit(tester);
 
       expect(find.text('A message cannot be only spaces.'), findsOneWidget);
       expect(posts(), isEmpty);
     });
 
-    testWidgets('refuses a submission with no purchase answer', (
+    testWidgets('refuses a submission with no preferences chosen', (
       WidgetTester tester,
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
-      await typeMessage(tester, 'Is this one still available?');
+      await typeMessage(tester, 'A complete message');
       await submit(tester);
 
+      // Both missing answers are reported at once, beside their sections.
       expect(
-        find.text('Please choose whether you are interested in purchasing.'),
+        find.text('Please choose a preferred payment method.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Please choose a preferred collection method.'),
         findsOneWidget,
       );
       expect(posts(), isEmpty);
+      expect(find.text(successHeading), findsNothing);
     });
 
-    testWidgets('refuses a negative delivery fee', (WidgetTester tester) async {
+    testWidgets('choosing a preference clears its own error', (
+      WidgetTester tester,
+    ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
-      await typeMessage(tester, 'Can you deliver to Pampanga?');
-      await chooseYes(tester);
-
-      // Switch to Arrange Delivery so the fee field is editable.
-      final Finder deliveryDropdown = find.byType(
-        DropdownButtonFormField<InquiryDeliveryMethod>,
-      );
-      await tester.ensureVisible(deliveryDropdown);
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(deliveryDropdown);
-      await settle(tester, frames: 20);
-      await tester.tap(
-        find.text('Arrange Delivery (I will arrange transport)').last,
-      );
-      await settle(tester, frames: 20);
-
-      final Finder fee = find.widgetWithText(TextFormField, 'Delivery Fee (₱)');
-      await tester.ensureVisible(fee);
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.enterText(fee, '-500');
-      await tester.pump(const Duration(milliseconds: 50));
-
+      await typeMessage(tester, 'A complete message');
       await submit(tester);
 
-      expect(find.text('A delivery fee cannot be negative.'), findsOneWidget);
+      await chooseOption(tester, 'Cash');
+      expect(
+        find.text('Please choose a preferred payment method.'),
+        findsNothing,
+      );
+      expect(
+        find.text('Please choose a preferred collection method.'),
+        findsOneWidget,
+        reason: 'the collection answer is still missing',
+      );
+
+      await chooseOption(tester, 'Farm Pickup');
+      expect(
+        find.text('Please choose a preferred collection method.'),
+        findsNothing,
+      );
+      expect(posts(), isEmpty, reason: 'choosing alone never submits');
+    });
+
+    testWidgets('a template clears a stale required-message error', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
+      await submit(tester);
+      expect(
+        find.text('Please enter a message for the seller.'),
+        findsOneWidget,
+      );
+
+      await tapTemplate(tester, 'Check availability');
+      // The field's error text fades out; let the decoration animation finish
+      // before asserting the stale message is gone.
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        messageController(tester).text,
+        checkAvailabilityTemplate,
+        reason: 'the template wrote its text into the field',
+      );
+      expect(
+        find.text('Please enter a message for the seller.'),
+        findsNothing,
+        reason: 'the template supplied the missing text',
+      );
       expect(posts(), isEmpty);
     });
 
@@ -282,108 +709,105 @@ void main() {
 
       expect(find.text('5/500'), findsOneWidget);
     });
-  });
 
-  group('submission', () {
-    testWidgets(
-      'sends the allow-listed body and shows the confirmation the server '
-      'returned',
-      (WidgetTester tester) async {
-        await pushInquire(
-          tester,
-          handler: (_) async => inquiryCreatedResponse(
-            inquiry: inquiryJson(message: 'Is this one still available?'),
-          ),
-        );
-        await typeMessage(tester, 'Is this one still available?');
-        await chooseYes(tester);
-        await submit(tester);
-
-        // Success is the server's answer: the confirmation view, by response.
-        expect(find.text(successHeading), findsOneWidget);
-        expect(find.text('Inquiry Sent'), findsOneWidget);
-        expect(find.byType(InquireScreen), findsOneWidget);
-
-        expect(posts(), hasLength(1));
-        final RecordedRequest post = posts().single;
-        expect(post.apiPath, InquiryEndpoints.create);
-        expect(
-          post.body.keys.toSet().difference(
-            InquiryEndpoints.writableFields.toSet(),
-          ),
-          isEmpty,
-          reason: 'not one key outside the allow-list went out',
-        );
-        expect(post.body['listing_id'], 12);
-        expect(post.body['message'], 'Is this one still available?');
-        expect(post.body['subject'], 'General Inquiry');
-        expect(post.body['purchase_interest'], isTrue);
-        expect(post.body['contact_method'], 'in_app_message');
-        expect(post.body['delivery_method'], 'buyer_pickup');
-        for (final String forbidden in <String>[
-          'buyer_id',
-          'seller_id',
-          'status',
-        ]) {
-          expect(post.body.containsKey(forbidden), isFalse);
-        }
-
-        // Back to Browse pops the whole stack to the shell stand-in below
-        // the listing detail entry route.
-        final Finder backToBrowse = find.widgetWithText(
-          OutlinedButton,
-          'Back to Browse',
-        );
-        await tester.ensureVisible(backToBrowse);
-        await tester.pump(const Duration(milliseconds: 50));
-        await tester.tap(backToBrowse);
-        await settle(tester);
-
-        expect(find.byType(InquireScreen), findsNothing);
-        expect(find.text('Listing detail stand-in'), findsOneWidget);
-        // Leaving never triggers a second submission.
-        expect(posts(), hasLength(1));
-      },
-    );
-
-    testWidgets('sends every preference the form gathered', (
+    testWidgets('the field stops at the 500-character ceiling', (
       WidgetTester tester,
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
-      await typeMessage(tester, 'Can you arrange transport to Baguio?');
-      await chooseYes(tester);
+      await typeMessage(tester, 'a' * (kInquiryMessageMax + 50));
 
-      // Direct Deal card.
-      await tester.ensureVisible(find.text('Direct Deal'));
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(find.text('Direct Deal'));
-      await tester.pump(const Duration(milliseconds: 50));
+      expect(messageController(tester).text.length, kInquiryMessageMax);
+      expect(find.text('500/500'), findsOneWidget);
+    });
+  });
 
-      // Delivery: Arrange Delivery with a proposed fee.
-      final Finder deliveryDropdown = find.byType(
-        DropdownButtonFormField<InquiryDeliveryMethod>,
+  group('submission', () {
+    testWidgets('sends the inquiry and returns to Browse on Back to Browse', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(
+          inquiry: inquiryJson(
+            message: 'Is this one still available?',
+            paymentMethod: 'cash',
+            collectionMethod: 'farm_pickup',
+          ),
+        ),
       );
-      await tester.ensureVisible(deliveryDropdown);
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(deliveryDropdown);
-      await settle(tester, frames: 20);
-      await tester.tap(
-        find.text('Arrange Delivery (I will arrange transport)').last,
+      await typeMessage(tester, 'Is this one still available?');
+      await chooseOption(tester, 'Cash');
+      await chooseOption(tester, 'Farm Pickup');
+      await chooseOption(tester, 'Next few days');
+      await submit(tester);
+
+      // Success is the server's answer: the confirmation view, by response.
+      expect(find.text(successHeading), findsOneWidget);
+      expect(find.text('Inquiry Sent'), findsOneWidget);
+      expect(find.byType(InquireScreen), findsOneWidget);
+
+      expect(posts(), hasLength(1));
+      final RecordedRequest post = posts().single;
+      expect(post.apiPath, InquiryEndpoints.create);
+      expect(post.body, <String, dynamic>{
+        'listing_id': 12,
+        'message': 'Is this one still available?',
+        'collection_date_option': 'next_few_days',
+        'payment_method': 'cash',
+        'collection_method': 'farm_pickup',
+      }, reason: 'exactly the collected fields, in their API spellings');
+      expect(
+        post.body.keys.toSet().difference(
+          InquiryEndpoints.writableFields.toSet(),
+        ),
+        isEmpty,
+        reason: 'not one key outside the allow-list went out',
       );
-      await settle(tester, frames: 20);
 
-      final Finder fee = find.widgetWithText(TextFormField, 'Delivery Fee (₱)');
-      await tester.ensureVisible(fee);
+      // Back to Browse pops the whole stack to the shell stand-in below
+      // the listing detail entry route.
+      final Finder backToBrowse = find.widgetWithText(
+        OutlinedButton,
+        'Back to Browse',
+      );
+      await tester.ensureVisible(backToBrowse);
       await tester.pump(const Duration(milliseconds: 50));
-      await tester.enterText(fee, '1500');
-      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(backToBrowse);
+      await settle(tester);
 
+      expect(find.byType(InquireScreen), findsNothing);
+      expect(find.text('Listing detail stand-in'), findsOneWidget);
+      // Leaving never triggers a second submission.
+      expect(posts(), hasLength(1));
+    });
+
+    testWidgets('sends the chosen payment and collection preferences', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(
+          inquiry: inquiryJson(
+            message: 'Can we discuss arrangements?',
+            paymentMethod: 'gcash',
+            collectionMethod: 'buyer_arranged_transportation',
+          ),
+        ),
+      );
+      await typeMessage(tester, 'Can we discuss arrangements?');
+      await chooseOption(tester, 'GCash');
+      await chooseOption(tester, 'Arrange Transport');
+      await chooseOption(tester, 'Next few days');
       await submit(tester);
 
       final RecordedRequest post = posts().single;
-      expect(post.body['transaction_method'], 'direct_deal');
-      expect(post.body['delivery_method'], 'arrange_delivery');
-      expect(post.body['delivery_fee'], '1500');
+      expect(post.body, <String, dynamic>{
+        'listing_id': 12,
+        'message': 'Can we discuss arrangements?',
+        'collection_date_option': 'next_few_days',
+        'payment_method': 'gcash',
+        'collection_method': 'buyer_arranged_transportation',
+      }, reason: 'exactly the collected values, in their API spellings');
       expect(
         post.body.keys.toSet().difference(
           InquiryEndpoints.writableFields.toSet(),
@@ -407,7 +831,7 @@ void main() {
             request.method == 'POST' ? gate.future : inquiryCreatedResponse(),
       );
       await typeMessage(tester, 'Kept while the request is in flight');
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
 
       final Finder send = find.widgetWithText(FilledButton, 'Send Inquiry');
       await tester.ensureVisible(send);
@@ -446,7 +870,7 @@ void main() {
             request.method == 'POST' ? gate.future : inquiryCreatedResponse(),
       );
       await typeMessage(tester, 'Only once, please');
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
 
       final Finder send = find.widgetWithText(FilledButton, 'Send Inquiry');
       await tester.ensureVisible(send);
@@ -484,7 +908,7 @@ void main() {
             : inquiryCreatedResponse(),
       );
       await typeMessage(tester, 'A message the server will not accept');
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
       await submit(tester);
 
       // Back on the form, with the server's message on the message field.
@@ -511,7 +935,7 @@ void main() {
             : inquiryCreatedResponse(),
       );
       await typeMessage(tester, 'Typed before the failure');
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
       await submit(tester);
 
       expect(find.text('Server error.'), findsOneWidget);
@@ -550,7 +974,7 @@ void main() {
             : inquiryCreatedResponse(),
       );
       await typeMessage(tester, 'Perfectly reasonable');
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
       await submit(tester);
 
       expect(
@@ -573,7 +997,7 @@ void main() {
             request.method == 'POST' ? gate.future : inquiryCreatedResponse(),
       );
       await typeMessage(tester, 'Waiting for the answer');
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
 
       final Finder send = find.widgetWithText(FilledButton, 'Send Inquiry');
       await tester.ensureVisible(send);
@@ -600,7 +1024,7 @@ void main() {
             : inquiryCreatedResponse(),
       );
       await typeMessage(tester, 'Typed before the outage');
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
       await submit(tester);
 
       expect(find.textContaining('Could not reach the server'), findsOneWidget);
@@ -618,14 +1042,15 @@ void main() {
           handler: (_) async => inquiryCreatedResponse(
             inquiry: inquiryJson(
               message: 'Can I collect on the 25th?',
-              transactionMethod: 'direct_deal',
-              deliveryMethod: 'arrange_delivery',
-              deliveryFee: '1500.00',
+              paymentMethod: 'cash',
+              collectionMethod: 'farm_pickup',
             ),
           ),
         );
         await typeMessage(tester, 'Can I collect on the 25th?');
-        await chooseYes(tester);
+        await chooseOption(tester, 'Cash');
+        await chooseOption(tester, 'Farm Pickup');
+        await chooseOption(tester, 'Next few days');
         await submit(tester);
 
         // The listing summary is the real [Listing] the screen was opened
@@ -633,22 +1058,16 @@ void main() {
         expect(find.text('CATTLE'), findsOneWidget);
         expect(find.text('Holstein'), findsOneWidget);
         expect(find.text('₱42,500.00'), findsOneWidget);
+        expect(find.text('Rizal Farms'), findsOneWidget);
         expect(find.text('Mabalacat, Pampanga'), findsOneWidget);
 
         // The inquiry summary is the record the create response returned.
         expect(find.text('Your Inquiry'), findsOneWidget);
-        expect(find.text('General Inquiry'), findsOneWidget);
         expect(find.text('Can I collect on the 25th?'), findsOneWidget);
-        expect(find.text('Interested in purchasing?'), findsOneWidget);
-        expect(find.text('Yes'), findsOneWidget);
-        expect(find.text('Transaction preference'), findsOneWidget);
-        expect(find.text('Direct Deal'), findsOneWidget);
-        expect(find.text('Delivery fee'), findsOneWidget);
-        expect(find.text('₱1,500.00'), findsOneWidget);
-        expect(find.text('Preferred contact method'), findsOneWidget);
-        expect(find.text('In-app Message'), findsOneWidget);
-        expect(find.text('Preferred schedule'), findsOneWidget);
-        expect(find.text('25 Oct 2026'), findsOneWidget);
+        expect(find.text('Preferred payment method'), findsOneWidget);
+        expect(find.text('Cash'), findsOneWidget);
+        expect(find.text('Preferred collection'), findsOneWidget);
+        expect(find.text("Pick up from the seller's farm"), findsOneWidget);
 
         // The form is gone; only the confirmation remains.
         expect(find.text('Inquire About Livestock'), findsNothing);
@@ -657,75 +1076,92 @@ void main() {
       },
     );
 
-    testWidgets('omits a summary row for a field the buyer left empty', (
+    testWidgets('renders only the preferences the create response returned', (
       WidgetTester tester,
     ) async {
+      // The form now requires both, but the confirmation is built from the
+      // server's record — never from what the screen remembers choosing. A
+      // response that echoes neither must not grow a row.
       await pushInquire(
         tester,
         handler: (_) async => inquiryCreatedResponse(
           inquiry: inquiryJson(
             message: 'Just asking about availability',
-            subject: null,
-            purchaseInterest: null,
-            transactionMethod: null,
-            deliveryMethod: 'buyer_pickup',
-            deliveryFee: null,
-            contactMethod: null,
-            preferredSchedule: null,
+            paymentMethod: null,
+            collectionMethod: null,
           ),
         ),
       );
       await typeMessage(tester, 'Just asking about availability');
-      await chooseYes(tester);
+      await chooseOption(tester, 'Cash');
+      await chooseOption(tester, 'Farm Pickup');
+      await chooseOption(tester, 'Next few days');
       await submit(tester);
 
       expect(find.text(successHeading), findsOneWidget);
       expect(find.text('Just asking about availability'), findsOneWidget);
-      // No row and no placeholder is invented for an absent field.
-      expect(find.text('Subject'), findsNothing);
-      expect(find.text('Interested in purchasing?'), findsNothing);
-      expect(find.text('Transaction preference'), findsNothing);
-      expect(find.text('Delivery fee'), findsNothing);
-      expect(find.text('Preferred contact method'), findsNothing);
-      expect(find.text('Preferred schedule'), findsNothing);
+      // No row and no placeholder is invented for an absent preference.
+      expect(find.text('Preferred payment method'), findsNothing);
+      expect(find.text('Preferred collection'), findsNothing);
+
+      // None of the obsolete rows survive on the confirmation either.
+      for (final String obsolete in <String>[
+        'Subject',
+        'General Inquiry',
+        'Interested in purchasing?',
+        'Transaction preference',
+        'Delivery fee',
+        'Preferred contact method',
+        'Preferred schedule',
+      ]) {
+        expect(
+          find.text(obsolete),
+          findsNothing,
+          reason: '"$obsolete" is no longer part of the confirmation',
+        );
+      }
     });
 
     testWidgets(
-      'renders View Inquiry disabled with an honest caption instead of a '
-      'fake route',
+      'Go to Messages opens the exact chat with the seller, not just the inbox',
       (WidgetTester tester) async {
         await pushInquire(
           tester,
           handler: (_) async => inquiryCreatedResponse(),
         );
         await typeMessage(tester, 'Will the button work?');
-        await chooseYes(tester);
+        await chooseOption(tester, 'Cash');
+        await chooseOption(tester, 'Farm Pickup');
+        await chooseOption(tester, 'Next few days');
         await submit(tester);
 
-        final Finder viewInquiry = find.widgetWithText(
+        final Finder goToMessages = find.widgetWithText(
           FilledButton,
-          'View Inquiry',
+          'Go to Messages',
         );
-        expect(viewInquiry, findsOneWidget);
+        expect(goToMessages, findsOneWidget);
         expect(
-          tester.widget<FilledButton>(viewInquiry).onPressed,
-          isNull,
-          reason: 'no buyer endpoint exists to open a saved inquiry',
+          tester.widget<FilledButton>(goToMessages).onPressed,
+          isNotNull,
+          reason: 'the destination exists, so the action is live',
         );
+        // The disabled inquiry route and its apology are gone.
+        expect(find.text('View Inquiry'), findsNothing);
         expect(
           find.text('Viewing a saved inquiry is not available in the app yet.'),
-          findsOneWidget,
+          findsNothing,
         );
 
-        // The dead button leads nowhere and, above all, never re-sends.
-        await tester.ensureVisible(viewInquiry);
+        await tester.ensureVisible(goToMessages);
         await tester.pump(const Duration(milliseconds: 50));
-        await tester.tap(viewInquiry, warnIfMissed: false);
+        await tester.tap(goToMessages);
         await settle(tester);
 
-        expect(find.byType(InquireScreen), findsOneWidget);
-        expect(find.text(successHeading), findsOneWidget);
-        expect(posts(), hasLength(1));
+        // MS-04: Go to Messages opens the exact buyer–seller conversation,
+        // not merely the inbox. The app bar shows the seller as the title.
+        expect(find.byType(ChatScreen), findsOneWidget);
+        expect(find.text('Rizal Farms'), findsOneWidget);
+        expect(posts(), hasLength(1), reason: 'the inquiry is not re-sent');
       },
     );
 
@@ -734,7 +1170,7 @@ void main() {
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
       await typeMessage(tester, 'Checking the status card');
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
       await submit(tester);
 
       expect(find.text('Inquiry Status'), findsOneWidget);
@@ -762,7 +1198,7 @@ void main() {
         40,
         (int index) => 'sentence $index',
       ).join(' ');
-      expect(longMessage.length, lessThanOrEqualTo(500));
+      expect(longMessage.length, lessThanOrEqualTo(kInquiryMessageMax));
 
       await pushInquire(
         tester,
@@ -770,7 +1206,7 @@ void main() {
             inquiryCreatedResponse(inquiry: inquiryJson(message: longMessage)),
       );
       await typeMessage(tester, longMessage);
-      await chooseYes(tester);
+      await chooseRequiredPreferences(tester);
       await submit(tester);
 
       // A RenderFlex overflow would throw and fail the test; the summary

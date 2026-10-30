@@ -99,6 +99,105 @@ enum InquiryContactMethod {
   }
 }
 
+/// The buyer's preferred way to pay the seller, as stored in
+/// `inquiries.payment_method`.
+///
+/// Serialised by `backend/app/Enums/InquiryPaymentMethod.php` and surfaced
+/// verbatim by `MobileInquiryResource`. A preference only — selecting one does
+/// not create a payment, and AgroBenta does not process payments
+/// (design spec §3.6). `other` is "Other / Discuss with seller".
+enum InquiryPaymentMethod {
+  cash('cash'),
+  gcash('gcash'),
+  maya('maya'),
+  other('other');
+
+  const InquiryPaymentMethod(this.value);
+
+  final String value;
+
+  /// The buyer-facing label for the confirmation summary. Display-only; the
+  /// API contract is always [value].
+  String get label => switch (this) {
+    InquiryPaymentMethod.cash => 'Cash',
+    InquiryPaymentMethod.gcash => 'GCash',
+    InquiryPaymentMethod.maya => 'Maya',
+    InquiryPaymentMethod.other => 'Other / Discuss with seller',
+  };
+
+  static InquiryPaymentMethod fromValue(String value) {
+    for (final InquiryPaymentMethod method in InquiryPaymentMethod.values) {
+      if (method.value == value) {
+        return method;
+      }
+    }
+    throw FormatException('Unknown payment method "$value".');
+  }
+}
+
+/// The buyer's preferred way to receive the livestock, as stored in
+/// `inquiries.collection_method`.
+///
+/// Serialised by `backend/app/Enums/InquiryCollectionMethod.php` and surfaced
+/// verbatim by `MobileInquiryResource`. A preference only — selecting one does
+/// not book transportation, and AgroBenta does not provide, book, or track
+/// riders (design spec §3.6). `discussWithSeller` is "Discuss arrangements
+/// with the seller".
+enum InquiryCollectionMethod {
+  farmPickup('farm_pickup'),
+  buyerArrangedTransportation('buyer_arranged_transportation'),
+  discussWithSeller('discuss_with_seller');
+
+  const InquiryCollectionMethod(this.value);
+
+  final String value;
+
+  /// The buyer-facing label for the confirmation summary. Display-only; the
+  /// API contract is always [value].
+  String get label => switch (this) {
+    InquiryCollectionMethod.farmPickup => 'Pick up from the seller\'s farm',
+    InquiryCollectionMethod.buyerArrangedTransportation =>
+      'Arrange my own livestock transportation',
+    InquiryCollectionMethod.discussWithSeller =>
+      'Discuss arrangements with the seller',
+  };
+
+  static InquiryCollectionMethod fromValue(String value) {
+    for (final InquiryCollectionMethod method
+        in InquiryCollectionMethod.values) {
+      if (method.value == value) {
+        return method;
+      }
+    }
+    throw FormatException('Unknown collection method "$value".');
+  }
+}
+
+/// The buyer's chosen collection-date preference for an inquiry.
+///
+/// `specificDate` means the buyer named a concrete date (sent in
+/// `preferred_schedule`, which must not be in the past). `nextFewDays` and
+/// `thisWeek` are relative preferences and do not require a date.
+enum InquiryCollectionDateOption {
+  specificDate('specific_date'),
+  nextFewDays('next_few_days'),
+  thisWeek('this_week');
+
+  const InquiryCollectionDateOption(this.value);
+
+  /// The exact lowercase string the API sends.
+  final String value;
+
+  static InquiryCollectionDateOption fromValue(String value) {
+    for (final InquiryCollectionDateOption option in values) {
+      if (option.value == value) {
+        return option;
+      }
+    }
+    throw FormatException('Unknown collection date option "$value".');
+  }
+}
+
 /// The listing snapshot embedded in an inquiry response.
 ///
 /// Identity and the two species fields only — the same narrow shape the
@@ -151,7 +250,11 @@ class Inquiry {
     required this.deliveryFee,
     required this.contactMethod,
     required this.preferredSchedule,
+    required this.collectionDateOption,
+    required this.paymentMethod,
+    required this.collectionMethod,
     required this.createdAt,
+    this.conversationCounterpartId,
   });
 
   factory Inquiry.fromJson(Map<String, dynamic> json) {
@@ -161,7 +264,7 @@ class Inquiry {
       id: readInt(json, 'id'),
       listing: listing == null ? null : InquiryListing.fromJson(listing),
       subject: readNullableString(json, 'subject'),
-      message: readString(json, 'message'),
+      message: readStringOrEmpty(json, 'message'),
       purchaseInterest: readNullableBool(json, 'purchase_interest'),
       transactionMethod: readNullableEnum(
         json,
@@ -180,7 +283,23 @@ class Inquiry {
         InquiryContactMethod.fromValue,
       ),
       preferredSchedule: readNullableDateTime(json, 'preferred_schedule'),
+      collectionDateOption: readNullableEnum(
+        json,
+        'collection_date_option',
+        InquiryCollectionDateOption.fromValue,
+      ),
+      paymentMethod: readNullableEnum(
+        json,
+        'payment_method',
+        InquiryPaymentMethod.fromValue,
+      ),
+      collectionMethod: readNullableEnum(
+        json,
+        'collection_method',
+        InquiryCollectionMethod.fromValue,
+      ),
       createdAt: readNullableDateTime(json, 'created_at'),
+      conversationCounterpartId: readNullableInt(json, 'conversation_counterpart_id'),
     );
   }
 
@@ -220,6 +339,19 @@ class Inquiry {
   /// The date the buyer hopes to transact, as a preference — not an
   /// appointment. `null` when none was chosen.
   final DateTime? preferredSchedule;
+
+  /// How the buyer prefers to pay the seller, or `null` for none stated.
+  final InquiryPaymentMethod? paymentMethod;
+
+  /// How the buyer plans to receive the livestock, or `null` for none stated.
+  final InquiryCollectionMethod? collectionMethod;
+
+  /// The buyer's chosen collection-date preference.
+  final InquiryCollectionDateOption? collectionDateOption;
+
+  /// The conversation counterpart (seller) id, so the buyer can open the exact
+  /// thread from "Go to Messages".
+  final int? conversationCounterpartId;
 
   final DateTime? createdAt;
 

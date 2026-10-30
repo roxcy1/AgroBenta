@@ -17,6 +17,8 @@ void main() {
           deliveryMethod: 'arrange_delivery',
           deliveryFee: '1500.00',
           contactMethod: 'in_app_message',
+          paymentMethod: 'cash',
+          collectionMethod: 'farm_pickup',
           preferredSchedule: '2026-10-25',
           createdAt: '2026-10-19T08:15:00.000000Z',
         ),
@@ -31,6 +33,8 @@ void main() {
       expect(inquiry.transactionMethod, InquiryTransactionMethod.arrangeDelivery);
       expect(inquiry.deliveryMethod, InquiryDeliveryMethod.arrangeDelivery);
       expect(inquiry.contactMethod, InquiryContactMethod.inAppMessage);
+      expect(inquiry.paymentMethod, InquiryPaymentMethod.cash);
+      expect(inquiry.collectionMethod, InquiryCollectionMethod.farmPickup);
       expect(inquiry.preferredSchedule, DateTime(2026, 10, 25));
       expect(inquiry.createdAt, isNotNull);
     });
@@ -70,6 +74,8 @@ void main() {
         'delivery_fee': null,
         'contact_method': null,
         'preferred_schedule': null,
+        'payment_method': null,
+        'collection_method': null,
         'created_at': null,
       });
 
@@ -81,6 +87,8 @@ void main() {
       expect(inquiry.deliveryFee, isNull);
       expect(inquiry.contactMethod, isNull);
       expect(inquiry.preferredSchedule, isNull);
+      expect(inquiry.paymentMethod, isNull);
+      expect(inquiry.collectionMethod, isNull);
       expect(inquiry.createdAt, isNull);
     });
 
@@ -111,6 +119,20 @@ void main() {
     test('an unknown contact method fails loudly', () {
       expect(
         () => Inquiry.fromJson(inquiryJson(contactMethod: 'phone')),
+        throwsFormatException,
+      );
+    });
+
+    test('an unknown payment method fails loudly', () {
+      expect(
+        () => Inquiry.fromJson(inquiryJson(paymentMethod: 'crypto')),
+        throwsFormatException,
+      );
+    });
+
+    test('an unknown collection method fails loudly', () {
+      expect(
+        () => Inquiry.fromJson(inquiryJson(collectionMethod: 'drone')),
         throwsFormatException,
       );
     });
@@ -149,6 +171,15 @@ void main() {
       expect(InquiryDeliveryMethod.buyerPickup.value, 'buyer_pickup');
       expect(InquiryDeliveryMethod.arrangeDelivery.value, 'arrange_delivery');
       expect(InquiryContactMethod.inAppMessage.value, 'in_app_message');
+      expect(InquiryPaymentMethod.cash.value, 'cash');
+      expect(InquiryPaymentMethod.gcash.value, 'gcash');
+      expect(InquiryPaymentMethod.maya.value, 'maya');
+      expect(InquiryPaymentMethod.other.value, 'other');
+      expect(InquiryCollectionMethod.farmPickup.value, 'farm_pickup');
+      expect(InquiryCollectionMethod.buyerArrangedTransportation.value,
+          'buyer_arranged_transportation');
+      expect(InquiryCollectionMethod.discussWithSeller.value,
+          'discuss_with_seller');
     });
 
     test('fromValue round-trips every case', () {
@@ -164,6 +195,13 @@ void main() {
       }
       for (final InquiryContactMethod value in InquiryContactMethod.values) {
         expect(InquiryContactMethod.fromValue(value.value), value);
+      }
+      for (final InquiryPaymentMethod value in InquiryPaymentMethod.values) {
+        expect(InquiryPaymentMethod.fromValue(value.value), value);
+      }
+      for (final InquiryCollectionMethod value
+          in InquiryCollectionMethod.values) {
+        expect(InquiryCollectionMethod.fromValue(value.value), value);
       }
     });
   });

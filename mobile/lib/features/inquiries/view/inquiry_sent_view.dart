@@ -28,15 +28,18 @@ import '../widgets/inquiry_listing_card.dart';
 /// It is never driven by, and must never grow, a server status field
 /// (mobile/AGENTS.md §B; GAP-19).
 ///
-/// ## View Inquiry is rendered disabled
+/// ## Go to Messages opens the existing inbox
 ///
-/// There is no inquiry-details destination or endpoint for a buyer. The button
-/// is kept visible with an honest caption rather than faking a route
-/// (design spec §4.1; GAP-19).
+/// The confirmation's primary action is the app's real Messages destination,
+/// [ConversationsScreen] — not an inquiry-details screen, which still has no
+/// buyer endpoint (GAP-19). The button is live because the destination exists;
+/// it does not create a conversation or send an initial message, because
+/// messaging integration belongs to another branch.
 class InquirySentView extends StatelessWidget {
   const InquirySentView({
     required this.listing,
     required this.inquiry,
+    required this.onGoToMessages,
     required this.onBackToBrowse,
     super.key,
   });
@@ -47,6 +50,9 @@ class InquirySentView extends StatelessWidget {
   /// The server-confirmed inquiry — the single source of truth for the
   /// "Your Inquiry" summary. No read endpoint exists to refresh it.
   final Inquiry inquiry;
+
+  /// Opens the existing Messages inbox.
+  final VoidCallback onGoToMessages;
 
   /// Returns to the buyer shell's Browse destination.
   final VoidCallback onBackToBrowse;
@@ -71,27 +77,13 @@ class InquirySentView extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               const _StatusCard(),
               const SizedBox(height: AppSpacing.lg),
-              // Disabled: there is no buyer endpoint to fetch a saved inquiry
-              // and no details screen. The caption states the gap honestly
-              // rather than leaving a dead button unexplained (GAP-19).
-              FilledButton(
-                onPressed: null,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    const Text('View Inquiry'),
-                    const SizedBox(width: AppSpacing.xxs),
-                    const Icon(Icons.chevron_right, size: 18),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Viewing a saved inquiry is not available in the app yet.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+              // The live destination that exists today. No conversation is
+              // created and no initial message is sent; this only opens the
+              // inbox (GAP-19 still covers inquiry details).
+              FilledButton.icon(
+                onPressed: onGoToMessages,
+                icon: const Icon(Icons.forum_outlined, size: 18),
+                label: const Text('Go to Messages'),
               ),
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(
@@ -154,9 +146,10 @@ class _SuccessHeader extends StatelessWidget {
   }
 }
 
-/// "Your Inquiry": the actual submitted values the create response echoed
-/// back. A field the buyer left empty is omitted rather than filled with a
-/// placeholder — the summary reports what was stored, nothing else.
+/// "Your Inquiry": the submitted message and the two preferences the form
+/// collects, exactly as the create response echoed them back. A preference the
+/// buyer left unset is omitted rather than filled with a placeholder — the
+/// summary reports what was stored, nothing else.
 class _YourInquiryCard extends StatelessWidget {
   const _YourInquiryCard({required this.inquiry});
 
@@ -167,52 +160,47 @@ class _YourInquiryCard extends StatelessWidget {
     return SectionCard(
       title: 'Your Inquiry',
       children: <Widget>[
-        if (inquiry.subject != null && inquiry.subject!.trim().isNotEmpty)
-          _SummaryRow(
-            icon: Icons.label_outline,
-            label: 'Subject',
-            value: inquiry.subject!,
-          ),
         _SummaryRow(
           icon: Icons.forum_outlined,
           label: 'Message',
           value: inquiry.message,
         ),
-        if (inquiry.purchaseInterest != null)
+        if (inquiry.paymentMethod != null)
           _SummaryRow(
-            icon: Icons.shopping_cart_outlined,
-            label: 'Interested in purchasing?',
-            value: inquiry.purchaseInterest! ? 'Yes' : 'No',
+            icon: Icons.account_balance_wallet_outlined,
+            label: 'Preferred payment method',
+            value: inquiry.paymentMethod!.label,
           ),
-        if (inquiry.transactionMethod != null)
+        if (inquiry.collectionMethod != null)
           _SummaryRow(
-            icon: Icons.swap_horiz_outlined,
-            label: 'Transaction preference',
-            value: inquiry.transactionMethod!.label,
+            icon: Icons.location_on_outlined,
+            label: 'Preferred collection',
+            value: inquiry.collectionMethod!.label,
           ),
-        if (inquiry.deliveryFee != null)
+        if (inquiry.collectionDateOption != null)
           _SummaryRow(
-            icon: Icons.payments_outlined,
-            label: 'Delivery fee',
-            value:
-                AppFormatters.formatMoney(inquiry.deliveryFee) ??
-                inquiry.deliveryFee!,
-          ),
-        if (inquiry.contactMethod != null)
-          _SummaryRow(
-            icon: Icons.chat_bubble_outline,
-            label: 'Preferred contact method',
-            value: inquiry.contactMethod!.label,
+            icon: Icons.calendar_today,
+            label: 'Collection date option',
+            value: _collectionDateOptionLabel(inquiry.collectionDateOption!),
           ),
         if (inquiry.preferredSchedule != null)
           _SummaryRow(
-            icon: Icons.event_outlined,
-            label: 'Preferred schedule',
-            value: AppFormatters.formatDate(inquiry.preferredSchedule),
+            icon: Icons.event,
+            label: 'Preferred collection date',
+            value: AppFormatters.formatDate(inquiry.preferredSchedule!),
           ),
       ],
     );
   }
+}
+
+/// Returns the buyer-facing label for a collection date option.
+String _collectionDateOptionLabel(InquiryCollectionDateOption option) {
+  return switch (option) {
+    InquiryCollectionDateOption.specificDate => 'Specific date',
+    InquiryCollectionDateOption.nextFewDays => 'Within the next few days',
+    InquiryCollectionDateOption.thisWeek => 'Within this week',
+  };
 }
 
 /// One label/value row in the confirmation summary. The value wraps; it is

@@ -411,8 +411,6 @@ abstract final class NotificationEndpoints {
   ];
 }
 
-
-
 /// Profile endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the
@@ -462,10 +460,11 @@ abstract final class ProfileEndpoints {
 ///
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `inquiries`-creating mobile group: one write path, `POST /inquiries`, the
-/// buyer's structured contact with a seller about a listing. Reading received
-/// inquiries is the seller surface in [SellerInquiryEndpoints]; triaging and
-/// re-statusing an inquiry are the Admin Web's `/admin/inquiries*` flow and are
-/// not part of this app's contract.
+/// buyer's structured contact with a seller about a listing, plus the buyer's
+/// pre-check `GET /inquiries/listing/{listing}`. Reading received inquiries is
+/// the seller surface in [SellerInquiryEndpoints]; triaging and re-statusing an
+/// inquiry are the Admin Web's `/admin/inquiries*` flow and are not part of
+/// this app's contract.
 ///
 /// The route takes no user id. The buyer is the token and the seller is
 /// `listing.seller_id`, resolved server-side, so there is no parameter or body
@@ -479,6 +478,16 @@ abstract final class InquiryEndpoints {
   /// transaction.
   static const String create = '/inquiries';
 
+  /// `GET` — the authenticated buyer's inquiry about one listing, or
+  /// `data: null`. 200, plain envelope.
+  ///
+  /// The pre-check the Inquire screen runs before rendering the form. The
+  /// buyer is the token, so the path carries only the listing id and no query
+  /// can widen it to another buyer's record. An inquiry in any status is
+  /// returned: the buyer may have only one per listing, whatever its status.
+  static String existingForListing(int listingId) =>
+      '/inquiries/listing/$listingId';
+
   /// The field names `StoreInquiryRequest` accepts.
   ///
   /// Listed as an explicit allow-list so the service body is visibly exactly
@@ -486,12 +495,13 @@ abstract final class InquiryEndpoints {
   /// later change to a model. `buyer_id`, `seller_id` and `status` are absent
   /// **by construction**: the server marks them `prohibited`.
   ///
-  /// `listing_id` and `message` are the two the server requires; everything
-  /// after them is a nullable preference the schema stores or does not, as the
-  /// buyer filled it in.
+  /// `listing_id`, `message`, `payment_method` and `collection_method` are the
+  /// four the server requires; everything after them is an optional preference
+  /// the schema stores or does not, as the buyer filled it in.
   static const List<String> writableFields = <String>[
     'listing_id',
     'message',
+    'collection_date_option',
     'subject',
     'purchase_interest',
     'transaction_method',
@@ -499,6 +509,8 @@ abstract final class InquiryEndpoints {
     'delivery_fee',
     'contact_method',
     'preferred_schedule',
+    'payment_method',
+    'collection_method',
   ];
 }
 

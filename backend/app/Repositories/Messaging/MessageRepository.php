@@ -150,19 +150,17 @@ class MessageRepository
     }
 
     /**
-     * The conversation key for a message: counterpart id + listing id.
+     * The conversation key for a message: counterpart id only.
      *
-     * Two users exchanging messages about two different listings are two
-     * conversations. This key is what makes that true.
+     * A conversation is the buyer–seller pair, regardless of listing, so all
+     * messages between two users belong to one conversation. `listing_id` is
+     * retained as context on each message but does not split conversations.
      */
     private function conversationKey(int $userId, Message $message): string
     {
-        $counterpartId = $message->sender_id === $userId
+        return (string) ($message->sender_id === $userId
             ? $message->receiver_id
-            : $message->sender_id;
-        $listingId = $message->listing_id ?? 'none';
-
-        return "{$counterpartId}:{$listingId}";
+            : $message->sender_id);
     }
 
     /**

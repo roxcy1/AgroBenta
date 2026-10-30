@@ -75,20 +75,22 @@ class MessagingService
     /**
      * Sends a message from `$sender` to `$receiver`.
      *
-     * The notification fires only when this is the first message the sender
-     * has ever sent to the receiver about this listing. A reply in an
-     * existing thread — or a second question about the same listing — is not
-     * a "New Inquiry" and does not notify.
+     * When `$notify` is `true` (the inquiry flow), a `NewInquiry` notification
+     * is always dispatched — even when reusing an existing buyer–seller
+     * conversation — so every new inquiry alerts the seller. Duplicate
+     * requests are stopped at the inquiry level (unique buyer+listing index),
+     * so this cannot produce duplicate notifications.
      *
-     * The `listing_id` is optional; a general "hello" with no listing behind
-     * it fires the notification too, because the receiver still needs to know
-     * somebody wrote to them.
+     * When `$notify` is `null` (the regular chat flow), the notification fires
+     * only on the first message between the sender and receiver about this
+     * listing, preserving existing behaviour.
      */
     public function sendMessage(
         User $sender,
         User $receiver,
         string $body,
         ?int $listingId = null,
+        ?bool $notify = null,
     ): Message {
         $isFirstInThread = $this->messages
             ->threadBetween($sender->id, $receiver->id, $listingId, 1)
@@ -101,7 +103,8 @@ class MessagingService
             'body' => $body,
         ]);
 
-        if ($isFirstInThread) {
+        $shouldNotify = $notify ?? $isFirstInThread;
+        if ($shouldNotify) {
             $receiver->notify(new NewInquiry($sender, $message, $listingId));
         }
 

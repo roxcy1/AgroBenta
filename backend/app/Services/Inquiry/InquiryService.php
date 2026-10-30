@@ -9,7 +9,9 @@ use App\Models\Listing;
 use App\Models\User;
 use App\Repositories\Inquiry\InquiryRepository;
 use App\Services\ActivityLogger;
+use App\Services\Messaging\MessagingService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -26,19 +28,28 @@ use Illuminate\Support\Facades\DB;
  *    an inquiry against one is a state conflict, not a bad request);
  *  - the listing must not be the caller's own: a seller does not inquire with
  *    themselves;
+ *  - the buyer may have only one inquiry per listing, whatever its status. A
+ *    second attempt is a 409 rather than a 422: the request is well formed,
+ *    the conversation already exists.
  *
- * Both are 409 rather than 422: nothing about the request is malformed, the
- * listing is simply in a state where the action has no meaning.
+ * Both listing guards are 409 rather than 422: nothing about the request is
+ * malformed, the listing is simply in a state where the action has no meaning.
+ * The duplicate guard is enforced twice — a lookup before the insert and the
+ * `inquiries_buyer_id_listing_id_unique` index — so two concurrent requests
+ * cannot both win. A unique violation is translated to the same 409 instead of
+ * surfacing as a 500.
  *
- * Creating an inquiry changes nothing else. It does not touch the listing's
- * status, does not create a transaction, and does not mark anything sold or
- * paid — an inquiry is a message of record between a buyer and a seller.
+ * Creating an inquiry also creates the initial buyer→seller message and fires
+ * a `NewInquiry` notification, all inside one database transaction. A
+ * duplicate inquiry is refused before any message is written, so no duplicate
+ * notification can result.
  */
 class InquiryService
 {
     public function __construct(
         private readonly InquiryRepository $inquiries,
         private readonly ActivityLogger $activity,
+        private readonly MessagingService $messaging,
     ) {
         //
     }
@@ -56,6 +67,23 @@ class InquiryService
     }
 
     /**
+     * The inquiry one buyer already sent about one listing, or `null`.
+     *
+     * Buyer-scoped: the buyer is the token and the listing is the route's
+     * listing, so this cannot read another buyer's records. The listing's
+     * status is deliberately not checked here - the question is "did I already
+     * ask?", not "may I ask now?", and the form only opens from an active
+     * listing anyway.
+     */
+    public function findForBuyerAndListing(User $buyer, Listing $listing): ?Inquiry
+    {
+        return $this->inquiries->findForBuyerAndListing(
+            $buyer,
+            (int) $listing->getKey(),
+        );
+    }
+
+    /**
      * Create an inquiry for the authenticated buyer against [listing].
      *
      * @param  array<string, mixed>  $preferences  The allow-listed form fields from `StoreInquiryRequest`.
@@ -70,34 +98,103 @@ class InquiryService
             abort(409, 'You cannot inquire about your own listing.');
         }
 
-        return DB::transaction(function () use ($buyer, $listing, $message, $preferences): Inquiry {
-            $inquiry = $this->inquiries->create(
-                $buyer,
-                (int) $listing->seller_id,
-                (int) $listing->getKey(),
-                $message,
-                $preferences,
-            );
+        // One inquiry per buyer per listing, whatever its status. This lookup
+        // answers the ordinary repeat; the unique index below answers the race
+        // between two requests that both pass it.
+        if ($this->findForBuyerAndListing($buyer, $listing) !== null) {
+            abort(409, 'You have already sent an inquiry about this listing.');
+        }
 
-            $this->activity->log(
-                $buyer,
-                ActivityAction::InquiryCreated,
-                sprintf(
-                    'Inquiry #%d sent for listing #%d.',
-                    $inquiry->getKey(),
-                    $listing->getKey(),
-                ),
-                [
-                    'target_type' => 'inquiry',
-                    'target_id' => $inquiry->getKey(),
-                    'context' => [
-                        'listing_id' => $listing->getKey(),
-                        'seller_id' => (int) $listing->seller_id,
+        try {
+            return DB::transaction(function () use ($buyer, $listing, $message, $preferences): Inquiry {
+                $inquiry = $this->inquiries->create(
+                    $buyer,
+                    (int) $listing->seller_id,
+                    (int) $listing->getKey(),
+                    $message,
+                    $preferences,
+                );
+
+                // Create the initial buyer→seller message inside the same
+                // transaction, and notify the seller for every inquiry.
+                $seller = User::findOrFail((int) $listing->seller_id);
+                $body = $this->buildMessageBody($buyer, $listing, $message, $preferences);
+                $this->messaging->sendMessage(
+                    $buyer,
+                    $seller,
+                    $body,
+                    (int) $listing->getKey(),
+                    true,
+                );
+
+                $this->activity->log(
+                    $buyer,
+                    ActivityAction::InquiryCreated,
+                    sprintf(
+                        'Inquiry #%d sent for listing #%d.',
+                        $inquiry->getKey(),
+                        $listing->getKey(),
+                    ),
+                    [
+                        'target_type' => 'inquiry',
+                        'target_id' => $inquiry->getKey(),
+                        'context' => [
+                            'listing_id' => $listing->getKey(),
+                            'seller_id' => (int) $listing->seller_id,
+                        ],
                     ],
-                ],
-            );
+                );
 
-            return $inquiry;
-        });
+                return $inquiry;
+            });
+        } catch (QueryException $exception) {
+            // A concurrent request inserted the same pair between the lookup
+            // and this insert. The row now exists, so this is the same 409 as
+            // an ordinary repeat - never a 500 leaking a database error.
+            if ($this->findForBuyerAndListing($buyer, $listing) !== null) {
+                abort(409, 'You have already sent an inquiry about this listing.');
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Build the structured initial message body for the buyer→seller thread.
+     *
+     * Contains the listing title/price, the buyer's payment and collection
+     * preferences, the preferred collection date/option, and the buyer's
+     * additional message.
+     *
+     * @param  array<string, mixed>  $preferences
+     */
+    private function buildMessageBody(
+        User $buyer,
+        Listing $listing,
+        string $message,
+        array $preferences,
+    ): string {
+        $price = $listing->asking_price !== null
+            ? number_format((float) $listing->asking_price, 2)
+            : 'not set';
+
+        $option = $preferences['collection_date_option'] ?? null;
+        $date = ! empty($preferences['preferred_schedule'])
+            ? (string) $preferences['preferred_schedule']
+            : 'not specified';
+
+        $lines = [
+            "New inquiry from {$buyer->name}.",
+            "Listing: {$listing->displayLabel()}.",
+            "Asking price: ₱{$price}.",
+            "Preferred payment: " . ($preferences['payment_method'] ?? 'not specified'),
+            "Preferred collection: " . ($preferences['collection_method'] ?? 'not specified'),
+            "Collection date option: $option ($date)",
+            '',
+            "Buyer's message:",
+            $message,
+        ];
+
+        return implode("\n", $lines);
     }
 }

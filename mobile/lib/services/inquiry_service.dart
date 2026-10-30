@@ -50,6 +50,30 @@ class InquiryService {
     );
   }
 
+  /// `GET /inquiries/listing/{listing}` — the caller's inquiry about one
+  /// listing, or `null`.
+  ///
+  /// The pre-check the Inquire screen runs before rendering the form. Buyer
+  /// scoping is the token, so there is no buyer id to send and no query that
+  /// could widen the result. An inquiry in any status is returned: the rule is
+  /// one per buyer per listing, whatever its status.
+  ///
+  /// The backend answers `data: null` when nothing has been sent; a `404` here
+  /// means the listing id no longer exists.
+  Future<Inquiry?> findExistingForListing(int listingId) {
+    return _apiClient.get<Inquiry?>(
+      InquiryEndpoints.existingForListing(listingId),
+      parse: (Object? data) {
+        if (data == null) {
+          return null;
+        }
+        return Inquiry.fromJson(
+          _asObject(data, 'GET /inquiries/listing/{listing}'),
+        );
+      },
+    );
+  }
+
   /// `POST /inquiries` — send an inquiry about [listingId].
   ///
   /// Throws [ApiException]:
@@ -63,13 +87,16 @@ class InquiryService {
   Future<Inquiry> create({
     required int listingId,
     required String message,
+    required InquiryCollectionDateOption collectionDateOption,
+    DateTime? preferredSchedule,
     String? subject,
     bool? purchaseInterest,
     InquiryTransactionMethod? transactionMethod,
     InquiryDeliveryMethod? deliveryMethod,
     String? deliveryFee,
     InquiryContactMethod? contactMethod,
-    DateTime? preferredSchedule,
+    InquiryPaymentMethod? paymentMethod,
+    InquiryCollectionMethod? collectionMethod,
   }) {
     return _apiClient.post<Inquiry>(
       InquiryEndpoints.create,
@@ -78,6 +105,7 @@ class InquiryService {
         // a form adds later has to be named here to be sent.
         'listing_id': listingId,
         'message': message.trim(),
+        'collection_date_option': collectionDateOption.value,
         if (_present(subject)) 'subject': subject!.trim(),
         'purchase_interest': ?purchaseInterest,
         if (transactionMethod != null)
@@ -87,6 +115,9 @@ class InquiryService {
         if (contactMethod != null) 'contact_method': contactMethod.value,
         if (preferredSchedule != null)
           'preferred_schedule': _dateOnly(preferredSchedule),
+        if (paymentMethod != null) 'payment_method': paymentMethod.value,
+        if (collectionMethod != null)
+          'collection_method': collectionMethod.value,
       },
       parse: (Object? data) =>
           Inquiry.fromJson(_asObject(data, 'POST /inquiries')),

@@ -30,6 +30,8 @@ Map<String, dynamic> inquiryJson({
   Object? deliveryFee = '1500.00',
   Object? contactMethod = 'in_app_message',
   Object? preferredSchedule = '2026-10-25',
+  Object? paymentMethod = 'cash',
+  Object? collectionMethod = 'farm_pickup',
   Object? createdAt = '2026-10-19T08:15:00.000000Z',
 }) {
   return <String, dynamic>{
@@ -43,6 +45,8 @@ Map<String, dynamic> inquiryJson({
     'delivery_fee': deliveryFee,
     'contact_method': contactMethod,
     'preferred_schedule': preferredSchedule,
+    'payment_method': paymentMethod,
+    'collection_method': collectionMethod,
     'created_at': createdAt,
   };
 }
@@ -64,6 +68,8 @@ Map<String, dynamic> sellerInquiryJson({
   Object? deliveryFee = '1500.00',
   Object? contactMethod = 'in_app_message',
   Object? preferredSchedule = '2026-10-25',
+  Object? paymentMethod = 'cash',
+  Object? collectionMethod = 'farm_pickup',
   Object? createdAt = '2026-10-19T08:15:00.000000Z',
 }) {
   return <String, dynamic>{
@@ -78,6 +84,8 @@ Map<String, dynamic> sellerInquiryJson({
     'delivery_fee': deliveryFee,
     'contact_method': contactMethod,
     'preferred_schedule': preferredSchedule,
+    'payment_method': paymentMethod,
+    'collection_method': collectionMethod,
     'created_at': createdAt,
   };
 }
@@ -116,6 +124,19 @@ http.Response inquiryCreatedResponse({Map<String, dynamic>? inquiry}) {
       successEnvelope(message: 'Inquiry sent.', data: inquiry ?? inquiryJson()),
     ),
     201,
+    headers: _jsonHeaders,
+  );
+}
+
+/// The `200` that `GET /api/inquiries/listing/{listing}` answers with.
+///
+/// `InquiryController@existing` returns the caller's own inquiry in `data`, or
+/// `data: null` when they have sent none. Both are ordinary successes — an
+/// absent inquiry is not an error.
+http.Response inquiryCheckResponse({Map<String, dynamic>? inquiry}) {
+  return http.Response(
+    jsonEncode(successEnvelope(data: inquiry)),
+    200,
     headers: _jsonHeaders,
   );
 }

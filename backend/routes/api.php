@@ -177,6 +177,11 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
 // 500-character message ceiling and `auth:sanctum` are the abuse bounds that
 // exist today. Revisit under D-09 if a limit is decided.
 Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    // The buyer's pre-check: the inquiry they already sent about one listing,
+    // or `data: null`. Buyer-scoped from the token, so it cannot read another
+    // buyer's record. Declared before the write route for readability; the
+    // verbs differ, so neither shadows the other.
+    Route::get('/inquiries/listing/{listing}', [MobileInquiryController::class, 'existing']);
     Route::post('/inquiries', [MobileInquiryController::class, 'store']);
 });
 

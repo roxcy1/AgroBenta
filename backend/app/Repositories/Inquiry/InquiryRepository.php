@@ -2,7 +2,9 @@
 
 namespace App\Repositories\Inquiry;
 
+use App\Enums\InquiryCollectionMethod;
 use App\Enums\InquiryContactMethod;
+use App\Enums\InquiryPaymentMethod;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryTransactionMethod;
 use App\Models\Inquiry;
@@ -63,6 +65,29 @@ class InquiryRepository
     }
 
     /**
+     * Find the inquiry one buyer already sent about one listing.
+     *
+     * The buyer is the token's user and the listing is the route's listing, so
+     * the lookup cannot be widened to another buyer's records. A listing that
+     * has since been deleted nulls `listing_id` and therefore no longer matches
+     * - which is correct: a new inquiry about a different listing is a different
+     * conversation.
+     *
+     * Newest first because the unique index below is the real guarantee; this
+     * method must stay useful even if a database predates it and still holds a
+     * duplicate pair.
+     */
+    public function findForBuyerAndListing(User $buyer, int $listingId): ?Inquiry
+    {
+        return Inquiry::query()
+            ->with(['listing:id,livestock_type,breed'])
+            ->where('buyer_id', $buyer->getKey())
+            ->where('listing_id', $listingId)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
      * Persist a new inquiry.
      *
      * @param  array<string, mixed>  $preferences  The allow-listed form fields from `StoreInquiryRequest`.
@@ -90,6 +115,13 @@ class InquiryRepository
                 ? InquiryContactMethod::from($preferences['contact_method'])
                 : null,
             'preferred_schedule' => $preferences['preferred_schedule'] ?? null,
+            'payment_method' => isset($preferences['payment_method'])
+                ? InquiryPaymentMethod::from($preferences['payment_method'])
+                : null,
+            'collection_method' => isset($preferences['collection_method'])
+                ? InquiryCollectionMethod::from($preferences['collection_method'])
+                : null,
+            'collection_date_option' => $preferences['collection_date_option'] ?? null,
             'status' => InquiryStatus::Open,
         ]);
     }

@@ -530,31 +530,51 @@ by design, so listing existence is not disclosed — the app renders a single
 by the app; it is admin-only and returns seller fields the marketplace must not
 expose.
 
-**Resolved for the Inquire screen (buyer inquiries).** The backend now exposes
-one write endpoint behind the same `auth:sanctum` + `ability:mobile` guard:
+**Resolved for the Inquire screen (buyer inquiries).** The backend exposes one
+write endpoint and one buyer-scoped pre-check behind the same `auth:sanctum` +
+`ability:mobile` guard:
 
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/inquiries` | Files one buyer inquiry against an `active` listing. Returns `201` with the `MobileInquiryResource` and the envelope message `Inquiry sent.`. |
+| `GET /api/inquiries/listing/{listing}` | The caller's own inquiry for that listing in `data`, or `data: null`. Buyer-scoped from the token; `404` only when the listing does not exist. |
 
 The body allow-list (`StoreInquiryRequest`, mirrored by
 `InquiryEndpoints.writableFields`) is exactly `listing_id`, `message`,
-`subject`, `purchase_interest`, `transaction_method`, `delivery_method`,
-`delivery_fee`, `contact_method` and `preferred_schedule`; `buyer_id`,
-`seller_id` and `status` are rejected with `422` (see the security
-requirements above — the app builds the body from the allow-list only).
-`InquiryService` answers `409` for a non-active listing and `409` for the
+`payment_method`, `collection_method`, `subject`, `purchase_interest`,
+`transaction_method`, `delivery_method`, `delivery_fee`, `contact_method` and
+`preferred_schedule`; `buyer_id`, `seller_id` and `status` are rejected with
+`422` (see the security requirements above — the app builds the body from the
+allow-list only). `payment_method` and `collection_method` are **required**:
+the form validates both before sending, and the server rejects a body missing
+either with `422`. Their values are `cash`/`gcash`/`maya`/`other` and
+`farm_pickup`/`buyer_arranged_transportation`/`discuss_with_seller`.
+
+**One inquiry per buyer per listing, whatever its status.** The service answers
+`409` with `You have already sent an inquiry about this listing.` when the
+pair already exists; the unique index
+`inquiries_buyer_id_listing_id_unique` makes that true under concurrent
+requests, and the service maps that violation to the same `409` rather than a
+`500`. A different buyer may still inquire about the same listing.
+`InquiryService` also answers `409` for a non-active listing and `409` for the
 caller's own listing, and `404` when the listing does not exist. Creating an
 inquiry changes nothing else: no transaction, no listing status change, no
 notification. Triage and re-status live under `/api/admin/inquiries*` and are
 not called by this app.
 
+The Inquire screen runs the pre-check before rendering the form. A record in
+any status shows **Inquiry Already Sent** — "You've already sent an inquiry
+about this livestock. You can continue the conversation in Messages." — with
+**Go to Messages** and **Back to Browse**. A failed pre-check still shows the
+form with a notice, because the server's duplicate guard is authoritative.
+
 The **Inquiry Sent** confirmation is rendered entirely from that create
 response — the record it returns is the screen's single source of truth, and
 its status card is a fixed, honest sentence, never a fetched or modelled
-server status. There is still no buyer endpoint to re-read an inquiry (GAP-19),
-so "View Inquiry" ships disabled with an honest caption rather than faking a
-route.
+server status. There is still no buyer inquiry-detail endpoint (GAP-19), so
+**Go to Messages** pushes the existing `ConversationsScreen` rather than
+pretending an inquiry-detail route exists. It is a pushed route, not a switch
+of the BuyerShell Messages tab.
 
 **Resolved for the Seller Home dashboard (HTTP only).** The backend exposes a
 token-scoped summary behind the same `auth:sanctum` + `ability:mobile` guard
@@ -771,7 +791,7 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-14 | Profile read/update for the current user | No endpoint. Admin can list users but not edit them. `OPEN`. | Profile |
 | GAP-15 | Token lifetime policy | Mobile tokens are issued non-expiring, the same as admin tokens. No expiry, no refresh, no revocation-all. Still needs an explicit decision before shipping, so a mobile session currently lasts until it is logged out or revoked. | Security |
 | GAP-16 | Sanctum token ability scoping for mobile | **CLOSED.** Mobile tokens carry `['mobile']`; mobile routes require `ability:mobile`. The `admin` group now also requires `ability:admin`, so a mobile token is refused by admin routes and an admin token is refused by mobile routes. Both directions are covered by `backend/tests/Feature/Auth/MobileAuthTest.php`. | — |
-| GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry. `GET /api/seller/inquiries` lists the approved seller's own inbox through `SellerInquiryResource`, which omits `status` deliberately (open/responded/closed is an admin triage bookmark) and omits buyer email. `GET /api/inquiries`, `GET /api/inquiries/{inquiry}`, `PATCH /api/inquiries/{inquiry}/status` and `DELETE /api/inquiries/{inquiry}` remain admin-only (`routes/api.php`, `ability:admin`). There is still no buyer read endpoint, no inquiry detail for either side, and no seller response/status action. | Buyer inquiry list/detail, the Inquiry Sent screen's "View Inquiry" (rendered disabled with an honest caption), seller inquiry response/status, any server-driven status display |
+| GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry and `GET /api/inquiries/listing/{listing}` pre-checks the caller's own inquiry for one listing. `GET /api/seller/inquiries` lists the approved seller's own inbox through `SellerInquiryResource`, which omits `status` deliberately (open/responded/closed is an admin triage bookmark) and omits buyer email. `GET /api/inquiries`, `GET /api/inquiries/{inquiry}`, `PATCH /api/inquiries/{inquiry}/status` and `DELETE /api/inquiries/{inquiry}` remain admin-only (`routes/api.php`, `ability:admin`). There is still no buyer inquiry list or detail endpoint, no inquiry detail for either side, and no seller response/status action. | Buyer inquiry list/detail, the Inquiry Sent screen's "View Inquiry" (the app offers "Go to Messages" instead), seller inquiry response/status, any server-driven status display |
 | GAP-20 | Real-time messaging / notifications | **OPEN.** Nothing in the backend broadcasts messages or notifications: `BROADCAST_CONNECTION=log` in `backend/.env`/`.env.example`, no `config/broadcasting.php` or `config/reverb.php`, no `routes/channels.php`, no `app/Events/`, and `laravel/reverb` is not a dependency. The `reverb` service in `compose.yaml` is commented out. The app therefore has no WebSocket client (and no WS/echo package in `pubspec.yaml`), no event names to subscribe to, and no reconnect logic. Both inbox and thread recover by HTTP refresh instead. Building real-time requires broadcasting, authenticated private channels and named events on the server first. | Real-time message delivery, live badge/notification updates |
 
 ### Gaps that are design questions, not missing code

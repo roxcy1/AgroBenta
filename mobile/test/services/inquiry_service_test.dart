@@ -32,7 +32,8 @@ void main() {
 
   group('create()', () {
     test('posts to the inquiry endpoint with the bearer token', () async {
-      await service.create(listingId: 12, message: 'Still available?');
+      await service.create(listingId: 12, message: 'Still available?',
+          collectionDateOption: InquiryCollectionDateOption.specificDate);
 
       expect(recorded, hasLength(1));
       expect(recorded.single.method, 'POST');
@@ -44,6 +45,7 @@ void main() {
       await service.create(
         listingId: 12,
         message: 'Is this one still available?',
+        collectionDateOption: InquiryCollectionDateOption.specificDate,
         subject: 'General Inquiry',
         purchaseInterest: true,
         transactionMethod: InquiryTransactionMethod.directDeal,
@@ -51,6 +53,8 @@ void main() {
         deliveryFee: '1500.00',
         contactMethod: InquiryContactMethod.inAppMessage,
         preferredSchedule: DateTime(2026, 10, 25),
+        paymentMethod: InquiryPaymentMethod.gcash,
+        collectionMethod: InquiryCollectionMethod.buyerArrangedTransportation,
       );
 
       expect(
@@ -73,12 +77,18 @@ void main() {
         '2026-10-25',
         reason: 'a date column round-trips as yyyy-MM-dd, not a timestamp',
       );
+      expect(recorded.single.body['payment_method'], 'gcash');
+      expect(
+        recorded.single.body['collection_method'],
+        'buyer_arranged_transportation',
+      );
     });
 
     test('omits preferences that were never filled in', () async {
       await service.create(
         listingId: 12,
         message: 'Just a question.',
+        collectionDateOption: InquiryCollectionDateOption.specificDate,
         purchaseInterest: false,
       );
 
@@ -88,6 +98,7 @@ void main() {
       expect(recorded.single.body, <String, dynamic>{
         'listing_id': 12,
         'message': 'Just a question.',
+        'collection_date_option': 'specific_date',
         'purchase_interest': false,
       });
     });
@@ -96,6 +107,7 @@ void main() {
       await service.create(
         listingId: 12,
         message: 'Just a question.',
+        collectionDateOption: InquiryCollectionDateOption.specificDate,
         subject: '   ',
         purchaseInterest: true,
         deliveryFee: '',
@@ -106,6 +118,7 @@ void main() {
       expect(recorded.single.body.keys.toSet(), <String>{
         'listing_id',
         'message',
+        'collection_date_option',
         'purchase_interest',
       });
     });
@@ -114,6 +127,7 @@ void main() {
       await service.create(
         listingId: 12,
         message: '  Is this one still available?  ',
+        collectionDateOption: InquiryCollectionDateOption.specificDate,
         purchaseInterest: true,
         deliveryFee: ' 1500.00 ',
       );
@@ -129,6 +143,7 @@ void main() {
       await service.create(
         listingId: 12,
         message: 'Hello',
+        collectionDateOption: InquiryCollectionDateOption.specificDate,
         purchaseInterest: true,
         subject: 'General Inquiry',
         transactionMethod: InquiryTransactionMethod.arrangeDelivery,
@@ -160,6 +175,7 @@ void main() {
       final Inquiry inquiry = await service.create(
         listingId: 12,
         message: 'Stored message.',
+        collectionDateOption: InquiryCollectionDateOption.specificDate,
         purchaseInterest: true,
       );
 
@@ -183,12 +199,13 @@ void main() {
         ),
       );
 
-      await expectLater(
-        service.create(
-          listingId: 12,
-          message: 'x' * 501,
-          purchaseInterest: true,
-        ),
+        await expectLater(
+          service.create(
+            listingId: 12,
+            message: 'x' * 501,
+            collectionDateOption: InquiryCollectionDateOption.specificDate,
+            purchaseInterest: true,
+          ),
         throwsA(
           isA<ApiException>()
               .having(
@@ -213,7 +230,8 @@ void main() {
       );
 
       await expectLater(
-        service.create(listingId: 12, message: 'Hello', purchaseInterest: true),
+        service.create(listingId: 12, message: 'Hello', purchaseInterest: true,
+            collectionDateOption: InquiryCollectionDateOption.specificDate),
         throwsA(
           isA<ApiException>()
               .having((ApiException e) => e.kind, 'kind', ApiErrorKind.conflict)
@@ -230,7 +248,72 @@ void main() {
       service = build((_) async => inquiryNotFoundResponse());
 
       await expectLater(
-        service.create(listingId: 99, message: 'Hello', purchaseInterest: true),
+        service.create(listingId: 99, message: 'Hello', purchaseInterest: true,
+            collectionDateOption: InquiryCollectionDateOption.specificDate),
+        throwsA(
+          isA<ApiException>().having(
+            (ApiException e) => e.kind,
+            'kind',
+            ApiErrorKind.notFound,
+          ),
+        ),
+      );
+    });
+  });
+
+  group('findExistingForListing()', () {
+    test(
+      'gets the buyer pre-check with no query and the bearer token',
+      () async {
+        service = build((_) async => inquiryCheckResponse());
+
+        await service.findExistingForListing(12);
+
+        expect(recorded, hasLength(1));
+        expect(recorded.single.method, 'GET');
+        expect(
+          recorded.single.apiPath,
+          InquiryEndpoints.existingForListing(12),
+        );
+        expect(recorded.single.apiPath, '/inquiries/listing/12');
+        expect(recorded.single.authorization, 'Bearer 1|mobile-token');
+        expect(
+          recorded.single.query,
+          isEmpty,
+          reason: 'the buyer is the token, so no buyer id may be sent',
+        );
+        expect(recorded.single.request.body, isEmpty);
+      },
+    );
+
+    test('parses the inquiry the buyer already sent', () async {
+      service = build(
+        (_) async => inquiryCheckResponse(
+          inquiry: inquiryJson(id: 21, message: 'Already asked.'),
+        ),
+      );
+
+      final Inquiry? existing = await service.findExistingForListing(12);
+
+      expect(existing, isNotNull);
+      expect(existing!.id, 21);
+      expect(existing.message, 'Already asked.');
+      expect(existing.listing?.id, 12);
+      expect(existing.paymentMethod, InquiryPaymentMethod.cash);
+      expect(existing.collectionMethod, InquiryCollectionMethod.farmPickup);
+    });
+
+    test('returns null when the buyer has sent none', () async {
+      service = build((_) async => inquiryCheckResponse());
+
+      expect(await service.findExistingForListing(12), isNull);
+    });
+
+    test('surfaces a 404 for a listing that no longer exists', () async {
+      service = build((_) async => inquiryNotFoundResponse());
+
+      await expectLater(
+        service.findExistingForListing(99),
         throwsA(
           isA<ApiException>().having(
             (ApiException e) => e.kind,

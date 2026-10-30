@@ -162,11 +162,22 @@ class SellerDashboardTest extends TestCase
         $foreignListing = $this->createListing($this->otherSeller, ['status' => ListingStatus::Active]);
         $this->createListing($this->otherSeller, ['status' => ListingStatus::Sold]);
 
+        // One inquiry per buyer per listing is a database rule, so several
+        // inquiries against one listing come from different buyers.
         $this->createInquiry($this->seller, ['listing' => $ownActive]);
-        $this->createInquiry($this->seller, ['listing' => $ownActive]);
-        $this->createInquiry($this->seller, ['listing' => $ownActive]);
+        $this->createInquiry($this->seller, [
+            'listing' => $ownActive,
+            'buyer_id' => User::factory()->create()->id,
+        ]);
+        $this->createInquiry($this->seller, [
+            'listing' => $ownActive,
+            'buyer_id' => User::factory()->create()->id,
+        ]);
         $this->createInquiry($this->otherSeller, ['listing' => $foreignListing]);
-        $this->createInquiry($this->otherSeller, ['listing' => $foreignListing]);
+        $this->createInquiry($this->otherSeller, [
+            'listing' => $foreignListing,
+            'buyer_id' => User::factory()->create()->id,
+        ]);
 
         $this->createTransaction($ownActive, $this->buyer);
         $this->createTransaction($ownActive, $this->buyer);

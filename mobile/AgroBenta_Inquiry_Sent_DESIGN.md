@@ -91,14 +91,14 @@ Important status rules:
 
 ## 4. Actions
 
-### 4.1 View Inquiry
+### 4.1 Go to Messages
 
-- Primary full-width green button with label **View Inquiry** and a right-chevron icon.
-- Open the existing inquiry detail destination, if implemented.
-- Pass the actual inquiry ID or stable identifier.
-- The detail view should display the saved inquiry, its listing context, and real status.
+- Primary full-width green button with label **Go to Messages** and a right-chevron icon.
+- Open the existing Messages inbox (`ConversationsScreen`).
+- This replaces the earlier **View Inquiry** action: the backend has no buyer
+  inquiry-detail endpoint (GAP-19), so no inquiry detail route is invented.
+- Pushing the inbox does not create a conversation or send a message.
 - Do not create a fake details screen or route to an unrelated transaction.
-- If no inquiry detail screen or endpoint exists, report the missing functionality rather than inventing an API contract.
 
 ### 4.2 Back to Browse
 
@@ -172,7 +172,7 @@ Implement:
 - Confirmation layout and success state.
 - Real listing and inquiry summary data.
 - Status presentation based on supported backend state.
-- View Inquiry navigation when the destination exists.
+- Go to Messages navigation to the existing inbox.
 - Back to Browse navigation.
 - Loading/error/empty handling as applicable.
 
@@ -181,7 +181,7 @@ Tests should cover:
 - No confirmation display after failed submission.
 - Correct listing and inquiry summary values.
 - Supported status rendering.
-- View Inquiry uses the correct inquiry identifier.
+- Go to Messages opens the existing inbox and sends nothing.
 - Back to Browse navigation.
 - Missing optional fields and long messages.
 - API errors and malformed responses.
@@ -201,7 +201,7 @@ Do not reset the database or Docker volumes. Do not stage, commit, or push.
 - It appears only after the server confirms inquiry creation.
 - All displayed listing and inquiry details come from actual data.
 - Status wording reflects the actual backend workflow.
-- View Inquiry opens the correct existing detail destination when supported.
+- Go to Messages opens the existing inbox; no inquiry-detail route is faked.
 - Back to Browse works and does not resubmit the inquiry.
 - Missing backend support is reported rather than faked.
 - Layout works on small screens.
