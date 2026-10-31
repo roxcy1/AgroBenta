@@ -17,15 +17,15 @@ use Illuminate\Http\Request;
  * answers 404, not 403, because the existence of a notification that belongs
  * to another user is not information this caller is entitled to.
  *
- * The `notifications` table is Laravel's standard one (UUID primary key,
- * `notifiable_type`/`notifiable_id` polymorphic, `data` as a JSON string). All
- * the filtering happens in `$user->notifications()`, which is already scoped
+ * The notifications table is Laravel's standard one (UUID primary key,
+ * notifiable_type/notifiable_id polymorphic, data as a JSON string). All
+ * the filtering happens in $user->notifications(), which is already scoped
  * to the caller.
  */
 class NotificationController extends Controller
 {
     /**
-     * `GET /api/notifications` — paginated list of the caller's notifications.
+     * GET /api/notifications — paginated list of the caller's notifications.
      */
     public function index(IndexNotificationRequest $request): JsonResponse
     {
@@ -35,6 +35,7 @@ class NotificationController extends Controller
 
         if ($request->has('unread')) {
             $unread = $request->boolean('unread');
+
             $query = $unread
                 ? $user->unreadNotifications()->latest()
                 : $user->readNotifications()->latest();
@@ -64,9 +65,9 @@ class NotificationController extends Controller
     }
 
     /**
-     * `GET /api/notifications/unread-count` — small endpoint for the nav badge.
+     * GET /api/notifications/unread-count — small endpoint for the nav badge.
      *
-     * Deliberately separate from `index`: the badge must update after every
+     * Deliberately separate from index: the badge must update after every
      * event that could produce a notification, and fetching a full page to read
      * one integer would be wasteful. This endpoint is small enough to be polled.
      */
@@ -81,9 +82,9 @@ class NotificationController extends Controller
     }
 
     /**
-     * `PATCH /api/notifications/{id}/read` — mark one notification as read.
+     * PATCH /api/notifications/{id}/read — mark one notification as read.
      *
-     * `findOrFail` on the caller's own notifications means an id belonging to
+     * findOrFail on the caller's own notifications means an id belonging to
      * another user answers 404. That is the right answer: the caller is not
      * entitled to learn that the id exists.
      */
@@ -103,26 +104,28 @@ class NotificationController extends Controller
     }
 
     /**
-     * `POST /api/notifications/read-all` — mark every unread notification as read.
+     * POST /api/notifications/read-all — mark every unread notification as read.
      *
-     * Returns the new unread count so the caller does not need a second
-     * request to update the badge.
+     * Returns the number of notifications updated so the caller can update
+     * the unread badge without making another request.
      */
     public function markAllAsRead(Request $request): JsonResponse
     {
-        $request->user()->unreadNotifications()->update(['read_at' => now()]);
+        $count = $request->user()
+            ->unreadNotifications()
+            ->update(['read_at' => now()]);
 
         return response()->json([
             'success' => true,
             'message' => 'All notifications marked as read.',
-            'data' => ['count' => 0],
+            'data' => ['count' => $count],
         ], 200);
     }
 
     /**
-     * `DELETE /api/notifications/{id}` — delete one notification.
+     * DELETE /api/notifications/{id} — delete one notification.
      *
-     * Scoped the same way as [markAsRead]: another user's id is a 404.
+     * Scoped the same way as markAsRead: another user's id is a 404.
      */
     public function destroy(Request $request, string $id): JsonResponse
     {

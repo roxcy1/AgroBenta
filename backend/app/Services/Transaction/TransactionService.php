@@ -12,25 +12,14 @@ use App\Repositories\Transaction\TransactionRepository;
 use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use App\Notifications\TransactionCreated;
+use App\Notifications\TransactionStatusChanged;
 
 /**
  * The rules for what a user may do to a transaction, and from which state.
  *
- * The repository decides *which* rows are visible to a user. This service
- * decides what may happen to them, and it is the only place that answers
- * those questions, because the answers are the documented lifecycle [D-15]:
- *
- *  - creation is buyer-initiated, against an `active` listing the buyer does
- *    not own, with stock to cover the quantity (rule 1, rule 6, §6.2);
- *  - `total_amount` is `asking_price × quantity`, server-derived (rule 3);
- *  - `pending → cancelled` by either party, and that is the only transition
- *    this service offers (rule 5);
- *  - `completed` and `cancelled` are terminal — no undo, no reopen.
- *
- * Completion is deliberately absent. [D-15] rule 4 requires "the appropriate
- * transaction confirmation" without naming the actor, and that ambiguity is
- * open as OQ-15. The `complete` transition stays unimplemented until it is
- * answered; no method below offers a substitute for it.
+ * The repository decides which rows are visible to a user. This service
+ * decides what may happen to them.
  */
 class TransactionService
 {
@@ -44,7 +33,7 @@ class TransactionService
     /**
      * List the caller's transactions, newest first.
      *
-     * @param  'buyer'|'seller'|null  $role
+     * @param 'buyer'|'seller'|null $role
      */
     public function listForUser(
         User $user,
@@ -65,24 +54,10 @@ class TransactionService
 
     /**
      * Create a pending transaction for the authenticated buyer.
-     *
-     * Guards, in order: the listing must exist, must be `active`, must not be
-     * the buyer's own, and must have stock for the quantity. A well-formed
-     * request against a listing in the wrong state is a 409, not a 422.
-     *
-     * Every guard runs inside a `DB::transaction()` against a row-level
-     * `lockForUpdate()` read, so status, ownership and stock come from the
-     * persisted row rather than the caller's model. A concurrent `markSold()`
-     * therefore cannot flip the listing to `sold` between the check and the
-     * transaction create. `SellerListingService::markSold()` takes the same
-     * listing-row lock, so both operations serialize on the listing row with a
-     * consistent lock order and no deadlock risk.
      */
     public function create(User $buyer, Listing $listing, int $quantity): Transaction
     {
         return DB::transaction(function () use ($buyer, $listing, $quantity): Transaction {
-            // Reload with a row lock so a concurrent markSold() cannot flip the
-            // listing to `sold` between the status check and transaction create.
             $locked = Listing::query()
                 ->where('id', $listing->getKey())
                 ->lockForUpdate()
@@ -146,6 +121,19 @@ class TransactionService
                 ],
             );
 
+            // Notify the seller that a buyer started a transaction.
+            // The buyer knows because they created the transaction.
+            // Only the seller needs to receive this notification.
+            $seller = $locked->seller;
+
+            if ($seller !== null) {
+                $seller->notify(
+                    new TransactionCreated(
+                        $transaction->fresh(['listing', 'buyer'])
+                    )
+                );
+            }
+
             return $transaction;
         });
     }
@@ -164,7 +152,10 @@ class TransactionService
         );
 
         return DB::transaction(function () use ($transaction, $actor): Transaction {
-            $cancelled = $this->transactions->updateStatus($transaction, TransactionStatus::Cancelled);
+            $cancelled = $this->transactions->updateStatus(
+                $transaction,
+                TransactionStatus::Cancelled
+            );
 
             $this->activity->log(
                 $actor,
@@ -187,6 +178,25 @@ class TransactionService
                 ],
             );
 
+            // Cancel is a status change like any other.
+            // Notify the party who did NOT perform the cancellation.
+            $counterpartyId = (int) $actor->getKey() === (int) $transaction->buyer_id
+                ? $transaction->seller_id
+                : $transaction->buyer_id;
+
+            $counterparty = User::find($counterpartyId);
+
+            if ($counterparty !== null) {
+                $counterparty->notify(
+                    new TransactionStatusChanged(
+                        $cancelled->fresh(['listing']),
+                        $actor->getKey(),
+                        TransactionStatus::Pending->value,
+                        TransactionStatus::Cancelled->value,
+                    )
+                );
+            }
+
             return $cancelled;
         });
     }
@@ -194,16 +204,19 @@ class TransactionService
     /**
      * Guard a lifecycle transition on the transaction's current state.
      *
-     * @param  list<TransactionStatus>  $allowed
+     * @param list<TransactionStatus> $allowed
      */
-    private function ensureStatusIs(Transaction $transaction, array $allowed, string $message): void
-    {
+    private function ensureStatusIs(
+        Transaction $transaction,
+        array $allowed,
+        string $message
+    ): void {
         if (in_array($transaction->status, $allowed, true)) {
             return;
         }
 
-        // 409, not 422: nothing about the request is malformed, the
-        // transaction is simply in a state where this action has no meaning.
+        // 409, not 422: the transaction is simply in a state
+        // where this action has no meaning.
         abort(409, $message);
     }
 }
