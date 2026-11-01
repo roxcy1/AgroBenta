@@ -2201,6 +2201,175 @@ input {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Listing photos (admin livestock): details dialog, review dialog, table row. */
+.lv-detail-section--photos {
+  margin-bottom: 16px;
+}
+
+.lv-action-modal--review {
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.lv-review-photos {
+  margin-bottom: 16px;
+}
+
+.lv-photos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lv-photos-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 320px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.lv-photos-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.lv-photos-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.lv-photos-step {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.lv-photos-step:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.lv-photos-step--prev {
+  left: 10px;
+}
+
+.lv-photos-step--next {
+  right: 10px;
+}
+
+.lv-photos-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.lv-photos-open {
+  color: var(--color-primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.lv-photos-open:hover {
+  text-decoration: underline;
+}
+
+.lv-photos-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lv-photos-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.lv-photos-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lv-photos-thumb:hover {
+  border-color: var(--color-primary-light);
+}
+
+.lv-photos-thumb--active {
+  border-color: var(--color-primary);
+}
+
+.lv-photos-empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.lv-photo-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.lv-row-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.lv-row-thumb--empty {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 768px) {
+  .lv-photos-stage {
+    height: 240px;
+  }
+}
+
 .activity-changes-cell {
   font-size: 13px;
   color: var(--color-text-secondary);

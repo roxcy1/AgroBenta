@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Listing } from '../api/useListings';
+import ListingPhotos from './ListingPhotos';
 import { statusLabel } from './listingModeration';
 
 interface ListingDetailsDialogProps {
@@ -144,6 +145,11 @@ export default function ListingDetailsDialog({ listing, onClose }: ListingDetail
         </header>
 
         <div className="lv-detail-body">
+          <section className="lv-detail-section lv-detail-section--photos">
+            <h3 className="lv-detail-section-title">Photos</h3>
+            <ListingPhotos photos={listing.photos} label={`Listing #${listing.id}`} />
+          </section>
+
           <div className="lv-detail-grid">
             {sections.map((section) => (
               <section

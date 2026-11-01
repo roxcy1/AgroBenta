@@ -45,6 +45,11 @@ class ListingResource extends JsonResource
             'vaccination' => $this->vaccination,
             'short_description' => $this->short_description,
             'additional_notes' => $this->additional_notes,
+            // Absolute, fetchable URLs in stored order, so a moderator can see
+            // the animal before approving it. `Listing` resolves each stored
+            // filename through the `listing-photos` disk (D-10), the same source
+            // `MobileListingResource` reads; no schema change is involved.
+            'photos' => $this->photos,
             'status' => $this->status?->value,
             // Administrator-only: the reason a moderator gave when rejecting
             // this listing. Never present on `MobileListingResource`, so a
