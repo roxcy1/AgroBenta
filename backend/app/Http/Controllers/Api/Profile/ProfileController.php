@@ -66,6 +66,14 @@ class ProfileController extends Controller
         $user->password = Hash::make($request->validated('password'));
         $user->save();
 
+        $currentToken = $user->currentAccessToken();
+
+        if ($currentToken !== null) {
+            $user->tokens()
+                ->where('id', '!=', $currentToken->id)
+                ->delete();
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Password changed.',

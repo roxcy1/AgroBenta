@@ -151,10 +151,8 @@ abstract final class SellerVerificationEndpoints {
 ///
 /// No path here takes a seller id. The scope is the token, resolved server-side,
 /// so there is no way for a client to name somebody else's inventory. There is
-/// also no `activate`, no `deactivate` and no `sold` path: `active` is an
-/// administrator decision, `active → inactive` is too, and a sold listing is a
-/// transaction. The seller lifecycle ends at `pending` and this group reflects
-/// that by having no route for going further.
+/// also no `activate` path: `active` is an administrator decision. A seller may
+/// mark one of their own `active` listings as `sold` through `markSold`.
 abstract final class SellerListingEndpoints {
   /// `GET` — the caller's own listings, in every status. 200, paginated
   /// envelope.
@@ -183,6 +181,13 @@ abstract final class SellerListingEndpoints {
   /// and it is one-way: the server answers `409` for a listing that is not a
   /// draft.
   static String submit(int id) => '/seller/listings/$id/submit';
+
+  /// `POST` — mark an active listing as sold. 200, plain envelope.
+  ///
+  /// [id] is appended. Permitted only while the listing is `active`; the server
+  /// answers `409` otherwise. Terminal for the listing: no new transactions can
+  /// be created against it afterwards.
+  static String markSold(int id) => '/seller/listings/$id/mark-sold';
 
   /// `DELETE` — destroy a draft or withdrawn listing. 200.
   ///
@@ -213,11 +218,15 @@ abstract final class SellerListingEndpoints {
   /// construction**: the server marks both `prohibited` and answers `422`, and
   /// no code path in this app can put them in a body.
   ///
-  /// `photos` is deliberately absent from the write surface even though the
-  /// server accepts the array. D-10 leaves both the upload mechanism and the
-  /// stored representation undecided, so a text box asking a seller to type
-  /// photo URLs would invent a scheme the contract has not chosen. The mobile
-  /// client sends no photos until that decision is made.
+  /// `photos` is deliberately absent from this JSON body because photos are
+  /// associated out of band — `SellerListingService.uploadPhotos` posts them as
+  /// multipart to `POST /seller/listings/{id}/photos`, and
+  /// `SellerListingService.removePhoto` deletes one by its served URL or
+  /// filename — rather than being typed into a field. A draft is created
+  /// without photos; locally picked photos are uploaded once the draft has an
+  /// id, and the server returns the listing with the absolute URLs it now
+  /// serves. Keeping the array out of the create/update body means an unrelated
+  /// save cannot rewrite the stored set.
   static const List<String> writableFields = <String>[
     'livestock_type',
     'breed',

@@ -49,25 +49,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Map<String, List<String>> _displayedErrors = const <String, List<String>>{};
 
   @override
-  void initState() {
-    super.initState();
-    // `readOf`, not `of`: a dependency cannot be registered from `initState`.
-    _controller = ProfileScope.readOf(context);
-    _initial =
-        _controller.state.user ??
-        (throw StateError(
-          'EditProfileScreen opened without a loaded profile.',
-        ));
-
-    _name = TextEditingController(text: _initial.name);
-    _email = TextEditingController(text: _initial.email);
-    _phone = TextEditingController(text: _initial.phone ?? '');
-    _location = TextEditingController(text: _initial.location ?? '');
-    _avatarUrl = TextEditingController(text: _initial.avatarUrl ?? '');
-    _bio = TextEditingController(text: _initial.bio ?? '');
-  }
-
-  @override
   void dispose() {
     _name.dispose();
     _email.dispose();
@@ -111,18 +92,85 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String avatarUrl = _avatarUrl.text.trim();
     final String bio = _bio.text.trim();
 
-    final bool saved = await _controller.save(
-      name: name == _initial.name ? null : name,
-      email: email == _initial.email ? null : email,
-      phone: phone == (_initial.phone ?? '') ? null : phone,
-      location: location == (_initial.location ?? '') ? null : location,
-      avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
-      bio: bio == (_initial.bio ?? '') ? null : bio,
-    );
+    final bool emailChanged = email != _initial.email;
 
-    if (saved && mounted) {
-      Navigator.of(context).pop(true);
+    Future<bool> doSave({String? currentPassword}) {
+      return _controller.save(
+        name: name == _initial.name ? null : name,
+        email: emailChanged ? email : null,
+        phone: phone == (_initial.phone ?? '') ? null : phone,
+        location: location == (_initial.location ?? '') ? null : location,
+        avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
+        bio: bio == (_initial.bio ?? '') ? null : bio,
+        currentPassword: currentPassword,
+      );
     }
+
+    if (!emailChanged) {
+      final bool saved = await doSave();
+      if (saved && mounted) {
+        Navigator.of(context).pop(true);
+      }
+      return;
+    }
+
+    String? currentPassword;
+    while (true) {
+      final String? password = await _promptCurrentPassword(
+        error: currentPassword == null
+            ? null
+            : _controller.state.errorFor('current_password'),
+      );
+      if (password == null || password.isEmpty) {
+        return;
+      }
+      currentPassword = password;
+      final bool saved = await doSave(currentPassword: currentPassword);
+      if (saved && mounted) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      final String? error = _controller.state.errorFor('current_password');
+      if (error == null) {
+        return;
+      }
+    }
+  }
+
+  Future<String?> _promptCurrentPassword({String? error}) async {
+    final String? result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return _CurrentPasswordDialog(error: error);
+      },
+    );
+    if (result == null || result.isEmpty) {
+      return null;
+    }
+    return result;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // `readOf`, not `of`: a dependency cannot be registered from `initState`.
+    _controller = ProfileScope.readOf(context);
+    _initial =
+        _controller.state.user ??
+        (throw StateError(
+          'EditProfileScreen opened without a loaded profile.',
+        ));
+
+    _name = TextEditingController(text: _initial.name);
+    _email = TextEditingController(text: _initial.email);
+    _phone = TextEditingController(text: _initial.phone ?? '');
+    _location = TextEditingController(text: _initial.location ?? '');
+    _avatarUrl = TextEditingController(text: _initial.avatarUrl ?? '');
+    _bio = TextEditingController(text: _initial.bio ?? '');
   }
 
   @override
@@ -168,7 +216,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   helperText: 'Required.',
                                 ),
                                 validator: (String? value) {
-                                  if (value == null || value.trim().length < 2) {
+                                  if (value == null ||
+                                      value.trim().length < 2) {
                                     return 'Please enter your name.';
                                   }
                                   return state.errorFor('name');
@@ -193,6 +242,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   return state.errorFor('email');
                                 },
                               ),
+
                               const SizedBox(height: AppSpacing.md),
                               TextFormField(
                                 controller: _phone,
@@ -313,6 +363,63 @@ class _FormErrorBanner extends StatelessWidget {
           Expanded(child: Text(message, style: theme.textTheme.bodySmall)),
         ],
       ),
+    );
+  }
+}
+
+class _CurrentPasswordDialog extends StatefulWidget {
+  const _CurrentPasswordDialog({this.error});
+
+  final String? error;
+
+  @override
+  State<_CurrentPasswordDialog> createState() => _CurrentPasswordDialogState();
+}
+
+class _CurrentPasswordDialogState extends State<_CurrentPasswordDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Confirm your password'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          TextField(
+            controller: _controller,
+            obscureText: true,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Current password',
+              errorText: widget.error,
+            ),
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Confirm'),
+        ),
+      ],
     );
   }
 }

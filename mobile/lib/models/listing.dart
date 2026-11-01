@@ -1,3 +1,4 @@
+import '../core/config/app_config.dart';
 import '../core/utils/json_utils.dart';
 
 /// A listing's publication status, as stored in `listings.status`.
@@ -141,7 +142,12 @@ class Listing {
       vaccination: readNullableString(json, 'vaccination'),
       shortDescription: readString(json, 'short_description'),
       additionalNotes: readNullableString(json, 'additional_notes'),
-      photos: readStringList(json, 'photos'),
+      photos: readStringList(json, 'photos')
+          .map((String url) => Listing.resolvePhotoUrl(
+                url,
+                apiOrigin: AppConfig.apiOrigin,
+              ))
+          .toList(growable: false),
       status: ListingStatus.fromValue(readString(json, 'status')),
       createdAt: readNullableDateTime(json, 'created_at'),
       updatedAt: readNullableDateTime(json, 'updated_at'),
@@ -287,6 +293,75 @@ class Listing {
       return false;
     }
     return uri.scheme == 'http' || uri.scheme == 'https';
+  }
+
+  /// Resolves a listing photo URL served by the backend so it points at a host
+  /// the current client can reach.
+  ///
+  /// Laravel embeds absolute photo URLs built from its own `APP_URL` (typically
+  /// `http://localhost:8001/storage/listings/9/...jpg`). On an Android emulator
+  /// `localhost` refers to the emulator itself, not the development machine, so
+  /// those URLs cannot be fetched. This method rewrites loopback hosts to the
+  /// client's configured [apiOrigin].
+  ///
+  /// - Absolute URLs with a loopback host (`localhost`, `127.0.0.1`, `::1`) are
+  ///   rewritten to use [apiOrigin]'s scheme, host, and port, keeping the path,
+  ///   query, and fragment.
+  /// - External absolute URLs (CDN, S3, any non-loopback host) are returned
+  ///   unchanged.
+  /// - Relative paths (with or without a leading `/`) are resolved against
+  ///   [apiOrigin], so `/storage/...` becomes `<apiOrigin>/storage/...`
+  ///   without duplicating any `/api` mount.
+  static String resolvePhotoUrl(String url, {required String apiOrigin}) {
+    final String trimmed = url.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+
+    final Uri? uri = Uri.tryParse(trimmed);
+
+    // Truly unparseable input: return unchanged.
+    if (uri == null) {
+      return trimmed;
+    }
+
+    // Absolute URL with a host: either rewrite loopback or preserve external.
+    if (uri.hasScheme && uri.host.isNotEmpty) {
+      final String host = uri.host.toLowerCase();
+      final bool isLoopback =
+          host == 'localhost' || host == '127.0.0.1' || host == '::1';
+
+      // External absolute URLs (S3, CDN, etc.) are preserved exactly.
+      if (!isLoopback) {
+        return trimmed;
+      }
+
+      // Rewrite the loopback host to the client's reachable API origin,
+      // keeping the original path, query, and fragment.
+      final Uri origin = Uri.parse(apiOrigin);
+      return Uri(
+        scheme: origin.scheme.isNotEmpty ? origin.scheme : uri.scheme,
+        host: origin.host.isNotEmpty ? origin.host : uri.host,
+        port: origin.port,
+        path: uri.path,
+        query: uri.query,
+        // Only include the fragment when present, so a URL without one
+        // doesn't get a trailing `#`.
+        fragment: uri.fragment.isNotEmpty ? uri.fragment : null,
+      ).toString();
+    }
+
+    // Relative path (no scheme, no host): resolve against the API origin.
+    // This covers '/storage/...' and 'storage/...'. A string containing
+    // whitespace is not a valid path or URL (e.g. 'not a url') and is
+    // returned unchanged rather than resolved into a bogus address.
+    if (!uri.hasScheme && uri.host.isEmpty && !trimmed.contains(RegExp(r'\s'))) {
+      final String path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+      return '$apiOrigin$path';
+    }
+
+    // Anything else (a scheme without a host, whitespace, etc.): unchanged.
+    return trimmed;
   }
 
   static String? _readNullableDecimal(Map<String, dynamic> json, String key) {

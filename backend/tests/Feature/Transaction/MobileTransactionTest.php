@@ -8,9 +8,11 @@ use App\Enums\UserRole;
 use App\Models\Listing;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Transaction\TransactionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
@@ -291,6 +293,11 @@ class MobileTransactionTest extends TestCase
                 'quantity' => 1,
             ])
             ->assertStatus(409);
+
+        $this->assertDatabaseMissing('transactions', [
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->seller->id,
+        ]);
     }
 
     #[Test]
@@ -307,6 +314,49 @@ class MobileTransactionTest extends TestCase
     }
 
     #[Test]
+    public function a_sold_listing_cannot_be_transacted(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Sold]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(409);
+
+        // No transaction was persisted for the sold listing.
+        $this->assertDatabaseMissing('transactions', [
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->buyer->id,
+        ]);
+    }
+
+    #[Test]
+    public function an_active_listing_can_be_transacted_control(): void
+    {
+        $listing = $this->createListing($this->seller);
+
+        $data = $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(201)
+            ->json('data');
+
+        $this->assertSame('pending', $data['status']);
+
+        // The transaction was persisted.
+        $this->assertDatabaseHas('transactions', [
+            'id' => $data['id'],
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->buyer->id,
+            'status' => TransactionStatus::Pending->value,
+        ]);
+    }
+
+    #[Test]
     public function insufficient_stock_is_refused(): void
     {
         $listing = $this->createListing($this->seller, ['quantity' => 1]);
@@ -317,6 +367,34 @@ class MobileTransactionTest extends TestCase
                 'quantity' => 2,
             ])
             ->assertStatus(409);
+
+        $this->assertDatabaseMissing('transactions', [
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->buyer->id,
+        ]);
+    }
+
+    #[Test]
+    public function stock_is_checked_against_the_locked_listing_not_a_stale_model(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 5]);
+        $stale = Listing::query()->findOrFail($listing->id);
+
+        // Change the stored quantity after the caller loaded its model. The
+        // service must read the locked row, not this stale quantity.
+        Listing::query()->whereKey($listing->id)->update(['quantity' => 1]);
+
+        try {
+            app(TransactionService::class)->create($this->buyer, $stale, 2);
+            $this->fail('The stale quantity must not authorise the transaction.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $this->assertDatabaseMissing('transactions', [
+            'listing_id' => $listing->id,
+            'buyer_id' => $this->buyer->id,
+        ]);
     }
 
     #[Test]

@@ -129,6 +129,25 @@ class SellerListingService {
     );
   }
 
+  /// `POST /seller/listings/{id}/mark-sold` — mark an active listing as sold.
+  ///
+  /// Permitted only while the listing is `active`. The server answers `409`
+  /// for any other state. Terminal for the listing: no new transactions can be
+  /// created against it afterwards. The body allow-list is empty, so any field
+  /// present is refused with `422`.
+  ///
+  /// Throws [ApiException]:
+  ///  * `conflict` on a `409` — the listing is not `active`.
+  ///  * `validation` on a `422` — a field was sent on an endpoint that accepts none.
+  ///  * `notFound` on a `404` — not the caller's listing, or it is gone.
+  Future<Listing> markSold(int id) {
+    return _apiClient.post<Listing>(
+      SellerListingEndpoints.markSold(id),
+      parse: (Object? data) =>
+          Listing.fromJson(_asObject(data, 'POST /seller/listings/$id/mark-sold')),
+    );
+  }
+
   /// `DELETE /seller/listings/{id}` — destroy a draft or withdrawn listing.
   ///
   /// A real deletion, and the server restricts it to a `draft` or `inactive`
@@ -193,6 +212,12 @@ class SellerListingService {
   /// indicator. The server returns the stored listing, whose `photos` holds the
   /// newly-served absolute URLs.
   ///
+  /// The part **name** is wire-significant: Laravel validates `photos` as an
+  /// array, so every part must be named `photos[]`. PHP's multipart parser turns
+  /// that suffix into an array; a bracket-less `photos` arrives as a single
+  /// scalar upload and the request is rejected with a `422` before mime or size
+  /// rules run.
+  ///
   /// Throws [ApiException]:
   ///  * `validation` on a `422` — the per-request or cumulative photo limit was
   ///    exceeded, or a file failed the mime/size rules.
@@ -212,7 +237,11 @@ class SellerListingService {
     for (final XFile file in files) {
       parts.add(
         http.MultipartFile(
-          'photos',
+          // `photos[]` — not `photos`. Laravel's `StoreListingPhotoRequest`
+          // validates `photos` with the `array` rule, and PHP only builds an
+          // array from bracket-suffixed part names. Sending `photos` makes the
+          // request fail with "The photos field must be an array." (422).
+          'photos[]',
           _wrapWithProgress(file.openRead(), (int chunk) {
             sentBytes += chunk;
             onProgress(sentBytes, totalBytes);

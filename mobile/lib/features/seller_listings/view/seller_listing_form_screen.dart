@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -10,9 +11,33 @@ import '../state/seller_listing_draft.dart';
 import '../state/seller_listing_scope.dart';
 import '../state/seller_listing_state.dart';
 import '../widgets/listing_photo_grid.dart';
+import 'seller_listing_input_formatters.dart';
 import 'seller_listing_views.dart';
 import 'seller_listing_validators.dart';
 import '../../../widgets/section_card.dart';
+
+/// Which Stepper step shows each server-validated field.
+///
+/// A `422` names fields, not steps, and the field that failed may not be on the
+/// step the save button was pressed on. This is the only place that mapping is
+/// written down.
+const Map<String, int> _fieldStep = <String, int>{
+  'photos': 0,
+  'livestock_type': 0,
+  'breed': 0,
+  'age_value': 0,
+  'age_unit': 0,
+  'weight_value': 0,
+  'weight_unit': 0,
+  'quantity': 1,
+  'asking_price': 1,
+  'location': 1,
+  'gender': 1,
+  'health_status': 1,
+  'vaccination': 1,
+  'short_description': 1,
+  'additional_notes': 1,
+};
 
 /// Create or edit a listing.
 ///
@@ -29,10 +54,8 @@ import '../../../widgets/section_card.dart';
 /// approval and everything after it belong to an administrator. So there is no
 /// status control here, and no field that could express one.
 ///
-/// It also cannot add photos. There is no upload endpoint (D-10 / GAP-06) and no
-/// agreed URL scheme, so a photo picker would either send something the server
-/// cannot store or invent a storage contract. The field is left out rather than
-/// stubbed.
+/// It also cannot change how a listing is published; photos are managed in the
+/// composer on the first step and uploaded once the draft exists.
 class SellerListingFormScreen extends StatefulWidget {
   const SellerListingFormScreen({this.listing, super.key});
 
@@ -63,25 +86,43 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
 
   int _step = 0;
 
+  /// The form holding every step's fields.
+  ///
+  /// One form for the whole Stepper rather than one per step, so every field the
+  /// Stepper has built shares a single validation state. Auto-validation is set
+  /// per field instead of on this form, so typing in one step cannot light up
+  /// errors in another.
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  /// The age field, validated on its own when the unit changes.
+  ///
+  /// The age limit depends on the unit, so a new unit can make an already-typed
+  /// age invalid (300 months is valid; 300 years is not). Validating this one
+  /// field avoids the whole-form `validate()` that would also put errors on
+  /// fields the seller has not touched.
+  final GlobalKey<FormFieldState<String>> _ageValueFieldKey =
+      GlobalKey<FormFieldState<String>>();
+
   late final SellerListingController _controller;
   bool _submitting = false;
+
+  /// The listing this form created, if a save succeeded but photo work did not.
+  ///
+  /// The form stays open on an upload failure so the seller can retry. The next
+  /// save must therefore update this record rather than create a second draft.
+  Listing? _saved;
 
   bool get _isEditing => widget.listing != null;
 
   void _onStepContinue() {
-    if (_step == 0) {
-      if (validateLivestockType(_livestockType.text) != null) {
-        setState(() {});
-        return;
-      }
-    }
-    if (_step == 1) {
-      if (validateQuantity(_quantity.text) != null ||
-          validateAskingPrice(_askingPrice.text) != null ||
-          validateListingLocation(_location.text) != null) {
-        setState(() {});
-        return;
-      }
+    // Only the step being left is checked. A step further on is still empty at
+    // this point, so checking it here would make the first Continue impossible.
+    if (_stepHasErrors(_step)) {
+      // The messages exist only once a field is validated, and a field the
+      // seller has not typed in never auto-validates. Continuing is an explicit
+      // request to move on, so validating is what makes its error visible.
+      _formKey.currentState?.validate();
+      return;
     }
     if (_step < 2) {
       setState(() => _step++);
@@ -166,19 +207,90 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     additionalNotes: _additionalNotes.text,
   );
 
+  /// Whether [step] has at least one client-side error.
+  bool _stepHasErrors(int step) =>
+      _localErrorsForStep(step).any((String? error) => error != null);
+
+  /// The first step that still has an invalid field, or `null` when the form is
+  /// valid. Steps are checked in order, which is also the order the seller walks
+  /// them in.
+  int? _firstInvalidStep() {
+    for (int step = 0; step <= 1; step++) {
+      if (_stepHasErrors(step)) {
+        return step;
+      }
+    }
+    return null;
+  }
+
+  /// Every client-side error the form can report for [step], in field order.
+  ///
+  /// The validator functions are called directly rather than through the
+  /// `FormState`, so the step to open is known before anything is rendered.
+  List<String?> _localErrorsForStep(int step) {
+    switch (step) {
+      case 0:
+        return <String?>[
+          validateLivestockType(_livestockType.text),
+          validateBreed(_breed.text),
+          validateAgeValue(_ageValue.text, unit: _ageUnit),
+          validateAgeUnit(_ageUnit, hasValue: _ageValue.text.trim().isNotEmpty),
+          validateWeightValue(_weightValue.text),
+          validateWeightUnit(
+            _weightUnit,
+            hasValue: _weightValue.text.trim().isNotEmpty,
+          ),
+        ];
+      case 1:
+        return <String?>[
+          validateQuantity(_quantity.text),
+          validateAskingPrice(_askingPrice.text),
+          validateListingLocation(_location.text),
+          validateOptionalShortText(_healthStatus.text),
+          validateOptionalShortText(_vaccination.text),
+          validateOptionalShortText(_shortDescription.text),
+          validateAdditionalNotes(_additionalNotes.text),
+        ];
+      default:
+        return const <String?>[];
+    }
+  }
+
+  /// The first step a server-reported error belongs to, or `null` when the `422`
+  /// named no field this form shows.
+  int? _firstStepWithServerError(Map<String, List<String>> errors) {
+    int? first;
+    for (final String field in errors.keys) {
+      final int? step = _fieldStep[field];
+      if (step != null && (first == null || step < first)) {
+        first = step;
+      }
+    }
+    return first;
+  }
+
   Future<void> _save() async {
-    final SellerListingDraft draft = _buildDraft();
-    if (draft.missingRequiredFields.isNotEmpty) {
-      setState(() {});
+    final int? invalidStep = _firstInvalidStep();
+    if (invalidStep != null) {
+      setState(() => _step = invalidStep);
+      // Validated after the frame that opened the bad step, so the messages are
+      // painted on the fields the seller is now looking at.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _formKey.currentState?.validate();
+      });
       return;
     }
+
+    final SellerListingDraft draft = _buildDraft();
+    final Listing? target = _saved ?? widget.listing;
 
     setState(() => _submitting = true);
     _controller.clearActionMessage();
 
-    final Listing? saved = _isEditing
-        ? await _controller.update(widget.listing!.id, _buildDraft())
-        : await _controller.create(_buildDraft());
+    final Listing? saved = target != null
+        ? await _controller.update(target.id, draft)
+        : await _controller.create(draft);
 
     if (!mounted) {
       return;
@@ -186,18 +298,50 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     setState(() => _submitting = false);
 
     if (saved != null) {
+      _saved = saved;
+
       // Upload any locally-picked photos that were not yet stored. The server
       // returns the whole listing, so the composer is rebuilt from served URLs
-      // and client and server agree.
-      final bool hasPending = _controller.photos.any(
-        (ListingPhotoItem p) => p.status == ListingPhotoStatus.pending,
+      // and client and server agree. A previously failed batch is resent too.
+      final bool hasPhotoWork = _controller.photos.any(
+        (ListingPhotoItem p) =>
+            p.status == ListingPhotoStatus.pending ||
+            p.status == ListingPhotoStatus.failed,
       );
-      if (hasPending) {
-        await _controller.uploadComposerPhotos(saved.id);
+      if (hasPhotoWork) {
+        final bool uploaded = await _controller.uploadComposerPhotos(saved.id);
+        if (!mounted) {
+          return;
+        }
+        if (!uploaded) {
+          // Stay on the form: the failed tiles and their retry controls are on
+          // step 0, so that is where the seller needs to be.
+          setState(() => _step = 0);
+          return;
+        }
       }
       // The caller needs the record it just wrote, to open or refresh with.
       if (mounted) Navigator.of(context).pop(saved);
+      return;
     }
+
+    // A `422` arrives as per-field messages. Re-validating after this frame
+    // folds the server's message into the field it names (the field validator
+    // gives the server precedence), and the step that owns the first one is
+    // opened so the message is not hidden behind a Stepper tab.
+    final Map<String, List<String>> serverErrors =
+        _controller.state.validationErrors;
+    if (serverErrors.isEmpty) {
+      return;
+    }
+    final int? errorStep = _firstStepWithServerError(serverErrors);
+    if (errorStep != null && errorStep != _step) {
+      setState(() => _step = errorStep);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _formKey.currentState?.validate();
+    });
   }
 
   @override
@@ -240,77 +384,86 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             final bool busy = _submitting || state.isActioning;
 
             return ExcludeSemantics(
-              child: Stepper(
-              currentStep: _step,
-              onStepContinue: busy ? null : _onStepContinue,
-              onStepCancel: busy ? null : _onStepCancel,
-              controlsBuilder: (BuildContext context, ControlsDetails details) {
-                if (_step == 2) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.md),
-                    child: FilledButton(
-                      onPressed: busy ? null : _save,
-                      child: busy
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(_isEditing ? 'Save changes' : 'Save as draft'),
-                    ),
-                  );
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.md),
-                  // Expanded buttons: the test viewport (and small phones)
-                  // are narrower than the two buttons' intrinsic widths, so
-                  // an unconstrained Row overflows and fails layout. Sharing
-                  // the width keeps both actions on one line at any width.
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
+              child: Form(
+                key: _formKey,
+                child: Stepper(
+                  currentStep: _step,
+                  onStepContinue: busy ? null : _onStepContinue,
+                  onStepCancel: busy ? null : _onStepCancel,
+                  controlsBuilder: (BuildContext context, ControlsDetails details) {
+                    if (_step == 2) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.md),
                         child: FilledButton(
-                          onPressed: details.onStepContinue,
-                          child: const Text('Continue'),
+                          onPressed: busy ? null : _save,
+                          child: busy
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  _isEditing ? 'Save changes' : 'Save as draft',
+                                ),
                         ),
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.md),
+                      // Expanded buttons: the test viewport (and small phones)
+                      // are narrower than the two buttons' intrinsic widths, so
+                      // an unconstrained Row overflows and fails layout. Sharing
+                      // the width keeps both actions on one line at any width.
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: details.onStepContinue,
+                              child: const Text('Continue'),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: TextButton(
+                              onPressed: details.onStepCancel,
+                              child: const Text('Back'),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: TextButton(
-                          onPressed: details.onStepCancel,
-                          child: const Text('Back'),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              steps: <Step>[
-                Step(
-                  title: const Text('Information'),
-                  isActive: _step >= 0,
-                  state: _step > 0 ? StepState.complete : StepState.indexed,
-                  content: _buildInformationStep(state),
+                    );
+                  },
+                  steps: <Step>[
+                    Step(
+                      title: const Text('Information'),
+                      isActive: _step >= 0,
+                      state: _step > 0 ? StepState.complete : StepState.indexed,
+                      content: _buildInformationStep(state),
+                    ),
+                    Step(
+                      title: const Text('Details'),
+                      isActive: _step >= 1,
+                      state: _step > 1
+                          ? StepState.complete
+                          : (_step == 1
+                                ? StepState.indexed
+                                : StepState.disabled),
+                      content: _buildDetailsStep(state),
+                    ),
+                    Step(
+                      title: const Text('Review'),
+                      isActive: _step >= 2,
+                      state: _step == 2
+                          ? StepState.indexed
+                          : StepState.disabled,
+                      content: _buildReviewStep(state),
+                    ),
+                  ],
                 ),
-                Step(
-                  title: const Text('Details'),
-                  isActive: _step >= 1,
-                  state: _step > 1
-                      ? StepState.complete
-                      : (_step == 1 ? StepState.indexed : StepState.disabled),
-                  content: _buildDetailsStep(state),
-                ),
-                Step(
-                  title: const Text('Review'),
-                  isActive: _step >= 2,
-                  state: _step == 2 ? StepState.indexed : StepState.disabled,
-                  content: _buildReviewStep(state),
-                ),
-              ],
-            ),
-          );
+              ),
+            );
           },
         ),
       ),
@@ -356,11 +509,16 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                 Expanded(
                   child: _TextField(
                     controller: _ageValue,
+                    formFieldKey: _ageValueFieldKey,
                     label: 'Age',
                     hint: 'e.g. 18',
-                    validator: validateAgeValue,
+                    validator: (String? value) =>
+                        validateAgeValue(value, unit: _ageUnit),
                     serverErrors: state.validationErrors['age_value'],
                     keyboardType: TextInputType.number,
+                    inputFormatters: const <TextInputFormatter>[
+                      DigitsOnlyInputFormatter(),
+                    ],
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -370,6 +528,10 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                     value: _ageUnit,
                     items: const <DropdownMenuItem<String>>[
                       DropdownMenuItem<String>(
+                        value: 'day',
+                        child: Text('Day'),
+                      ),
+                      DropdownMenuItem<String>(
                         value: 'month',
                         child: Text('Month'),
                       ),
@@ -378,8 +540,13 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                         child: Text('Year'),
                       ),
                     ],
-                    onChanged: (String? value) =>
-                        setState(() => _ageUnit = value),
+                    onChanged: (String? value) {
+                      setState(() => _ageUnit = value);
+                      // The limit is per unit, so the age the seller already
+                      // typed may now be out of range. Only that field is
+                      // re-validated; no untouched field gains an error.
+                      _ageValueFieldKey.currentState?.validate();
+                    },
                     validator: (String? value) =>
                         state.validationErrors['age_unit']?.first ??
                         validateAgeUnit(
@@ -404,6 +571,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    inputFormatters: const <TextInputFormatter>[
+                      DecimalInputFormatter(),
+                    ],
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -424,9 +594,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                     onChanged: (String? value) =>
                         setState(() => _weightUnit = value),
                     validator: (String? value) =>
-                        state
-                            .validationErrors['weight_unit']
-                            ?.first ??
+                        state.validationErrors['weight_unit']?.first ??
                         validateWeightUnit(
                           value,
                           hasValue: _weightValue.text.trim().isNotEmpty,
@@ -438,12 +606,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        SectionCard(
-          title: 'Photos',
-          children: <Widget>[
-            ListingPhotoGrid(),
-          ],
-        ),
+        SectionCard(title: 'Photos', children: <Widget>[ListingPhotoGrid()]),
       ],
     );
   }
@@ -463,6 +626,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               validator: validateQuantity,
               serverErrors: state.validationErrors['quantity'],
               keyboardType: TextInputType.number,
+              inputFormatters: const <TextInputFormatter>[
+                DigitsOnlyInputFormatter(),
+              ],
             ),
             const SizedBox(height: AppSpacing.md),
             _TextField(
@@ -475,6 +641,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
+              inputFormatters: const <TextInputFormatter>[
+                DecimalInputFormatter(),
+              ],
               prefixText: '₱ ',
             ),
             const SizedBox(height: AppSpacing.md),
@@ -496,10 +665,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               label: 'Gender',
               value: _gender,
               items: const <DropdownMenuItem<String>>[
-                DropdownMenuItem<String>(
-                  value: 'male',
-                  child: Text('Male'),
-                ),
+                DropdownMenuItem<String>(value: 'male', child: Text('Male')),
                 DropdownMenuItem<String>(
                   value: 'female',
                   child: Text('Female'),
@@ -567,12 +733,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             if (_breed.text.isNotEmpty)
               _ReviewRow(label: 'Breed', value: _breed.text),
             if (_ageValue.text.isNotEmpty && _ageUnit != null)
-              _ReviewRow(
-                label: 'Age',
-                value: '${_ageValue.text} ${_ageUnit!}',
-              ),
-            if (_gender != null)
-              _ReviewRow(label: 'Gender', value: _gender!),
+              _ReviewRow(label: 'Age', value: '${_ageValue.text} ${_ageUnit!}'),
+            if (_gender != null) _ReviewRow(label: 'Gender', value: _gender!),
             if (_weightValue.text.isNotEmpty && _weightUnit != null)
               _ReviewRow(
                 label: 'Weight',
@@ -586,10 +748,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             if (_vaccination.text.isNotEmpty)
               _ReviewRow(label: 'Vaccination', value: _vaccination.text),
             if (_shortDescription.text.isNotEmpty)
-              _ReviewRow(
-                label: 'Description',
-                value: _shortDescription.text,
-              ),
+              _ReviewRow(label: 'Description', value: _shortDescription.text),
             if (_additionalNotes.text.isNotEmpty)
               _ReviewRow(label: 'Notes', value: _additionalNotes.text),
           ],
@@ -689,6 +848,8 @@ class _TextField extends StatelessWidget {
     this.serverErrors,
     this.keyboardType,
     this.prefixText,
+    this.inputFormatters,
+    this.formFieldKey,
     this.maxLines = 1,
   });
 
@@ -700,14 +861,28 @@ class _TextField extends StatelessWidget {
   final List<String>? serverErrors;
   final TextInputType? keyboardType;
   final String? prefixText;
+
+  /// Listing-specific input restrictions, e.g. digits only for the age.
+  final List<TextInputFormatter>? inputFormatters;
+
+  /// The key of the field's own [FormFieldState], for the rare case that
+  /// re-validating one field is the right thing to do (the age unit changes the
+  /// age limit without changing the age).
+  final GlobalKey<FormFieldState<String>>? formFieldKey;
+
   final int maxLines;
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
+      key: formFieldKey,
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      inputFormatters: inputFormatters,
+      // Per field, never on the `Form`: a change in one step must not draw
+      // errors on fields the seller has not reached yet.
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -763,6 +938,9 @@ class _Dropdown<T> extends StatelessWidget {
       items: items,
       onChanged: onChanged,
       isExpanded: true,
+      // Per field, like the text inputs. A dropdown the seller has not opened
+      // does not show an error because of something typed elsewhere.
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
@@ -804,15 +982,9 @@ class _ReviewRow extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
+          Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
         ],
       ),
     );
   }
 }
-

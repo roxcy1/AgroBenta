@@ -12,6 +12,7 @@ use App\Repositories\Admin\AdminListingRepository;
 use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AdminListingService
 {
@@ -38,9 +39,38 @@ class AdminListingService
      * [D-02 rule 8] makes administrator approval a precondition for `active`,
      * and a seller has no path to it at all — `SellerListingService` stops at
      * `pending` and does not contain an equivalent method.
+     *
+     * A `pending` listing with no stored photo is refused [DEC-03]. That is a
+     * legacy guard for rows queued before the submission rule existed; for new
+     * submissions the seller-side check is the enforcement point. The same
+     * guard also refuses a row whose stored filenames have no files on disk, so
+     * a restored or partially lost storage cannot produce a live listing with
+     * dead images. Only `pending` is guarded here, so any other state still
+     * receives the 409 the transition guard gives it rather than a misleading
+     * validation error.
+     *
+     * @throws ValidationException if a pending listing has no stored photo or a
+     *                             stored photo has no file
      */
     public function approve(Listing $listing, User $actor): Listing
     {
+        if ($listing->status === ListingStatus::Pending) {
+            if (! $listing->hasStoredPhotos()) {
+                throw ValidationException::withMessages([
+                    'photos' => 'At least one photo is required before a listing can be approved.',
+                ]);
+            }
+
+            // The stored filenames are checked against the disk as the last
+            // gate before publication, so a legacy row — or one whose files
+            // have since disappeared — cannot go live with broken images.
+            if ($listing->missingPhotoFilenames() !== []) {
+                throw ValidationException::withMessages([
+                    'photos' => 'One or more listing photos are missing. The listing cannot be approved until they are re-uploaded.',
+                ]);
+            }
+        }
+
         return $this->moderate(
             $listing,
             ListingStatus::Pending,

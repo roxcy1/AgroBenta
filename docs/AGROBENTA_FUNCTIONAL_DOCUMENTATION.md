@@ -1,6 +1,7 @@
 # AgroBenta — Functional & System Documentation
 
-**Status: APPROVED — aligned to the capstone manuscript (2026-10-24)**
+**Status: APPROVED — aligned to the capstone manuscript (2026-10-24);
+listing-input decisions DEC-01 to DEC-03 approved 2026-10-27**
 
 ---
 
@@ -39,6 +40,11 @@ against the text, or the class diagrams against the ERD), the point is recorded
 as an open item in §13 and must be answered by the manuscript's author. It is
 not settled by guessing.
 
+Where the manuscript is **unavailable or silent**, a rule may be adopted as an
+explicit project-owner decision and marked **[DEC-nn]**. Such a rule is binding
+until the manuscript can be checked. If the manuscript states something
+different, the manuscript wins and this document is corrected.
+
 ### 0.2 Markers used in this document
 
 | Marker | Meaning |
@@ -46,6 +52,7 @@ not settled by guessing.
 | **[MS]** | Taken from the manuscript text. Page numbers refer to the manuscript PDF. |
 | **[MS-P]** | Taken from a manuscript prototype screen (Figures 4–27). |
 | **[D-nn]** / **[SEC]** | An earlier approved decision, kept because the manuscript agrees or is silent. |
+| **[DEC-nn]** | A project-owner decision adopted after the 2026-10-24 alignment, where the manuscript was unavailable or silent. Not a manuscript rule; see §13.4. |
 | **[OPEN]** | Not settled. Listed in §13. Do not implement a guess. |
 
 ### 0.3 Terminology
@@ -318,16 +325,16 @@ The marketplace inventory unit. Owned by exactly one seller.
 | Category | `livestock_type`: **cattle, carabao, goat, swine** (§4.1). |
 | Title | Shown as required in the prototype **[MS-P Figure 22]**; there is no title column in the ERD — see §13, MS-08. |
 | Description | Required in the prototype (up to 500 characters). |
-| Price | `asking_price`, set by the seller. |
+| Price | `asking_price`, set by the seller; at most two decimal places **[DEC-02]** (§4.7). |
 | Quantity | Whole units, at least 1. |
 | Breed | Optional. |
-| Age | `age_value` + `age_unit` (`day` / `month` / `year`). Optional. |
-| Weight | `weight_value` + `weight_unit` (`kg` / `lb`). Optional. |
+| Age | `age_value` + `age_unit` (`day` / `month` / `year`). Optional; maximum 25 years / 300 months / 9,125 days according to the selected unit **[DEC-01]** (§4.7). |
+| Weight | `weight_value` + `weight_unit` (`kg` / `lb`). Optional; at most two decimal places **[DEC-02]** (§4.7). |
 | Sex | `gender`: `male` / `female`. Optional. |
 | Condition | `health_status`, free text. Optional. |
 | Vaccination | `vaccination`, free text. Optional. |
 | Location | Required. Within the locale (§1). |
-| Photos | At least one photo **[MS-P Figure 22]**. Stored in `listings.photos` (JSON). |
+| Photos | At least one photo **[MS-P Figure 22]**, required at submission **[DEC-03]**. A draft may have none (§4.5). Stored in `listings.photos` (JSON). |
 
 Listing information follows **[MS p.14]**: *"livestock category, breed, age,
 sex, weight, condition, location, images, description, and asking price."*
@@ -380,6 +387,8 @@ Rules:
 6. Buyers browse only `active` listings. The marketplace query filters to
    `active` server-side.
 7. A seller never sends `status` directly. The server sets it from the action.
+8. A listing must have at least one stored photo before it can be submitted for
+   review, and therefore before it can become `active` (§4.5). **[DEC-03]**
 
 > **[OPEN] MS-01 — direct publish vs admin approval.** The Add New Listing
 > prototype (Figure 22) has a seller-chosen "Status: Active" and a "Publish
@@ -401,12 +410,34 @@ set and match the ERD.
   absolute URLs.
 * At least one photo is required to publish **[MS-P Figure 22]**; the maximum is
   a platform setting.
+* A draft may have no photos. The seller must have at least one stored photo
+  before **submitting for review**; submission is refused otherwise. **[DEC-03]**
+* Admin approval must also refuse a `pending` listing with no stored photo. This
+  is a guard for a listing that reached `pending` before the submission rule
+  existed; for new submissions the submit check is the enforcement point.
+  **[DEC-03]**
 * Photos are public once the listing is active.
 
 ### 4.6 Search and filtering **[MS p.14; MS-P Figures 7–8]**
 
 Users can search and filter active listings by livestock category, location,
 asking price and other available listing characteristics.
+
+### 4.7 Numeric limits **[DEC-01, DEC-02]**
+
+* **Age.** When an age is given, the maximum depends on the selected unit:
+  **25 years**, **300 months**, or **9,125 days**. The limit is applied in the
+  unit the seller selected; the server does not convert one unit into another.
+* **Weight and asking price.** At most **two decimal places**. A value with three
+  or more decimal places is rejected, not rounded, so the stored amount always
+  matches what the seller entered.
+* Both limits are enforced by the API and in the mobile form; the API is
+  authoritative.
+
+These are project-owner decisions, not manuscript rules. The final manuscript
+was not available when they were adopted, and the draft available at the time
+did not state them. Re-check them against the manuscript when it is available
+(§0.1).
 
 ---
 
@@ -794,6 +825,7 @@ The manuscript ERD (p.94) is the reference schema:
   (§3.2).
 * Do **not** add a second account table or split buyers and sellers (§2.3).
 * Do **not** add payment-processing tables (§11).
+* Do **not** add a listing `title` column while MS-08 is open (§12.1, §13.2).
 * Preserve backward compatibility; existing data must remain readable.
 
 ### 12.3 Manuscript diagrams that conflict with the ERD
@@ -860,6 +892,21 @@ for the manuscript's author.
 | **OQ-17** | What happens to an `active` listing when its quantity is used up by transactions. |
 | **A-01** | Whether a rejected listing can be edited and resubmitted, or must be replaced. |
 
+### 13.4 Closed by project-owner decision (2026-10-27)
+
+Adopted after the 2026-10-24 manuscript alignment. The final manuscript was not
+available during that review, so these are recorded as decisions, not as
+manuscript rules, and must be re-checked against the manuscript when it is
+available (§0.1).
+
+| ID | Item | Resolution |
+|---|---|---|
+| **DEC-01** | Maximum age | 25 years / 300 months / 9,125 days, applied in the selected unit (§4.7). |
+| **DEC-02** | Decimal precision | Weight and asking price accept at most two decimal places; a third decimal is rejected (§4.7). |
+| **DEC-03** | Listing photos | A draft may have none; submission requires at least one stored photo, and admin approval refuses a zero-photo `pending` listing as a legacy guard (§4.4 rule 8, §4.5). |
+
+MS-08 (listing title) remains open in §13.2. No title field or column is added.
+
 ---
 
 ## 14. Change control
@@ -882,4 +929,5 @@ Related: the manuscript (PDF, kept outside the repository),
 | Date | Change |
 |---|---|
 | 2026-10-24 | Aligned to the capstone manuscript, confirmed by the project manager as the final document. Allowed the Seller Mode / Buyer Mode view switch (§2.7); added sign-in features (§2.8); replaced "no identity document upload" with private supporting documents (§3.3); limited livestock categories to cattle, carabao, goats and swine (§4.1); added "seller marks as sold" (§4.4); set the price suggestion to an external AI API, visible to buyers as a reference (§5); set the transaction flow to seller-accepts / buyer-confirms-receipt (§6.4); added inquiries separate from messages (§8.2); added analytics scope (§9.4); rewrote out-of-scope (§11) and open items (§13). Conflicts inside the manuscript recorded as MS-01 to MS-17. |
+| 2026-10-27 | Adopted project-owner decisions DEC-01 to DEC-03: unit-aware maximum age (25 years / 300 months / 9,125 days), at most two decimal places for weight and asking price, and the photo minimum at submission with an approval-time guard for legacy listings (§4.4, §4.5, §4.7, §13.4). Added the `[DEC-nn]` marker because the manuscript was unavailable; the rules must be re-checked against it. MS-08 (listing title) remains open. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

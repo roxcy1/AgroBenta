@@ -11,6 +11,7 @@ use App\Notifications\ListingApproved;
 use App\Notifications\ListingRejected;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -43,6 +44,10 @@ class ListingModerationTest extends TestCase
     {
         parent::setUp();
 
+        // Approval compares the stored filenames with the disk now, so every
+        // fixture needs a real (faked) disk behind its photo.
+        Storage::fake(Listing::PHOTO_DISK);
+
         $this->admin = User::factory()->create([
             'role' => UserRole::Admin,
             'seller_capability' => SellerCapability::Buyer,
@@ -70,10 +75,13 @@ class ListingModerationTest extends TestCase
 
     /**
      * @param  array<string, mixed>  $overrides
+     * @param  bool  $writePhotoFiles  When false, the stored filenames are left
+     *                                 without files, to model a row whose
+     *                                 storage was lost or never written.
      */
-    private function createListing(array $overrides = []): Listing
+    private function createListing(array $overrides = [], bool $writePhotoFiles = true): Listing
     {
-        return Listing::create(array_merge([
+        $listing = Listing::create(array_merge([
             'seller_id' => $this->seller->id,
             'livestock_type' => 'cattle',
             'breed' => 'Angus',
@@ -89,10 +97,22 @@ class ListingModerationTest extends TestCase
             'vaccination' => 'up_to_date',
             'short_description' => 'Healthy Angus bull',
             'additional_notes' => null,
-            'photos' => [],
+            // A stored photo by default, because approval requires one
+            // [DEC-03]. Tests about the photo rule override this with `[]`.
+            'photos' => ['approved-photo.jpg'],
             'status' => ListingStatus::Pending,
             'admin_note' => null,
         ], $overrides));
+
+        if ($writePhotoFiles) {
+            $disk = Storage::disk(Listing::PHOTO_DISK);
+
+            foreach ($listing->storedPhotoFilenames() as $filename) {
+                $disk->put($listing->id.'/'.$filename, 'photo');
+            }
+        }
+
+        return $listing;
     }
 
     /**
@@ -234,7 +254,9 @@ class ListingModerationTest extends TestCase
     #[Test]
     public function an_admin_can_approve_a_pending_listing(): void
     {
-        $listing = $this->createListing();
+        // Approval requires a stored photo [DEC-03]; this is the acceptance
+        // case, and the refusal below is the other half of the rule.
+        $listing = $this->createListing(['photos' => ['approved-photo.jpg']]);
 
         $response = $this->moderate("/api/admin/listings/{$listing->id}/approve");
 
@@ -242,6 +264,77 @@ class ListingModerationTest extends TestCase
         $response->assertJsonPath('success', true);
         $response->assertJsonPath('data.id', $listing->id);
         $response->assertJsonPath('data.status', 'active');
+    }
+
+    #[Test]
+    public function a_pending_listing_without_a_stored_photo_cannot_be_approved(): void
+    {
+        Notification::fake();
+
+        // A legacy row: it reached `pending` before the submission rule
+        // existed, so approval is the last point at which the hole can be
+        // closed [DEC-03].
+        $listing = $this->createListing(['photos' => []]);
+
+        $this->moderate("/api/admin/listings/{$listing->id}/approve")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertSame(ListingStatus::Pending, $listing->fresh()->status);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function a_pending_listing_whose_photo_file_is_missing_cannot_be_approved(): void
+    {
+        Notification::fake();
+
+        // The column names a photo, but storage has no such file. Approval is
+        // the last gate before publication, so the row stays pending rather
+        // than going live with a dead image.
+        $listing = $this->createListing(writePhotoFiles: false);
+
+        $this->moderate("/api/admin/listings/{$listing->id}/approve")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertSame(ListingStatus::Pending, $listing->fresh()->status);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function a_pending_listing_with_one_missing_photo_file_cannot_be_approved(): void
+    {
+        Notification::fake();
+
+        $listing = $this->createListing([
+            'photos' => ['present.jpg', 'missing.jpg'],
+        ]);
+
+        // The helper writes every default filename; delete one to leave a
+        // mixed set.
+        Storage::disk(Listing::PHOTO_DISK)->delete($listing->id.'/missing.jpg');
+
+        $this->moderate("/api/admin/listings/{$listing->id}/approve")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertSame(ListingStatus::Pending, $listing->fresh()->status);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function approval_accepts_a_pending_listing_whose_photo_file_exists(): void
+    {
+        $listing = $this->createListing();
+
+        Storage::disk(Listing::PHOTO_DISK)->assertExists(
+            $listing->id.'/approved-photo.jpg',
+        );
+
+        $this->moderate("/api/admin/listings/{$listing->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Active->value);
     }
 
     #[Test]

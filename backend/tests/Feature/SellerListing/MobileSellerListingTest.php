@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\SellerListing;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Enums\UserRole;
 use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -17,11 +19,11 @@ use Tests\TestCase;
  * Seller listing management — contract §5.4.
  *
  * The lifecycle is the point of this file. A seller may create a draft, submit
- * it, edit a draft or an active listing, and delete a draft or a withdrawn one.
- * Everything else — publishing, deactivating, marking sold, or reaching another
- * seller's row — is refused, and each refusal is asserted rather than assumed:
- * this is the surface where "the client just won't offer that button" is not a
- * security property.
+ * it, edit a draft or an active listing, mark an active listing as sold, and
+ * delete a draft or a withdrawn one. Everything else — publishing, deactivating,
+ * or reaching another seller's row — is refused, and each refusal is asserted
+ * rather than assumed: this is the surface where "the client just won't offer
+ * that button" is not a security property.
  */
 class MobileSellerListingTest extends TestCase
 {
@@ -36,6 +38,10 @@ class MobileSellerListingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Submission now compares the stored filenames with the disk, so the
+        // suite needs a real (faked) disk rather than a name with no file.
+        Storage::fake(Listing::PHOTO_DISK);
 
         $this->seller = User::factory()->seller()->create([
             'role' => UserRole::User,
@@ -62,10 +68,13 @@ class MobileSellerListingTest extends TestCase
 
     /**
      * @param  array<string, mixed>  $overrides
+     * @param  bool  $writePhotoFiles  When false, the stored filenames are left
+     *                                 without files, to model a row whose
+     *                                 storage was lost or never written.
      */
-    private function createListing(User $seller, array $overrides = []): Listing
+    private function createListing(User $seller, array $overrides = [], bool $writePhotoFiles = true): Listing
     {
-        return Listing::create(array_merge([
+        $listing = Listing::create(array_merge([
             'seller_id' => $seller->id,
             'livestock_type' => 'cattle',
             'breed' => 'Angus',
@@ -81,9 +90,21 @@ class MobileSellerListingTest extends TestCase
             'vaccination' => 'up_to_date',
             'short_description' => 'Healthy Angus bull',
             'additional_notes' => null,
-            'photos' => [],
+            // A stored photo by default, because submission requires one
+            // [DEC-03]. Tests about the photo rule override this with `[]`.
+            'photos' => ['submitted-photo.jpg'],
             'status' => ListingStatus::Draft,
         ], $overrides));
+
+        if ($writePhotoFiles) {
+            $disk = Storage::disk(Listing::PHOTO_DISK);
+
+            foreach ($listing->storedPhotoFilenames() as $filename) {
+                $disk->put($listing->id.'/'.$filename, 'photo');
+            }
+        }
+
+        return $listing;
     }
 
     /**
@@ -121,6 +142,7 @@ class MobileSellerListingTest extends TestCase
             'store' => ['POST', '/api/seller/listings'],
             'update' => ['PATCH', '/api/seller/listings/{listing}'],
             'submit' => ['POST', '/api/seller/listings/{listing}/submit'],
+            'markSold' => ['POST', '/api/seller/listings/{listing}/mark-sold'],
             'destroy' => ['DELETE', '/api/seller/listings/{listing}'],
         ];
     }
@@ -330,6 +352,110 @@ class MobileSellerListingTest extends TestCase
             ->assertJsonValidationErrors('age_value');
     }
 
+    /**
+     * The approved unit-aware age ceilings [DEC-01], as boundary and one above.
+     *
+     * @return array<string, array{string, int, int}>
+     */
+    public static function ageLimits(): array
+    {
+        return [
+            'days' => ['day', 9125, 9126],
+            'months' => ['month', 300, 301],
+            'years' => ['year', 25, 26],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('ageLimits')]
+    public function the_age_maximum_depends_on_the_selected_unit(string $unit, int $maximum, int $aboveMaximum): void
+    {
+        // The boundary is accepted in each unit. A unit-blind `max:25` would
+        // reject 9,125 days and 300 months, so these assertions also prove the
+        // value is not converted to another unit first.
+        $this->store(['age_value' => $maximum, 'age_unit' => $unit])->assertCreated();
+
+        $this->store(['age_value' => $aboveMaximum, 'age_unit' => $unit])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('age_value');
+
+        $this->assertDatabaseCount('listings', 1);
+    }
+
+    #[Test]
+    #[DataProvider('ageLimits')]
+    public function the_age_maximum_depends_on_the_selected_unit_on_update(string $unit, int $maximum, int $aboveMaximum): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'age_value' => null,
+            'age_unit' => null,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'age_value' => $maximum,
+                'age_unit' => $unit,
+            ])
+            ->assertOk();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'age_value' => $aboveMaximum,
+                'age_unit' => $unit,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('age_value');
+    }
+
+    #[Test]
+    public function a_third_decimal_place_is_rejected_on_create(): void
+    {
+        // DEC-02: the value is rejected rather than silently rounded by the
+        // decimal column, so what the seller typed is what would be stored.
+        $this->store([
+            'asking_price' => 50000.123,
+            'weight_value' => 320.555,
+            'weight_unit' => 'kg',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['asking_price', 'weight_value']);
+
+        $this->assertDatabaseCount('listings', 0);
+    }
+
+    #[Test]
+    public function two_decimal_places_are_accepted_on_create(): void
+    {
+        $this->store([
+            'asking_price' => 50000.12,
+            'weight_value' => 320.55,
+            'weight_unit' => 'kg',
+        ])->assertCreated();
+
+        $this->assertDatabaseCount('listings', 1);
+    }
+
+    #[Test]
+    public function a_third_decimal_place_is_rejected_on_update(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'asking_price' => 50000.123,
+                'weight_value' => 320.555,
+                'weight_unit' => 'kg',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['asking_price', 'weight_value']);
+
+        // Refused, not stored: the row keeps the values it already had.
+        $stored = Listing::query()->findOrFail($listing->id);
+
+        $this->assertSame('50000.00', $stored->asking_price);
+        $this->assertSame('500.00', $stored->weight_value);
+    }
+
     #[Test]
     public function a_non_string_photo_entry_is_rejected(): void
     {
@@ -338,6 +464,33 @@ class MobileSellerListingTest extends TestCase
         $this->store(['photos' => [123]])
             ->assertStatus(422)
             ->assertJsonValidationErrors('photos.0');
+    }
+
+    #[Test]
+    public function a_listing_cannot_be_created_with_photos(): void
+    {
+        // A listing that does not exist yet has no directory to scope a
+        // filename to, so a photo can only be attached through the upload
+        // endpoint after the draft is saved.
+        $this->store(['photos' => ['smuggled.jpg']])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertDatabaseCount('listings', 0);
+    }
+
+    #[Test]
+    public function a_draft_can_be_created_without_photos(): void
+    {
+        // Photo-optional drafting is the other half of the rule: no photos is
+        // valid, an absent key is valid, and only a non-empty list is refused.
+        $this->store(['photos' => []])
+            ->assertCreated()
+            ->assertJsonPath('data.photos', []);
+
+        $this->store()
+            ->assertCreated()
+            ->assertJsonPath('data.photos', []);
     }
 
     // ------------------------------------------------------------------- read
@@ -584,12 +737,136 @@ class MobileSellerListingTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings/'.$listing->id.'/submit')
             ->assertOk()
-            ->assertJsonPath('data.status', ListingStatus::Pending->value);
+            ->assertJsonPath('data.status', ListingStatus::Pending->value)
+            // A stored photo is what makes the draft submittable [DEC-03], and
+            // it survives the transition unchanged.
+            ->assertJsonCount(1, 'data.photos');
 
         $this->assertDatabaseHas('listings', [
             'id' => $listing->id,
             'status' => ListingStatus::Pending->value,
         ]);
+    }
+
+    #[Test]
+    public function a_draft_without_a_stored_photo_cannot_be_submitted_for_review(): void
+    {
+        // A draft may be saved with no photos (§4.5), but it cannot enter
+        // review until at least one is stored [DEC-03].
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'photos' => [],
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_draft_whose_stored_photo_file_is_missing_cannot_be_submitted_for_review(): void
+    {
+        // The column names a photo, but no file was ever written. Without this
+        // check the draft could be queued and approved on a broken image.
+        $listing = $this->createListing(
+            $this->seller,
+            ['status' => ListingStatus::Draft],
+            writePhotoFiles: false,
+        );
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    #[Test]
+    #[DataProvider('ageLimits')]
+    public function a_draft_whose_age_exceeds_the_unit_maximum_cannot_be_submitted(string $unit, int $maximum, int $aboveMaximum): void
+    {
+        // A draft written before the limit existed, or outside this API, is
+        // caught at the last gate rather than queued for a moderator.
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'age_value' => $aboveMaximum,
+            'age_unit' => $unit,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('age_value');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    #[Test]
+    #[DataProvider('ageLimits')]
+    public function a_draft_at_the_age_maximum_can_be_submitted(string $unit, int $maximum, int $aboveMaximum): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'age_value' => $maximum,
+            'age_unit' => $unit,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Pending->value);
+    }
+
+    #[Test]
+    public function a_draft_with_more_than_two_decimal_places_cannot_be_submitted(): void
+    {
+        // Create and update already refuse a third decimal, so this models a row
+        // written outside the API or before the rule existed. Submission is the
+        // last gate, and it must see the stored value rather than the rounded
+        // `decimal:2` cast.
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'asking_price' => 50000.123,
+            'weight_value' => 320.555,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['asking_price', 'weight_value']);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_draft_at_the_maximum_precision_can_be_submitted(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'asking_price' => 50000.12,
+            'weight_value' => 320.55,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Pending->value);
     }
 
     #[Test]
@@ -705,6 +982,100 @@ class MobileSellerListingTest extends TestCase
         $this->assertDatabaseHas('listings', [
             'id' => $listing->id,
             'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    // ---------------------------------------------------------------- mark sold
+
+    #[Test]
+    public function an_active_listing_can_be_marked_as_sold(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Active]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Listing marked as sold.')
+            ->assertJsonPath('data.status', ListingStatus::Sold->value)
+            ->assertJsonPath('data.id', $listing->id);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Sold->value,
+        ]);
+
+        $this->assertDatabaseHas('activities', [
+            'user_id' => $this->seller->id,
+            'action' => ActivityAction::ListingMarkedSold->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_mark_sold_cannot_carry_a_status_or_seller_id(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Active]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold', ['status' => 'active'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold', [
+                'seller_id' => $this->otherSeller->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('seller_id');
+
+        // Rejected before the controller: the listing is still active.
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Active->value,
+        ]);
+    }
+
+    /**
+     * @return array<string, array{ListingStatus}>
+     */
+    public static function nonSellableStatuses(): array
+    {
+        return [
+            'draft' => [ListingStatus::Draft],
+            'pending' => [ListingStatus::Pending],
+            'sold' => [ListingStatus::Sold],
+            'inactive' => [ListingStatus::Inactive],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('nonSellableStatuses')]
+    public function a_non_active_listing_cannot_be_marked_as_sold(ListingStatus $status): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => $status]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold')
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => $status->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_seller_cannot_mark_another_sellers_listing_as_sold(): void
+    {
+        $listing = $this->createListing($this->otherSeller, ['status' => ListingStatus::Active]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold')
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Active->value,
         ]);
     }
 
@@ -892,6 +1263,7 @@ class MobileSellerListingTest extends TestCase
                 'GET api/seller/listings',
                 'POST api/seller/listings',
                 'POST api/seller/listings/{listing}/submit',
+                'POST api/seller/listings/{listing}/mark-sold',
                 'PATCH api/seller/listings/{listing}',
                 'DELETE api/seller/listings/{listing}',
                 // Listing photos (functional documentation §4.5, D-10): file

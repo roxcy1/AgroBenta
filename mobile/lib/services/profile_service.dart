@@ -38,6 +38,7 @@ class ProfileService {
     String? location,
     String? avatarUrl,
     String? bio,
+    String? currentPassword,
   }) {
     final Map<String, dynamic> body = <String, dynamic>{
       'name': ?name,
@@ -46,6 +47,7 @@ class ProfileService {
       'location': ?location,
       'avatar_url': ?avatarUrl,
       'bio': ?bio,
+      'current_password': ?currentPassword,
     };
 
     return _client.put<User>(

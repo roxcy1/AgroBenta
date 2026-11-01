@@ -118,7 +118,12 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     super.initState();
 
     _tokenStore = widget.tokenStore ?? TokenStorage();
-    _apiClient = ApiClient(tokenStorage: _tokenStore);
+    _apiClient = ApiClient(
+      tokenStorage: _tokenStore,
+      // A 403 may mean seller rights were removed after sign-in, so the account
+      // is re-read from the server; the controller then drops Seller Mode.
+      onForbidden: () => _accountModeController.recheckSellerCapability(),
+    );
     _authService = AuthService(_apiClient);
     _authRepository = AuthRepository(_authService, _tokenStore);
     _authController = AuthController(_authRepository);

@@ -1,5 +1,6 @@
 import 'package:agrobenta_mobile/features/seller_listings/view/seller_listing_detail_screen.dart';
 import 'package:agrobenta_mobile/features/seller_listings/view/seller_listing_form_screen.dart';
+import 'package:agrobenta_mobile/features/seller_listings/view/seller_listing_views.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,7 +23,10 @@ void main() {
       ),
     );
 
-    expect(find.text('No listings yet — Create your first listing'), findsOneWidget);
+    expect(
+      find.text('No listings yet — Create your first listing'),
+      findsOneWidget,
+    );
     expect(
       find.widgetWithText(FilledButton, 'Create a listing'),
       findsOneWidget,
@@ -48,8 +52,7 @@ void main() {
     // header, so an unscoped finder would count both and report doubles.
     Finder inCards(String text) => find.descendant(
       of: find.byWidgetPredicate(
-        (Widget widget) =>
-            widget.runtimeType.toString() == 'SellerListingCard',
+        (Widget widget) => widget.runtimeType.toString() == 'SellerListingCard',
       ),
       matching: find.text(text),
     );
@@ -118,6 +121,140 @@ void main() {
     await sellerListingsSettle(tester);
 
     expect(find.byType(SellerListingDetailScreen), findsOneWidget);
+  });
+
+  testWidgets('a draft without photos cannot be submitted from the list', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(id: 1, livestockType: 'Cattle', status: 'draft'),
+        ],
+        total: 1,
+      ),
+    );
+
+    expect(find.text(listingPhotoRequirementMessage), findsOneWidget);
+    final TextButton submit = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Submit for review'),
+    );
+    expect(submit.onPressed, isNull);
+  });
+
+  testWidgets('a draft with a stored photo offers submission', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(
+            id: 1,
+            livestockType: 'Cattle',
+            status: 'draft',
+            photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+          ),
+        ],
+        total: 1,
+      ),
+    );
+
+    expect(find.text(listingPhotoRequirementMessage), findsNothing);
+    final TextButton submit = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Submit for review'),
+    );
+    expect(submit.onPressed, isNotNull);
+  });
+
+  testWidgets('the detail screen blocks submit for a draft without photos', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(id: 1, livestockType: 'Cattle', status: 'draft'),
+        ],
+        total: 1,
+      ),
+    );
+
+    await tester.tap(find.text('Cattle'));
+    await sellerListingsSettle(tester);
+
+    expect(find.text(listingPhotoRequirementMessage), findsOneWidget);
+    final FilledButton submit = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Submit for review'),
+    );
+    expect(submit.onPressed, isNull);
+  });
+
+  testWidgets('an active listing offers Mark as sold from the list', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(id: 1, livestockType: 'Cattle', status: 'active'),
+        ],
+        total: 1,
+      ),
+    );
+
+    expect(find.text('Mark as sold'), findsOneWidget);
+  });
+
+  testWidgets('a pending listing does not offer Mark as sold', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(id: 1, livestockType: 'Cattle', status: 'pending'),
+        ],
+        total: 1,
+      ),
+    );
+
+    expect(find.text('Mark as sold'), findsNothing);
+  });
+
+  testWidgets('confirming Mark as sold shows sold status', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath.endsWith('/mark-sold')) {
+          return sellerListingResponse(
+            listing: listingJson(id: 1, status: 'sold'),
+          );
+        }
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 1, livestockType: 'Cattle', status: 'active'),
+          ],
+          total: 1,
+        );
+      },
+    );
+
+    await tester.tap(find.text('Mark as sold'));
+    await sellerListingsSettle(tester);
+
+    // Confirmation dialog appears.
+    expect(find.text('Mark this listing as sold?'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark as sold'));
+    await sellerListingsSettle(tester);
+
+    // The sold listing is reflected in the list.
+    expect(find.text('Sold'), findsWidgets);
   });
 }
 

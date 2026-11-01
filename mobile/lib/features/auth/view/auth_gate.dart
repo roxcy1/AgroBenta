@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../state/auth_controller.dart';
 import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 import 'session_status_screens.dart';
 import 'sign_in_screen.dart';
@@ -32,6 +33,7 @@ class _AuthGateState extends State<AuthGate> {
   /// Which form a signed-out user is looking at. View state, not auth state:
   /// it means nothing to the server and must not survive a sign-out.
   bool _showRegistration = false;
+  bool _showForgotPassword = false;
 
   bool _restoreStarted = false;
   bool _wasSignedIn = false;
@@ -74,8 +76,13 @@ class _AuthGateState extends State<AuthGate> {
 
     if (signedIn != _wasSignedIn) {
       _wasSignedIn = signedIn;
-      if (!signedIn && _showRegistration) {
-        setState(() => _showRegistration = false);
+      if (!signedIn) {
+        if (_showRegistration || _showForgotPassword) {
+          setState(() {
+            _showRegistration = false;
+            _showForgotPassword = false;
+          });
+        }
       }
     }
   }
@@ -87,15 +94,30 @@ class _AuthGateState extends State<AuthGate> {
     return switch (state.status) {
       AuthStatus.restoring => const RestoringSessionScreen(),
       AuthStatus.restoreFailed => RestoreFailedScreen(state: state),
-      AuthStatus.signedOut =>
-        _showRegistration
-            ? RegisterScreen(onSignIn: _showSignIn)
-            : SignInScreen(onRegister: _showRegister),
+      AuthStatus.signedOut => _showForgotPassword
+          ? ForgotPasswordScreen(onBackToSignIn: _showSignIn)
+          : _showRegistration
+              ? RegisterScreen(onSignIn: _showSignIn)
+              : SignInScreen(
+                  onRegister: _showRegister,
+                  onForgotPassword: _goToForgotPassword,
+                ),
       AuthStatus.signedIn => widget.authenticatedView(context),
     };
   }
 
-  void _showRegister() => setState(() => _showRegistration = true);
+  void _showRegister() => setState(() {
+        _showRegistration = true;
+        _showForgotPassword = false;
+      });
 
-  void _showSignIn() => setState(() => _showRegistration = false);
+  void _goToForgotPassword() => setState(() {
+        _showForgotPassword = true;
+        _showRegistration = false;
+      });
+
+  void _showSignIn() => setState(() {
+        _showRegistration = false;
+        _showForgotPassword = false;
+      });
 }

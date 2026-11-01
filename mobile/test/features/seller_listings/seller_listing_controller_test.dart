@@ -1,11 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:agrobenta_mobile/features/seller_listings/state/listing_photo_item.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_controller.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_draft.dart';
 import 'package:agrobenta_mobile/models/listing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import '../../support/seller_listing_fakes.dart';
+
+/// A one-pixel PNG, so an upload has real bytes to send.
+final Uint8List _pngBytes = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+);
 
 /// The controller is where the lifecycle rules are mirrored, so these tests are
 /// about the two things that must never go wrong: a seller must never be offered
@@ -40,6 +50,35 @@ void main() {
       expect(_canDelete(ListingStatus.pending), isFalse);
       expect(_canDelete(ListingStatus.active), isFalse);
       expect(_canDelete(ListingStatus.sold), isFalse);
+    });
+
+    test('canMarkSold covers active only', () {
+      // Marking sold is one-way and terminal: only an active listing may be
+      // marked, and once sold it stays sold.
+      expect(_canMarkSold(ListingStatus.active), isTrue);
+      expect(_canMarkSold(ListingStatus.draft), isFalse);
+      expect(_canMarkSold(ListingStatus.pending), isFalse);
+      expect(_canMarkSold(ListingStatus.sold), isFalse);
+      expect(_canMarkSold(ListingStatus.inactive), isFalse);
+    });
+
+    test('submission requires at least one stored photo', () {
+      // DEC-03: a draft may exist without photos, but review may not start
+      // until one is stored. The server remains the authority; this mirror is
+      // what keeps a refused submit from being offered.
+      final Listing empty = Listing.fromJson(
+        listingJson(id: 1, status: 'draft'),
+      );
+      final Listing withPhoto = Listing.fromJson(
+        listingJson(
+          id: 1,
+          status: 'draft',
+          photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+        ),
+      );
+
+      expect(SellerListingController.hasSubmissionPhotos(empty), isFalse);
+      expect(SellerListingController.hasSubmissionPhotos(withPhoto), isTrue);
     });
   });
 
@@ -111,23 +150,26 @@ void main() {
       expect(harness.controller.state.errorMessage, isNotNull);
     });
 
-    test('a loadInitial while one is already in flight costs one request', () async {
-      // Loading resolves synchronously for a mock transport, so a truly
-      // concurrent pair needs a handler that holds the response hostage. That is
-      // exactly the case the idempotency guard exists for.
-      final Completer<http.Response> gate = Completer<http.Response>();
-      final harness = buildRecordedController(
-        (RecordedRequest request) => gate.future,
-      );
-      addTearDown(harness.controller.dispose);
+    test(
+      'a loadInitial while one is already in flight costs one request',
+      () async {
+        // Loading resolves synchronously for a mock transport, so a truly
+        // concurrent pair needs a handler that holds the response hostage. That is
+        // exactly the case the idempotency guard exists for.
+        final Completer<http.Response> gate = Completer<http.Response>();
+        final harness = buildRecordedController(
+          (RecordedRequest request) => gate.future,
+        );
+        addTearDown(harness.controller.dispose);
 
-      final Future<void> first = harness.controller.loadInitial();
-      final Future<void> second = harness.controller.loadInitial();
-      gate.complete(sellerListingListResponse());
-      await Future.wait(<Future<void>>[first, second]);
+        final Future<void> first = harness.controller.loadInitial();
+        final Future<void> second = harness.controller.loadInitial();
+        gate.complete(sellerListingListResponse());
+        await Future.wait(<Future<void>>[first, second]);
 
-      expect(harness.recorded, hasLength(1));
-    });
+        expect(harness.recorded, hasLength(1));
+      },
+    );
   });
 
   group('filtering and search', () {
@@ -161,73 +203,74 @@ void main() {
       expect(harness.recorded, hasLength(after));
     });
 
-
-  group('active tab inactive tail', () {
-    test(
-      'the active tab appends page 1 of inactive below the active rows',
-      () async {
-        final harness = buildRecordedController((
-          RecordedRequest request,
-        ) async {
-          if (request.query['status'] == 'inactive') {
+    group('active tab inactive tail', () {
+      test(
+        'the active tab appends page 1 of inactive below the active rows',
+        () async {
+          final harness = buildRecordedController((
+            RecordedRequest request,
+          ) async {
+            if (request.query['status'] == 'inactive') {
+              return sellerListingListResponse(
+                listings: <Map<String, dynamic>>[
+                  listingJson(id: 9, status: 'inactive'),
+                ],
+                total: 1,
+              );
+            }
             return sellerListingListResponse(
               listings: <Map<String, dynamic>>[
-                listingJson(id: 9, status: 'inactive'),
+                listingJson(id: 1, status: 'active'),
               ],
               total: 1,
             );
-          }
-          return sellerListingListResponse(
-            listings: <Map<String, dynamic>>[
-              listingJson(id: 1, status: 'active'),
-            ],
-            total: 1,
+          });
+          addTearDown(harness.controller.dispose);
+
+          await harness.controller.applyStatusFilter(ListingStatus.active);
+
+          final List<Listing> listings = harness.controller.state.listings;
+          expect(listings.map((Listing listing) => listing.id).toList(), <int>[
+            1,
+            9,
+          ]);
+          expect(
+            listings.map((Listing listing) => listing.status).toList(),
+            <ListingStatus>[ListingStatus.active, ListingStatus.inactive],
           );
-        });
+        },
+      );
+
+      test('other tabs do not fetch the inactive tail', () async {
+        final harness = buildRecordedController(
+          (RecordedRequest request) async => sellerListingListResponse(),
+        );
         addTearDown(harness.controller.dispose);
 
-        await harness.controller.applyStatusFilter(ListingStatus.active);
+        await harness.controller.applyStatusFilter(ListingStatus.pending);
 
-        final List<Listing> listings = harness.controller.state.listings;
-        expect(
-          listings.map((Listing listing) => listing.id).toList(),
-          <int>[1, 9],
-        );
-        expect(
-          listings.map((Listing listing) => listing.status).toList(),
-          <ListingStatus>[ListingStatus.active, ListingStatus.inactive],
-        );
-      },
-    );
+        expect(harness.recorded, hasLength(1));
+        expect(harness.recorded.single.query['status'], 'pending');
+      });
 
-    test('other tabs do not fetch the inactive tail', () async {
-      final harness = buildRecordedController(
-        (RecordedRequest request) async => sellerListingListResponse(),
+      test(
+        'a search on the active tab does not fetch the inactive tail',
+        () async {
+          final harness = buildRecordedController(
+            (RecordedRequest request) async => sellerListingListResponse(),
+          );
+          addTearDown(harness.controller.dispose);
+
+          await harness.controller.applyStatusFilter(ListingStatus.active);
+          final int afterFilter = harness.recorded.length;
+          harness.controller.updateSearch('goat');
+          await harness.controller.submitSearch();
+
+          expect(harness.recorded, hasLength(afterFilter + 1));
+          expect(harness.recorded.last.query['status'], 'active');
+        },
       );
-      addTearDown(harness.controller.dispose);
-
-      await harness.controller.applyStatusFilter(ListingStatus.pending);
-
-      expect(harness.recorded, hasLength(1));
-      expect(harness.recorded.single.query['status'], 'pending');
     });
-
-    test('a search on the active tab does not fetch the inactive tail', ()
-    async {
-      final harness = buildRecordedController(
-        (RecordedRequest request) async => sellerListingListResponse(),
-      );
-      addTearDown(harness.controller.dispose);
-
-      await harness.controller.applyStatusFilter(ListingStatus.active);
-      final int afterFilter = harness.recorded.length;
-      harness.controller.updateSearch('goat');
-      await harness.controller.submitSearch();
-
-      expect(harness.recorded, hasLength(afterFilter + 1));
-      expect(harness.recorded.last.query['status'], 'active');
-    });
-  });
     test('clearing the query drops both the filter and the search', () async {
       final harness = buildRecordedController(
         (RecordedRequest request) async => sellerListingListResponse(),
@@ -489,6 +532,69 @@ void main() {
     });
   });
 
+  group('markSold', () {
+    test('posts to the mark-sold route and swaps the row to sold', () async {
+      final harness = buildRecordedController((RecordedRequest request) async {
+        if (request.apiPath.endsWith('/mark-sold')) {
+          return sellerListingResponse(
+            listing: listingJson(id: 1, status: 'sold'),
+          );
+        }
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 1, status: 'active'),
+            listingJson(id: 2, status: 'active'),
+          ],
+          total: 2,
+        );
+      });
+      addTearDown(harness.controller.dispose);
+
+      await harness.controller.loadInitial();
+      await harness.controller.markSold(1);
+
+      final RecordedRequest sent = harness.recorded.firstWhere(
+        (RecordedRequest r) => r.apiPath.endsWith('/mark-sold'),
+      );
+      expect(sent.method, 'POST');
+      expect(sent.apiPath, '/seller/listings/1/mark-sold');
+
+      final List<Listing> listings = harness.controller.state.listings;
+      expect(listings, hasLength(2));
+      // Replaced, not appended: the row keeps its place in the list.
+      expect(listings.first.id, 1);
+      expect(listings.first.status, ListingStatus.sold);
+    });
+
+    test('a 409 becomes a conflict message and re-reads the list', () async {
+      // The listing has already moved on — already sold, or not active.
+      final harness = buildRecordedController((RecordedRequest request) async {
+        if (request.apiPath.endsWith('/mark-sold')) {
+          return listingConflictResponse(
+            message: 'Only an active listing can be marked as sold.',
+          );
+        }
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 1, status: 'pending'),
+          ],
+          total: 1,
+        );
+      });
+      addTearDown(harness.controller.dispose);
+
+      await harness.controller.loadInitial();
+      await harness.controller.markSold(1);
+
+      expect(harness.controller.state.conflictMessage, isNotNull);
+      expect(harness.controller.state.actionErrorMessage, isNull);
+      expect(
+        harness.controller.state.listings.single.status,
+        ListingStatus.pending,
+      );
+    });
+  });
+
   group('update', () {
     test('patches the listing and swaps the row', () async {
       final harness = buildRecordedController((RecordedRequest request) async {
@@ -641,6 +747,216 @@ void main() {
     });
   });
 
+  group('photos', () {
+    test(
+      'uploading pending photos rebuilds the composer from served URLs',
+      () async {
+        final harness = buildRecordedController((
+          RecordedRequest request,
+        ) async {
+          if (request.method == 'POST' &&
+              request.apiPath == '/seller/listings/9/photos') {
+            return sellerListingResponse(
+              listing: listingJson(
+                id: 9,
+                status: 'draft',
+                photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+              ),
+              statusCode: 201,
+            );
+          }
+          return http.Response('Not found', 404);
+        });
+        addTearDown(harness.controller.dispose);
+
+        harness.controller.startPhotoComposer(9, const <String>[]);
+        harness.controller.addPickedPhotos(<XFile>[
+          XFile.fromData(_pngBytes, path: 'a.png'),
+        ]);
+
+        final bool uploaded = await harness.controller.uploadComposerPhotos(9);
+
+        expect(uploaded, isTrue);
+        expect(harness.controller.photos, hasLength(1));
+        expect(
+          harness.controller.photos.single.status,
+          ListingPhotoStatus.uploaded,
+        );
+        expect(
+          harness.controller.photos.single.url,
+          'https://api.test/storage/listings/a.jpg',
+        );
+        expect(harness.recorded.single.method, 'POST');
+        expect(harness.recorded.single.apiPath, '/seller/listings/9/photos');
+        expect(
+          harness.recorded.single.request.headers['content-type'],
+          contains('multipart/form-data'),
+        );
+      },
+    );
+
+    test('a failed batch is marked failed and can be retried', () async {
+      bool failUpload = true;
+      final harness = buildRecordedController((RecordedRequest request) async {
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/9/photos') {
+          if (failUpload) {
+            return http_500();
+          }
+          return sellerListingResponse(
+            listing: listingJson(
+              id: 9,
+              status: 'draft',
+              photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+            ),
+            statusCode: 201,
+          );
+        }
+        return http.Response('Not found', 404);
+      });
+      addTearDown(harness.controller.dispose);
+
+      harness.controller.startPhotoComposer(9, const <String>[]);
+      harness.controller.addPickedPhotos(<XFile>[
+        XFile.fromData(_pngBytes, path: 'a.png'),
+      ]);
+
+      final bool first = await harness.controller.uploadComposerPhotos(9);
+
+      expect(first, isFalse);
+      expect(
+        harness.controller.photos.single.status,
+        ListingPhotoStatus.failed,
+      );
+      expect(harness.controller.photos.single.error, isNotNull);
+      // The listing id survives the failure, or the retry would have nowhere
+      // to send the same batch.
+      expect(harness.controller.state.actionListingId, 9);
+      expect(harness.controller.state.actionErrorMessage, isNotNull);
+
+      failUpload = false;
+      final bool retried = await harness.controller.retryFailedPhotos();
+
+      expect(retried, isTrue);
+      expect(
+        harness.controller.photos.single.status,
+        ListingPhotoStatus.uploaded,
+      );
+      expect(harness.recorded, hasLength(2));
+      expect(
+        harness.recorded.map((RecordedRequest r) => r.apiPath),
+        everyElement('/seller/listings/9/photos'),
+      );
+    });
+
+    test('a retry without a listing to attach to does nothing', () async {
+      final harness = buildRecordedController(
+        (RecordedRequest request) async => http.Response('Not found', 404),
+      );
+      addTearDown(harness.controller.dispose);
+
+      harness.controller.startPhotoComposer(null, const <String>[]);
+      harness.controller.addPickedPhotos(<XFile>[
+        XFile.fromData(_pngBytes, path: 'a.png'),
+      ]);
+
+      final bool retried = await harness.controller.retryFailedPhotos();
+
+      expect(retried, isFalse);
+      expect(harness.recorded, isEmpty);
+    });
+
+    group('reorder', () {
+      List<String?> order(SellerListingController controller) => controller
+          .photos
+          .map((ListingPhotoItem photo) => photo.file?.path)
+          .toList();
+
+      SellerListingController threePhotos(
+        Future<http.Response> Function(RecordedRequest request) handler,
+      ) {
+        final harness = buildRecordedController(handler);
+        addTearDown(harness.controller.dispose);
+        harness.controller.startPhotoComposer(9, const <String>[]);
+        harness.controller.addPickedPhotos(<XFile>[
+          XFile.fromData(_pngBytes, path: 'a.png'),
+          XFile.fromData(_pngBytes, path: 'b.png'),
+          XFile.fromData(_pngBytes, path: 'c.png'),
+        ]);
+        return harness.controller;
+      }
+
+      Future<http.Response> notFound(RecordedRequest request) async =>
+          http.Response('Not found', 404);
+
+      test('moving a photo up puts it before its neighbour', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(2, 1);
+
+        expect(order(controller), <String?>['a.png', 'c.png', 'b.png']);
+      });
+
+      test('moving a photo down puts it after its neighbour', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(0, 1);
+
+        expect(order(controller), <String?>['b.png', 'a.png', 'c.png']);
+      });
+
+      test('a move to the same place or outside the list changes nothing', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(1, 1);
+        controller.reorderPhotos(5, 0);
+        controller.reorderPhotos(0, 5);
+        controller.reorderPhotos(-1, 0);
+
+        expect(order(controller), <String?>['a.png', 'b.png', 'c.png']);
+      });
+
+      test(
+        'the upload sends the photos in the order the seller chose',
+        () async {
+          final List<RecordedRequest> uploads = <RecordedRequest>[];
+          final SellerListingController controller = threePhotos((
+            RecordedRequest request,
+          ) async {
+            uploads.add(request);
+            return sellerListingResponse(
+              listing: listingJson(
+                id: 9,
+                status: 'draft',
+                photos: <Object?>[
+                  'https://api.test/storage/listings/c.jpg',
+                  'https://api.test/storage/listings/a.jpg',
+                  'https://api.test/storage/listings/b.jpg',
+                ],
+              ),
+              statusCode: 201,
+            );
+          });
+
+          // c first, then a, then b.
+          controller.reorderPhotos(2, 0);
+
+          final bool uploaded = await controller.uploadComposerPhotos(9);
+
+          expect(uploaded, isTrue);
+          // The body carries raw PNG bytes, which are not valid UTF-8.
+        final String body = latin1.decode(uploads.single.request.bodyBytes);
+          final int c = body.indexOf('filename="c.png"');
+          final int a = body.indexOf('filename="a.png"');
+          final int b = body.indexOf('filename="b.png"');
+          expect(c, isNonNegative);
+          expect(c, lessThan(a));
+          expect(a, lessThan(b));
+        },
+      );
+    });
+  });
+
   group('lifecycle rules', () {
     test('the draft list is immutable, so a repeat save sends the same body', () {
       // A draft is a value. If it were mutable, a body could be built from fields
@@ -659,115 +975,6 @@ void main() {
     });
   });
 }
-group('photo reorder', () {
-      test('moves a photo up one position', () {
-        final harness = buildRecordedController(
-          (RecordedRequest request) async => listingNotFoundResponse(),
-        );
-        addTearDown(harness.controller.dispose);
-
-        // Start with 3 photos at indices 0, 1, 2
-        _controller.addPickedPhotos(<XFile[
-          XFile(path: 'photo1.jpg'),
-          XFile(path: 'photo2.jpg'),
-          XFile(path: 'photo3.jpg'),
-        ]);
-
-        // Move photo at index 2 (third) up to index 1
-        _controller.reorderPhotos(2, 1);
-
-        final List<ListingPhotoItem> reordered = _controller.photos;
-        expect(reordered.length, 3);
-        // Third photo should now be at index 1, second photo shifts to index 2
-        expect(reordered[0].path, 'photo1.jpg');
-        expect(reordered[1].path, 'photo3.jpg');
-        expect(reordered[2].path, 'photo2.jpg');
-      });
-
-      test('moves a photo down one position', () {
-        final harness = buildRecordedController(
-          (RecordedRequest request) async => listingNotFoundResponse(),
-        );
-        addTearDown(harness.controller.dispose);
-
-        // Start with 3 photos at indices 0, 1, 2
-        _controller.addPickedPhotos(<XFile[
-          XFile(path: 'photo1.jpg'),
-          XFile(path: 'photo2.jpg'),
-          XFile(path: 'photo3.jpg'),
-        ]);
-
-        // Move photo at index 1 (second) down to index 2
-        _controller.reorderPhotos(1, 2);
-
-        final List<ListingPhotoItem> reordered = _controller.photos;
-        expect(reordered.length, 3);
-        // Second photo should now be at index 2, third photo shifts to index 1
-        expect(reordered[0].path, 'photo1.jpg');
-        expect(reordered[1].path, 'photo3.jpg');
-        expect(reordered[2].path, 'photo2.jpg');
-      });
-
-      test('does nothing when old index equals new index', () {
-        final harness = buildRecordedController(
-          (RecordedRequest request) async => listingNotFoundResponse(),
-        );
-        addTearDown(harness.controller.dispose);
-
-        _controller.addPickedPhotos(<XFile[
-          XFile(path: 'photo1.jpg'),
-          XFile(path: 'photo2.jpg'),
-        ]);
-
-        // Attempt to move photo at index 0 to index 0 (no-op)
-        _controller.reorderPhotos(0, 0);
-
-        final List<ListingPhotoItem> photos = _controller.photos;
-        expect(photos.length, 2);
-        expect(photos[0].path, 'photo1.jpg');
-        expect(photos[1].path, 'photo2.jpg');
-      });
-
-      test('does nothing when old index is out of bounds', () {
-        final harness = buildRecordedController(
-          (RecordedRequest request) async => listingNotFoundResponse(),
-        );
-        addTearDown(harness.controller.dispose);
-
-        _controller.addPickedPhotos(<XFile[
-          XFile(path: 'photo1.jpg'),
-        ]);
-
-        // Attempt to move from index 5 (out of bounds)
-        _controller.reorderPhotos(5, 0);
-
-        final List<ListingPhotoItem> photos = _controller.photos;
-        expect(photos.length, 1);
-        expect(photos[0].path, 'photo1.jpg');
-      });
-
-      test('does nothing when new index is out of bounds', () {
-        final harness = buildRecordedController(
-          (RecordedRequest request) async => listingNotFoundResponse(),
-        );
-        addTearDown(harness.controller.dispose);
-
-        _controller.addPickedPhotos(<XFile[
-          XFile(path: 'photo1.jpg'),
-          XFile(path: 'photo2.jpg'),
-        ]);
-
-        // Attempt to move from index 0 to index 5 (out of bounds)
-        _controller.reorderPhotos(0, 5);
-
-        final List<ListingPhotoItem> photos = _controller.photos;
-        expect(photos.length, 2);
-        expect(photos[0].path, 'photo1.jpg');
-        expect(photos[1].path, 'photo2.jpg');
-      });
-    });
-  });
-}
 
 /// A draft that is only used for its status.
 Listing _listing(ListingStatus status) =>
@@ -779,6 +986,8 @@ bool _canSubmit(ListingStatus status) =>
     SellerListingController.canSubmit(_listing(status));
 bool _canDelete(ListingStatus status) =>
     SellerListingController.canDelete(_listing(status));
+bool _canMarkSold(ListingStatus status) =>
+    SellerListingController.canMarkSold(_listing(status));
 
 /// A `500`, for the paths that should not be assumed to work.
 http.Response http_500() => http.Response('Internal Server Error', 500);

@@ -18,7 +18,7 @@ namespace App\Http\Requests\SellerListing;
 class UpdateSellerListingRequest extends StoreSellerListingRequest
 {
     /**
-     * @return array<string, list<string>>
+     * @return array<string, list<mixed>>
      */
     public function rules(): array
     {
@@ -48,7 +48,11 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
                 // listing with an incomplete pair, and the consequence is that
                 // they cannot submit it yet — which is the documented rule rather
                 // than a new one.
-                static fn (string $rule): bool => ! str_starts_with($rule, 'required'),
+                //
+                // Rule objects ([MaximumAgeForUnit]) are kept as they are: only
+                // string rules can express `required`, and casting an object here
+                // would both drop it and fail.
+                static fn (mixed $rule): bool => ! is_string($rule) || ! str_starts_with($rule, 'required'),
             ));
 
             $rewritten[] = 'sometimes';

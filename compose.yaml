@@ -9,6 +9,7 @@ services:
       - ./backend:/var/www/html
       - backend_vendor:/var/www/html/vendor
       - ./docker/php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini
+      - ./docker/php/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
       - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf
     environment:
       - DB_HOST=mysql

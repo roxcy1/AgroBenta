@@ -317,7 +317,7 @@ void main() {
     });
 
     expect(find.text('Could not load transactions'), findsOneWidget);
-    expect(find.text('Server error.'), findsOneWidget);
+    expect(find.text('Something went wrong on the server.'), findsOneWidget);
 
     await tester.tap(find.text('Retry'));
     await settle(tester);

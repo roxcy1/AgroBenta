@@ -444,7 +444,7 @@ void main() {
       return transactionDetailResponse();
     });
 
-    expect(find.text('Server error.'), findsOneWidget);
+    expect(find.text('Something went wrong on the server.'), findsOneWidget);
     expect(
       find.text('Could not load transaction'),
       findsOneWidget,

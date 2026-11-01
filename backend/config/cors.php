@@ -25,7 +25,7 @@ return [
     |
     */
 
-    'paths' => ['api/*'],
+    'paths' => ['api/*', 'storage/*'],
 
     'allowed_methods' => ['*'],
 
@@ -35,7 +35,16 @@ return [
     ],
 
     'allowed_origins_patterns' => [
-         
+        // Development web origins served from the local machine over plain HTTP.
+        // Flutter Web (`flutter run -d chrome` or `--web-port`) and the Admin Web
+        // Vite dev server may be reached via `localhost` or via the machine's
+        // LAN IP when accessed from another device on the same network. Matching
+        // private IP ranges avoids hardcoding any one developer's address.
+        // Each pattern is passed to preg_match(), so it needs delimiters and anchors.
+        '#^http://localhost:\d+$#',
+        '#^http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$#',
+        '#^http://192\.168\.\d{1,3}\.\d{1,3}:\d+$#',
+        '#^http://172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}:\d+$#',
     ],
 
     'allowed_headers' => ['*'],

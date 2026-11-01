@@ -275,9 +275,12 @@ MockClient _mockClient(
 }
 
 /// A bounded pump: a spinner keeps `pumpAndSettle` from returning.
+///
+/// 20 frames of 50 ms is a second, which outlasts the 800 ms mode-change cover
+/// in `AccountModeShell`, so a test that switches mode can tap straight after.
 Future<void> settleAccountModeShell(
   WidgetTester tester, {
-  int frames = 16,
+  int frames = 20,
 }) async {
   for (int frame = 0; frame < frames; frame++) {
     await tester.pump(const Duration(milliseconds: 50));

@@ -13,17 +13,26 @@ void main() {
     // the whole point of the `kIsWeb` guard is that the two disagree on web: a
     // browser reporting Android must still get `localhost`.
 
-    test('a native Android build defaults to the physical-device address', () {
+    test('a native Android build requires API_BASE_URL for physical devices', () {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
-      // A physical phone cannot reach the host through the emulator's 10.0.2.2
-      // alias, so the plain Android default must be the machine's LAN address.
-      expect(
-        AppConfig.apiBaseUrl,
-        kIsWeb
-            ? 'http://localhost:8001/api'
-            : AppConfig.physicalAndroidApiBaseUrl,
-      );
+      // `apiBaseUrl` reads the suite's own dart-defines, so what it must do
+      // depends on how the suite was started. The unconditional rows are in the
+      // `resolveApiBaseUrl` matrix below.
+      const bool configured =
+          bool.hasEnvironment('API_BASE_URL') ||
+          String.fromEnvironment('ANDROID_RUN_TARGET') == 'emulator';
+
+      if (kIsWeb) {
+        expect(AppConfig.apiBaseUrl, 'http://localhost:8001/api');
+      } else if (configured) {
+        expect(AppConfig.apiBaseUrl, isNotEmpty);
+      } else {
+        expect(
+          () => AppConfig.apiBaseUrl,
+          throwsA(isA<StateError>()),
+        );
+      }
     });
 
     test('uses localhost on iOS', () {
@@ -48,20 +57,43 @@ void main() {
     });
   });
 
+  group('apiOrigin', () {
+    test('strips the /api mount path from the base URL', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      expect(AppConfig.apiOrigin, 'http://localhost:8001');
+    });
+
+    test('keeps a non-default port', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      // The local stack serves the API on 8001, not on a default HTTP port.
+      expect(AppConfig.apiOrigin, 'http://localhost:8001');
+    });
+
+    test('never includes a path', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      final Uri origin = Uri.parse(AppConfig.apiOrigin);
+      expect(origin.path, isEmpty);
+      expect(origin.hasAuthority, isTrue);
+    });
+  });
+
   group('resolveApiBaseUrl platform matrix', () {
     // This is the table the whole connectivity fix rests on, so it is asserted
     // exhaustively rather than one platform at a time. The arguments are the
     // real `kIsWeb` and `defaultTargetPlatform` values, so every row is a build
     // configuration that actually occurs.
 
-    test('a native Android build resolves to the physical-device address', () {
+    test('a native Android build without override throws when physical', () {
       expect(
-        AppConfig.resolveApiBaseUrl(
+        () => AppConfig.resolveApiBaseUrl(
           isWeb: false,
           platform: TargetPlatform.android,
           override: '',
         ),
-        AppConfig.physicalAndroidApiBaseUrl,
+        throwsA(isA<StateError>()),
       );
     });
 
@@ -80,19 +112,19 @@ void main() {
       );
     });
 
-    test('a non-emulator or unknown Android target is a physical build', () {
+    test('a non-emulator or unknown Android target requires API_BASE_URL', () {
       for (final String target in <String>['', 'physical', 'nonsense']) {
         expect(
-          AppConfig.resolveApiBaseUrl(
+          () => AppConfig.resolveApiBaseUrl(
             isWeb: false,
             platform: TargetPlatform.android,
             override: '',
             androidTarget: target,
           ),
-          AppConfig.physicalAndroidApiBaseUrl,
+          throwsA(isA<StateError>()),
           reason:
               'ANDROID_RUN_TARGET="$target" must never silently yield '
-              '10.0.2.2 on a physical-device build.',
+              '10.0.2.2 or use a hardcoded IP on a physical-device build.',
         );
       }
     });
@@ -184,12 +216,12 @@ void main() {
     test('a blank or whitespace override falls back to the defaults', () {
       for (final String override in <String>['', '   ', '\n']) {
         expect(
-          AppConfig.resolveApiBaseUrl(
+          () => AppConfig.resolveApiBaseUrl(
             isWeb: false,
             platform: TargetPlatform.android,
             override: override,
           ),
-          AppConfig.physicalAndroidApiBaseUrl,
+          throwsA(isA<StateError>()),
         );
         expect(
           AppConfig.resolveApiBaseUrl(
@@ -215,21 +247,23 @@ void main() {
   });
 
   group('resolve', () {
+    // A platform that resolves without API_BASE_URL. Android would throw here
+    // unless the suite were run with a dart-define.
     setUp(() {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     });
 
     test('joins the API root with an absolute path', () {
       expect(
         AppConfig.resolve('/admin/dashboard'),
-        '${AppConfig.physicalAndroidApiBaseUrl}/admin/dashboard',
+        '${'http://localhost:8001/api'}/admin/dashboard',
       );
     });
 
     test('tolerates a path without a leading slash', () {
       expect(
         AppConfig.resolve('admin/dashboard'),
-        '${AppConfig.physicalAndroidApiBaseUrl}/admin/dashboard',
+        '${'http://localhost:8001/api'}/admin/dashboard',
       );
     });
 
@@ -239,7 +273,7 @@ void main() {
           '/listings',
           query: <String, dynamic>{'status': 'active', 'page': 2},
         ),
-        '${AppConfig.physicalAndroidApiBaseUrl}/'
+        '${'http://localhost:8001/api'}/'
         'listings?status=active&page=2',
       );
     });
@@ -252,7 +286,7 @@ void main() {
 
       expect(
         url,
-        '${AppConfig.physicalAndroidApiBaseUrl}/listings?status=active',
+        '${'http://localhost:8001/api'}/listings?status=active',
       );
       expect(url, isNot(contains('search')));
     });
@@ -260,13 +294,13 @@ void main() {
     test('produces no query string when the map is empty', () {
       expect(
         AppConfig.resolve('/listings', query: <String, dynamic>{}),
-        '${AppConfig.physicalAndroidApiBaseUrl}/listings',
+        '${'http://localhost:8001/api'}/listings',
       );
     });
   });
 
   test('isUsingCleartextHttp reflects the resolved scheme', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
     // The development stack is plain HTTP over Nginx on port 8001. This is
     // expected locally; production must use HTTPS.

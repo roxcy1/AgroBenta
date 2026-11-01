@@ -117,6 +117,24 @@ class SellerListingPhotoTest extends TestCase
     }
 
     /**
+     * Write real files into a listing's own photo directory.
+     *
+     * The set-at-once edit path accepts only filenames that already exist
+     * there, so a fixture must put them there instead of asserting a name with
+     * no file behind it.
+     *
+     * @param  list<string>  $filenames
+     */
+    private function writePhotoFiles(Listing $listing, array $filenames): void
+    {
+        $disk = Storage::disk(Listing::PHOTO_DISK);
+
+        foreach ($filenames as $filename) {
+            $disk->put($listing->id.'/'.$filename, 'photo');
+        }
+    }
+
+    /**
      * @param  array<int, UploadedFile>  $files
      */
     private function upload(Listing $listing, array $files, ?string $token = null): TestResponse
@@ -338,23 +356,162 @@ class SellerListingPhotoTest extends TestCase
     }
 
     #[Test]
-    public function a_listing_can_still_be_created_with_exactly_ten_photos(): void
+    public function a_listing_can_be_created_without_photos_but_not_with_them(): void
     {
+        // A draft stays photo-optional: the upload endpoints attach photos once
+        // the listing exists and has an id to scope a directory to.
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings', [
                 'livestock_type' => 'cattle',
                 'location' => 'Bukidnon',
                 'asking_price' => 50000,
                 'quantity' => 1,
-                // Ten *distinct* placeholders — the mutator de-duplicates
-                // identical filenames, which would silently shrink the list.
-                'photos' => array_map(
-                    static fn (int $i): string => "photo{$i}.jpg",
-                    range(1, 10),
-                ),
+                'photos' => [],
             ])
-            ->assertStatus(201)
-            ->assertJsonCount(10, 'data.photos');
+            ->assertCreated()
+            ->assertJsonPath('data.photos', []);
+
+        // A non-empty list is a claim the server cannot verify: there is no
+        // directory for this listing yet, so it is refused at any size.
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings', [
+                'livestock_type' => 'cattle',
+                'location' => 'Bukidnon',
+                'asking_price' => 50000,
+                'quantity' => 1,
+                'photos' => ['photo.jpg'],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+    }
+
+    // --------------------------------------------------- edit (set-at-once)
+
+    #[Test]
+    public function an_update_accepts_a_filename_that_exists_on_the_listing(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $this->writePhotoFiles($listing, ['front.jpg', 'side.jpg']);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", [
+                'photos' => ['front.jpg'],
+            ])
+            ->assertOk()
+            ->assertJsonCount(1, 'data.photos');
+
+        $this->assertSame(['front.jpg'], $this->storedPhotos($listing));
+    }
+
+    #[Test]
+    public function an_update_accepts_the_url_it_was_served(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $this->writePhotoFiles($listing, ['front.jpg']);
+
+        // A client holds URLs, so a read-modify-write round trip must not force
+        // it to parse its own URL into a filename first.
+        $served = $this->photoBase().'/'.$listing->id.'/front.jpg';
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", [
+                'photos' => [$served],
+            ])
+            ->assertOk();
+
+        $this->assertSame(['front.jpg'], $this->storedPhotos($listing));
+    }
+
+    #[Test]
+    public function an_update_rejects_a_filename_that_has_no_file(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $this->writePhotoFiles($listing, ['front.jpg']);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", [
+                'photos' => ['ghost.jpg'],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        // Refused, not applied.
+        $this->assertSame([], $this->storedPhotos($listing));
+    }
+
+    #[Test]
+    public function an_update_cannot_adopt_another_listings_photo(): void
+    {
+        $other = $this->createListing($this->otherSeller);
+        $this->writePhotoFiles($other, ['foreign.jpg']);
+
+        $listing = $this->createListing($this->seller);
+
+        // Even the other listing's served URL collapses to a filename that this
+        // listing's own directory does not contain.
+        $foreignUrl = $this->photoBase().'/'.$other->id.'/foreign.jpg';
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", [
+                'photos' => [$foreignUrl],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertSame([], $this->storedPhotos($listing));
+    }
+
+    #[Test]
+    public function an_update_cannot_escape_the_listing_directory(): void
+    {
+        $other = $this->createListing($this->otherSeller);
+        $this->writePhotoFiles($other, ['foreign.jpg']);
+
+        $listing = $this->createListing($this->seller);
+
+        // The mutator's basename rule turns this into `foreign.jpg`, which is
+        // still not in *this* listing's directory.
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", [
+                'photos' => ['../'.$other->id.'/foreign.jpg'],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertSame([], $this->storedPhotos($listing));
+    }
+
+    #[Test]
+    public function an_active_listing_cannot_be_edited_to_have_no_photos(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Active,
+            'photos' => ['only.jpg'],
+        ]);
+        $this->writePhotoFiles($listing, ['only.jpg']);
+
+        // The same rule as removing the last photo: an edit is not a route
+        // around the requirement that a live listing keeps one photo.
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", ['photos' => []])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('photos');
+
+        $this->assertSame(['only.jpg'], $this->storedPhotos($listing));
+    }
+
+    #[Test]
+    public function a_draft_can_be_edited_to_have_no_photos(): void
+    {
+        $listing = $this->createListing($this->seller, ['photos' => ['only.jpg']]);
+        $this->writePhotoFiles($listing, ['only.jpg']);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson("/api/seller/listings/{$listing->id}", ['photos' => []])
+            ->assertOk()
+            ->assertJsonPath('data.photos', []);
+
+        $this->assertSame([], $this->storedPhotos($listing));
     }
 
     // ------------------------------------------------- configurable ceiling
@@ -395,20 +552,19 @@ class SellerListingPhotoTest extends TestCase
     }
 
     #[Test]
-    public function the_photo_ceiling_applies_when_creating_with_the_setting(): void
+    public function a_configured_ceiling_does_not_make_photos_valid_on_create(): void
     {
         $this->setPhotoLimit('3');
 
+        // Lowering the ceiling changes the upload and edit bound; it does not
+        // create a way to attach a file to a listing that does not exist yet.
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings', [
                 'livestock_type' => 'cattle',
                 'location' => 'Bukidnon',
                 'asking_price' => 50000,
                 'quantity' => 1,
-                'photos' => array_map(
-                    static fn (int $i): string => "photo{$i}.jpg",
-                    range(1, 4),
-                ),
+                'photos' => ['photo1.jpg', 'photo2.jpg'],
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('photos');
@@ -495,6 +651,7 @@ class SellerListingPhotoTest extends TestCase
         $this->setPhotoLimit('2');
 
         $listing = $this->createListing($this->seller);
+        $this->writePhotoFiles($listing, ['a.jpg', 'b.jpg', 'c.jpg']);
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->patchJson("/api/seller/listings/{$listing->id}", [
@@ -589,6 +746,52 @@ class SellerListingPhotoTest extends TestCase
         $listing = $this->createListing($this->seller, ['photos' => ['front.jpg']]);
 
         $this->removePhoto($listing, 'never-existed.jpg')->assertNotFound();
+    }
+
+    #[Test]
+    public function the_last_photo_of_an_active_listing_cannot_be_removed(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Active,
+            'photos' => ['only.jpg'],
+        ]);
+        $this->writePhotoFiles($listing, ['only.jpg']);
+
+        $this->removePhoto($listing, 'only.jpg')->assertStatus(409);
+
+        $this->assertSame(['only.jpg'], $this->storedPhotos($listing));
+        Storage::disk(Listing::PHOTO_DISK)->assertExists($listing->id.'/only.jpg');
+    }
+
+    #[Test]
+    public function a_non_final_photo_of_an_active_listing_can_be_removed(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Active,
+            'photos' => ['keep.jpg', 'drop.jpg'],
+        ]);
+        $this->writePhotoFiles($listing, ['keep.jpg', 'drop.jpg']);
+
+        $this->removePhoto($listing, 'drop.jpg')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.photos');
+
+        $this->assertSame(['keep.jpg'], $this->storedPhotos($listing));
+        Storage::disk(Listing::PHOTO_DISK)->assertMissing($listing->id.'/drop.jpg');
+        Storage::disk(Listing::PHOTO_DISK)->assertExists($listing->id.'/keep.jpg');
+    }
+
+    #[Test]
+    public function the_last_photo_of_a_draft_can_be_removed(): void
+    {
+        // Only the published state is guarded: a draft may be photo-less until
+        // it is submitted.
+        $listing = $this->createListing($this->seller, ['photos' => ['only.jpg']]);
+        $this->writePhotoFiles($listing, ['only.jpg']);
+
+        $this->removePhoto($listing, 'only.jpg')
+            ->assertOk()
+            ->assertJsonPath('data.photos', []);
     }
 
     // -------------------------------------------------- ownership and access

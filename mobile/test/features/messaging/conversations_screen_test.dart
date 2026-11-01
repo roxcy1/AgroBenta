@@ -185,7 +185,7 @@ void main() {
         },
       );
 
-      expect(find.text('Server error.'), findsOneWidget);
+      expect(find.text('Something went wrong on the server.'), findsOneWidget);
       expect(find.text('Try again'), findsOneWidget);
 
       await tester.tap(find.text('Try again'));

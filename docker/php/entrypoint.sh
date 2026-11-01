@@ -17,4 +17,16 @@ if [ "$*" = "php-fpm" ] && [ ! -f "/var/www/html/artisan" ]; then
     echo ">> the app exists. This message just saves you a confusing debug."
 fi
 
+# Laravel serves listing photos from storage/app/public/listings (contract D-10).
+# The backend is a bind mount, so git carries no ownership for that tree: a fresh
+# checkout leaves it root:root, and PHP-FPM (www-data) cannot write the uploaded
+# file even though validation passed. Re-applied on every start because mount
+# ownership does not survive container recreation. 755 keeps the files readable
+# by nginx while only the owner may write.
+if [ -d "/var/www/html/storage/app/public" ]; then
+    mkdir -p /var/www/html/storage/app/public/listings
+    chown www-data:www-data /var/www/html/storage/app/public/listings
+    chmod 755 /var/www/html/storage/app/public/listings
+fi
+
 exec "$@"

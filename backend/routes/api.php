@@ -105,6 +105,7 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     Route::get('/', [SellerListingController::class, 'index']);
     Route::post('/', [SellerListingController::class, 'store']);
     Route::post('/{listing}/submit', [SellerListingController::class, 'submit']);
+    Route::post('/{listing}/mark-sold', [SellerListingController::class, 'markSold']);
     Route::patch('/{listing}', [SellerListingController::class, 'update']);
     Route::delete('/{listing}', [SellerListingController::class, 'destroy']);
 

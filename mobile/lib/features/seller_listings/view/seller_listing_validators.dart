@@ -25,6 +25,28 @@ const String kListingMaxAskingPrice = '99999999999.99';
 /// The largest `weight_value` a `decimal(10,2)` can hold.
 const String kListingMaxWeightValue = '99999999.99';
 
+/// The largest age allowed per unit (DEC-01, functional documentation §4.7):
+/// 25 years = 300 months = 9,125 days.
+const int kListingMaxAgeDays = 9125;
+const int kListingMaxAgeMonths = 300;
+const int kListingMaxAgeYears = 25;
+
+/// How many decimal places Weight and Asking Price accept (DEC-02).
+const int kListingMaxDecimalPlaces = 2;
+
+/// The maximum age for [unit], expressed in that unit, or `null` when no unit
+/// is selected.
+///
+/// The limit is applied to the number the seller typed **in the unit they
+/// chose**; no conversion between units is performed, because the contract's
+/// magnitude is unit-aware.
+int? maxAgeForUnit(String? unit) => switch (unit) {
+  'day' => kListingMaxAgeDays,
+  'month' => kListingMaxAgeMonths,
+  'year' => kListingMaxAgeYears,
+  _ => null,
+};
+
 /// Validates the required species field.
 String? validateLivestockType(String? value) {
   final String trimmed = (value ?? '').trim();
@@ -70,7 +92,8 @@ String? validateAskingPrice(String? value) {
     return 'Enter the asking price.';
   }
   if (!_isPlainDecimal(trimmed)) {
-    return 'Enter a number, for example 42500 or 42500.50.';
+    return 'Enter a number with at most two decimal places, for example '
+        '42500 or 42500.50.';
   }
   if (double.tryParse(trimmed)! < 0) {
     return 'The price cannot be negative.';
@@ -97,12 +120,17 @@ String? validateQuantity(String? value) {
   return null;
 }
 
-/// Validates the age magnitude, which the contract holds to `integer, min:0`.
+/// Validates the age magnitude, which the contract holds to `integer, min:0`
+/// and DEC-01 caps in the **selected unit**: 25 years / 300 months / 9,125 days.
 ///
 /// A whole number even though the column is `decimal(5,1)`: the contract is what
 /// a client is held to, and a fractional age in months is not something the
 /// field can express meaningfully.
-String? validateAgeValue(String? value) {
+///
+/// [unit] is the value of the age-unit control. Without a unit the magnitude
+/// cannot be bounded, so only the non-negative check applies here and
+/// [validateAgeUnit] reports the missing unit.
+String? validateAgeValue(String? value, {String? unit}) {
   final String trimmed = (value ?? '').trim();
   if (trimmed.isEmpty) {
     return null; // Optional, and only together with a unit.
@@ -114,8 +142,19 @@ String? validateAgeValue(String? value) {
   if (amount < 0) {
     return 'The age cannot be negative.';
   }
+  final int? max = maxAgeForUnit(unit);
+  if (max != null && amount > max) {
+    return 'Enter an age of at most ${_ageLimitText(unit!)}.';
+  }
   return null;
 }
+
+/// How the age limit for [unit] is written in an error message.
+String _ageLimitText(String unit) => switch (unit) {
+  'day' => '9,125 days',
+  'month' => '300 months',
+  _ => '25 years',
+};
 
 /// Validates the age unit, which is required whenever an age is given.
 ///
@@ -132,14 +171,16 @@ String? validateAgeUnit(String? value, {required bool hasValue}) {
   return null;
 }
 
-/// Validates the weight magnitude, which the contract holds to `numeric, min:0`.
+/// Validates the weight magnitude, which the contract holds to `numeric,
+/// min:0`, with at most two decimal places (DEC-02).
 String? validateWeightValue(String? value) {
   final String trimmed = (value ?? '').trim();
   if (trimmed.isEmpty) {
     return null; // Optional, and only together with a unit.
   }
   if (!_isPlainDecimal(trimmed)) {
-    return 'Enter a number, for example 320 or 320.5.';
+    return 'Enter a number with at most two decimal places, for example '
+        '320 or 320.50.';
   }
   if (double.tryParse(trimmed)! < 0) {
     return 'The weight cannot be negative.';
@@ -179,13 +220,19 @@ String? validateAdditionalNotes(String? value) {
   return null;
 }
 
-/// Whether [value] is a plain decimal number.
+/// Whether [value] is a plain decimal number with at most
+/// [kListingMaxDecimalPlaces] decimal places (DEC-02).
 ///
 /// Accepts an optional sign-free integer or decimal with at most one decimal
 /// point, and **rejects** anything a seller would not expect to be read as one
-/// number: thousands separators, a currency symbol, scientific notation, or
-/// leading/trailing junk. `double.tryParse` accepts several of those, which is
-/// why it is not the whole test.
+/// number: thousands separators, a currency symbol, scientific notation, a
+/// third decimal place, or leading/trailing junk. `double.tryParse` accepts
+/// several of those, which is why it is not the whole test.
+///
+/// A trailing decimal point (`12.`) is rejected: it is a half-typed number, not
+/// a value the seller means to store.
 bool _isPlainDecimal(String value) {
-  return RegExp(r'^\d+(\.\d+)?$').hasMatch(value);
+  return RegExp(
+    '^\\d+(\\.\\d{1,$kListingMaxDecimalPlaces})?\$',
+  ).hasMatch(value);
 }
