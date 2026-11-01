@@ -218,17 +218,16 @@ class _InquireScreenState extends State<InquireScreen> {
 
   /// Opens the conversation with the seller of [widget.listing]. When a
   /// counterpart is known (from a confirmed inquiry) the exact chat thread is
-  /// opened; otherwise the Messages inbox is shown.
-  void _openMessages({ChatUser? counterpart, int? listingId}) {
-    final int currentUserId =
-        AuthScope.of(context).state.user?.id ?? 0;
-    if (counterpart != null && listingId != null) {
+  /// opened; otherwise the Messages inbox is shown. The thread is the
+  /// buyer–seller pair, so it is not narrowed to this one listing.
+  void _openMessages({ChatUser? counterpart}) {
+    final int currentUserId = AuthScope.of(context).state.user?.id ?? 0;
+    if (counterpart != null) {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => ChatScreen(
             counterpart: counterpart,
             currentUserId: currentUserId,
-            listingId: listingId,
           ),
         ),
       );
@@ -329,7 +328,6 @@ class _InquireScreenState extends State<InquireScreen> {
                     name: widget.listing.seller.name,
                     avatarUrl: null,
                   ),
-                  listingId: widget.listing.id,
                 ),
                 onBackToBrowse: _backToBrowse,
               );
@@ -348,7 +346,6 @@ class _InquireScreenState extends State<InquireScreen> {
                     name: widget.listing.seller.name,
                     avatarUrl: null,
                   ),
-                  listingId: widget.listing.id,
                 ),
                 onBackToBrowse: _backToBrowse,
               );
@@ -707,8 +704,11 @@ class _InquireScreenState extends State<InquireScreen> {
 
   List<Widget> _collectionDateSection(bool isSubmitting) {
     final ThemeData theme = Theme.of(context);
-    final String? error = _dateError ?? _controller.state.errorFor('preferred_schedule');
-    final String? optionError = _controller.state.errorFor('collection_date_option');
+    final String? error =
+        _dateError ?? _controller.state.errorFor('preferred_schedule');
+    final String? optionError = _controller.state.errorFor(
+      'collection_date_option',
+    );
     final String? selectedDate = _preferredSchedule == null
         ? null
         : '${_preferredSchedule!.year}-${_preferredSchedule!.month.toString().padLeft(2, '0')}-${_preferredSchedule!.day.toString().padLeft(2, '0')}';
@@ -724,11 +724,13 @@ class _InquireScreenState extends State<InquireScreen> {
           const SizedBox(height: AppSpacing.sm),
           ..._dateOptionCards(isSubmitting, theme),
           const SizedBox(height: AppSpacing.sm),
-          if (_collectionDateOption == InquiryCollectionDateOption.nextFewDays) ...<Widget>[
+          if (_collectionDateOption ==
+              InquiryCollectionDateOption.nextFewDays) ...<Widget>[
             ..._nextFewDaysDateChips(isSubmitting),
             const SizedBox(height: AppSpacing.xs),
           ],
-          if (_collectionDateOption == InquiryCollectionDateOption.specificDate) ...<Widget>[
+          if (_collectionDateOption ==
+              InquiryCollectionDateOption.specificDate) ...<Widget>[
             ListTile(
               leading: const Icon(Icons.calendar_today, size: 20),
               title: const Text('Specific date'),
@@ -765,7 +767,8 @@ class _InquireScreenState extends State<InquireScreen> {
   List<Widget> _dateOptionCards(bool isSubmitting, ThemeData theme) {
     return <Widget>[
       _PreferenceCard(
-        selected: _collectionDateOption == InquiryCollectionDateOption.specificDate,
+        selected:
+            _collectionDateOption == InquiryCollectionDateOption.specificDate,
         icon: Icons.calendar_today,
         title: 'Specific date',
         subtitle: 'Choose an exact date.',
@@ -777,7 +780,8 @@ class _InquireScreenState extends State<InquireScreen> {
       ),
       const SizedBox(width: AppSpacing.sm),
       _PreferenceCard(
-        selected: _collectionDateOption == InquiryCollectionDateOption.nextFewDays,
+        selected:
+            _collectionDateOption == InquiryCollectionDateOption.nextFewDays,
         icon: Icons.event_busy,
         title: 'Next few days',
         subtitle: 'Within the next few days.',
@@ -855,7 +859,8 @@ class _InquireScreenState extends State<InquireScreen> {
   }
 
   Widget _nextFewDaysChip(DateTime date, int index, bool isSubmitting) {
-    final bool selected = _preferredSchedule != null &&
+    final bool selected =
+        _preferredSchedule != null &&
         _preferredSchedule!.year == date.year &&
         _preferredSchedule!.month == date.month &&
         _preferredSchedule!.day == date.day;

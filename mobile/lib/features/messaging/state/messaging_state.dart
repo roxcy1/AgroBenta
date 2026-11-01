@@ -5,14 +5,14 @@ import '../../../models/message.dart';
 
 /// The inbox category filters.
 ///
-/// Only filters the conversation data can actually decide exist here. There
-/// is no category column: a conversation's sole classification is whether it
-/// is tied to a listing (`listing_id`), which is exactly what
-/// [InboxFilter.inquiries] selects. "Transactions" is deliberately absent — the
-/// API models no transaction-message relationship (GAP-11), so the screen
-/// renders that chip disabled. "Notifications" is not a filter at all:
-/// notifications have their own destination, which the screen links to.
-enum InboxFilter { all, inquiries }
+/// There is no category column. The server computes two pair-level facts over
+/// the caller's messages — whether an inquiry exists between the two users and
+/// whether a transaction does — and [InboxFilter.inquiries] and
+/// [InboxFilter.transactions] read those facts. A conversation can belong to
+/// both, because a pair can reach a transaction through an inquiry.
+/// "Notifications" is not a filter at all: notifications have their own
+/// destination, which the screen links to.
+enum InboxFilter { all, inquiries, transactions }
 
 /// The lifecycle states for the conversations list.
 enum ConversationsStatus { initial, loading, ready, failed }
@@ -66,8 +66,11 @@ class ConversationsState {
     final String needle = query.trim().toLowerCase();
     return conversations
         .where((Conversation conversation) {
-          if (filter == InboxFilter.inquiries &&
-              conversation.listingId == null) {
+          if (filter == InboxFilter.inquiries && !conversation.hasInquiry) {
+            return false;
+          }
+          if (filter == InboxFilter.transactions &&
+              !conversation.hasTransaction) {
             return false;
           }
           if (needle.isEmpty) {

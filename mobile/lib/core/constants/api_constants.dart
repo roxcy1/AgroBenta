@@ -558,6 +558,48 @@ abstract final class SellerDashboardEndpoints {
   static const String summary = '/seller/dashboard';
 }
 
+/// Purchase-offer endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under
+/// `auth:sanctum` + `ability:mobile`. Creating and withdrawing an offer also
+/// require the `seller` capability gate server-side; reading, accepting and
+/// declining are open to the buyer who is party to the offer.
+///
+/// An offer is tied to one inquiry (hence one listing) and one buyer–seller
+/// pair. Every route resolves the caller from the token, and the repository
+/// scopes the result to the caller's pair, so no path or query can widen it to
+/// another pair's offers.
+abstract final class OfferEndpoints {
+  /// `GET` — the caller's offers, newest first. 200, plain envelope.
+  ///
+  /// Query allow-list is `inquiry_id`, `listing_id`, `counterpart_id` and
+  /// `status`; ownership-shaped filters (`buyer_id`, `seller_id`, `user_id`)
+  /// are refused with a `422`. The list is not paginated.
+  static const String list = '/offers';
+
+  /// `POST` — create a purchase offer as the listing's seller. 201.
+  ///
+  /// Body allow-list is exactly `inquiry_id`, `listing_id` and
+  /// `proposed_amount`. `buyer_id`, `seller_id`, `status` and `responded_at`
+  /// are server-owned and refused with `422`.
+  static const String create = '/offers';
+
+  /// `GET` — one offer the caller is party to. 200, plain envelope.
+  static String detail(int id) => '/offers/$id';
+
+  /// `POST` — the buyer accepts a pending offer. 200.
+  ///
+  /// The response carries both the accepted offer and the `pending`
+  /// transaction the acceptance created.
+  static String accept(int id) => '/offers/$id/accept';
+
+  /// `POST` — the buyer declines a pending offer. 200, plain envelope.
+  static String decline(int id) => '/offers/$id/decline';
+
+  /// `POST` — the creating seller withdraws a pending offer. 200.
+  static String withdraw(int id) => '/offers/$id/withdraw';
+}
+
 /// Mobile authentication endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php`. They are

@@ -46,6 +46,9 @@ class ReceivedInquiry {
     required this.deliveryFee,
     required this.contactMethod,
     required this.preferredSchedule,
+    required this.collectionDateOption,
+    required this.paymentMethod,
+    required this.collectionMethod,
     required this.createdAt,
   });
 
@@ -77,6 +80,21 @@ class ReceivedInquiry {
         InquiryContactMethod.fromValue,
       ),
       preferredSchedule: readNullableDateTime(json, 'preferred_schedule'),
+      collectionDateOption: readNullableEnum(
+        json,
+        'collection_date_option',
+        InquiryCollectionDateOption.fromValue,
+      ),
+      paymentMethod: readNullableEnum(
+        json,
+        'payment_method',
+        InquiryPaymentMethod.fromValue,
+      ),
+      collectionMethod: readNullableEnum(
+        json,
+        'collection_method',
+        InquiryCollectionMethod.fromValue,
+      ),
       createdAt: readNullableDateTime(json, 'created_at'),
     );
   }
@@ -116,6 +134,17 @@ class ReceivedInquiry {
 
   /// The date the buyer hopes to transact, as a preference, not an appointment.
   final DateTime? preferredSchedule;
+
+  /// The buyer's collection-date preference. `specificDate` pairs with
+  /// [preferredSchedule]; the two relative options carry no date.
+  final InquiryCollectionDateOption? collectionDateOption;
+
+  /// The buyer's preferred way to pay. A preference only — no payment is
+  /// created or processed.
+  final InquiryPaymentMethod? paymentMethod;
+
+  /// How the buyer proposes to receive the livestock. A preference only.
+  final InquiryCollectionMethod? collectionMethod;
 
   final DateTime? createdAt;
 

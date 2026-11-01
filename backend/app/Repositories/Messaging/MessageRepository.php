@@ -2,7 +2,9 @@
 
 namespace App\Repositories\Messaging;
 
+use App\Models\Inquiry;
 use App\Models\Message;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -80,6 +82,9 @@ class MessageRepository
      */
     public function conversationsFor(int $userId): Collection
     {
+        $inquiryCounterparts = $this->counterpartsWithInquiry($userId);
+        $transactionCounterparts = $this->counterpartsWithTransaction($userId);
+
         return Message::query()
             ->select([
                 'id',
@@ -101,7 +106,12 @@ class MessageRepository
             ->orderByDesc('created_at')
             ->get()
             ->groupBy(fn (Message $m): string => $this->conversationKey($userId, $m))
-                        ->map(fn (Collection $messages): array => $this->buildConversation($userId, $messages))
+            ->map(fn (Collection $messages): array => $this->buildConversation(
+                $userId,
+                $messages,
+                $inquiryCounterparts,
+                $transactionCounterparts,
+            ))
             ->values();
     }
 
@@ -164,17 +174,76 @@ class MessageRepository
     }
 
     /**
+     * The counterparts the caller has an inquiry with.
+     *
+     * A conversation is the buyer–seller pair, so classification is by the
+     * other user id, not by listing or inquiry id. The caller is always one
+     * side of an inquiry they can see; the counterpart is the other.
+     *
+     * @return array<int, true>
+     */
+    private function counterpartsWithInquiry(int $userId): array
+    {
+        return Inquiry::query()
+            ->where(function ($query) use ($userId): void {
+                $query->where('buyer_id', $userId)->orWhere('seller_id', $userId);
+            })
+            ->get(['buyer_id', 'seller_id'])
+            ->mapWithKeys(fn (Inquiry $inquiry): array => [
+                (int) ($inquiry->buyer_id === $userId
+                    ? $inquiry->seller_id
+                    : $inquiry->buyer_id) => true,
+            ])
+            ->all();
+    }
+
+    /**
+     * The counterparts the caller has a transaction with.
+     *
+     * A transaction may exist without an inquiry (a direct purchase), so this
+     * is derived from `transactions`, not from the inquiry set.
+     *
+     * @return array<int, true>
+     */
+    private function counterpartsWithTransaction(int $userId): array
+    {
+        return Transaction::query()
+            ->where(function ($query) use ($userId): void {
+                $query->where('buyer_id', $userId)->orWhere('seller_id', $userId);
+            })
+            ->get(['buyer_id', 'seller_id'])
+            ->mapWithKeys(fn (Transaction $transaction): array => [
+                (int) ($transaction->buyer_id === $userId
+                    ? $transaction->seller_id
+                    : $transaction->buyer_id) => true,
+            ])
+            ->all();
+    }
+
+    /**
      * Shapes one group of messages into a conversation payload for the
      * resource.
      *
      * The messages arrive newest-first (the outer query ordered them that
      * way), so `first()` is the latest and the rest are counted for unread.
      *
+     * `has_inquiry` and `has_transaction` describe the buyer–seller pair, not
+     * the listing on the latest message: a conversation is the counterpart
+     * pair, and an inquiry or transaction between those two users is what the
+     * inbox filters select. They are computed from the database, never from
+     * the message text.
+     *
      * @param  Collection<int, Message>  $messages
+     * @param  array<int, true>  $inquiryCounterparts
+     * @param  array<int, true>  $transactionCounterparts
      * @return array<string, mixed>
      */
-    private function buildConversation(int $userId, Collection $messages): array
-    {
+    private function buildConversation(
+        int $userId,
+        Collection $messages,
+        array $inquiryCounterparts,
+        array $transactionCounterparts,
+    ): array {
         /** @var Message $latest */
         $latest = $messages->first();
         $counterpart = $latest->sender_id === $userId
@@ -186,6 +255,8 @@ class MessageRepository
             ->whereNull('read_at')
             ->count();
 
+        $counterpartId = (int) $counterpart->id;
+
         return [
             'counterpart' => $counterpart,
             'listing_id' => $latest->listing_id,
@@ -195,6 +266,8 @@ class MessageRepository
             'last_message' => $latest->body,
             'last_message_at' => $latest->created_at,
             'unread_count' => $unread,
+            'has_inquiry' => isset($inquiryCounterparts[$counterpartId]),
+            'has_transaction' => isset($transactionCounterparts[$counterpartId]),
         ];
     }
 }

@@ -188,6 +188,14 @@ enum InquiryCollectionDateOption {
   /// The exact lowercase string the API sends.
   final String value;
 
+  /// The buyer-facing label for the confirmation and seller inbox.
+  /// Display-only; the API contract is always [value].
+  String get label => switch (this) {
+    InquiryCollectionDateOption.specificDate => 'Specific date',
+    InquiryCollectionDateOption.nextFewDays => 'Within the next few days',
+    InquiryCollectionDateOption.thisWeek => 'Within this week',
+  };
+
   static InquiryCollectionDateOption fromValue(String value) {
     for (final InquiryCollectionDateOption option in values) {
       if (option.value == value) {
@@ -299,7 +307,10 @@ class Inquiry {
         InquiryCollectionMethod.fromValue,
       ),
       createdAt: readNullableDateTime(json, 'created_at'),
-      conversationCounterpartId: readNullableInt(json, 'conversation_counterpart_id'),
+      conversationCounterpartId: readNullableInt(
+        json,
+        'conversation_counterpart_id',
+      ),
     );
   }
 

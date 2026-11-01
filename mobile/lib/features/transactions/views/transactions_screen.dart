@@ -27,11 +27,25 @@ import 'transaction_tab.dart';
 /// OQ-15), and that is correct rather than a bug to work around by faking a
 /// completion path.
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({required this.role, super.key});
+  const TransactionsScreen({
+    required this.role,
+    this.isActive = true,
+    super.key,
+  });
 
   /// The side of the caller's records this screen shows. Fixed for the
   /// screen's life because the shell selects it from the Account Mode.
   final TransactionRole role;
+
+  /// Whether the shell currently shows this tab.
+  ///
+  /// The shell keeps the screen alive in an `IndexedStack`, so switching back
+  /// to it does not rebuild the state. Flipping this from `false` to `true`
+  /// refreshes whatever each filter has already loaded, which is how a
+  /// transaction created in a chat appears without replacing the screen or
+  /// forcing the user to pull down. The default is `true` so a standalone
+  /// screen (Seller Home's pushed route) keeps its ordinary initial load.
+  final bool isActive;
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -55,6 +69,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         ),
     };
     _controllers[TransactionsFilter.all]!.loadInitial();
+  }
+
+  @override
+  void didUpdateWidget(TransactionsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      // Refresh only the filters that have loaded something. An unopened
+      // filter still has its initial load waiting for the first selection.
+      for (final TransactionsController controller in _controllers.values) {
+        if (controller.state.status != TransactionsStatus.initial) {
+          controller.refresh();
+        }
+      }
+    }
   }
 
   @override

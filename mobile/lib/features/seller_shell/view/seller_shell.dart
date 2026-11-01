@@ -52,7 +52,10 @@ class _SellerShellState extends State<SellerShell> {
           ),
           const SellerListingsScreen(),
           const ConversationsScreen(),
-          const TransactionsScreen(role: TransactionRole.seller),
+          TransactionsScreen(
+            role: TransactionRole.seller,
+            isActive: _index == _transactionsIndex,
+          ),
           const ProfileScreen(),
         ],
       ),

@@ -25,6 +25,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *   'last_message'   => string,               // the newest message body
  *   'last_message_at'=> Carbon,               // when it was sent
  *   'unread_count'   => int,                  // unread messages for the caller
+ *   'has_inquiry'    => bool,                 // an inquiry exists for the pair
+ *   'has_transaction'=> bool,                 // a transaction exists for the pair
  * ]
  * ```
  */
@@ -42,6 +44,8 @@ class ConversationResource extends JsonResource
             'last_message' => $this['last_message'],
             'last_message_at' => $this['last_message_at']?->toISOString(),
             'unread_count' => $this['unread_count'],
+            'has_inquiry' => (bool) $this['has_inquiry'],
+            'has_transaction' => (bool) $this['has_transaction'],
         ];
     }
 }

@@ -20,11 +20,11 @@ import 'chat_screen.dart';
 /// Search and the category filter are **local view filters** over the one
 /// response `GET /conversations` returns (Messages design §3.2–§3.3): the API
 /// offers no conversation search, and an inbox is small by construction. The
-/// "Inquiries" filter selects listing-scoped threads (`listing_id != null`).
-/// "Transactions" renders disabled because the API links no message to a
-/// transaction (GAP-11). "Notifications" is not a conversation category at all
-/// — it opens the separate, already-built notifications destination, as the
-/// design prescribes.
+/// "Inquiries" and "Transactions" filters read the pair-level booleans the
+/// server computes (`has_inquiry`, `has_transaction`), so neither guesses from
+/// the listing context of the newest message. "Notifications" is not a
+/// conversation category at all — it opens the separate, already-built
+/// notifications destination, as the design prescribes.
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
 
@@ -80,7 +80,6 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         builder: (BuildContext context) => ChatScreen(
           counterpart: conversation.counterpart,
           currentUserId: currentUserId,
-          listingId: conversation.listingId,
         ),
       ),
     );
@@ -257,12 +256,10 @@ class _SearchField extends StatelessWidget {
 
 /// The All / Inquiries / Transactions / Notifications chip row.
 ///
-/// Only [InboxFilter.all] and [InboxFilter.inquiries] are selectable — they
-/// are the only categories the conversation data can answer. "Transactions"
-/// is rendered disabled (GAP-11: no transaction-message link; Messages design
-/// §3.3: report the gap, never populate a filter with fake data).
-/// "Notifications" is an enabled **shortcut** to the existing notifications
-/// destination, not a filter; its trailing icon says so.
+/// All, Inquiries and Transactions are selectable local filters over the
+/// server's pair-level `has_inquiry` / `has_transaction` facts. "Notifications"
+/// is an enabled **shortcut** to the existing notifications destination, not a
+/// filter; its trailing icon says so.
 class _FilterRow extends StatelessWidget {
   const _FilterRow({
     required this.filter,
@@ -293,13 +290,10 @@ class _FilterRow extends StatelessWidget {
             onTap: () => onSelected(InboxFilter.inquiries),
           ),
           const SizedBox(width: AppSpacing.xs),
-          // Not supported: the API links no message or conversation to a
-          // transaction (GAP-11). Disabled, not hidden — the category is
-          // part of the product, its data is not there yet.
-          const _FilterChip(
+          _FilterChip(
             label: 'Transactions',
-            selected: false,
-            onTap: null,
+            selected: filter == InboxFilter.transactions,
+            onTap: () => onSelected(InboxFilter.transactions),
           ),
           const SizedBox(width: AppSpacing.xs),
           // Not a thread category. Opens the notifications inbox.

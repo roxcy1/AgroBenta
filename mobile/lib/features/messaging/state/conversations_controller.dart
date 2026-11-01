@@ -140,6 +140,8 @@ class ConversationsController extends ChangeNotifier {
               lastMessage: c.lastMessage,
               lastMessageAt: c.lastMessageAt,
               unreadCount: 0,
+              hasInquiry: c.hasInquiry,
+              hasTransaction: c.hasTransaction,
             );
           }
           return c;

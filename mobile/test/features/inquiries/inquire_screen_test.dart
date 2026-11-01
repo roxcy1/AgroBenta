@@ -12,6 +12,7 @@ import 'package:agrobenta_mobile/features/inquiries/view/inquiry_validators.dart
 import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
 import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
+import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
 import 'package:agrobenta_mobile/models/inquiry.dart';
 import 'package:agrobenta_mobile/models/listing.dart';
 import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
@@ -24,6 +25,7 @@ import '../../support/auth_fakes.dart';
 import '../../support/inquiry_fakes.dart';
 import '../../support/marketplace_fakes.dart';
 import '../../support/messaging_fakes.dart';
+import '../../support/offer_fakes.dart';
 
 /// The Inquiry Sent screen's heading. Every success assertion keys on this;
 /// the failure assertions use it as the "not shown" probe.
@@ -108,6 +110,13 @@ void main() {
         ConversationsController(messagingRepository);
     addTearDown(conversationsController.dispose);
 
+    // The chat screen mounts its offer panel from this scope. This test opens
+    // conversations, not offers, so an empty list is the real answer.
+    final offerRepository = buildOfferRepository(
+      tokenStore,
+      (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
+    );
+
     final AuthController authController = AuthController(
       buildAuthRepository(
         tokenStore,
@@ -131,12 +140,15 @@ void main() {
         child: MessagingScope(
           repository: messagingRepository,
           conversationsController: conversationsController,
-          child: AuthScope(
-            controller: authController,
-            child: MaterialApp(
-              theme: AppTheme.light(),
-              home: Scaffold(
-                appBar: AppBar(title: const Text('Listing detail stand-in')),
+          child: OfferScope(
+            repository: offerRepository,
+            child: AuthScope(
+              controller: authController,
+              child: MaterialApp(
+                theme: AppTheme.light(),
+                home: Scaffold(
+                  appBar: AppBar(title: const Text('Listing detail stand-in')),
+                ),
               ),
             ),
           ),
@@ -459,31 +471,32 @@ void main() {
       );
     });
 
-    testWidgets('Go to Messages opens the exact chat from the already-sent state', (
-      WidgetTester tester,
-    ) async {
-      await pushInquire(
-        tester,
-        handler: (_) async => inquiryCreatedResponse(),
-        checkHandler: (_) async =>
-            inquiryCheckResponse(inquiry: inquiryJson(id: 21)),
-      );
+    testWidgets(
+      'Go to Messages opens the exact chat from the already-sent state',
+      (WidgetTester tester) async {
+        await pushInquire(
+          tester,
+          handler: (_) async => inquiryCreatedResponse(),
+          checkHandler: (_) async =>
+              inquiryCheckResponse(inquiry: inquiryJson(id: 21)),
+        );
 
-      final Finder goToMessages = find.widgetWithText(
-        FilledButton,
-        'Go to Messages',
-      );
-      await tester.ensureVisible(goToMessages);
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(goToMessages);
-      await settle(tester);
+        final Finder goToMessages = find.widgetWithText(
+          FilledButton,
+          'Go to Messages',
+        );
+        await tester.ensureVisible(goToMessages);
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(goToMessages);
+        await settle(tester);
 
-      expect(find.byType(ChatScreen), findsOneWidget);
-      expect(find.text('Rizal Farms'), findsOneWidget);
-      // MS-04: Go to Messages opens the exact buyer–seller conversation.
-      // Opening the chat creates no inquiry and sends no message.
-      expect(posts(), isEmpty);
-    });
+        expect(find.byType(ChatScreen), findsOneWidget);
+        expect(find.text('Rizal Farms'), findsOneWidget);
+        // MS-04: Go to Messages opens the exact buyer–seller conversation.
+        // Opening the chat creates no inquiry and sends no message.
+        expect(posts(), isEmpty);
+      },
+    );
 
     testWidgets('Back to Browse leaves the already-sent state', (
       WidgetTester tester,

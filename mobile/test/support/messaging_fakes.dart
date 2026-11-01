@@ -59,6 +59,8 @@ Map<String, dynamic> conversationJson({
   String lastMessage = 'Still available?',
   Object? lastMessageAt = '2026-10-01T08:15:00.000000Z',
   Object? unreadCount = 0,
+  bool hasInquiry = false,
+  bool hasTransaction = false,
 }) {
   return <String, dynamic>{
     'counterpart': counterpart ?? chatUserJson(),
@@ -67,6 +69,8 @@ Map<String, dynamic> conversationJson({
     'last_message': lastMessage,
     'last_message_at': lastMessageAt,
     'unread_count': unreadCount,
+    'has_inquiry': hasInquiry,
+    'has_transaction': hasTransaction,
   };
 }
 

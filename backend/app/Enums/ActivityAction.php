@@ -39,6 +39,11 @@ enum ActivityAction: string
     case InquiryStatusUpdated = 'inquiry_status_updated';
     case InquiryDeleted = 'inquiry_deleted';
 
+    case OfferCreated = 'offer_created';
+    case OfferAccepted = 'offer_accepted';
+    case OfferDeclined = 'offer_declined';
+    case OfferWithdrawn = 'offer_withdrawn';
+
     case SettingsUpdated = 'settings_updated';
 
     public function label(): string
@@ -62,6 +67,10 @@ enum ActivityAction: string
             self::TransactionCancelled => 'Transaction cancelled',
             self::InquiryStatusUpdated => 'Inquiry status updated',
             self::InquiryDeleted => 'Inquiry deleted',
+            self::OfferCreated => 'Offer created',
+            self::OfferAccepted => 'Offer accepted',
+            self::OfferDeclined => 'Offer declined',
+            self::OfferWithdrawn => 'Offer withdrawn',
             self::SettingsUpdated => 'Settings updated',
         };
     }

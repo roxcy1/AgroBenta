@@ -181,7 +181,7 @@ class _YourInquiryCard extends StatelessWidget {
           _SummaryRow(
             icon: Icons.calendar_today,
             label: 'Collection date option',
-            value: _collectionDateOptionLabel(inquiry.collectionDateOption!),
+            value: inquiry.collectionDateOption!.label,
           ),
         if (inquiry.preferredSchedule != null)
           _SummaryRow(
@@ -192,15 +192,6 @@ class _YourInquiryCard extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Returns the buyer-facing label for a collection date option.
-String _collectionDateOptionLabel(InquiryCollectionDateOption option) {
-  return switch (option) {
-    InquiryCollectionDateOption.specificDate => 'Specific date',
-    InquiryCollectionDateOption.nextFewDays => 'Within the next few days',
-    InquiryCollectionDateOption.thisWeek => 'Within this week',
-  };
 }
 
 /// One label/value row in the confirmation summary. The value wraps; it is

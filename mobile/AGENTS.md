@@ -654,20 +654,47 @@ exposes the caller's own conversations and messages behind the same
 | `PATCH /api/messages/{id}/read` | Marks one message read. |
 
 `ConversationResource` carries `counterpart{id,name,avatar_url}`, `listing_id`,
-`listing_title`, `last_message`, `last_message_at` and `unread_count`;
-`MessageResource` carries the message plus embedded sender/receiver summaries.
-The app's `Conversation` and `Message` models mirror them exactly. Search and
-the category chips are **local view filters** — the API has no conversation
-search and no category column. "Inquiries" selects listing-scoped threads;
-"Transactions" renders disabled — the API links no conversation to a
-transaction, and My Purchases / My Sales are separate screens over
-`/api/transactions`;
+`listing_title`, `last_message`, `last_message_at`, `unread_count`,
+`has_inquiry` and `has_transaction`; `MessageResource` carries the message plus
+embedded sender/receiver summaries. The app's `Conversation` and `Message`
+models mirror them exactly. A conversation is the buyer–seller pair, not one
+listing: `listing_id` is only the newest message's context. Search and the
+category chips are **local view filters** — the API has no conversation search
+and no category column. "Inquiries" and "Transactions" read the server's
+pair-level booleans; neither guesses from `listing_id`.
 "Notifications" is a shortcut to the existing, separate notifications
 destination, not a thread filter. Opening a thread marks it read through the
 same endpoint from two callers by design (the inbox optimistically, the chat
 screen on open). **There is no real-time transport** (GAP-20): the inbox and
 thread recover via pull-to-refresh and an on-return refresh, and the app ships
 no WebSocket client, no invented event names and no fake reconnect.
+
+**Resolved for purchase offers (MS-05).** A seller answers an inquiry with a
+structured offer behind the same `auth:sanctum` + `ability:mobile` guard;
+creation and withdrawal additionally require the `seller` gate:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/offers` | The caller's offers, newest first. Optional `inquiry_id`, `listing_id`, `counterpart_id`, `status`; ownership filters are `422`. |
+| `POST /api/offers` | Creates a `pending` offer from `inquiry_id`, `listing_id` and `proposed_amount` (numeric, min 0.01). Seller-only. |
+| `GET /api/offers/{offer}` | One offer the caller is party to; `404` for a non-party. |
+| `POST /api/offers/{offer}/accept` | The inquiry's buyer accepts; atomically creates exactly one `pending` transaction whose `total_amount` is `proposed_amount`. |
+| `POST /api/offers/{offer}/decline` | The inquiry's buyer declines. |
+| `POST /api/offers/{offer}/withdraw` | The creating seller withdraws. |
+
+`OfferResource` carries `id`, `inquiry_id`, `listing_id`, `seller_id`,
+`buyer_id`, `proposed_amount` (decimal string), `status`
+(`pending`/`accepted`/`declined`/`withdrawn`/`expired`), `responded_at` and
+`created_at`. It carries **no transaction id**, so "View transaction" is shown
+only in the accept response dialog, from `data.transaction`; an
+already-accepted offer loaded from the list never fabricates a link. The seller
+starts an offer from a `ReceivedInquiryCard`; the chat's offer panel loads
+`GET /offers?counterpart_id=` and lets the buyer accept or decline and the
+seller withdraw. Acceptance returns both records, and the resulting transaction
+appears in My Purchases and My Sales through the existing transaction list.
+Buyer and seller lists refresh when their shell selects the Transactions tab
+(`TransactionsScreen.isActive`). Completion remains unavailable (OQ-15,
+backend `501`).
 
 **Resolved for the Transactions screens (My Purchases / My Sales, HTTP only).**
 The backend exposes the caller's transactions behind the same `auth:sanctum` +
@@ -787,7 +814,7 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-10 | AI price suggestion | `AiPriceEstimate` model and `ai_price_estimates` table exist. No controller, service, route or job. No pricing algorithm in the repository. `OPEN`. | AI price suggestion |
 | GAP-11 | Transactions | **CLOSED** for the mobile surface. `GET /api/transactions` (own records only; `?role`, `?status`, paginated), `POST /api/transactions` (buyer creates `pending` from an `active` listing; body `listing_id` + `quantity` only; `total_amount` server-derived), `GET /api/transactions/{id}` (party-only; `404` otherwise) and `POST /api/transactions/{id}/cancel` (pending-only, either party; `409` once terminal), behind `auth:sanctum` + `ability:mobile`, served by `Api/Transaction/TransactionController` over `MobileTransactionResource`. `POST /{id}/complete` is **not implemented** and answers `501` (OQ-15), so the client offers no completion. Tests: `backend/tests/Feature/Transaction/MobileTransactionTest.php`. | Completion (OQ-15) |
 | GAP-12 | Notifications | **CLOSED.** `GET /api/notifications` (paginated `notifications` list with `pagination` and `unread_count`), `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `POST /api/notifications/read-all` and `DELETE /api/notifications/{id}`, all behind `auth:sanctum` + `ability:mobile` and served by `Api/Notification/NotificationController` over `NotificationResource`. Every route resolves the record from the token — no route takes a user id — and notification ids are UUID strings. The app consumes this through its own Notifications screen, reached from the Home bell and from the Messages screen's Notifications chip. | — |
-| GAP-13 | Messaging | **CLOSED.** `GET /api/conversations`, `POST /api/conversations/{userId}/read`, `GET /api/conversations/{userId}/messages`, `POST /api/messages` and `PATCH /api/messages/{id}/read`, behind `auth:sanctum` + `ability:mobile`, served by `Api/Messaging/ConversationController` and `MessageController` over `ConversationResource` / `MessageResource`. Conversations are derived from message pairs (no table, no id); the caller's own participation scopes every query, and `sender_id`/`receiver_id` are server-derived on send. Consumed by the Messages inbox and chat screens. **No broadcasting** accompanies any of it — see GAP-20. No backend feature tests exist for these routes. | — |
+| GAP-13 | Messaging | **CLOSED.** `GET /api/conversations`, `POST /api/conversations/{userId}/read`, `GET /api/conversations/{userId}/messages`, `POST /api/messages` and `PATCH /api/messages/{id}/read`, behind `auth:sanctum` + `ability:mobile`, served by `Api/Messaging/ConversationController` and `MessageController` over `ConversationResource` / `MessageResource`. Conversations are derived from message pairs (no table, no id); the caller's own participation scopes every query, and `sender_id`/`receiver_id` are server-derived on send. Consumed by the Messages inbox and chat screens. `ConversationResource` also carries the pair-level `has_inquiry` / `has_transaction` booleans the inbox filters use; backend coverage lives in `backend/tests/Feature/Messaging/ConversationClassificationTest.php`. **No broadcasting** accompanies any of it — see GAP-20. | — |
 | GAP-14 | Profile read/update for the current user | No endpoint. Admin can list users but not edit them. `OPEN`. | Profile |
 | GAP-15 | Token lifetime policy | Mobile tokens are issued non-expiring, the same as admin tokens. No expiry, no refresh, no revocation-all. Still needs an explicit decision before shipping, so a mobile session currently lasts until it is logged out or revoked. | Security |
 | GAP-16 | Sanctum token ability scoping for mobile | **CLOSED.** Mobile tokens carry `['mobile']`; mobile routes require `ability:mobile`. The `admin` group now also requires `ability:admin`, so a mobile token is refused by admin routes and an admin token is refused by mobile routes. Both directions are covered by `backend/tests/Feature/Auth/MobileAuthTest.php`. | — |

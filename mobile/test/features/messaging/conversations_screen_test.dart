@@ -12,8 +12,10 @@ import 'package:agrobenta_mobile/features/messaging/widgets/conversation_tile.da
 import 'package:agrobenta_mobile/features/notifications/state/notifications_controller.dart';
 import 'package:agrobenta_mobile/features/notifications/state/notifications_scope.dart';
 import 'package:agrobenta_mobile/features/notifications/view/notifications_screen.dart';
+import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
 import 'package:agrobenta_mobile/repositories/messaging_repository.dart';
 import 'package:agrobenta_mobile/repositories/notification_repository.dart';
+import 'package:agrobenta_mobile/repositories/offer_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -21,6 +23,7 @@ import 'package:http/http.dart' as http;
 import '../../support/auth_fakes.dart';
 import '../../support/messaging_fakes.dart';
 import '../../support/notification_fakes.dart';
+import '../../support/offer_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -68,6 +71,14 @@ void main() {
         NotificationsController(notificationRepository);
     addTearDown(notificationsController.dispose);
 
+    // The chat screen reads this scope for its offer panel. These inbox tests
+    // never open an offer, so an empty list is the honest answer.
+    final OfferRepository offerRepository = buildOfferRepository(
+      tokenStore,
+      (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
+      recorded: recorded,
+    );
+
     final AuthController authController = AuthController(
       buildAuthRepository(
         tokenStore,
@@ -93,11 +104,14 @@ void main() {
         child: NotificationsScope(
           repository: notificationRepository,
           controller: notificationsController,
-          child: AuthScope(
-            controller: authController,
-            child: MaterialApp(
-              theme: AppTheme.light(),
-              home: const ConversationsScreen(),
+          child: OfferScope(
+            repository: offerRepository,
+            child: AuthScope(
+              controller: authController,
+              child: MaterialApp(
+                theme: AppTheme.light(),
+                home: const ConversationsScreen(),
+              ),
             ),
           ),
         ),
@@ -321,21 +335,26 @@ void main() {
   });
 
   group('category filters', () {
-    testWidgets('Inquiries keeps only listing-scoped threads', (
+    testWidgets('Inquiries keeps only threads with an inquiry for the pair', (
       WidgetTester tester,
     ) async {
       await pumpInbox(
         tester,
         handler: (_) async => conversationsResponse(
           conversations: <Map<String, dynamic>>[
+            // Has an inquiry, even though its newest message carries no
+            // listing context: the pair-level fact decides, not listing_id.
             conversationJson(
               counterpart: chatUserJson(id: 3, name: 'Rizal Farms'),
-              listingId: 12,
-            ),
-            conversationJson(
-              counterpart: chatUserJson(id: 4, name: 'Ben Santos'),
               listingId: null,
               listingTitle: null,
+              hasInquiry: true,
+            ),
+            // No inquiry, even though a listing id is present.
+            conversationJson(
+              counterpart: chatUserJson(id: 4, name: 'Ben Santos'),
+              listingId: 12,
+              hasInquiry: false,
             ),
           ],
         ),
@@ -357,9 +376,24 @@ void main() {
       expect(find.text('Ben Santos'), findsOneWidget);
     });
 
-    testWidgets('Transactions is disabled and Notifications opens its own '
-        'destination', (WidgetTester tester) async {
-      await pumpInbox(tester, handler: (_) async => conversationsResponse());
+    testWidgets('Transactions filters by the pair-level transaction fact', (
+      WidgetTester tester,
+    ) async {
+      await pumpInbox(
+        tester,
+        handler: (_) async => conversationsResponse(
+          conversations: <Map<String, dynamic>>[
+            conversationJson(
+              counterpart: chatUserJson(id: 3, name: 'Rizal Farms'),
+              hasTransaction: true,
+            ),
+            conversationJson(
+              counterpart: chatUserJson(id: 4, name: 'Ben Santos'),
+              hasTransaction: false,
+            ),
+          ],
+        ),
+      );
 
       final Finder transactions = find.ancestor(
         of: find.text('Transactions'),
@@ -368,9 +402,27 @@ void main() {
       expect(transactions, findsOneWidget, reason: 'Transactions is shown');
       expect(
         tester.widget<InkWell>(transactions).onTap,
-        isNull,
-        reason: 'no data model supports a transaction-message link (GAP-11)',
+        isNotNull,
+        reason: 'the server now supplies the pair-level transaction fact',
       );
+
+      await tester.tap(find.text('Transactions'));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Rizal Farms'), findsOneWidget);
+      expect(find.text('Ben Santos'), findsNothing);
+
+      await tester.tap(find.text('All'));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Rizal Farms'), findsOneWidget);
+      expect(find.text('Ben Santos'), findsOneWidget);
+    });
+
+    testWidgets('Notifications opens its own destination', (
+      WidgetTester tester,
+    ) async {
+      await pumpInbox(tester, handler: (_) async => conversationsResponse());
 
       final Finder notifications = find.ancestor(
         of: find.text('Notifications'),

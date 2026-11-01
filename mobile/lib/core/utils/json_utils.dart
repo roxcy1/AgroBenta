@@ -92,6 +92,18 @@ int? readNullableInt(Map<String, dynamic> json, String key) {
   );
 }
 
+/// Reads a required boolean.
+bool readBool(Map<String, dynamic> json, String key) {
+  final Object? value = json[key];
+  if (value is bool) {
+    return value;
+  }
+  throw FormatException(
+    'Expected field "$key" to be a bool, got ${value.runtimeType}.',
+    json.toString(),
+  );
+}
+
 /// Reads a required nullable boolean.
 bool? readNullableBool(Map<String, dynamic> json, String key) {
   final Object? value = json[key];

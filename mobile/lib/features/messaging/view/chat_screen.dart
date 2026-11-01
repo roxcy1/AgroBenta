@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/app_formatters.dart';
 import '../../../models/message.dart';
+import '../../../models/offer.dart';
+import '../../offers/state/chat_offers_controller.dart';
+import '../../offers/state/offer_scope.dart';
+import '../../offers/state/offer_state.dart';
+import '../../offers/widgets/chat_offer_panel.dart';
+import '../../transactions/views/transaction_detail_screen.dart';
 import '../state/chat_controller.dart';
 import '../state/messaging_scope.dart';
 import '../state/messaging_state.dart';
@@ -44,6 +51,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   late final ChatController _controller;
+  late final ChatOffersController _offers;
 
   @override
   void initState() {
@@ -62,15 +70,121 @@ class _ChatScreenState extends State<ChatScreen> {
     // Mark read on open — the user is looking at the thread, so unread
     // messages are read from their perspective.
     _controller.markRead();
+
+    // The offer panel is per-thread state. The list is scoped by counterpart
+    // because a conversation is the buyer–seller pair, not one listing.
+    _offers = ChatOffersController(
+      OfferScope.readOf(context),
+      counterpartId: widget.counterpart.id,
+    );
+    _offers.load();
   }
 
   @override
   void dispose() {
+    _offers.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   Future<bool> _onSend(String body) => _controller.send(body);
+
+  /// Shows the transaction the acceptance created, with the one honest link
+  /// the app can offer. An already-accepted offer loaded from the list cannot
+  /// be linked: `OfferResource` carries no transaction id.
+  Future<void> _acceptOffer(Offer offer) async {
+    final OfferAcceptance? result = await _offers.accept(offer);
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final String amount =
+        AppFormatters.formatMoney(result.offer.proposedAmount) ??
+        result.offer.proposedAmount;
+    final bool? view = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Offer accepted'),
+        content: Text(
+          'A pending transaction for $amount was created. '
+          'The seller will see it in My Sales.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('View transaction'),
+          ),
+        ],
+      ),
+    );
+
+    if (view == true && mounted) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) =>
+              TransactionDetailScreen(transactionId: result.transaction.id),
+        ),
+      );
+    }
+  }
+
+  Future<void> _declineOffer(Offer offer) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Decline this offer?'),
+        content: const Text(
+          'The offer will be declined and cannot be accepted later. '
+          'The seller can still make a new offer.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep offer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Decline'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _offers.decline(offer);
+    }
+  }
+
+  Future<void> _withdrawOffer(Offer offer) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Withdraw this offer?'),
+        content: const Text(
+          'The buyer will no longer be able to accept it. '
+          'You can make a new offer afterwards.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep offer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Withdraw'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _offers.withdraw(offer);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,9 +206,10 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: _controller,
+          listenable: Listenable.merge(<Listenable>[_controller, _offers]),
           builder: (BuildContext context, Widget? child) {
             final ChatState state = _controller.state;
+            final ChatOffersState offers = _offers.state;
 
             // A send error is shown as a snackbar, once.
             final String? sendError = state.sendErrorMessage;
@@ -107,6 +222,20 @@ class _ChatScreenState extends State<ChatScreen> {
                   context,
                 ).showSnackBar(SnackBar(content: Text(sendError)));
                 _controller.clearSendError();
+              });
+            }
+
+            // An offer action failure is shown the same way, once.
+            final String? offerError = offers.actionErrorMessage;
+            if (offerError != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(offerError)));
+                _offers.clearActionError();
               });
             }
 
@@ -129,6 +258,14 @@ class _ChatScreenState extends State<ChatScreen> {
                               currentUserId: widget.currentUserId,
                             ),
                   },
+                ),
+                ChatOfferPanel(
+                  state: offers,
+                  currentUserId: widget.currentUserId,
+                  onAccept: _acceptOffer,
+                  onDecline: _declineOffer,
+                  onWithdraw: _withdrawOffer,
+                  onRetry: _offers.load,
                 ),
                 ChatInputBar(onSend: _onSend, isSending: state.isSending),
               ],
