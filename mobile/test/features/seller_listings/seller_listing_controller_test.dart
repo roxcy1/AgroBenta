@@ -865,6 +865,96 @@ void main() {
       expect(retried, isFalse);
       expect(harness.recorded, isEmpty);
     });
+
+    group('reorder', () {
+      List<String?> order(SellerListingController controller) => controller
+          .photos
+          .map((ListingPhotoItem photo) => photo.file?.path)
+          .toList();
+
+      SellerListingController threePhotos(
+        Future<http.Response> Function(RecordedRequest request) handler,
+      ) {
+        final harness = buildRecordedController(handler);
+        addTearDown(harness.controller.dispose);
+        harness.controller.startPhotoComposer(9, const <String>[]);
+        harness.controller.addPickedPhotos(<XFile>[
+          XFile.fromData(_pngBytes, path: 'a.png'),
+          XFile.fromData(_pngBytes, path: 'b.png'),
+          XFile.fromData(_pngBytes, path: 'c.png'),
+        ]);
+        return harness.controller;
+      }
+
+      Future<http.Response> notFound(RecordedRequest request) async =>
+          http.Response('Not found', 404);
+
+      test('moving a photo up puts it before its neighbour', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(2, 1);
+
+        expect(order(controller), <String?>['a.png', 'c.png', 'b.png']);
+      });
+
+      test('moving a photo down puts it after its neighbour', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(0, 1);
+
+        expect(order(controller), <String?>['b.png', 'a.png', 'c.png']);
+      });
+
+      test('a move to the same place or outside the list changes nothing', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(1, 1);
+        controller.reorderPhotos(5, 0);
+        controller.reorderPhotos(0, 5);
+        controller.reorderPhotos(-1, 0);
+
+        expect(order(controller), <String?>['a.png', 'b.png', 'c.png']);
+      });
+
+      test(
+        'the upload sends the photos in the order the seller chose',
+        () async {
+          final List<RecordedRequest> uploads = <RecordedRequest>[];
+          final SellerListingController controller = threePhotos((
+            RecordedRequest request,
+          ) async {
+            uploads.add(request);
+            return sellerListingResponse(
+              listing: listingJson(
+                id: 9,
+                status: 'draft',
+                photos: <Object?>[
+                  'https://api.test/storage/listings/c.jpg',
+                  'https://api.test/storage/listings/a.jpg',
+                  'https://api.test/storage/listings/b.jpg',
+                ],
+              ),
+              statusCode: 201,
+            );
+          });
+
+          // c first, then a, then b.
+          controller.reorderPhotos(2, 0);
+
+          final bool uploaded = await controller.uploadComposerPhotos(9);
+
+          expect(uploaded, isTrue);
+          // The body carries raw PNG bytes, which are not valid UTF-8.
+        final String body = latin1.decode(uploads.single.request.bodyBytes);
+          final int c = body.indexOf('filename="c.png"');
+          final int a = body.indexOf('filename="a.png"');
+          final int b = body.indexOf('filename="b.png"');
+          expect(c, isNonNegative);
+          expect(c, lessThan(a));
+          expect(a, lessThan(b));
+        },
+      );
+    });
   });
 
   group('lifecycle rules', () {

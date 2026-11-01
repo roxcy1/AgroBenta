@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -61,21 +62,75 @@ class ListingPhotoGrid extends StatelessWidget {
           );
         }),
         if (controller.canAddPhoto)
-          _AddTile(onAdd: () => _pickPhotos(controller)),
+          _AddTile(onAdd: () => _pickPhotos(context, controller)),
       ],
     );
   }
 
-  /// Opens the image picker (gallery or camera) and appends any picks.
-  static Future<void> _pickPhotos(SellerListingController controller) async {
-    final ImagePicker picker = ImagePicker();
-    final List<XFile> picked = await picker.pickMultiImage(
-      maxWidth: 1600,
-      maxHeight: 1600,
-      imageQuality: 85,
+  /// Asks where the photos come from, then appends whatever the seller picks.
+  ///
+  /// Dismissing the choice picks nothing. The controller and messenger are read
+  /// before the first `await`, so no [BuildContext] is used after it. A picker
+  /// that cannot open — typically a denied camera or photo permission — is
+  /// reported instead of surfacing as an unhandled error.
+  static Future<void> _pickPhotos(
+    BuildContext context,
+    SellerListingController controller,
+  ) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (BuildContext dialogContext) => SimpleDialog(
+        title: const Text('Add photos from'),
+        children: <Widget>[
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(ImageSource.gallery),
+            child: const Text('Gallery'),
+          ),
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(ImageSource.camera),
+            child: const Text('Camera'),
+          ),
+        ],
+      ),
     );
-    if (picked.isNotEmpty) {
-      controller.addPickedPhotos(picked);
+    if (source == null) {
+      return;
+    }
+
+    final ImagePicker picker = ImagePicker();
+    try {
+      if (source == ImageSource.camera) {
+        final XFile? photo = await picker.pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1600,
+          maxHeight: 1600,
+          imageQuality: 85,
+        );
+        if (photo != null) {
+          controller.addPickedPhotos(<XFile>[photo]);
+        }
+      } else {
+        final List<XFile> picked = await picker.pickMultiImage(
+          maxWidth: 1600,
+          maxHeight: 1600,
+          imageQuality: 85,
+        );
+        if (picked.isNotEmpty) {
+          controller.addPickedPhotos(picked);
+        }
+      }
+    } on PlatformException {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the camera or photo library. '
+            'Check the app permissions and try again.',
+          ),
+        ),
+      );
     }
   }
 }
@@ -425,7 +480,7 @@ class _MoveButton extends StatelessWidget {
   }
 }
 
-/// The add photo tile: a [+] that opens the gallery or camera.
+/// The add photo tile: a [+] that asks for the gallery or the camera.
 class _AddTile extends StatelessWidget {
   const _AddTile({required this.onAdd});
 
