@@ -18,8 +18,7 @@ use Tests\TestCase;
 /**
  * Mobile inquiry creation — `POST /api/inquiries`.
  *
- * The buyer's write path, as reserved by the `/admin/inquiries` route
- * comment. The rules under test are the ones the design document and the
+ * The buyer's write path. The rules under test are the ones the design document and the
  * schema state: the buyer and the seller are server-resolved, the inquiry is
  * created `open`, a plain message is a valid inquiry, the structured
  * preferences are optional, server-owned fields are refused, and creating an

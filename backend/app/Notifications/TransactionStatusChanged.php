@@ -10,15 +10,10 @@ use Illuminate\Notifications\Notification;
  * "The other party changed the status of transaction #N."
  *
  * Fired to the **counterparty** (the party that did not make the change).
- * Fires for every status transition except `pending → cancelled` (which fires
- * its own [TransactionCancelled] to keep the wording "cancelled" distinct) and
- * `created` (the initial insert is [TransactionCreated]).
  *
- * ## The `$actorId` parameter
- *
- * The notification is addressed to "the other party", so the class needs to
- * know who changed it. Passing the id rather than the User keeps this class
- * decoupled from the service layer that calls it.
+ * Currently triggered when a transaction is cancelled (`pending -> cancelled`).
+ * When the `complete` transition is implemented (currently blocked by OQ-15),
+ * this same class will fire with `newStatus = 'completed'`.
  */
 class TransactionStatusChanged extends Notification
 {

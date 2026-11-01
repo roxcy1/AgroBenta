@@ -358,4 +358,74 @@ class MobileNotificationTest extends TestCase
 
         Notification::assertSentTo($seller, TransactionStatusChanged::class);
     }
+
+        public function test_buyer_who_creates_a_transaction_does_not_get_a_notification(): void
+    {
+        Notification::fake();
+
+        $seller = User::factory()->create(['seller_capability' => 'seller']);
+        $buyer  = User::factory()->create();
+
+        $listing = Listing::create([
+            'seller_id' => $seller->getKey(),
+            'livestock_type' => 'cattle',
+            'breed' => 'Brahman',
+            'quantity' => 10,
+            'asking_price' => 1000,
+            'location' => 'Trinidad, Bohol',
+            'short_description' => 'Test listing',
+            'status' => 'active',
+            'photos' => [],
+        ]);
+
+        $buyerToken = $buyer->createToken('test', ['mobile'])->plainTextToken;
+
+        $this->actingAs($buyer, 'sanctum')
+            ->withHeader('Authorization', "Bearer {$buyerToken}")
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->getKey(),
+                'quantity' => 2,
+            ])
+            ->assertCreated();
+
+        Notification::assertNotSentTo($buyer, TransactionCreated::class);
+    }
+
+    public function test_seller_cancelling_a_transaction_notifies_the_buyer(): void
+    {
+        Notification::fake();
+
+        $seller = User::factory()->create(['seller_capability' => 'seller']);
+        $buyer  = User::factory()->create();
+
+        $listing = Listing::create([
+            'seller_id' => $seller->getKey(),
+            'livestock_type' => 'cattle',
+            'breed' => 'Brahman',
+            'quantity' => 10,
+            'asking_price' => 1000,
+            'location' => 'Trinidad, Bohol',
+            'short_description' => 'Test listing',
+            'status' => 'active',
+            'photos' => [],
+        ]);
+
+        $transaction = Transaction::create([
+            'buyer_id' => $buyer->getKey(),
+            'seller_id' => $seller->getKey(),
+            'listing_id' => $listing->getKey(),
+            'quantity' => 1,
+            'total_amount' => 1000,
+            'status' => 'pending',
+        ]);
+
+        $sellerToken = $seller->createToken('test', ['mobile'])->plainTextToken;
+
+        $this->actingAs($seller, 'sanctum')
+            ->withHeader('Authorization', "Bearer {$sellerToken}")
+            ->postJson("/api/transactions/{$transaction->getKey()}/cancel")
+            ->assertOk();
+
+        Notification::assertSentTo($buyer, TransactionStatusChanged::class);
+    }
 }

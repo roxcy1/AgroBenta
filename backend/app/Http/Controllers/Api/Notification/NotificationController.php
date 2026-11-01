@@ -109,8 +109,13 @@ class NotificationController extends Controller
      * Returns the number of notifications updated so the caller can update
      * the unread badge without making another request.
      */
-    public function markAllAsRead(Request $request): JsonResponse
+     public function markAllAsRead(Request $request): JsonResponse
     {
+        // `update()` returns the number of rows affected — the exact count of
+        // notifications that flipped from unread to read. Returning that is
+        // what the mobile client needs to display ("N marked as read"); the
+        // previous hardcoded 0 was a bug because it told the client nothing
+        // was updated even when the request succeeded.
         $count = $request->user()
             ->unreadNotifications()
             ->update(['read_at' => now()]);
