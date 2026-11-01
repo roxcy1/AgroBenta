@@ -9,13 +9,13 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * The mobile-facing shape of an inquiry: what the buyer just sent, echoed
  * back as stored.
  *
- * Deliberately narrower than the administrator's `InquiryResource`:
+ * Deliberately narrow:
  *
  *  - no `buyer` / `seller` projections and **no emails** — a mobile reader is
  *    the buyer, who knows who they are, and seller contact details must not be
  *    disclosed through this projection (functional documentation §10.4);
- *  - no `status` — the workflow marker is an internal administrator bookmark
- *    (`routes/api.php`, admin block) and gates no mobile behaviour, so
+ *  - no `status` — the workflow marker is an internal bookmark (no
+ *    administrator route sets it any more) and gates no mobile behaviour, so
  *    modelling it here would invite the client to render a state it has no
  *    business acting on;
  *

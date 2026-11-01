@@ -8,16 +8,17 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * The mobile-facing shape of an inquiry as received by its seller.
  *
- * Narrower than the administrator's `InquiryResource`:
+ * Deliberately narrow:
  *
  *  - `buyer` carries only an identity and display name, never an email or
  *    other contact detail (functional documentation section 10.4);
  *  - `listing` carries the same narrow identity the buyer's confirmation and
  *    the transaction resource use, and is null when the listing has since been
  *    deleted (`listings` are nulled rather than cascaded);
- *  - `status` is omitted. It is the administrator's triage bookmark, not a
- *    seller-facing workflow the mobile client may act on, and its presence
- *    would invite the client to render a state this phase does not implement.
+ *  - `status` is omitted. It is an internal triage bookmark (no administrator
+ *    route sets it any more), not a seller-facing workflow the mobile client
+ *    may act on, and its presence would invite the client to render a state
+ *    this phase does not implement.
  */
 class SellerInquiryResource extends JsonResource
 {

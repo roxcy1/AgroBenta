@@ -546,8 +546,8 @@ requirements above — the app builds the body from the allow-list only).
 `InquiryService` answers `409` for a non-active listing and `409` for the
 caller's own listing, and `404` when the listing does not exist. Creating an
 inquiry changes nothing else: no transaction, no listing status change, no
-notification. Triage and re-status live under `/api/admin/inquiries*` and are
-not called by this app.
+notification. There are no administrator inquiry endpoints: an inquiry is
+between the buyer and the seller only.
 
 The **Inquiry Sent** confirmation is rendered entirely from that create
 response — the record it returns is the screen's single source of truth, and
@@ -771,7 +771,7 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-14 | Profile read/update for the current user | No endpoint. Admin can list users but not edit them. `OPEN`. | Profile |
 | GAP-15 | Token lifetime policy | Mobile tokens are issued non-expiring, the same as admin tokens. No expiry, no refresh, no revocation-all. Still needs an explicit decision before shipping, so a mobile session currently lasts until it is logged out or revoked. | Security |
 | GAP-16 | Sanctum token ability scoping for mobile | **CLOSED.** Mobile tokens carry `['mobile']`; mobile routes require `ability:mobile`. The `admin` group now also requires `ability:admin`, so a mobile token is refused by admin routes and an admin token is refused by mobile routes. Both directions are covered by `backend/tests/Feature/Auth/MobileAuthTest.php`. | — |
-| GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry. `GET /api/seller/inquiries` lists the approved seller's own inbox through `SellerInquiryResource`, which omits `status` deliberately (open/responded/closed is an admin triage bookmark) and omits buyer email. `GET /api/inquiries`, `GET /api/inquiries/{inquiry}`, `PATCH /api/inquiries/{inquiry}/status` and `DELETE /api/inquiries/{inquiry}` remain admin-only (`routes/api.php`, `ability:admin`). There is still no buyer read endpoint, no inquiry detail for either side, and no seller response/status action. | Buyer inquiry list/detail, the Inquiry Sent screen's "View Inquiry" (rendered disabled with an honest caption), seller inquiry response/status, any server-driven status display |
+| GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry. `GET /api/seller/inquiries` lists the approved seller's own inbox through `SellerInquiryResource`, which omits `status` deliberately (open/responded/closed is an internal bookmark that no administrator route sets any more) and omits buyer email. The administrator inquiry routes (`/api/admin/inquiries*`) were removed: an inquiry is between the buyer and the seller only. There is still no buyer read endpoint, no inquiry detail for either side, and no seller response/status action. | Buyer inquiry list/detail, the Inquiry Sent screen's "View Inquiry" (rendered disabled with an honest caption), seller inquiry response/status, any server-driven status display |
 | GAP-20 | Real-time messaging / notifications | **OPEN.** Nothing in the backend broadcasts messages or notifications: `BROADCAST_CONNECTION=log` in `backend/.env`/`.env.example`, no `config/broadcasting.php` or `config/reverb.php`, no `routes/channels.php`, no `app/Events/`, and `laravel/reverb` is not a dependency. The `reverb` service in `compose.yaml` is commented out. The app therefore has no WebSocket client (and no WS/echo package in `pubspec.yaml`), no event names to subscribe to, and no reconnect logic. Both inbox and thread recover by HTTP refresh instead. Building real-time requires broadcasting, authenticated private channels and named events on the server first. | Real-time message delivery, live badge/notification updates |
 
 ### Gaps that are design questions, not missing code
