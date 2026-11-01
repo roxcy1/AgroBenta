@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Models\Listing;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ListingManagementTest extends TestCase
@@ -335,6 +336,59 @@ class ListingManagementTest extends TestCase
                 'status',
             ],
         ]);
+    }
+
+    public function test_listing_response_includes_photo_urls_in_order(): void
+    {
+        $listing = $this->createListing(['photos' => ['first.jpg', 'second.png']]);
+        $disk = Storage::disk(Listing::PHOTO_DISK);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/listings');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.listings.0.photos', [
+            $disk->url("{$listing->id}/first.jpg"),
+            $disk->url("{$listing->id}/second.png"),
+        ]);
+    }
+
+    public function test_photos_are_absolute_urls_never_filenames_or_paths(): void
+    {
+        $this->createListing(['photos' => ['first.jpg', 'second.png']]);
+
+        $photos = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/listings')
+            ->json('data.listings.0.photos');
+
+        $this->assertCount(2, $photos);
+
+        foreach ($photos as $photo) {
+            $this->assertMatchesRegularExpression('#^https?://#', $photo);
+        }
+    }
+
+    public function test_show_includes_photo_urls(): void
+    {
+        $listing = $this->createListing(['photos' => ['only.jpg']]);
+        $disk = Storage::disk(Listing::PHOTO_DISK);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/listings/{$listing->id}");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.photos', [$disk->url("{$listing->id}/only.jpg")]);
+    }
+
+    public function test_a_listing_without_photos_returns_an_empty_list(): void
+    {
+        $listing = $this->createListing(['photos' => []]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/listings/{$listing->id}");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.photos', []);
     }
 
     public function test_guest_cannot_show_a_single_listing(): void

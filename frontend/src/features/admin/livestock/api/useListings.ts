@@ -25,6 +25,8 @@ export interface Listing {
   vaccination: string | null;
   short_description: string;
   additional_notes: string | null;
+  /** Absolute, fetchable photo URLs in stored order. Empty when there are none. */
+  photos: string[];
   status: ListingStatus;
   /** Administrator-only. Never present on the mobile listing resource. */
   admin_note: string | null;

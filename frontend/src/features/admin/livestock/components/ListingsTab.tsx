@@ -4,6 +4,7 @@ import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/query
 import { useListing, useListingCounts, useListings } from '../api/useListings';
 import type { Listing } from '../api/useListings';
 import ListingDetailsDialog from './ListingDetailsDialog';
+import { ListingPhotoThumb } from './ListingPhotos';
 import ListingReviewDialog from './ListingReviewDialog';
 import ListingStatsCards from './ListingStatsCards';
 import type { ModerationOption } from './listingModeration';
@@ -227,6 +228,7 @@ export function ListingsTab() {
                   <table className="lv-table">
                     <thead>
                       <tr>
+                        <th>Photo</th>
                         <th>Type</th>
                         <th>Breed</th>
                         <th>Qty</th>
@@ -248,6 +250,9 @@ export function ListingsTab() {
                           onClick={() => setDetails(listing)}
                           onKeyDown={(event) => handleRowKeyDown(event, listing)}
                         >
+                          <td className="lv-photo-cell">
+                            <ListingPhotoThumb url={listing.photos[0]} />
+                          </td>
                           <td className="lv-name-cell">{listing.livestock_type}</td>
                           <td>{listing.breed}</td>
                           <td>{listing.quantity}</td>

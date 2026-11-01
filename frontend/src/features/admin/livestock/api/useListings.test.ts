@@ -21,6 +21,7 @@ function makeListing(id: number): Listing {
     vaccination: 'complete',
     short_description: 'Healthy cattle',
     additional_notes: null,
+    photos: ['http://localhost/storage/listings/' + id + '/a.jpg'],
     status: 'active',
     admin_note: null,
     created_at: '2026-10-01T00:00:00.000000Z',

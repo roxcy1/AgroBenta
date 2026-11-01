@@ -6,6 +6,7 @@ import {
   useDeactivateListing,
   useRejectListing,
 } from '../api/useListings';
+import ListingPhotos from './ListingPhotos';
 import type { ModerationOption } from './listingModeration';
 import { statusLabel } from './listingModeration';
 
@@ -93,7 +94,7 @@ export default function ListingReviewDialog({
       }}
     >
       <div
-        className="lv-action-modal"
+        className="lv-action-modal lv-action-modal--review"
         role="dialog"
         aria-modal="true"
         aria-labelledby="listing-review-title"
@@ -103,6 +104,10 @@ export default function ListingReviewDialog({
           {option.confirmTitle}
         </h2>
         <p className="lv-action-modal-desc">{option.confirmMessage}</p>
+
+        <div className="lv-review-photos">
+          <ListingPhotos photos={listing.photos} label={`Listing #${listing.id}`} />
+        </div>
 
         <div className="lv-table-container">
           <table className="lv-table">
