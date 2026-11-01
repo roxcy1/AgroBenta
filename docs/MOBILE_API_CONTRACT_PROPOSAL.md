@@ -652,6 +652,27 @@ has no route to revise and resubmit the same record. Recorded, not invented.
 
 ---
 
+#### `POST /seller/listings/{listing}/mark-sold`
+
+| Dimension | Specification |
+|---|---|
+| **Endpoint** | `/api/seller/listings/{listing}/mark-sold` |
+| **Method** | `POST` |
+| **Authentication** | Required |
+| **Ability** | `mobile` |
+| **Request fields** | None. The body allow-list is empty; any field present is rejected with `422`. |
+| **Validation** | The listing must be `active` and owned by the authenticated seller. **[D-02]:** `active → sold` is a seller action, not a client-settable `status` field. |
+| **Response** | `200`, §3.1, listing with `status: "sold"` |
+| **Errors** | `401`, `403`, `404` not yours / does not exist<br>`409` not currently `active` — `draft`, `pending`, `sold` or `inactive`<br>`422` any field present in the request body |
+| **Authorization** | `seller_capability = seller` |
+| **Ownership** | `listing.seller_id === $me->id`, else `404` |
+
+**This transition is one-way and terminal:** once `sold`, no new transaction can be created against the listing (`TransactionService::create()` answers `409` for any non-`active` listing), and no reactivation path exists (MS-02 unresolved).
+
+The status check and status update run inside a single `DB::transaction()` with `lockForUpdate()` on the listing row, so a concurrent transaction creation cannot race the status flip. `TransactionService::create()` takes the same listing-row lock, so both operations serialize consistently with no deadlock risk.
+
+---
+
 #### `PATCH /seller/listings/{listing}`
 
 | Dimension | Specification |
@@ -1229,6 +1250,7 @@ cannot be verified at all — see F-04.
 | `GET` | `/seller/listings` | yes | `mobile` | `isApprovedSeller` |
 | `POST` | `/seller/listings` | yes | `mobile` | `isApprovedSeller`; **no `status`** |
 | `POST` | `/seller/listings/{listing}/submit` | yes | `mobile` | seller + owner; `draft` only |
+| `POST` | `/seller/listings/{listing}/mark-sold` | yes | `mobile` | seller + owner; `active` only |
 | `PATCH` | `/seller/listings/{listing}` | yes | `mobile` | seller + owner; **no `status`** |
 | `DELETE` | `/seller/listings/{listing}` | yes | `mobile` | seller + owner; `draft`/`inactive` only |
 | `POST` | `/seller/listings/{listing}/price-suggestion` | yes | `mobile` | seller + owner; **estimator blocked** |
@@ -1261,6 +1283,7 @@ contract-level view of functional documentation §10.
 | `/seller/listings` | `POST` | listing content fields, `photos` | **`seller_id`**, **`status`** | `seller_id = $me`, `status = draft` |
 | `/seller/listings/{id}` | `PATCH` | any listing content field | **`seller_id`**, **`status`** | — |
 | `/seller/listings/{id}/submit` | `POST` | none | all | status `draft → pending` |
+| `/seller/listings/{id}/mark-sold` | `POST` | none | all | status `active → sold` |
 | `/transactions` | `POST` | `listing_id`, `quantity` | **`buyer_id`**, **`seller_id`**, `total_amount`, `status` | both ids, amount, `status=pending` |
 | `/messages` | `POST` | `receiver_id`, `body`, `listing_id` | **`sender_id`**, `read_at` | `sender_id = $me` |
 

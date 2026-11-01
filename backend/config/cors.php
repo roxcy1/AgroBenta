@@ -40,12 +40,11 @@ return [
         // Vite dev server may be reached via `localhost` or via the machine's
         // LAN IP when accessed from another device on the same network. Matching
         // private IP ranges avoids hardcoding any one developer's address.
-        'http://localhost:\d+',
-        'http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+',
-        'http://192\.168\.\d{1,3}\.\d{1,3}:\d+',
-        'http://172\.1[6-9]\.\d{1,3}\.\d{1,3}:\d+',
-        'http://172\.2[0-9]\.\d{1,3}\.\d{1,3}:\d+',
-        'http://172\.3[0-1]\.\d{1,3}\.\d{1,3}:\d+',
+        // Each pattern is passed to preg_match(), so it needs delimiters and anchors.
+        '#^http://localhost:\d+$#',
+        '#^http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$#',
+        '#^http://192\.168\.\d{1,3}\.\d{1,3}:\d+$#',
+        '#^http://172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}:\d+$#',
     ],
 
     'allowed_headers' => ['*'],

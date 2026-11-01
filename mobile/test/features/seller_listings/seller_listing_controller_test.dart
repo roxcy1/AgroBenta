@@ -52,6 +52,16 @@ void main() {
       expect(_canDelete(ListingStatus.sold), isFalse);
     });
 
+    test('canMarkSold covers active only', () {
+      // Marking sold is one-way and terminal: only an active listing may be
+      // marked, and once sold it stays sold.
+      expect(_canMarkSold(ListingStatus.active), isTrue);
+      expect(_canMarkSold(ListingStatus.draft), isFalse);
+      expect(_canMarkSold(ListingStatus.pending), isFalse);
+      expect(_canMarkSold(ListingStatus.sold), isFalse);
+      expect(_canMarkSold(ListingStatus.inactive), isFalse);
+    });
+
     test('submission requires at least one stored photo', () {
       // DEC-03: a draft may exist without photos, but review may not start
       // until one is stored. The server remains the authority; this mirror is
@@ -522,6 +532,69 @@ void main() {
     });
   });
 
+  group('markSold', () {
+    test('posts to the mark-sold route and swaps the row to sold', () async {
+      final harness = buildRecordedController((RecordedRequest request) async {
+        if (request.apiPath.endsWith('/mark-sold')) {
+          return sellerListingResponse(
+            listing: listingJson(id: 1, status: 'sold'),
+          );
+        }
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 1, status: 'active'),
+            listingJson(id: 2, status: 'active'),
+          ],
+          total: 2,
+        );
+      });
+      addTearDown(harness.controller.dispose);
+
+      await harness.controller.loadInitial();
+      await harness.controller.markSold(1);
+
+      final RecordedRequest sent = harness.recorded.firstWhere(
+        (RecordedRequest r) => r.apiPath.endsWith('/mark-sold'),
+      );
+      expect(sent.method, 'POST');
+      expect(sent.apiPath, '/seller/listings/1/mark-sold');
+
+      final List<Listing> listings = harness.controller.state.listings;
+      expect(listings, hasLength(2));
+      // Replaced, not appended: the row keeps its place in the list.
+      expect(listings.first.id, 1);
+      expect(listings.first.status, ListingStatus.sold);
+    });
+
+    test('a 409 becomes a conflict message and re-reads the list', () async {
+      // The listing has already moved on — already sold, or not active.
+      final harness = buildRecordedController((RecordedRequest request) async {
+        if (request.apiPath.endsWith('/mark-sold')) {
+          return listingConflictResponse(
+            message: 'Only an active listing can be marked as sold.',
+          );
+        }
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 1, status: 'pending'),
+          ],
+          total: 1,
+        );
+      });
+      addTearDown(harness.controller.dispose);
+
+      await harness.controller.loadInitial();
+      await harness.controller.markSold(1);
+
+      expect(harness.controller.state.conflictMessage, isNotNull);
+      expect(harness.controller.state.actionErrorMessage, isNull);
+      expect(
+        harness.controller.state.listings.single.status,
+        ListingStatus.pending,
+      );
+    });
+  });
+
   group('update', () {
     test('patches the listing and swaps the row', () async {
       final harness = buildRecordedController((RecordedRequest request) async {
@@ -792,6 +865,96 @@ void main() {
       expect(retried, isFalse);
       expect(harness.recorded, isEmpty);
     });
+
+    group('reorder', () {
+      List<String?> order(SellerListingController controller) => controller
+          .photos
+          .map((ListingPhotoItem photo) => photo.file?.path)
+          .toList();
+
+      SellerListingController threePhotos(
+        Future<http.Response> Function(RecordedRequest request) handler,
+      ) {
+        final harness = buildRecordedController(handler);
+        addTearDown(harness.controller.dispose);
+        harness.controller.startPhotoComposer(9, const <String>[]);
+        harness.controller.addPickedPhotos(<XFile>[
+          XFile.fromData(_pngBytes, path: 'a.png'),
+          XFile.fromData(_pngBytes, path: 'b.png'),
+          XFile.fromData(_pngBytes, path: 'c.png'),
+        ]);
+        return harness.controller;
+      }
+
+      Future<http.Response> notFound(RecordedRequest request) async =>
+          http.Response('Not found', 404);
+
+      test('moving a photo up puts it before its neighbour', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(2, 1);
+
+        expect(order(controller), <String?>['a.png', 'c.png', 'b.png']);
+      });
+
+      test('moving a photo down puts it after its neighbour', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(0, 1);
+
+        expect(order(controller), <String?>['b.png', 'a.png', 'c.png']);
+      });
+
+      test('a move to the same place or outside the list changes nothing', () {
+        final SellerListingController controller = threePhotos(notFound);
+
+        controller.reorderPhotos(1, 1);
+        controller.reorderPhotos(5, 0);
+        controller.reorderPhotos(0, 5);
+        controller.reorderPhotos(-1, 0);
+
+        expect(order(controller), <String?>['a.png', 'b.png', 'c.png']);
+      });
+
+      test(
+        'the upload sends the photos in the order the seller chose',
+        () async {
+          final List<RecordedRequest> uploads = <RecordedRequest>[];
+          final SellerListingController controller = threePhotos((
+            RecordedRequest request,
+          ) async {
+            uploads.add(request);
+            return sellerListingResponse(
+              listing: listingJson(
+                id: 9,
+                status: 'draft',
+                photos: <Object?>[
+                  'https://api.test/storage/listings/c.jpg',
+                  'https://api.test/storage/listings/a.jpg',
+                  'https://api.test/storage/listings/b.jpg',
+                ],
+              ),
+              statusCode: 201,
+            );
+          });
+
+          // c first, then a, then b.
+          controller.reorderPhotos(2, 0);
+
+          final bool uploaded = await controller.uploadComposerPhotos(9);
+
+          expect(uploaded, isTrue);
+          // The body carries raw PNG bytes, which are not valid UTF-8.
+        final String body = latin1.decode(uploads.single.request.bodyBytes);
+          final int c = body.indexOf('filename="c.png"');
+          final int a = body.indexOf('filename="a.png"');
+          final int b = body.indexOf('filename="b.png"');
+          expect(c, isNonNegative);
+          expect(c, lessThan(a));
+          expect(a, lessThan(b));
+        },
+      );
+    });
   });
 
   group('lifecycle rules', () {
@@ -823,6 +986,8 @@ bool _canSubmit(ListingStatus status) =>
     SellerListingController.canSubmit(_listing(status));
 bool _canDelete(ListingStatus status) =>
     SellerListingController.canDelete(_listing(status));
+bool _canMarkSold(ListingStatus status) =>
+    SellerListingController.canMarkSold(_listing(status));
 
 /// A `500`, for the paths that should not be assumed to work.
 http.Response http_500() => http.Response('Internal Server Error', 500);

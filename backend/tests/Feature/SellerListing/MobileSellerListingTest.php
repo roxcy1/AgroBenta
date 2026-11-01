@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\SellerListing;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Enums\UserRole;
 use App\Models\Listing;
@@ -18,11 +19,11 @@ use Tests\TestCase;
  * Seller listing management — contract §5.4.
  *
  * The lifecycle is the point of this file. A seller may create a draft, submit
- * it, edit a draft or an active listing, and delete a draft or a withdrawn one.
- * Everything else — publishing, deactivating, marking sold, or reaching another
- * seller's row — is refused, and each refusal is asserted rather than assumed:
- * this is the surface where "the client just won't offer that button" is not a
- * security property.
+ * it, edit a draft or an active listing, mark an active listing as sold, and
+ * delete a draft or a withdrawn one. Everything else — publishing, deactivating,
+ * or reaching another seller's row — is refused, and each refusal is asserted
+ * rather than assumed: this is the surface where "the client just won't offer
+ * that button" is not a security property.
  */
 class MobileSellerListingTest extends TestCase
 {
@@ -141,6 +142,7 @@ class MobileSellerListingTest extends TestCase
             'store' => ['POST', '/api/seller/listings'],
             'update' => ['PATCH', '/api/seller/listings/{listing}'],
             'submit' => ['POST', '/api/seller/listings/{listing}/submit'],
+            'markSold' => ['POST', '/api/seller/listings/{listing}/mark-sold'],
             'destroy' => ['DELETE', '/api/seller/listings/{listing}'],
         ];
     }
@@ -983,6 +985,100 @@ class MobileSellerListingTest extends TestCase
         ]);
     }
 
+    // ---------------------------------------------------------------- mark sold
+
+    #[Test]
+    public function an_active_listing_can_be_marked_as_sold(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Active]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Listing marked as sold.')
+            ->assertJsonPath('data.status', ListingStatus::Sold->value)
+            ->assertJsonPath('data.id', $listing->id);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Sold->value,
+        ]);
+
+        $this->assertDatabaseHas('activities', [
+            'user_id' => $this->seller->id,
+            'action' => ActivityAction::ListingMarkedSold->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_mark_sold_cannot_carry_a_status_or_seller_id(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Active]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold', ['status' => 'active'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold', [
+                'seller_id' => $this->otherSeller->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('seller_id');
+
+        // Rejected before the controller: the listing is still active.
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Active->value,
+        ]);
+    }
+
+    /**
+     * @return array<string, array{ListingStatus}>
+     */
+    public static function nonSellableStatuses(): array
+    {
+        return [
+            'draft' => [ListingStatus::Draft],
+            'pending' => [ListingStatus::Pending],
+            'sold' => [ListingStatus::Sold],
+            'inactive' => [ListingStatus::Inactive],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('nonSellableStatuses')]
+    public function a_non_active_listing_cannot_be_marked_as_sold(ListingStatus $status): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => $status]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold')
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => $status->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_seller_cannot_mark_another_sellers_listing_as_sold(): void
+    {
+        $listing = $this->createListing($this->otherSeller, ['status' => ListingStatus::Active]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold')
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Active->value,
+        ]);
+    }
+
     // ---------------------------------------------------------------- delete
 
     #[Test]
@@ -1167,6 +1263,7 @@ class MobileSellerListingTest extends TestCase
                 'GET api/seller/listings',
                 'POST api/seller/listings',
                 'POST api/seller/listings/{listing}/submit',
+                'POST api/seller/listings/{listing}/mark-sold',
                 'PATCH api/seller/listings/{listing}',
                 'DELETE api/seller/listings/{listing}',
                 // Listing photos (functional documentation §4.5, D-10): file

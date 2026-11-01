@@ -11,14 +11,19 @@ import '../../support/auth_fakes.dart';
 void main() {
   late FakeTokenStore tokenStore;
   late Map<String, dynamic> currentUser;
+  late bool fail503;
 
   setUp(() {
     tokenStore = FakeTokenStore('stored-token');
     currentUser = userJson();
+    fail503 = false;
   });
 
   Future<http.Response> Function(RecordedRequest request) authHandler() {
     return (RecordedRequest request) async {
+      if (fail503) {
+        return http.Response(jsonEncode(<String, dynamic>{}), 503);
+      }
       if (request.apiPath == '/auth/logout') {
         return http.Response(
           jsonEncode(successEnvelope(message: 'Logged out successfully.')),
@@ -115,6 +120,60 @@ void main() {
 
     expect(controller.mode, AccountMode.buyer);
     expect(controller.canUseSellerMode, isTrue);
+  });
+
+  test('requestSellerMode switches a verified seller to Seller Mode', () async {
+    currentUser = userJson(sellerCapability: 'seller');
+    final (_, AccountModeController controller) = await restoredSession();
+
+    await controller.requestSellerMode();
+
+    expect(controller.mode, AccountMode.seller);
+    expect(controller.takeNotice(), isNull);
+  });
+
+  test(
+    'requestSellerMode refuses a stale seller the server no longer approves',
+    () async {
+      currentUser = userJson(sellerCapability: 'seller');
+      final (_, AccountModeController controller) = await restoredSession();
+      expect(controller.canUseSellerMode, isTrue);
+
+      // Seller rights were removed on the server after sign-in.
+      currentUser = userJson(sellerCapability: 'buyer');
+      await controller.requestSellerMode();
+
+      expect(controller.mode, AccountMode.buyer);
+      expect(controller.canUseSellerMode, isFalse);
+      expect(controller.takeNotice(), contains('verified sellers'));
+    },
+  );
+
+  test(
+    'requestSellerMode stays in Buyer Mode when the server cannot be reached',
+    () async {
+      currentUser = userJson(sellerCapability: 'seller');
+      final (_, AccountModeController controller) = await restoredSession();
+
+      fail503 = true;
+      await controller.requestSellerMode();
+
+      expect(controller.mode, AccountMode.buyer);
+      expect(controller.takeNotice(), contains('Could not confirm'));
+    },
+  );
+
+  test('recheckSellerCapability drops Seller Mode with a notice', () async {
+    currentUser = userJson(sellerCapability: 'seller');
+    final (_, AccountModeController controller) = await restoredSession();
+    controller.select(AccountMode.seller);
+
+    currentUser = userJson(sellerCapability: 'buyer');
+    await controller.recheckSellerCapability();
+
+    expect(controller.mode, AccountMode.buyer);
+    expect(controller.takeNotice(), contains('no longer a verified seller'));
+    expect(controller.takeNotice(), isNull);
   });
 
   test(

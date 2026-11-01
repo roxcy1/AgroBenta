@@ -78,15 +78,20 @@ class SellerDashboardController extends ChangeNotifier {
       if (_disposed || generation != _generation) {
         return;
       }
+      // A 403 means the account is not an approved seller, so retrying cannot
+      // help; say that rather than showing the server's wording.
+      final String message = error.kind == ApiErrorKind.forbidden
+          ? 'Seller Mode is not available for this account.'
+          : error.message;
       _set(
         preserve
             ? _state.copyWith(
                 status: SellerDashboardStatus.ready,
-                refreshErrorMessage: error.message,
+                refreshErrorMessage: message,
               )
             : _state.copyWith(
                 status: SellerDashboardStatus.failed,
-                errorMessage: error.message,
+                errorMessage: message,
               ),
       );
     } on Object {

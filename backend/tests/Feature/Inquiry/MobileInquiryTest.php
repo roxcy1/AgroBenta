@@ -20,16 +20,16 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Mobile inquiry creation — `POST /api/inquiries` — and the buyer pre-check
- * `GET /api/inquiries/listing/{listing}`.
+ * Mobile inquiry creation — POST /api/inquiries — and the buyer pre-check
+ * GET /api/inquiries/listing/{listing}.
  *
- * The buyer's write path, as reserved by the `/admin/inquiries` route comment.
- * The rules under test are the ones the design document and the schema state:
- * the buyer and the seller are server-resolved, the inquiry is created `open`,
- * the message and both preferences are required, server-owned fields are
- * refused, one buyer may send only one inquiry per listing whatever its status,
- * and creating an inquiry changes nothing about the listing or the transaction
- * lifecycle.
+ * The buyer and seller are server-resolved. Inquiries are created as open.
+ * The message, payment method, and collection method are required.
+ * Server-owned fields are rejected. A buyer may create only one inquiry
+ * per listing, regardless of status.
+ *
+ * Creating an inquiry does not change the listing or transaction lifecycle.
+ * Inquiries are handled between buyers and sellers, without admin moderation.
  */
 class MobileInquiryTest extends TestCase
 {

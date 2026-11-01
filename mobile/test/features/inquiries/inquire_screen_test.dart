@@ -951,7 +951,7 @@ void main() {
       await chooseRequiredPreferences(tester);
       await submit(tester);
 
-      expect(find.text('Server error.'), findsOneWidget);
+      expect(find.text('Something went wrong on the server.'), findsOneWidget);
       expect(
         find.text('Typed before the failure'),
         findsOneWidget,

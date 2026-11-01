@@ -296,6 +296,14 @@ class _Greeting extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Text(
+            'Buyer Mode',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
           Text('Hello, ${user.name}!', style: theme.textTheme.titleMedium),
           const SizedBox(height: AppSpacing.xxs),
           Text(

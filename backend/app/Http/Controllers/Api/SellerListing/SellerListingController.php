@@ -123,6 +123,24 @@ class SellerListingController extends Controller
     }
 
     /**
+     * Mark a listing the seller owns as sold.
+     *
+     * `active → sold`. This is a named action rather than a status field, so a
+     * client cannot set `status` directly (§10.1). The lifecycle itself is
+     * decided by [SellerListingService].
+     */
+    public function markSold(SellerListingActionRequest $request, string $listing): JsonResponse
+    {
+        $marked = $this->listings->markSold($this->findOwnedListing($request, $listing));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Listing marked as sold.',
+            'data' => new MobileListingResource($marked),
+        ], 200);
+    }
+
+    /**
      * Destroy a draft or withdrawn listing.
      */
     public function destroy(SellerListingActionRequest $request, string $listing): JsonResponse

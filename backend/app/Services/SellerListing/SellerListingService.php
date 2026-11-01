@@ -29,13 +29,11 @@ use RuntimeException;
  *  - `draft` becomes `pending` on submit, and that is the only way out of it;
  *  - `draft` and `active` are editable [D-24];
  *  - `draft` and `inactive` are destroyable [D-25];
- *  - `active → inactive` is an **administrator** action, and `sold` belongs to a
- *    transaction rather than a seller. Neither is reachable from here, and
- *    neither is approximated by anything this class does.
+ *  - `active → inactive` is an **administrator** action;
+ *  - `active → sold` is a seller action via `markSold()`;
  *
  * A seller therefore cannot publish a listing. Approval is a moderation step this
- * phase does not implement (OQ-14), and no method below offers a substitute for
- * it.
+ * phase does not implement (OQ-14).
  */
 class SellerListingService
 {
@@ -214,6 +212,66 @@ class SellerListingService
             );
 
             return $listing;
+        });
+    }
+
+    /**
+     * Mark a listing the seller owns as sold.
+     *
+     * `active → sold`. Terminal for the listing: no new transactions can be
+     * created against it afterwards.
+     *
+     * The status check is performed inside a `DB::transaction()` against a
+     * row-level `lockForUpdate()` read of the listing, so a concurrent
+     * transaction creation cannot move the listing out of `active` between the
+     * check and the status write. `TransactionService::create()` takes the same
+     * listing-row lock, so both operations serialize on the listing row with a
+     * consistent lock order and no deadlock risk.
+     *
+     * @throws ValidationException if the listing is not active
+     */
+    public function markSold(Listing $listing): Listing
+    {
+        return DB::transaction(function () use ($listing): Listing {
+            // Reload inside the transaction with a row lock so that ownership
+            // and status are validated against the persisted row, not against
+            // the model the controller passed in (which could be stale).
+            $locked = Listing::query()
+                ->where('id', $listing->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($locked === null) {
+                abort(404, 'Listing not found.');
+            }
+
+            if ((int) $locked->seller_id !== (int) $listing->seller_id) {
+                abort(404, 'Listing not found.');
+            }
+
+            if ($locked->status !== ListingStatus::Active) {
+                abort(409, 'Only an active listing can be marked as sold.');
+            }
+
+            $previousStatus = $locked->status->value;
+
+            $locked->status = ListingStatus::Sold;
+            $locked->save();
+
+            $this->activity->log(
+                $locked->seller_id,
+                ActivityAction::ListingMarkedSold,
+                sprintf('Listing #%d marked as sold.', $locked->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $locked->getKey(),
+                    'changes' => [
+                        'status' => ['from' => $previousStatus, 'to' => ListingStatus::Sold->value],
+                    ],
+                ],
+            );
+
+            return $locked;
         });
     }
 

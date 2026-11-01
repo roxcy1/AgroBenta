@@ -913,11 +913,15 @@ class MarketplaceListingTest extends TestCase
                 'Bearer '.$admin->createToken('admin_token', ['admin'])->plainTextToken,
             )->getJson('/api/admin/listings')->assertOk();
 
-        // The two projections differ on exactly the two points that matter:
-        // the admin view carries the seller email and omits photos.
+        // The two projections still differ on what must never cross over: the
+        // admin view carries the seller email and the moderator's note, and the
+        // marketplace carries neither. Both expose photos, each through its own
+        // resource, so a moderator can see what a buyer will see.
         $this->assertArrayHasKey('email', $adminView->json('data.listings.0.seller'));
         $this->assertArrayNotHasKey('email', $marketplace->json('data.listings.0.seller'));
-        $this->assertArrayNotHasKey('photos', $adminView->json('data.listings.0'));
+        $this->assertArrayHasKey('admin_note', $adminView->json('data.listings.0'));
+        $this->assertArrayNotHasKey('admin_note', $marketplace->json('data.listings.0'));
+        $this->assertArrayHasKey('photos', $adminView->json('data.listings.0'));
         $this->assertArrayHasKey('photos', $marketplace->json('data.listings.0'));
     }
 

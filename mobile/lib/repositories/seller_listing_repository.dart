@@ -55,6 +55,9 @@ class SellerListingRepository {
   /// Submits a draft for review.
   Future<Listing> submit(int id) => _service.submit(id);
 
+  /// Marks an active listing as sold.
+  Future<Listing> markSold(int id) => _service.markSold(id);
+
   /// Destroys a draft or withdrawn listing.
   Future<void> delete(int id) => _service.delete(id);
 

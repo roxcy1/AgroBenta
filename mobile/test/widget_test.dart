@@ -3,6 +3,7 @@ import 'package:agrobenta_mobile/core/theme/app_colors.dart';
 import 'package:agrobenta_mobile/features/auth/view/register_screen.dart';
 import 'package:agrobenta_mobile/features/auth/view/sign_in_screen.dart';
 import 'package:agrobenta_mobile/main.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,14 +32,17 @@ void main() {
     expect(app.theme?.colorScheme.primary, AppColors.primary);
   });
 
-  testWidgets('the API base URL resolves to the physical-device address', (
+  testWidgets('the API base URL never defaults to the emulator alias', (
     WidgetTester tester,
   ) async {
-    // flutter_test runs with defaultTargetPlatform == android and no
-    // ANDROID_RUN_TARGET define, so the native-Android default must resolve to
-    // the physical-device LAN address — never the emulator host alias.
-    expect(AppConfig.apiBaseUrl, 'http://192.168.1.100:8001/api');
+    // A native Android build has no default URL: it needs API_BASE_URL or an
+    // explicit ANDROID_RUN_TARGET=emulator, so there is nothing to assert for
+    // it here. Every other platform resolves to loopback, never to 10.0.2.2.
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    expect(AppConfig.apiBaseUrl, 'http://localhost:8001/api');
     expect(AppConfig.apiBaseUrl, isNot(contains('10.0.2.2')));
+    debugDefaultTargetPlatformOverride = null;
 
     await tester.pumpWidget(AgroBentaApp(tokenStore: FakeTokenStore()));
     await settleAuth(tester);

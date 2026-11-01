@@ -4,6 +4,7 @@ import 'package:agrobenta_mobile/core/config/app_config.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_state.dart';
 import 'package:agrobenta_mobile/models/user.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -183,6 +184,9 @@ void main() {
     });
 
     test('an unreachable API is reported rather than swallowed', () async {
+      // A platform that resolves without API_BASE_URL; Android would throw.
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       final AuthController controller = controllerFor(
         (_) async => throw http.ClientException('connection refused'),
       );
@@ -190,15 +194,12 @@ void main() {
       await controller.signIn(email: 'ana@example.test', password: 'nope');
 
       expect(controller.state.status, AuthStatus.signedOut);
-      // The network error names the actual configured host — on the default
-      // physical-device Android build that is the machine's LAN address, never
-      // the emulator alias. Derived from the constant rather than spelled out,
-      // so a DHCP change of the LAN IP cannot stale this test.
+      // The network error names the actual configured host, never the
+      // emulator alias. Derived from AppConfig rather than spelled out, so a
+      // change of the base URL cannot stale this test.
       expect(
         controller.state.errorMessage,
-        contains(
-          Uri.parse(AppConfig.physicalAndroidApiBaseUrl).host,
-        ),
+        contains(Uri.parse(AppConfig.apiBaseUrl).host),
       );
       expect(controller.state.errorMessage, isNot(contains('10.0.2.2')));
     });

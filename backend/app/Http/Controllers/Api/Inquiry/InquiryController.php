@@ -13,18 +13,16 @@ use Illuminate\Http\Request;
 /**
  * Create a buyer inquiry — the mobile write path.
  *
- * Received inquiries are read through the seller endpoint; triaging and
- * re-statusing belong to the Admin Web's flow under `/admin/inquiries*`. This
- * controller exists because that block's route comment reserves creation for
- * the buyer's mobile client. Every method
+ * Received inquiries are read through the seller endpoint. There is no
+ * administrator inquiry route: an inquiry is between the buyer and the seller
+ * only (functional documentation §8.2). Every method
  * resolves the buyer from the token and the seller from the listing — never
  * from the body — so there is no parameter or field that could point an
  * inquiry at the wrong account.
  *
- * Responses use `MobileInquiryResource`, never the administrator-facing
- * `InquiryResource`: the admin projection carries both parties' email
- * addresses, and a mobile reader must not receive them (functional
- * documentation §10.4).
+ * Responses use `MobileInquiryResource`, which carries neither party's email
+ * address: a mobile reader must not receive them (functional documentation
+ * §10.4).
  */
 class InquiryController extends Controller
 {

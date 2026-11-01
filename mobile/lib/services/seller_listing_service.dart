@@ -129,6 +129,25 @@ class SellerListingService {
     );
   }
 
+  /// `POST /seller/listings/{id}/mark-sold` — mark an active listing as sold.
+  ///
+  /// Permitted only while the listing is `active`. The server answers `409`
+  /// for any other state. Terminal for the listing: no new transactions can be
+  /// created against it afterwards. The body allow-list is empty, so any field
+  /// present is refused with `422`.
+  ///
+  /// Throws [ApiException]:
+  ///  * `conflict` on a `409` — the listing is not `active`.
+  ///  * `validation` on a `422` — a field was sent on an endpoint that accepts none.
+  ///  * `notFound` on a `404` — not the caller's listing, or it is gone.
+  Future<Listing> markSold(int id) {
+    return _apiClient.post<Listing>(
+      SellerListingEndpoints.markSold(id),
+      parse: (Object? data) =>
+          Listing.fromJson(_asObject(data, 'POST /seller/listings/$id/mark-sold')),
+    );
+  }
+
   /// `DELETE /seller/listings/{id}` — destroy a draft or withdrawn listing.
   ///
   /// A real deletion, and the server restricts it to a `draft` or `inactive`
