@@ -3,7 +3,6 @@
 use App\Http\Controllers\Api\Admin\ActivityController;
 use App\Http\Controllers\Api\Admin\AuthController;
 use App\Http\Controllers\Api\Admin\DashboardController;
-use App\Http\Controllers\Api\Admin\InquiryController;
 use App\Http\Controllers\Api\Admin\ListingController;
 use App\Http\Controllers\Api\Admin\ReportsController;
 use App\Http\Controllers\Api\Admin\SellerVerificationController;
@@ -161,10 +160,9 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
 
 // Inquiries — the buyer's structured contact with a seller about a listing.
 //
-// The buyer's write path. Reading received inquiries is the seller route above;
-// triaging, re-statusing and deleting an inquiry belong to the administrator
-// block below; its route comment reserves creation for the buyer's mobile
-// client, and this is that path.
+// The buyer's write path. Reading received inquiries is the seller route above.
+// There is no administrator inquiry route: an inquiry is between the buyer and
+// the seller only (functional documentation §8.2).
 //
 // No route here takes a user id. The buyer is resolved from the token and the
 // seller from `listing.seller_id` inside the service, so there is no parameter
@@ -267,15 +265,6 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::post('/seller-verifications/{sellerVerification}/reject', [SellerVerificationController::class, 'reject']);
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::get('/transactions/{transaction}', [TransactionController::class, 'show']);
-    // Buyer-to-seller inquiries. Administrator-only: an inquiry is read and
-    // worked here, never created here — the write path belongs to the buyer's
-    // mobile client, and the status is an internal bookmark the buyer never
-    // sees. `status` and `destroy` carry their own requests, so the only
-    // mutable field is the workflow status.
-    Route::get('/inquiries', [InquiryController::class, 'index']);
-    Route::get('/inquiries/{inquiry}', [InquiryController::class, 'show']);
-    Route::patch('/inquiries/{inquiry}/status', [InquiryController::class, 'updateStatus']);
-    Route::delete('/inquiries/{inquiry}', [InquiryController::class, 'destroy']);
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::get('/activities/summary', [ActivityController::class, 'summary']);
     Route::get('/reports', [ReportsController::class, 'index']);
