@@ -216,6 +216,8 @@ class InquiryListing {
     required this.id,
     required this.livestockType,
     required this.breed,
+    this.askingPrice,
+    this.photoUrl,
   });
 
   factory InquiryListing.fromJson(Map<String, dynamic> json) {
@@ -223,6 +225,8 @@ class InquiryListing {
       id: readInt(json, 'id'),
       livestockType: readString(json, 'livestock_type'),
       breed: readStringOrEmpty(json, 'breed'),
+      askingPrice: readNullableDecimalString(json, 'asking_price'),
+      photoUrl: readNullableString(json, 'photo_url'),
     );
   }
 
@@ -231,6 +235,13 @@ class InquiryListing {
   final String livestockType;
 
   final String breed;
+
+  /// The listing's asking price, as the API sent it. Absent on projections
+  /// that do not carry it (the buyer's own inquiry), so it stays nullable.
+  final String? askingPrice;
+
+  /// The listing's first photo, already an absolute URL.
+  final String? photoUrl;
 
   /// A buyer-facing title: the breed when there is one, else the species.
   String get title => breed.trim().isEmpty ? livestockType : breed;

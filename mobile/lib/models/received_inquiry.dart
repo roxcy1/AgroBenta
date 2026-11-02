@@ -50,6 +50,7 @@ class ReceivedInquiry {
     required this.paymentMethod,
     required this.collectionMethod,
     required this.createdAt,
+    this.canMakeOffer = true,
   });
 
   factory ReceivedInquiry.fromJson(Map<String, dynamic> json) {
@@ -96,6 +97,7 @@ class ReceivedInquiry {
         InquiryCollectionMethod.fromValue,
       ),
       createdAt: readNullableDateTime(json, 'created_at'),
+      canMakeOffer: readNullableBool(json, 'can_make_offer') ?? true,
     );
   }
 
@@ -147,6 +149,10 @@ class ReceivedInquiry {
   final InquiryCollectionMethod? collectionMethod;
 
   final DateTime? createdAt;
+
+  /// Server-decided: a new offer is allowed only while the inquiry is open,
+  /// nothing is pending and nothing has been accepted.
+  final bool canMakeOffer;
 
   @override
   String toString() => 'ReceivedInquiry($id, ${buyer?.id ?? 'no buyer'})';

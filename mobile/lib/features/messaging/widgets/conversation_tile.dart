@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/app_formatters.dart';
 import '../../../models/conversation.dart';
 import '../../../models/message.dart';
 
@@ -71,13 +72,27 @@ class ConversationTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      conversation.listingTitle ?? 'Direct message',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            _listingLabel(conversation),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (_statusLabel(conversation) != null) ...<Widget>[
+                          const SizedBox(width: AppSpacing.xs),
+                          _StatusChip(
+                            label: _statusLabel(conversation)!,
+                            emphasised: conversation.latestOffer?.isPending ??
+                                false,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Row(
@@ -111,6 +126,39 @@ class ConversationTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// The listing context line: the most relevant listing, its asking price and,
+  /// when the thread spans more than one listing, how many others there are.
+  static String _listingLabel(Conversation conversation) {
+    final String title = conversation.listingTitle ?? 'Direct message';
+    final String? price = conversation.listingPrice == null
+        ? null
+        : AppFormatters.formatMoney(conversation.listingPrice!);
+    final String base = price == null ? title : '$title · $price';
+    if (conversation.listingCount > 1) {
+      return '$base · +${conversation.listingCount - 1} more listings';
+    }
+    return base;
+  }
+
+  /// The single status the preview shows, most specific first: a pending
+  /// offer, then a decided offer, then the pair-level inquiry/transaction
+  /// facts. `null` when the thread carries no status worth a chip.
+  static String? _statusLabel(Conversation conversation) {
+    final ConversationOffer? offer = conversation.latestOffer;
+    if (offer != null) {
+      return offer.isPending
+          ? 'Offer pending'
+          : 'Offer ${offer.status.label.toLowerCase()}';
+    }
+    if (conversation.hasInquiry) {
+      return 'Inquiry';
+    }
+    if (conversation.hasTransaction) {
+      return 'Transaction';
+    }
+    return null;
   }
 
   /// A compact time label for the row — "now", "5m", "14:32", "3d", "12/10".
@@ -185,6 +233,43 @@ class _Avatar extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// The thread-status chip: pale green for a live offer, neutral otherwise.
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label, required this.emphasised});
+
+  final String label;
+  final bool emphasised;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color background = emphasised
+        ? AppColors.primarySurface
+        : AppColors.surface;
+    final Color foreground = emphasised
+        ? AppColors.primary
+        : AppColors.textSecondary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: emphasised ? AppColors.primary : AppColors.border,
+        ),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: foreground,
+          fontWeight: emphasised ? FontWeight.w600 : FontWeight.w500,
+        ),
       ),
     );
   }

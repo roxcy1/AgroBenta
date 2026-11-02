@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api\Inquiry;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Inquiry\IndexInquiryRequest;
 use App\Http\Requests\Inquiry\StoreInquiryRequest;
+use App\Http\Resources\InquiryListItemResource;
 use App\Http\Resources\MobileInquiryResource;
 use App\Models\Listing;
 use App\Services\Inquiry\InquiryService;
@@ -29,6 +31,28 @@ class InquiryController extends Controller
     public function __construct(private readonly InquiryService $inquiries)
     {
         //
+    }
+
+    /**
+     * `GET /api/inquiries` — the caller's active inquiries.
+     *
+     * Backs the Messages "Inquiries" tab. The scope is the token; `role`
+     * only selects which side of the caller's own records to return. An
+     * inquiry whose offer was accepted is excluded — that agreement belongs
+     * to the Transactions tab and must never be offered again.
+     */
+    public function index(IndexInquiryRequest $request): JsonResponse
+    {
+        $role = $request->validated('role');
+
+        $inquiries = $this->inquiries->activeFor($request->user(), $role);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'inquiries' => InquiryListItemResource::collection($inquiries),
+            ],
+        ], 200);
     }
 
     /**

@@ -2,6 +2,7 @@ import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
 import '../models/inquiry.dart';
+import '../models/inquiry_list_item.dart';
 import '../models/received_inquiry_page.dart';
 
 /// The inquiry API surface: the buyer's create path and the seller's inbox.
@@ -26,6 +27,32 @@ class InquiryService {
   const InquiryService(this._apiClient);
 
   final ApiClient _apiClient;
+
+  /// `GET /inquiries` — the caller's active inquiries on one side.
+  ///
+  /// [role] is the active Account Mode; omitting it asks for both sides. The
+  /// scope is always the token, and inquiries already accepted are excluded
+  /// server-side.
+  Future<List<InquiryListItem>> listActive({String? role}) {
+    final Map<String, dynamic> query = <String, dynamic>{};
+    if (role != null) {
+      query['role'] = role;
+    }
+
+    return _apiClient.get<List<InquiryListItem>>(
+      InquiryEndpoints.list,
+      query: query,
+      parse: (Object? data) {
+        final Map<String, dynamic> map = _asObject(data, 'GET /inquiries');
+        final List<dynamic> raw =
+            (map['inquiries'] as List<dynamic>?) ?? const <dynamic>[];
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map(InquiryListItem.fromJson)
+            .toList(growable: false);
+      },
+    );
+  }
 
   /// `GET /seller/inquiries` — one page of the authenticated seller's inbox.
   ///

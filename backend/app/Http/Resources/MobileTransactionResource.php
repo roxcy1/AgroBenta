@@ -47,6 +47,12 @@ class MobileTransactionResource extends JsonResource
             ],
             'quantity' => $this->quantity,
             'total_amount' => $this->total_amount,
+            'terms' => [
+                'offer_id' => $this->offer_id,
+                'pickup_date' => $this->pickup_date?->toDateString(),
+                'payment_method' => $this->payment_method,
+                'collection_method' => $this->collection_method,
+            ],
             'status' => $this->status?->value,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),

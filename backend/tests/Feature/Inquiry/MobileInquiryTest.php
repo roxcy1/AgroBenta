@@ -200,6 +200,11 @@ class MobileInquiryTest extends TestCase
     #[Test]
     public function every_supported_preference_is_persisted_and_echoed(): void
     {
+        // A controlled clock: the preferred date is relative to "now", so the
+        // test cannot expire the way a hard-coded calendar date does.
+        $this->freezeTime();
+        $scheduled = now()->addDays(2)->toDateString();
+
         $listing = $this->createListing($this->seller);
 
         $data = $this->postInquiry($this->validInquiryBody($listing, [
@@ -210,7 +215,7 @@ class MobileInquiryTest extends TestCase
             'delivery_method' => 'arrange_delivery',
             'delivery_fee' => '1500.50',
             'contact_method' => 'in_app_message',
-            'preferred_schedule' => '2026-11-01',
+            'preferred_schedule' => $scheduled,
             'payment_method' => 'gcash',
             'collection_method' => 'buyer_arranged_transportation',
         ]))->assertStatus(201)->json('data');
@@ -223,7 +228,7 @@ class MobileInquiryTest extends TestCase
         $this->assertSame('arrange_delivery', $stored->delivery_method);
         $this->assertSame('1500.50', (string) $stored->delivery_fee);
         $this->assertSame('in_app_message', $stored->contact_method->value);
-        $this->assertSame('2026-11-01', $stored->preferred_schedule->toDateString());
+        $this->assertSame($scheduled, $stored->preferred_schedule->toDateString());
         $this->assertSame('gcash', $stored->payment_method->value);
         $this->assertSame('buyer_arranged_transportation', $stored->collection_method->value);
 
@@ -233,7 +238,7 @@ class MobileInquiryTest extends TestCase
         $this->assertSame('arrange_delivery', $data['delivery_method']);
         $this->assertSame('1500.50', $data['delivery_fee']);
         $this->assertSame('in_app_message', $data['contact_method']);
-        $this->assertSame('2026-11-01', $data['preferred_schedule']);
+        $this->assertSame($scheduled, $data['preferred_schedule']);
         $this->assertSame('gcash', $data['payment_method']);
         $this->assertSame('buyer_arranged_transportation', $data['collection_method']);
     }

@@ -483,6 +483,13 @@ abstract final class InquiryEndpoints {
   /// transaction.
   static const String create = '/inquiries';
 
+  /// `GET` - the caller's active inquiries on one side. 200, plain envelope.
+  ///
+  /// Query allow-list is `role` (`buyer`|`seller`, the active Account Mode).
+  /// Ownership filters are refused server-side with `422`. Inquiries already
+  /// converted to an accepted transaction are excluded.
+  static const String list = '/inquiries';
+
   /// `GET` — the authenticated buyer's inquiry about one listing, or
   /// `data: null`. 200, plain envelope.
   ///

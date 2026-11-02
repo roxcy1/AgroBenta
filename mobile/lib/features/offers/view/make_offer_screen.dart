@@ -10,19 +10,95 @@ import '../state/make_offer_controller.dart';
 import '../state/offer_scope.dart';
 import '../state/offer_state.dart';
 
-/// The seller's form for proposing a final price on a received inquiry.
+/// The seller's structured purchase-offer form for a received inquiry.
 ///
 /// An offer is always created from an existing inquiry: the inquiry supplies
 /// the buyer and the listing, so this screen sends only `inquiry_id`,
-/// `listing_id` and the proposed amount. The seller, the buyer and the
-/// `pending` status are all server-derived.
+/// `listing_id`, the proposed amount and the terms. The seller, the buyer, the
+/// status and the inquiry's original preferences are all server-provided.
+///
+/// The buyer, the livestock listing and the listed price are read-only — they
+/// are facts, not choices. The seller edits the final price, the proposed
+/// pickup date, the payment method, the collection method and an optional note;
+/// every editable field is prefilled from the buyer's inquiry so "keep the
+/// buyer's preference" is the default.
+///
+/// Two ways in, both from the server's own records:
+///
+///  * [MakeOfferScreen] — the seller's Received Inquiries list.
+///  * [MakeOfferScreen.forConversation] — a chat thread, using
+///    `ConversationResource.eligible_inquiry`.
 ///
 /// The controller is owned by this route. Popping returns `true` when an offer
-/// was created so the seller's inbox can refresh.
+/// was created so the inbox (or chat panel) can refresh.
 class MakeOfferScreen extends StatefulWidget {
-  const MakeOfferScreen({required this.inquiry, super.key});
+  /// Opens the form from a received inquiry.
+  factory MakeOfferScreen({required ReceivedInquiry inquiry, Key? key}) {
+    return MakeOfferScreen._(
+      inquiryId: inquiry.id,
+      listingId: inquiry.listing?.id,
+      buyerName: inquiry.buyer?.name,
+      listingTitle: inquiry.listing?.title,
+      askingPrice: inquiry.listing?.askingPrice,
+      photoUrl: inquiry.listing?.photoUrl,
+      initialPaymentMethod: inquiry.paymentMethod,
+      initialCollectionMethod: inquiry.collectionMethod,
+      initialPickupDate: inquiry.preferredSchedule,
+      key: key,
+    );
+  }
 
-  final ReceivedInquiry inquiry;
+  /// Opens the form from a conversation, using the server's eligible inquiry.
+  factory MakeOfferScreen.forConversation({
+    required int inquiryId,
+    required int listingId,
+    required String buyerName,
+    String? listingTitle,
+    String? askingPrice,
+    String? photoUrl,
+    InquiryPaymentMethod? paymentMethod,
+    InquiryCollectionMethod? collectionMethod,
+    DateTime? preferredSchedule,
+    Key? key,
+  }) {
+    return MakeOfferScreen._(
+      inquiryId: inquiryId,
+      listingId: listingId,
+      buyerName: buyerName,
+      listingTitle: listingTitle,
+      askingPrice: askingPrice,
+      photoUrl: photoUrl,
+      initialPaymentMethod: paymentMethod,
+      initialCollectionMethod: collectionMethod,
+      initialPickupDate: preferredSchedule,
+      key: key,
+    );
+  }
+
+  const MakeOfferScreen._({
+    required this.inquiryId,
+    required this.listingId,
+    required this.buyerName,
+    required this.listingTitle,
+    this.askingPrice,
+    this.photoUrl,
+    this.initialPaymentMethod,
+    this.initialCollectionMethod,
+    this.initialPickupDate,
+    super.key,
+  });
+
+  final int inquiryId;
+  final int? listingId;
+  final String? buyerName;
+  final String? listingTitle;
+  final String? askingPrice;
+  final String? photoUrl;
+
+  /// The buyer's original preferences, used as the initial values.
+  final InquiryPaymentMethod? initialPaymentMethod;
+  final InquiryCollectionMethod? initialCollectionMethod;
+  final DateTime? initialPickupDate;
 
   @override
   State<MakeOfferScreen> createState() => _MakeOfferScreenState();
@@ -31,31 +107,89 @@ class MakeOfferScreen extends StatefulWidget {
 class _MakeOfferScreenState extends State<MakeOfferScreen> {
   late final MakeOfferController _controller;
   final TextEditingController _amount = TextEditingController();
+  final TextEditingController _note = TextEditingController();
+
+  late InquiryPaymentMethod? _paymentMethod = widget.initialPaymentMethod;
+  late InquiryCollectionMethod? _collectionMethod =
+      widget.initialCollectionMethod;
+
+  /// Earliest date the seller may propose: tomorrow. The backend also refuses
+  /// past dates, so the picker and the server agree.
+  static DateTime get _tomorrow {
+    final DateTime now = DateTime.now();
+    return DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+  }
+
+  /// The buyer's preferred date when it is still selectable; otherwise the
+  /// form starts on tomorrow. [widget.initialPickupDate] is kept untouched so
+  /// the change marker still compares against the buyer's original preference.
+  static DateTime _initialPickup(DateTime? preferred) {
+    if (preferred == null) {
+      return _tomorrow;
+    }
+    final DateTime day = DateTime(preferred.year, preferred.month, preferred.day);
+    return day.isBefore(_tomorrow) ? _tomorrow : day;
+  }
+
+  late DateTime? _pickupDate = _initialPickup(widget.initialPickupDate);
 
   @override
   void initState() {
     super.initState();
     _controller = MakeOfferController(OfferScope.readOf(context));
+    // Prefill the price with the listing's asking price; the seller may edit it.
+    _amount.text = widget.askingPrice ?? '';
   }
 
   @override
   void dispose() {
     _amount.dispose();
+    _note.dispose();
     _controller.dispose();
     super.dispose();
   }
 
+  Future<void> _pickDate() async {
+    final DateTime first = _tomorrow;
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _pickupDate ?? first,
+      firstDate: first,
+      lastDate: first.add(const Duration(days: 90)),
+      helpText: 'Proposed pickup date',
+    );
+    if (picked != null && mounted) {
+      setState(() => _pickupDate = picked);
+    }
+  }
+
+  /// True when the chosen pickup date differs from the buyer's original one.
+  bool get _pickupChanged {
+    final DateTime? original = widget.initialPickupDate;
+    final DateTime? current = _pickupDate;
+    if (original == null || current == null) {
+      return original != current;
+    }
+    return original.year != current.year ||
+        original.month != current.month ||
+        original.day != current.day;
+  }
+
   Future<void> _submit() async {
-    final InquiryBuyer? buyer = widget.inquiry.buyer;
-    final InquiryListing? listing = widget.inquiry.listing;
-    if (buyer == null || listing == null) {
+    final String buyerLabel = widget.buyerName ?? 'the buyer';
+    final int? listingId = widget.listingId;
+    if (listingId == null) {
       return;
     }
 
     final Offer? created = await _controller.submit(
-      inquiryId: widget.inquiry.id,
-      listingId: listing.id,
+      inquiryId: widget.inquiryId,
+      listingId: listingId,
       amount: _amount.text,
+      pickupDate: _pickupDate,
+      paymentMethod: _paymentMethod,
+      collectionMethod: _collectionMethod,
+      note: _note.text,
     );
     if (created == null || !mounted) {
       return;
@@ -69,7 +203,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
       builder: (BuildContext context) => AlertDialog(
         title: const Text('Offer sent'),
         content: Text(
-          '$amount is now visible to ${buyer.name} in your conversation. '
+          '$amount is now visible to $buyerLabel in your conversation. '
           'It stays pending until the buyer accepts or declines it.',
         ),
         actions: <Widget>[
@@ -88,8 +222,13 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final InquiryBuyer? buyer = widget.inquiry.buyer;
-    final InquiryListing? listing = widget.inquiry.listing;
+    final String buyerLabel = widget.buyerName ?? 'Unknown buyer';
+    final String listingLabel =
+        widget.listingTitle ?? 'Listing no longer available';
+    final String? askingPrice = widget.askingPrice == null
+        ? null
+        : AppFormatters.formatMoney(widget.askingPrice!) ??
+              widget.askingPrice;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Make an Offer')),
@@ -99,7 +238,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
           builder: (BuildContext context, Widget? child) {
             final MakeOfferState state = _controller.state;
             final bool canSubmit =
-                buyer != null && listing != null && !state.isSubmitting;
+                widget.listingId != null && !state.isSubmitting;
 
             return ListView(
               padding: const EdgeInsets.all(AppSpacing.screenGutter),
@@ -107,31 +246,37 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(AppSpacing.md),
-                    child: Column(
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(
-                          buyer?.name ?? 'Unknown buyer',
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: AppSpacing.xxs),
-                        Row(
-                          children: <Widget>[
-                            const Icon(
-                              Icons.pets_outlined,
-                              size: 16,
-                              color: AppColors.textSecondary,
-                            ),
-                            const SizedBox(width: AppSpacing.xxs),
-                            Expanded(
-                              child: Text(
-                                listing?.title ?? 'Listing no longer available',
+                        _ListingPhoto(url: widget.photoUrl),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                listingLabel,
+                                style: theme.textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                buyerLabel,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: AppColors.textSecondary,
                                 ),
                               ),
-                            ),
-                          ],
+                              if (askingPrice != null) ...<Widget>[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Listed price: $askingPrice',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -147,12 +292,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) {
-                    if (canSubmit) {
-                      _submit();
-                    }
-                  },
+                  textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     prefixText: '₱ ',
                     hintText: '0.00',
@@ -160,6 +300,65 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                     helperText:
                         'The final price you are proposing for this inquiry. '
                         'The listing\'s asking price is unchanged.',
+                    helperMaxLines: 2,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _TermRow(
+                  label: 'Pickup date',
+                  value: _pickupDate == null
+                      ? 'Buyer did not choose one'
+                      : AppFormatters.formatDate(_pickupDate),
+                  onPressed: state.isSubmitting ? null : _pickDate,
+                  changed: _pickupChanged,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DropdownButtonFormField<InquiryPaymentMethod>(
+                  initialValue: _paymentMethod,
+                  decoration: const InputDecoration(labelText: 'Payment method'),
+                  items: InquiryPaymentMethod.values
+                      .map(
+                        (InquiryPaymentMethod method) =>
+                            DropdownMenuItem<InquiryPaymentMethod>(
+                              value: method,
+                              child: Text(method.label),
+                            ),
+                      )
+                      .toList(growable: false),
+                  onChanged: state.isSubmitting
+                      ? null
+                      : (InquiryPaymentMethod? value) =>
+                            setState(() => _paymentMethod = value),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DropdownButtonFormField<InquiryCollectionMethod>(
+                  initialValue: _collectionMethod,
+                  decoration: const InputDecoration(
+                    labelText: 'Collection method',
+                  ),
+                  items: InquiryCollectionMethod.values
+                      .map(
+                        (InquiryCollectionMethod method) =>
+                            DropdownMenuItem<InquiryCollectionMethod>(
+                              value: method,
+                              child: Text(method.label),
+                            ),
+                      )
+                      .toList(growable: false),
+                  onChanged: state.isSubmitting
+                      ? null
+                      : (InquiryCollectionMethod? value) =>
+                            setState(() => _collectionMethod = value),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: _note,
+                  enabled: !state.isSubmitting,
+                  maxLength: 500,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Note (optional)',
+                    hintText: 'Anything the buyer should know about this offer.',
                   ),
                 ),
                 if (state.errorMessage != null &&
@@ -190,6 +389,107 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// One read-mostly term row: the label, the current value, a change marker and
+/// an action that edits it.
+class _TermRow extends StatelessWidget {
+  const _TermRow({
+    required this.label,
+    required this.value,
+    required this.onPressed,
+    required this.changed,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback? onPressed;
+  final bool changed;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return InkWell(
+      onTap: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        child: Row(
+          children: <Widget>[
+            SizedBox(
+              width: 120,
+              child: Text(label, style: theme.textTheme.labelMedium),
+            ),
+            Expanded(
+              child: Text(
+                value,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: changed ? AppColors.primary : AppColors.text,
+                  fontWeight: changed ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (changed)
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.xs),
+                child: Text(
+                  'changed',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            Icon(
+              Icons.edit_outlined,
+              size: 18,
+              color: onPressed == null
+                  ? AppColors.border
+                  : AppColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The listing thumbnail in the offer form: the real photo when one exists,
+/// otherwise the same livestock glyph the rest of the app uses.
+class _ListingPhoto extends StatelessWidget {
+  const _ListingPhoto({required this.url});
+
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    final String? source = url;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: SizedBox(
+        width: 72,
+        height: 72,
+        child: source == null || source.isEmpty
+            ? Container(
+                color: AppColors.primarySurface,
+                child: const Icon(
+                  Icons.pets_outlined,
+                  color: AppColors.textSecondary,
+                ),
+              )
+            : Image.network(
+                source,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: AppColors.primarySurface,
+                  child: const Icon(
+                    Icons.pets_outlined,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
       ),
     );
   }

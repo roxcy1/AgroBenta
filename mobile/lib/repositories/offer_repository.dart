@@ -1,3 +1,4 @@
+import '../models/inquiry.dart';
 import '../models/offer.dart';
 import '../services/offer_service.dart';
 
@@ -34,11 +35,19 @@ class OfferRepository {
     required int inquiryId,
     required int listingId,
     required String proposedAmount,
+    DateTime? proposedPickupDate,
+    InquiryPaymentMethod? paymentMethod,
+    InquiryCollectionMethod? collectionMethod,
+    String? note,
   }) {
     return _service.create(
       inquiryId: inquiryId,
       listingId: listingId,
       proposedAmount: proposedAmount,
+      proposedPickupDate: proposedPickupDate,
+      paymentMethod: paymentMethod,
+      collectionMethod: collectionMethod,
+      note: note,
     );
   }
 

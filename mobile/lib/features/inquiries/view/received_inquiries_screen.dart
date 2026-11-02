@@ -79,6 +79,11 @@ class _ReceivedInquiriesScreenState extends State<ReceivedInquiriesScreen> {
     if (inquiry.buyer == null || inquiry.listing == null) {
       return null;
     }
+    // The server owns eligibility (open inquiry, nothing pending or accepted),
+    // so an ineligible inquiry never renders an actionable button.
+    if (!inquiry.canMakeOffer) {
+      return null;
+    }
     return () => _openMakeOffer(inquiry);
   }
 

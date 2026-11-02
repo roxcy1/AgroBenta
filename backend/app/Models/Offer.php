@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\InquiryCollectionMethod;
+use App\Enums\InquiryPaymentMethod;
 use App\Enums\OfferStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -9,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'inquiry_id', 'listing_id', 'seller_id', 'buyer_id',
-    'proposed_amount', 'status', 'responded_at',
+    'proposed_amount', 'proposed_pickup_date', 'payment_method',
+    'collection_method', 'note', 'status', 'responded_at',
 ])]
 class Offer extends Model
 {
@@ -22,6 +25,9 @@ class Offer extends Model
     {
         return [
             'proposed_amount' => 'decimal:2',
+            'proposed_pickup_date' => 'date',
+            'payment_method' => InquiryPaymentMethod::class,
+            'collection_method' => InquiryCollectionMethod::class,
             'status' => OfferStatus::class,
             'responded_at' => 'datetime',
         ];

@@ -7,9 +7,12 @@ use App\Enums\InquiryContactMethod;
 use App\Enums\InquiryPaymentMethod;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryTransactionMethod;
+use App\Enums\OfferStatus;
 use App\Models\Inquiry;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * Data access for inquiries.
@@ -42,7 +45,8 @@ class InquiryRepository
         return Inquiry::query()
             ->with([
                 'buyer:id,name',
-                'listing:id,livestock_type,breed',
+                'listing:id,livestock_type,breed,asking_price,photos',
+                'offers:id,inquiry_id,status',
             ])
             ->where('seller_id', $seller->getKey())
             // A total order, so two inquiries written in the same second cannot
@@ -50,6 +54,49 @@ class InquiryRepository
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($perPage);
+    }
+
+    /**
+     * The caller's active inquiries, on the side they are asking for.
+     *
+     * Used by the Messages "Inquiries" tab: individual inquiries that still
+     * need negotiation or a buyer decision. An inquiry whose offer was
+     * accepted is excluded — it has become a transaction, which the
+     * Transactions tab owns.
+     *
+     * @return Collection<int, Inquiry>
+     */
+    public function listActiveForUser(User $user, ?string $role = null): Collection
+    {
+        return Inquiry::query()
+            ->with([
+                'listing:id,livestock_type,breed,asking_price,photos',
+                'buyer:id,name',
+                'seller:id,name',
+                'offers:id,inquiry_id,status,proposed_amount,created_at',
+            ])
+            ->where('status', InquiryStatus::Open)
+            ->whereDoesntHave('offers', function (Builder $query): void {
+                $query->where('status', OfferStatus::Accepted);
+            })
+            ->when(
+                $role === 'buyer',
+                fn (Builder $query) => $query->where('buyer_id', $user->getKey()),
+            )
+            ->when(
+                $role === 'seller',
+                fn (Builder $query) => $query->where('seller_id', $user->getKey()),
+            )
+            ->when(
+                $role === null,
+                fn (Builder $query) => $query->where(function (Builder $query) use ($user): void {
+                    $query->where('buyer_id', $user->getKey())
+                        ->orWhere('seller_id', $user->getKey());
+                }),
+            )
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
     }
 
     /**

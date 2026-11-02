@@ -111,6 +111,20 @@ class OfferRepository
     }
 
     /**
+     * Whether the inquiry already produced an accepted agreement.
+     *
+     * Acceptance is final: the inquiry may never receive another offer, which
+     * is why this is checked under the same inquiry lock as the pending guard.
+     */
+    public function hasAcceptedForInquiry(int $inquiryId): bool
+    {
+        return Offer::query()
+            ->where('inquiry_id', $inquiryId)
+            ->where('status', OfferStatus::Accepted)
+            ->exists();
+    }
+
+    /**
      * The caller's offers, newest first.
      *
      * Every filter narrows a list the caller is already a party to; none of
@@ -164,7 +178,7 @@ class OfferRepository
         $offer->responded_at = now();
         $offer->save();
 
-        return $offer->refresh();
+        return $offer->refresh()->load(['inquiry', 'listing']);
     }
 
     /**
@@ -174,7 +188,7 @@ class OfferRepository
     {
         return Offer::query()
             ->with([
-                'inquiry:buyer_id,seller_id,listing_id,status',
+                'inquiry:buyer_id,seller_id,listing_id,status,payment_method,collection_method,preferred_schedule',
                 'listing:id,livestock_type,breed,asking_price,seller_id',
                 'seller:id,name,avatar_url',
                 'buyer:id,name,avatar_url',

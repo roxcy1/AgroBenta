@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/message.dart';
+import 'inquiry_message_card.dart';
 
 /// One message bubble in a chat thread.
 ///
@@ -24,6 +25,13 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+
+    // The opening inquiry message renders as a structured card, not as the
+    // generated prose body the server also stores.
+    final MessageInquiry? inquiry = message.inquiry;
+    if (inquiry != null) {
+      return InquiryMessageCard(inquiry: inquiry, isMine: isMine);
+    }
 
     final Color bubbleColor = isMine
         ? AppColors.primary

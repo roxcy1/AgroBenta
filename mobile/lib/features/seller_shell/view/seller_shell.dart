@@ -38,7 +38,7 @@ class _SellerShellState extends State<SellerShell> {
   @override
   Widget build(BuildContext context) {
     final ConversationsController messaging = MessagingScope.of(context);
-    final int unread = messaging.state.totalUnread;
+    final int unread = messaging.state.unreadCount(sellerMode: true);
 
     return Scaffold(
       body: IndexedStack(
@@ -51,7 +51,7 @@ class _SellerShellState extends State<SellerShell> {
                 setState(() => _index = _transactionsIndex),
           ),
           const SellerListingsScreen(),
-          const ConversationsScreen(),
+          const ConversationsScreen(sellerMode: true),
           TransactionsScreen(
             role: TransactionRole.seller,
             isActive: _index == _transactionsIndex,

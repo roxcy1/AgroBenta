@@ -46,26 +46,38 @@ class ConversationsState {
   /// The selected category filter.
   final InboxFilter filter;
 
-  /// Whether any conversation has unread messages — used for the tab badge.
-  int get totalUnread => conversations.fold<int>(
-    0,
-    (int sum, Conversation c) => sum + c.unreadCount,
-  );
+  /// The unread total for one account mode.
+  ///
+  /// The Messages badge is mode-scoped: Buyer Mode counts only threads where
+  /// the caller acts as a buyer, Seller Mode only seller-side threads. A
+  /// thread the caller is on both sides of counts in both modes.
+  int unreadCount({required bool sellerMode}) => conversations
+      .where((Conversation c) => c.matchesMode(sellerMode: sellerMode))
+      .fold<int>(0, (int sum, Conversation c) => sum + c.unreadCount);
 
-  bool get hasUnread => totalUnread > 0;
+  bool hasUnread({required bool sellerMode}) =>
+      unreadCount(sellerMode: sellerMode) > 0;
 
   bool get isInitialLoad =>
       status == ConversationsStatus.initial ||
       status == ConversationsStatus.loading;
 
-  /// What the list actually renders: [filter] first, then a case-insensitive
-  /// local search over the participant name, the listing title and the last
-  /// message preview. Local because the API offers no conversation search and
-  /// the whole inbox is one response (Messages design §3.2).
-  List<Conversation> get visibleConversations {
+  /// What the list actually renders: the account-mode filter first, then the
+  /// category filter, then a case-insensitive local search over the
+  /// participant name, the listing title and the last message preview. Local
+  /// because the API offers no conversation search and the whole inbox is one
+  /// response (Messages design §3.2).
+  ///
+  /// [sellerMode] comes from the existing Account Mode — the same switch that
+  /// chooses BuyerShell or SellerShell. A thread where the caller acts in both
+  /// roles (or whose role cannot be determined) is visible in both modes.
+  List<Conversation> visibleConversations({required bool sellerMode}) {
     final String needle = query.trim().toLowerCase();
     return conversations
         .where((Conversation conversation) {
+          if (!conversation.matchesMode(sellerMode: sellerMode)) {
+            return false;
+          }
           if (filter == InboxFilter.inquiries && !conversation.hasInquiry) {
             return false;
           }

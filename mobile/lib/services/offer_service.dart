@@ -1,5 +1,6 @@
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
+import '../models/inquiry.dart';
 import '../models/offer.dart';
 
 /// The purchase-offer API surface.
@@ -64,16 +65,41 @@ class OfferService {
     required int inquiryId,
     required int listingId,
     required String proposedAmount,
+    DateTime? proposedPickupDate,
+    InquiryPaymentMethod? paymentMethod,
+    InquiryCollectionMethod? collectionMethod,
+    String? note,
   }) {
+    final Map<String, dynamic> body = <String, dynamic>{
+      'inquiry_id': inquiryId,
+      'listing_id': listingId,
+      'proposed_amount': proposedAmount,
+    };
+    if (proposedPickupDate != null) {
+      body['proposed_pickup_date'] = _isoDate(proposedPickupDate);
+    }
+    if (paymentMethod != null) {
+      body['payment_method'] = paymentMethod.value;
+    }
+    if (collectionMethod != null) {
+      body['collection_method'] = collectionMethod.value;
+    }
+    if (note != null && note.trim().isNotEmpty) {
+      body['note'] = note.trim();
+    }
+
     return _apiClient.post<Offer>(
       OfferEndpoints.create,
-      body: <String, dynamic>{
-        'inquiry_id': inquiryId,
-        'listing_id': listingId,
-        'proposed_amount': proposedAmount,
-      },
+      body: body,
       parse: (Object? data) => Offer.fromJson(_asObject(data, 'POST /offers')),
     );
+  }
+
+  /// `yyyy-MM-dd` — the date-only shape the API validates.
+  static String _isoDate(DateTime date) {
+    final String month = date.month.toString().padLeft(2, '0');
+    final String day = date.day.toString().padLeft(2, '0');
+    return '${date.year.toString().padLeft(4, '0')}-$month-$day';
   }
 
   /// `POST /offers/{id}/accept` — the buyer accepts, creating a transaction.

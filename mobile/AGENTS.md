@@ -654,16 +654,55 @@ exposes the caller's own conversations and messages behind the same
 | `PATCH /api/messages/{id}/read` | Marks one message read. |
 
 `ConversationResource` carries `counterpart{id,name,avatar_url}`, `listing_id`,
-`listing_title`, `last_message`, `last_message_at`, `unread_count`,
-`has_inquiry` and `has_transaction`; `MessageResource` carries the message plus
-embedded sender/receiver summaries. The app's `Conversation` and `Message`
+`listing_title`, `listing_price`, `last_message`, `last_message_at`,
+`unread_count`, `has_inquiry`, `has_transaction`, `roles`, `listing_count`,
+`latest_offer` and `eligible_inquiry`; `MessageResource` carries the message
+plus embedded sender/receiver summaries. The app's `Conversation` and `Message`
 models mirror them exactly. A conversation is the buyer–seller pair, not one
-listing: `listing_id` is only the newest message's context. Search and the
-category chips are **local view filters** — the API has no conversation search
-and no category column. "Inquiries" and "Transactions" read the server's
+listing: `listing_id`/`listing_title`/`listing_price` describe the **most
+relevant** listing, and `listing_count` says how many distinct listings the
+thread covers. Relevance is server-decided: a pending offer's listing first,
+then an open inquiry's, then the newest message's — so the price and status on
+a preview always belong to the same listing. The client renders `+N more
+listings` when the count exceeds one. Search and
+the category chips are **local view filters** — the API has no conversation
+search and no category column. "Inquiries" and "Transactions" read the server's
 pair-level booleans; neither guesses from `listing_id`.
-"Notifications" is a shortcut to the existing, separate notifications
-destination, not a thread filter. Opening a thread marks it read through the
+
+The inbox is also scoped by the **existing Account Mode**. `roles` is the
+server-computed set of sides the caller acts on with that counterpart
+(`buyer`, `seller`, both, or none). Buyer Mode shows buyer-side threads, Seller
+Mode seller-side threads, a pair traded both ways appears in both, and a thread
+whose role cannot be determined is shown in both rather than hidden. The
+unread badge counts unread **messages** (never the caller's own) for the active
+mode. `latest_offer` and `eligible_inquiry` exist so the preview and the
+in-chat offer action never guess: `eligible_inquiry` is the seller's own newest
+**open** inquiry from that buyer with no pending or accepted offer, carries the
+buyer's original preferences (payment, collection, preferred date, asking price,
+listing photo) so the offer form can prefill them without another request, and
+is null on the buyer side.
+
+The Messages chips are real tabs over three server surfaces:
+**All** is `GET /conversations` (the shared buyer–seller thread);
+**Inquiries** is `GET /api/inquiries?role=<mode>`, one row per active inquiry
+that still needs negotiation or a buyer decision, with the listing, asking
+price, counterpart and latest offer, and inquiries converted to an accepted
+transaction excluded; **Transactions** reuses `GET /transactions?role=<mode>`
+(read-only records with View details and Open chat). The bottom Transactions
+module remains the place that manages transactions. Each tab loads its own
+list on first open; search filters the loaded rows locally.
+
+Messages exposes All, Inquiries and Transactions only. Notifications is not a
+conversation category and is no longer a chip on this screen; it remains on
+Home's bell, which opens the existing notifications destination. The chat
+header shows the counterpart's public avatar/name/role (initials when there is
+no photo) and opens a compact panel built only from `UserSummaryResource`.
+The message that opened an inquiry carries the service-attached `inquiry`
+object (`listing{id,title,asking_price,photo_url}`, payment/collection values,
+preferred date and the buyer's message); the client renders it as one
+structured card and never re-parses the generated prose body, so a thread with
+several inquiries shows one card each and no duplicates. Opening a
+thread marks it read through the
 same endpoint from two callers by design (the inbox optimistically, the chat
 screen on open). **There is no real-time transport** (GAP-20): the inbox and
 thread recover via pull-to-refresh and an on-return refresh, and the app ships
@@ -683,15 +722,39 @@ creation and withdrawal additionally require the `seller` gate:
 | `POST /api/offers/{offer}/withdraw` | The creating seller withdraws. |
 
 `OfferResource` carries `id`, `inquiry_id`, `listing_id`, `seller_id`,
-`buyer_id`, `proposed_amount` (decimal string), `status`
-(`pending`/`accepted`/`declined`/`withdrawn`/`expired`), `responded_at` and
-`created_at`. It carries **no transaction id**, so "View transaction" is shown
+`buyer_id`, `proposed_amount` (decimal string), `proposed_pickup_date`,
+`payment_method`, `collection_method`, `note`, `status`
+(`pending`/`accepted`/`declined`/`withdrawn`/`expired`), `responded_at`,
+`created_at`, a `listing{id,livestock_type,breed,asking_price,photo_url}`
+summary, and
+`original_terms{payment_method,collection_method,pickup_date}` copied from the
+buyer's inquiry. Offer rules are server-owned: one **pending** offer per
+inquiry; **acceptance is permanent** (no further offer for that inquiry, ever);
+a **declined or withdrawn** offer may be revised; the inquiry is locked for the
+duration, so concurrent creates collapse to one. The seller inbox and the
+inquiry-list projection expose `can_make_offer`, and both the Received
+Inquiries card and the in-chat action are hidden when it is false. The client diffs the offer terms against `original_terms` to
+highlight what the seller changed; it never reconstructs the buyer's originals.
+An offer carries **no transaction id**, so "View transaction" is shown
 only in the accept response dialog, from `data.transaction`; an
 already-accepted offer loaded from the list never fabricates a link. The seller
-starts an offer from a `ReceivedInquiryCard`; the chat's offer panel loads
+starts an offer from a `ReceivedInquiryCard`, or from the chat's **Make an
+Offer** action when `ConversationResource.eligible_inquiry` is present (Seller
+Mode only — the server already excluded inquiries with a pending offer and
+inquiries where the caller is the buyer). Both entry points open the same
+structured form: buyer, listing (with photo) and listed price are read-only,
+while the final price (prefilled with the listed price), pickup date, payment
+method, collection method and note are editable and prefilled from the inquiry.
+The pickup date is future-only in both layers: the Flutter picker starts
+tomorrow, and `StoreOfferRequest` refuses a past `proposed_pickup_date` with
+`422`. When the buyer's preferred date has already passed, the form starts on
+tomorrow and keeps the original preference only for the change marker. The chat's offer panel loads
 `GET /offers?counterpart_id=` and lets the buyer accept or decline and the
-seller withdraw. Acceptance returns both records, and the resulting transaction
-appears in My Purchases and My Sales through the existing transaction list.
+seller withdraw. Acceptance copies the accepted price and terms onto exactly
+one `pending` transaction (`transactions.offer_id` is unique), so the agreement
+is snapshotted independently of later offer/inquiry/listing edits, and the
+resulting transaction appears in My Purchases and My Sales through the existing
+transaction list.
 Buyer and seller lists refresh when their shell selects the Transactions tab
 (`TransactionsScreen.isActive`). Completion remains unavailable (OQ-15,
 backend `501`).

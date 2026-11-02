@@ -3,8 +3,6 @@
 namespace Tests\Feature\Offer;
 
 use App\Enums\ListingStatus;
-use App\Enums\OfferStatus;
-use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
 use App\Models\Inquiry;
 use App\Models\Listing;
@@ -515,5 +513,221 @@ class OfferTest extends TestCase
         $this->getOffers(['user_id' => $this->buyer->id], $this->seller)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['user_id']);
+    }
+
+    #[Test]
+    public function a_seller_can_create_a_structured_offer_with_terms(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $preferred = now()->addDays(1)->toDateString();
+        $proposed = now()->addDays(3)->toDateString();
+
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing, [
+            'payment_method' => 'gcash',
+            'collection_method' => 'farm_pickup',
+            'preferred_schedule' => $preferred,
+        ]);
+
+        $response = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 47000.00,
+            'proposed_pickup_date' => $proposed,
+            'payment_method' => 'cash',
+            'collection_method' => 'buyer_arranged_transportation',
+            'note' => 'Bring a helper.',
+        ])->assertStatus(201)->json('data');
+
+        $this->assertSame('47000.00', $response['proposed_amount']);
+        $this->assertSame($proposed, $response['proposed_pickup_date']);
+        $this->assertSame('cash', $response['payment_method']);
+        $this->assertSame('buyer_arranged_transportation', $response['collection_method']);
+        $this->assertSame('Bring a helper.', $response['note']);
+
+        // The buyer's originals travel with the offer so the client can diff
+        // without a second request.
+        $this->assertSame('gcash', $response['original_terms']['payment_method']);
+        $this->assertSame('farm_pickup', $response['original_terms']['collection_method']);
+        $this->assertSame($preferred, $response['original_terms']['pickup_date']);
+
+        $offer = Offer::query()->sole();
+        $this->assertSame('cash', $offer->payment_method->value);
+        $this->assertSame('buyer_arranged_transportation', $offer->collection_method->value);
+        $this->assertSame($proposed, $offer->proposed_pickup_date->toDateString());
+        $this->assertSame('Bring a helper.', $offer->note);
+    }
+
+    #[Test]
+    public function an_unknown_term_value_is_rejected_with_422(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 47000.00,
+            'payment_method' => 'bitcoin',
+            'collection_method' => 'teleport',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['payment_method', 'collection_method']);
+
+        $this->assertSame(0, Offer::query()->count());
+    }
+
+    #[Test]
+    public function a_past_pickup_date_is_refused(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 47000.00,
+            'proposed_pickup_date' => now()->subDay()->toDateString(),
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['proposed_pickup_date']);
+
+        $this->assertSame(0, Offer::query()->count());
+    }
+
+    #[Test]
+    public function an_accepted_inquiry_can_never_receive_another_offer(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(200);
+
+        $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 45000.00,
+        ])->assertStatus(409);
+
+        $this->assertSame(1, Offer::query()->count());
+        $this->assertSame(1, Transaction::query()->count());
+    }
+
+    #[Test]
+    public function a_declined_offer_can_be_revised(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->postOfferAction('decline', $offerId, $this->buyer)->assertStatus(200);
+
+        $revised = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 46000.00,
+        ])->assertStatus(201)->json('data');
+
+        $this->assertSame('pending', $revised['status']);
+        $this->assertSame('46000.00', $revised['proposed_amount']);
+        $this->assertSame(2, Offer::query()->count());
+    }
+
+    #[Test]
+    public function a_withdrawn_offer_can_be_revised(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->postOfferAction('withdraw', $offerId, $this->seller)->assertStatus(200);
+
+        $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 47000.00,
+        ])->assertStatus(201);
+    }
+
+    #[Test]
+    public function the_seller_inbox_reports_offer_eligibility(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $inbox = fn () => $this->withHeader(
+            'Authorization',
+            'Bearer '.$this->mobileToken($this->seller),
+        )->getJson('/api/seller/inquiries')->assertOk()->json('data.inquiries.0');
+
+        $this->assertTrue($inbox()['can_make_offer']);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->assertFalse($inbox()['can_make_offer'], 'a pending offer blocks another');
+
+        $this->postOfferAction('decline', $offerId, $this->buyer)->assertStatus(200);
+        $this->assertTrue($inbox()['can_make_offer'], 'a declined offer can be revised');
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 47000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(200);
+        $this->assertFalse($inbox()['can_make_offer'], 'acceptance is permanent');
+    }
+
+    #[Test]
+    public function accepting_a_structured_offer_snapshots_its_terms_on_the_transaction(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $pickup = now()->addDays(4)->toDateString();
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 46000.00,
+            'proposed_pickup_date' => $pickup,
+            'payment_method' => 'maya',
+            'collection_method' => 'farm_pickup',
+            'note' => 'See you at 8am.',
+        ])->assertStatus(201)->json('data.id');
+
+        $response = $this->postOfferAction('accept', $offerId, $this->buyer)
+            ->assertStatus(200)
+            ->json('data');
+
+        $transaction = Transaction::query()->sole();
+
+        $this->assertSame($offerId, $transaction->offer_id);
+        $this->assertSame('46000.00', $transaction->total_amount);
+        $this->assertSame($pickup, $transaction->pickup_date->toDateString());
+        $this->assertSame('maya', $transaction->payment_method);
+        $this->assertSame('farm_pickup', $transaction->collection_method);
+
+        $this->assertSame($pickup, $response['transaction']['terms']['pickup_date']);
+        $this->assertSame('maya', $response['transaction']['terms']['payment_method']);
+        $this->assertSame('farm_pickup', $response['transaction']['terms']['collection_method']);
+        $this->assertSame($offerId, $response['transaction']['terms']['offer_id']);
     }
 }

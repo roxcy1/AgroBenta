@@ -80,6 +80,21 @@ void main() {
     },
   );
 
+  testWidgets('an ineligible inquiry offers no Make an offer action', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(
+      tester,
+      (_) async => sellerInquiryListResponse(
+        inquiries: <Map<String, dynamic>>[
+          sellerInquiryJson(canMakeOffer: false),
+        ],
+      ),
+    );
+
+    expect(find.text('Make an offer'), findsNothing);
+  });
+
   testWidgets('renders the buyer inquiry fields the resource carries', (
     WidgetTester tester,
   ) async {

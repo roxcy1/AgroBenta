@@ -74,6 +74,7 @@ Map<String, dynamic> sellerInquiryJson({
   Object? paymentMethod = 'cash',
   Object? collectionMethod = 'farm_pickup',
   Object? createdAt = '2026-10-19T08:15:00.000000Z',
+  bool? canMakeOffer = true,
 }) {
   return <String, dynamic>{
     'id': id,
@@ -91,6 +92,7 @@ Map<String, dynamic> sellerInquiryJson({
     'payment_method': paymentMethod,
     'collection_method': collectionMethod,
     'created_at': createdAt,
+    'can_make_offer': canMakeOffer,
   };
 }
 
@@ -122,6 +124,72 @@ const Map<String, String> _jsonHeaders = <String, String>{
 
 /// The `201` that `POST /api/inquiries` answers with, plain envelope —
 /// `InquiryController@store` returns it verbatim.
+/// One `InquiryListItemResource` payload for the Messages "Inquiries" tab.
+Map<String, dynamic> inquiryListItemJson({
+  Object? id = 55,
+  String role = 'buyer',
+  String listingTitle = 'cattle Angus',
+  Object? askingPrice = '50000.00',
+  String? photoUrl,
+  String counterpartName = 'Juan Dela Cruz',
+  String? paymentMethod = 'gcash',
+  String? collectionMethod = 'farm_pickup',
+  Object? preferredSchedule = '2026-11-10',
+  String message = 'Still available? I can pick it up.',
+  Map<String, dynamic>? latestOffer,
+  bool canMakeOffer = false,
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'role': role,
+    'status': 'open',
+    'listing': <String, dynamic>{
+      'id': 12,
+      'title': listingTitle,
+      'asking_price': askingPrice,
+      'photo_url': photoUrl,
+    },
+    'counterpart': <String, dynamic>{'id': 3, 'name': counterpartName},
+    'payment_method': paymentMethod,
+    'collection_method': collectionMethod,
+    'preferred_schedule': preferredSchedule,
+    'message': message,
+    'latest_offer': latestOffer,
+    'can_make_offer': canMakeOffer,
+    'created_at': '2026-11-01T08:15:00.000000Z',
+  };
+}
+
+/// The latest-offer summary embedded in an inquiry list item.
+Map<String, dynamic> inquiryListOfferJson({
+  Object? id = 41,
+  String status = 'pending',
+  Object? proposedAmount = '47500.00',
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'status': status,
+    'proposed_amount': proposedAmount,
+  };
+}
+
+http.Response inquiryListResponse({
+  List<Map<String, dynamic>>? inquiries,
+  int statusCode = 200,
+}) {
+  return http.Response(
+    jsonEncode(
+      successEnvelope(
+        data: <String, dynamic>{
+          'inquiries': inquiries ?? <Map<String, dynamic>>[],
+        },
+      ),
+    ),
+    statusCode,
+    headers: const <String, String>{'content-type': 'application/json'},
+  );
+}
+
 http.Response inquiryCreatedResponse({Map<String, dynamic>? inquiry}) {
   return http.Response(
     jsonEncode(

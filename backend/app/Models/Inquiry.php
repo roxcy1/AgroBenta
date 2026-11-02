@@ -10,6 +10,7 @@ use App\Enums\InquiryTransactionMethod;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'buyer_id', 'seller_id', 'listing_id', 'subject', 'message',
@@ -52,5 +53,13 @@ class Inquiry extends Model
     public function listing(): BelongsTo
     {
         return $this->belongsTo(Listing::class);
+    }
+
+    /**
+     * The offers made against this inquiry, newest first.
+     */
+    public function offers(): HasMany
+    {
+        return $this->hasMany(Offer::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 }

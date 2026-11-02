@@ -68,13 +68,15 @@ class OfferService
         User $seller,
         int $inquiryId,
         int $listingId,
-        string $proposedAmount
+        string $proposedAmount,
+        array $terms = [],
     ): Offer {
         return DB::transaction(function () use (
             $seller,
             $inquiryId,
             $listingId,
-            $proposedAmount
+            $proposedAmount,
+            $terms,
         ): Offer {
             $inquiry = $this->offers->lockInquiry($inquiryId);
             if ($inquiry === null) {
@@ -106,12 +108,20 @@ class OfferService
                 abort(409, 'This inquiry already has a pending offer.');
             }
 
+            if ($this->offers->hasAcceptedForInquiry($inquiryId)) {
+                abort(409, 'This inquiry has already been accepted.');
+            }
+
             $offer = $this->offers->create([
                 'inquiry_id' => (int) $inquiry->getKey(),
                 'listing_id' => (int) $listing->getKey(),
                 'seller_id' => (int) $seller->getKey(),
                 'buyer_id' => (int) $inquiry->buyer_id,
                 'proposed_amount' => $proposedAmount,
+                'proposed_pickup_date' => $terms['proposed_pickup_date'] ?? null,
+                'payment_method' => $terms['payment_method'] ?? null,
+                'collection_method' => $terms['collection_method'] ?? null,
+                'note' => $terms['note'] ?? null,
                 'status' => OfferStatus::Pending,
             ]);
 
@@ -137,7 +147,7 @@ class OfferService
                 ],
             );
 
-            return $offer;
+            return $offer->load(['inquiry', 'listing']);
         });
     }
 
@@ -178,6 +188,10 @@ class OfferService
                 (int) $accepted->listing_id,
                 1,
                 (string) $accepted->proposed_amount,
+                (int) $accepted->getKey(),
+                $accepted->payment_method?->value,
+                $accepted->collection_method?->value,
+                $accepted->proposed_pickup_date?->toDateString(),
             );
 
             $this->activity->log(

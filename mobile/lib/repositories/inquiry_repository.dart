@@ -1,5 +1,6 @@
 import '../core/constants/api_constants.dart';
 import '../models/inquiry.dart';
+import '../models/inquiry_list_item.dart';
 import '../models/received_inquiry_page.dart';
 import '../services/inquiry_service.dart';
 
@@ -19,6 +20,11 @@ class InquiryRepository {
   const InquiryRepository(this._service);
 
   final InquiryService _service;
+
+  /// Fetches the caller's active inquiries on one side.
+  Future<List<InquiryListItem>> listActive({String? role}) {
+    return _service.listActive(role: role);
+  }
 
   /// Fetches one page of the authenticated seller's received inquiries.
   ///

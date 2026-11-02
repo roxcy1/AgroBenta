@@ -12,6 +12,7 @@ use App\Services\ActivityLogger;
 use App\Services\Messaging\MessagingService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -64,6 +65,16 @@ class InquiryService
     public function listForSeller(User $seller, int $perPage = 15): LengthAwarePaginator
     {
         return $this->inquiries->paginateForSeller($seller, $perPage);
+    }
+
+    /**
+     * The caller's active inquiries on one side, for the Messages tab.
+     *
+     * @return Collection<int, Inquiry>
+     */
+    public function activeFor(User $user, ?string $role = null): Collection
+    {
+        return $this->inquiries->listActiveForUser($user, $role);
     }
 
     /**
@@ -187,8 +198,8 @@ class InquiryService
             "New inquiry from {$buyer->name}.",
             "Listing: {$listing->displayLabel()}.",
             "Asking price: ₱{$price}.",
-            "Preferred payment: " . ($preferences['payment_method'] ?? 'not specified'),
-            "Preferred collection: " . ($preferences['collection_method'] ?? 'not specified'),
+            'Preferred payment: '.($preferences['payment_method'] ?? 'not specified'),
+            'Preferred collection: '.($preferences['collection_method'] ?? 'not specified'),
             "Collection date option: $option ($date)",
             '',
             "Buyer's message:",

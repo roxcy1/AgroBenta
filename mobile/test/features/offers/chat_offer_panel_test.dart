@@ -143,4 +143,64 @@ void main() {
     expect(find.text('Purchase offer'), findsNothing);
     expect(find.text('Accept offer'), findsNothing);
   });
+
+  testWidgets('the buyer sees the proposed terms and what the seller changed', (
+    WidgetTester tester,
+  ) async {
+    await pumpPanel(
+      tester,
+      offer: Offer.fromJson(
+        offerJson(
+          buyerId: 7,
+          sellerId: 3,
+          proposedAmount: '47000.00',
+          proposedPickupDate: '2026-11-12',
+          paymentMethod: 'cash',
+          collectionMethod: 'farm_pickup',
+          note: 'Bring a helper.',
+          originalTerms: <String, dynamic>{
+            'payment_method': 'gcash',
+            'collection_method': 'farm_pickup',
+            'pickup_date': '2026-11-10',
+          },
+        ),
+      ),
+      currentUserId: 7,
+    );
+
+    expect(find.text('Pickup'), findsOneWidget);
+    expect(find.textContaining('Cash (was GCash)'), findsOneWidget);
+    expect(
+      find.textContaining('Pick up from the seller'),
+      findsOneWidget,
+      reason: 'an unchanged term is shown once, without a "was" clause',
+    );
+    expect(find.text('Bring a helper.'), findsOneWidget);
+    expect(find.text('Accept offer'), findsOneWidget);
+  });
+
+  testWidgets('the seller sees the same terms without change highlighting', (
+    WidgetTester tester,
+  ) async {
+    await pumpPanel(
+      tester,
+      offer: Offer.fromJson(
+        offerJson(
+          buyerId: 7,
+          sellerId: 3,
+          paymentMethod: 'cash',
+          originalTerms: <String, dynamic>{
+            'payment_method': 'gcash',
+            'collection_method': null,
+            'pickup_date': null,
+          },
+        ),
+      ),
+      currentUserId: 3,
+    );
+
+    expect(find.text('Cash'), findsOneWidget);
+    expect(find.textContaining('was GCash'), findsNothing);
+    expect(find.text('Withdraw offer'), findsOneWidget);
+  });
 }

@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
+import '../../../models/conversation.dart';
 import '../../../models/message.dart';
 import '../../../models/offer.dart';
 import '../../offers/state/chat_offers_controller.dart';
 import '../../offers/state/offer_scope.dart';
 import '../../offers/state/offer_state.dart';
+import '../../offers/view/make_offer_screen.dart';
 import '../../offers/widgets/chat_offer_panel.dart';
 import '../../transactions/views/transaction_detail_screen.dart';
 import '../state/chat_controller.dart';
@@ -32,6 +34,8 @@ class ChatScreen extends StatefulWidget {
     required this.counterpart,
     required this.currentUserId,
     this.listingId,
+    this.offerInquiry,
+    this.counterpartRole,
     super.key,
   });
 
@@ -44,6 +48,17 @@ class ChatScreen extends StatefulWidget {
 
   /// The listing this thread is about, if any.
   final int? listingId;
+
+  /// The server-provided inquiry the seller can still answer with an offer.
+  ///
+  /// `null` for the buyer side, for a thread with no open inquiry, and for
+  /// chats opened outside Messages — the action is only offered where the
+  /// server said it is eligible.
+  final ConversationEligibleInquiry? offerInquiry;
+
+  /// The counterpart's role in this thread (`Buyer`/`Seller`), when the
+  /// conversation has exactly one side. `null` means "do not guess".
+  final String? counterpartRole;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -88,6 +103,35 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<bool> _onSend(String body) => _controller.send(body);
+
+  /// Opens the seller's offer form for the eligible inquiry, then refreshes
+  /// this thread's offer panel when an offer was actually created.
+  Future<void> _openMakeOffer(ConversationEligibleInquiry inquiry) async {
+    final int? listingId = inquiry.listingId;
+    if (listingId == null) {
+      return;
+    }
+
+    final bool? created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (BuildContext context) => MakeOfferScreen.forConversation(
+          inquiryId: inquiry.id,
+          listingId: listingId,
+          buyerName: widget.counterpart.name,
+          listingTitle: inquiry.listingTitle,
+          askingPrice: inquiry.askingPrice,
+          photoUrl: inquiry.photoUrl,
+          paymentMethod: inquiry.paymentMethod,
+          collectionMethod: inquiry.collectionMethod,
+          preferredSchedule: inquiry.preferredSchedule,
+        ),
+      ),
+    );
+
+    if (created == true && mounted) {
+      await _offers.load();
+    }
+  }
 
   /// Shows the transaction the acceptance created, with the one honest link
   /// the app can offer. An already-accepted offer loaded from the list cannot
@@ -186,22 +230,107 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _showProfile() {
+    final ChatUser user = widget.counterpart;
+    final String? role = widget.counterpartRole;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        final ThemeData theme = Theme.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.screenGutter,
+              AppSpacing.xs,
+              AppSpacing.screenGutter,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    _ProfileAvatar(user: user),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(user.name, style: theme.textTheme.titleLarge),
+                          if (role != null) ...<Widget>[
+                            const SizedBox(height: 2),
+                            Text(
+                              role,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Only the profile details AgroBenta shares with chat '
+                  'participants are shown here.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final String? role = widget.counterpartRole;
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            _SmallAvatar(user: widget.counterpart),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                widget.counterpart.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+        titleSpacing: 0,
+        title: InkWell(
+          onTap: _showProfile,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: 4,
             ),
-          ],
+            child: Row(
+              children: <Widget>[
+                _SmallAvatar(user: widget.counterpart),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        widget.counterpart.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (role != null)
+                        Text(
+                          role,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
       body: SafeArea(
@@ -259,6 +388,11 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                   },
                 ),
+                if (widget.offerInquiry != null)
+                  _MakeOfferBar(
+                    inquiry: widget.offerInquiry!,
+                    onPressed: () => _openMakeOffer(widget.offerInquiry!),
+                  ),
                 ChatOfferPanel(
                   state: offers,
                   currentUserId: widget.currentUserId,
@@ -375,6 +509,75 @@ class _ErrorState extends StatelessWidget {
             FilledButton(onPressed: onRetry, child: const Text('Try again')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The larger avatar in the profile sheet: the real photo when the account has
+/// one, the same initials fallback the chat list uses otherwise.
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.user});
+
+  final ChatUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final String? url = user.avatarUrl;
+    if (url == null || url.isEmpty) {
+      return CircleAvatar(
+        radius: 32,
+        child: Text(user.initial, style: const TextStyle(fontSize: 24)),
+      );
+    }
+    return CircleAvatar(radius: 32, backgroundImage: NetworkImage(url));
+  }
+}
+
+/// The seller's in-chat action for the inquiry the server marked eligible.
+///
+/// It sits above the existing offer panel and above the composer: the seller
+/// answers the inquiry without leaving the conversation. The inquiry id is
+/// never inferred here — it comes from `ConversationResource.eligible_inquiry`,
+/// which already excludes inquiries with a pending offer and inquiries where
+/// the caller is the buyer.
+class _MakeOfferBar extends StatelessWidget {
+  const _MakeOfferBar({required this.inquiry, required this.onPressed});
+
+  final ConversationEligibleInquiry inquiry;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String? listing = inquiry.listingTitle;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenGutter,
+        AppSpacing.xs,
+        AppSpacing.screenGutter,
+        AppSpacing.xs,
+      ),
+      color: AppColors.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            listing == null ? 'Answer this inquiry' : 'Inquiry · $listing',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          FilledButton.tonalIcon(
+            onPressed: onPressed,
+            icon: const Icon(Icons.local_offer_outlined, size: 18),
+            label: const Text('Make an Offer'),
+          ),
+        ],
       ),
     );
   }

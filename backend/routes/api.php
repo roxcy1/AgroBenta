@@ -183,6 +183,9 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
     // verbs differ, so neither shadows the other.
     Route::get('/inquiries/listing/{listing}', [MobileInquiryController::class, 'existing']);
     Route::post('/inquiries', [MobileInquiryController::class, 'store']);
+    // The Messages "Inquiries" tab: the caller's own active inquiries, on the
+    // side the active Account Mode selects.
+    Route::get('/inquiries', [MobileInquiryController::class, 'index']);
 });
 
 // Profile — the caller's own account details and credentials.

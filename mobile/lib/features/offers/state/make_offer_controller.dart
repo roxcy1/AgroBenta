@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../models/inquiry.dart';
 import '../../../models/offer.dart';
 import '../../../repositories/offer_repository.dart';
 import 'offer_state.dart';
@@ -34,6 +35,10 @@ class MakeOfferController extends ChangeNotifier {
     required int inquiryId,
     required int listingId,
     required String amount,
+    DateTime? pickupDate,
+    InquiryPaymentMethod? paymentMethod,
+    InquiryCollectionMethod? collectionMethod,
+    String? note,
   }) async {
     if (_state.isSubmitting) {
       return null;
@@ -60,6 +65,10 @@ class MakeOfferController extends ChangeNotifier {
         inquiryId: inquiryId,
         listingId: listingId,
         proposedAmount: trimmed,
+        proposedPickupDate: pickupDate,
+        paymentMethod: paymentMethod,
+        collectionMethod: collectionMethod,
+        note: note,
       );
       if (_disposed) {
         return null;

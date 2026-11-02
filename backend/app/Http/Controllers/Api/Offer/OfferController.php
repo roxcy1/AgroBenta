@@ -74,6 +74,12 @@ class OfferController extends Controller
             (int) $request->validated('inquiry_id'),
             (int) $request->validated('listing_id'),
             (string) $request->validated('proposed_amount'),
+            [
+                'proposed_pickup_date' => $request->validated('proposed_pickup_date'),
+                'payment_method' => $request->validated('payment_method'),
+                'collection_method' => $request->validated('collection_method'),
+                'note' => $request->validated('note'),
+            ],
         );
 
         return response()->json([

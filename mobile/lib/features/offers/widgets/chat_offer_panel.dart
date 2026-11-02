@@ -147,6 +147,10 @@ class ChatOfferPanel extends StatelessWidget {
             color: AppColors.textSecondary,
           ),
         ),
+        if (offer.hasTerms) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          _OfferTerms(offer: offer, highlightChanges: isBuyer),
+        ],
         if (offer.status.isPending && (isBuyer || isSeller)) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
           if (isBusy)
@@ -217,6 +221,105 @@ class ChatOfferPanel extends StatelessWidget {
             : 'You withdrew this offer.',
       OfferStatus.expired => 'This offer expired.',
     };
+  }
+}
+
+/// The seller's proposed terms, with the buyer's original preference shown
+/// beside anything the seller changed.
+///
+/// The comparison is against `OfferResource.original_terms`, which the server
+/// copies from the inquiry — the client never reconstructs the buyer's original
+/// values from memory.
+class _OfferTerms extends StatelessWidget {
+  const _OfferTerms({required this.offer, required this.highlightChanges});
+
+  final Offer offer;
+  final bool highlightChanges;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String? pickup = offer.proposedPickupDate == null
+        ? null
+        : AppFormatters.formatDate(offer.proposedPickupDate);
+    final String? originalPickup = offer.originalPickupDate == null
+        ? null
+        : AppFormatters.formatDate(offer.originalPickupDate);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.primarySurface,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (pickup != null)
+            _row(
+              theme,
+              'Pickup',
+              pickup,
+              changed: highlightChanges && offer.pickupDateChanged,
+              original: originalPickup,
+            ),
+          if (offer.paymentMethod != null)
+            _row(
+              theme,
+              'Payment',
+              offer.paymentMethod!.label,
+              changed: highlightChanges && offer.paymentChanged,
+              original: offer.originalPaymentMethod?.label,
+            ),
+          if (offer.collectionMethod != null)
+            _row(
+              theme,
+              'Collection',
+              offer.collectionMethod!.label,
+              changed: highlightChanges && offer.collectionChanged,
+              original: offer.originalCollectionMethod?.label,
+            ),
+          if (offer.note != null && offer.note!.trim().isNotEmpty)
+            _row(theme, 'Note', offer.note!.trim()),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(
+    ThemeData theme,
+    String label,
+    String value, {
+    bool changed = false,
+    String? original,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              changed && original != null ? '$value (was $original)' : value,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: changed ? AppColors.primary : AppColors.text,
+                fontWeight: changed ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

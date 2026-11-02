@@ -1,4 +1,5 @@
 import '../core/utils/json_utils.dart';
+import 'inquiry.dart';
 import 'transaction.dart';
 
 /// The lifecycle state of a purchase offer, as stored in `offers.status`.
@@ -61,9 +62,21 @@ class Offer {
     required this.status,
     required this.respondedAt,
     required this.createdAt,
+    this.proposedPickupDate,
+    this.paymentMethod,
+    this.collectionMethod,
+    this.note,
+    this.originalPaymentMethod,
+    this.originalCollectionMethod,
+    this.originalPickupDate,
   });
 
   factory Offer.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic>? original = readNullableObject(
+      json,
+      'original_terms',
+    );
+
     return Offer(
       id: readInt(json, 'id'),
       inquiryId: readInt(json, 'inquiry_id'),
@@ -71,6 +84,35 @@ class Offer {
       sellerId: readInt(json, 'seller_id'),
       buyerId: readInt(json, 'buyer_id'),
       proposedAmount: readDecimalString(json, 'proposed_amount'),
+      proposedPickupDate: readNullableDateTime(json, 'proposed_pickup_date'),
+      paymentMethod: readNullableEnum(
+        json,
+        'payment_method',
+        InquiryPaymentMethod.fromValue,
+      ),
+      collectionMethod: readNullableEnum(
+        json,
+        'collection_method',
+        InquiryCollectionMethod.fromValue,
+      ),
+      note: readNullableString(json, 'note'),
+      originalPaymentMethod: original == null
+          ? null
+          : readNullableEnum(
+              original,
+              'payment_method',
+              InquiryPaymentMethod.fromValue,
+            ),
+      originalCollectionMethod: original == null
+          ? null
+          : readNullableEnum(
+              original,
+              'collection_method',
+              InquiryCollectionMethod.fromValue,
+            ),
+      originalPickupDate: original == null
+          ? null
+          : readNullableDateTime(original, 'pickup_date'),
       status: OfferStatus.fromValue(readString(json, 'status')),
       respondedAt: readNullableDateTime(json, 'responded_at'),
       createdAt: readNullableDateTime(json, 'created_at'),
@@ -99,12 +141,58 @@ class Offer {
   /// stored independently of the listing's asking price.
   final String proposedAmount;
 
+  /// The pickup date the seller proposed, if any.
+  final DateTime? proposedPickupDate;
+
+  /// The seller's proposed terms. Null when the seller kept the buyer's
+  /// original preference (the server sends what was actually proposed).
+  final InquiryPaymentMethod? paymentMethod;
+  final InquiryCollectionMethod? collectionMethod;
+
+  /// An optional note from the seller.
+  final String? note;
+
+  /// The buyer's own inquiry preference at the time the offer was made.
+  /// Used only to highlight what the seller changed; the values above are the
+  /// terms being accepted.
+  final InquiryPaymentMethod? originalPaymentMethod;
+  final InquiryCollectionMethod? originalCollectionMethod;
+  final DateTime? originalPickupDate;
+
   final OfferStatus status;
+
+  /// Whether the seller changed the buyer's payment preference.
+  bool get paymentChanged =>
+      paymentMethod != null &&
+      originalPaymentMethod != null &&
+      paymentMethod != originalPaymentMethod;
+
+  /// Whether the seller changed the buyer's collection preference.
+  bool get collectionChanged =>
+      collectionMethod != null &&
+      originalCollectionMethod != null &&
+      collectionMethod != originalCollectionMethod;
+
+  /// Whether the seller proposed a different pickup date.
+  bool get pickupDateChanged =>
+      proposedPickupDate != null &&
+      originalPickupDate != null &&
+      !_sameDay(proposedPickupDate!, originalPickupDate!);
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// When the buyer responded, or `null` while the offer is pending.
   final DateTime? respondedAt;
 
   final DateTime? createdAt;
+
+  /// Whether the seller proposed any term beyond the price.
+  bool get hasTerms =>
+      proposedPickupDate != null ||
+      paymentMethod != null ||
+      collectionMethod != null ||
+      (note?.isNotEmpty ?? false);
 
   /// Whether [userId] is the buyer this offer was made to.
   bool isBuyer(int userId) => buyerId == userId;

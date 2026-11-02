@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests\Offer;
 
+use App\Enums\InquiryCollectionMethod;
+use App\Enums\InquiryPaymentMethod;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Body for a seller creating a purchase offer on a buyer's inquiry.
@@ -36,6 +39,18 @@ class StoreOfferRequest extends FormRequest
             'inquiry_id' => ['required', 'integer', 'exists:inquiries,id'],
             'listing_id' => ['required', 'integer', 'exists:listings,id'],
             'proposed_amount' => ['required', 'numeric', 'min:0.01'],
+            'proposed_pickup_date' => ['nullable', 'date', 'after_or_equal:today'],
+            'payment_method' => [
+                'nullable',
+                'string',
+                Rule::in(array_column(InquiryPaymentMethod::cases(), 'value')),
+            ],
+            'collection_method' => [
+                'nullable',
+                'string',
+                Rule::in(array_column(InquiryCollectionMethod::cases(), 'value')),
+            ],
+            'note' => ['nullable', 'string', 'max:500'],
 
             'buyer_id' => ['prohibited'],
             'seller_id' => ['prohibited'],
