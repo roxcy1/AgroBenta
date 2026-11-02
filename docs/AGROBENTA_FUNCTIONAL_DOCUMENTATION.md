@@ -224,7 +224,7 @@ Rules:
 | Registration with email and password | In scope. |
 | Login with email and password | In scope. |
 | Profile management (view and update personal details, change password) | In scope. **[MS-P Figure 20: Personal Information, Address, Change Password, Notification Settings]** |
-| **Forgot password** | Shown on the login prototype. In scope; the recovery method is **[OPEN]** (§13, MS-10). |
+| **Forgot password** | Shown on the login prototype. In scope. A six-digit code is sent by email and entered in the app (project decision, 2026-11-03). The email service is **[OPEN]** (§13, MS-10). |
 | "Remember me" | Shown on the login prototype. **[OPEN]** (§13, MS-11). |
 | Google / Facebook sign-in | Shown on the login prototype. **[OPEN]** (§13, MS-11). |
 
@@ -871,7 +871,7 @@ for the manuscript's author.
 | **MS-07** | **Document retention:** who may view IDs, and when are they deleted (for example after rejection)? |
 | **MS-08** | **Listing title:** the prototype requires a title; the ERD has none. Add a title field, or derive it (e.g. type + breed)? |
 | **MS-09** | **AI service:** which external provider, who pays, who holds the key? Correct the Definition of Terms (p.20) to say "external AI service" rather than an in-house model. |
-| **MS-10** | **Forgot password:** email code or email link? Which email service? |
+| **MS-10** | **Forgot password:** ~~email code or email link?~~ Six-digit email code (project decision, 2026-11-03; see §2.8). Which email service? |
 | **MS-11** | **Remember me and Google/Facebook sign-in:** build them or remove them from the prototype? |
 | **MS-12** | **Transaction statuses:** how are "seller accepted" and "in delivery" stored, given the ERD has only `pending`, `completed`, `cancelled`? Do the seller tabs "Inquiry" and "Negotiating" belong to transactions or to inquiries? |
 | **MS-13** | **Agreed price and delivery fee:** can the agreed price differ from the asking price? Is a delivery fee recorded and added to the total, given Limitation 5? |
@@ -930,4 +930,5 @@ Related: the manuscript (PDF, kept outside the repository),
 |---|---|
 | 2026-10-24 | Aligned to the capstone manuscript, confirmed by the project manager as the final document. Allowed the Seller Mode / Buyer Mode view switch (§2.7); added sign-in features (§2.8); replaced "no identity document upload" with private supporting documents (§3.3); limited livestock categories to cattle, carabao, goats and swine (§4.1); added "seller marks as sold" (§4.4); set the price suggestion to an external AI API, visible to buyers as a reference (§5); set the transaction flow to seller-accepts / buyer-confirms-receipt (§6.4); added inquiries separate from messages (§8.2); added analytics scope (§9.4); rewrote out-of-scope (§11) and open items (§13). Conflicts inside the manuscript recorded as MS-01 to MS-17. |
 | 2026-10-27 | Adopted project-owner decisions DEC-01 to DEC-03: unit-aware maximum age (25 years / 300 months / 9,125 days), at most two decimal places for weight and asking price, and the photo minimum at submission with an approval-time guard for legacy listings (§4.4, §4.5, §4.7, §13.4). Added the `[DEC-nn]` marker because the manuscript was unavailable; the rules must be re-checked against it. MS-08 (listing title) remains open. |
+| 2026-11-03 | Part of MS-10 decided: password recovery uses a six-digit email code (§2.8). The manuscript does not specify the method. The email service remains open. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

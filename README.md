@@ -100,6 +100,10 @@ docker compose restart php nginx
 
 After changing `.env`, also update `backend/.env` with matching values for Laravel's database configuration (see Quick Start above).
 
+### Email
+
+Password reset codes are sent by email. Locally, `MAIL_MAILER=log` writes each email to `backend/storage/logs/laravel.log`, so you can read the code there. For a real deployment, set the `CHANGE_THIS_*` mail values listed in `backend/.env.example` in `backend/.env`.
+
 **Optional but recommended:** change the folder name when you copy this template — it becomes your Docker project name automatically.
 
 ---

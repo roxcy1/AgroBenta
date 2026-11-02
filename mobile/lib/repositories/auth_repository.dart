@@ -114,6 +114,26 @@ class AuthRepository {
   /// is nothing left to revoke.
   Future<void> forgetLocalSession() => _tokenStore.clear();
 
+  /// Asks the server to email a password reset code to [email].
+  Future<void> forgotPassword({required String email}) =>
+      _service.forgotPassword(email: email);
+
+  /// Sets a new password from a reset code. No session is created: the user
+  /// signs in afterwards with the new password.
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+    required String passwordConfirmation,
+  }) {
+    return _service.resetPassword(
+      email: email,
+      code: code,
+      password: password,
+      passwordConfirmation: passwordConfirmation,
+    );
+  }
+
   /// Writes the token to secure storage.
   ///
   /// An empty token is treated as a contract violation rather than stored: a
