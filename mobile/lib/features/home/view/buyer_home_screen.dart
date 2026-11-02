@@ -16,7 +16,6 @@ import '../../marketplace/views/listing_detail_screen.dart';
 import '../../marketplace/views/marketplace_filter_screen.dart';
 import '../../marketplace/widgets/marketplace_filter_button.dart';
 import '../../notifications/state/notifications_scope.dart';
-import '../../seller_listings/widgets/seller_listings_entry_card.dart';
 import '../widgets/home_categories.dart';
 import '../widgets/home_header.dart';
 import '../widgets/home_hero_banner.dart';
@@ -42,8 +41,10 @@ import '../widgets/home_listings_section.dart';
 ///
 /// The account card, the seller-verification entry and the sign-out action of
 /// the previous Home are gone: the approved design ends at Recent Listings.
-/// Sign out lives on the profile screen; the seller-only My Listings entry
-/// remains at the bottom because it is the app's only path into that screen.
+/// Sign out lives on the profile screen. Buying is all this screen offers:
+/// listing management belongs to Seller Mode (the SellerShell's My Listings
+/// tab and the Seller Home dashboard), so no account — seller-capable or not —
+/// gets a Manage Listings shortcut here.
 class BuyerHomeScreen extends StatefulWidget {
   const BuyerHomeScreen({
     this.onBrowseMarketplace,
@@ -249,19 +250,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                           ),
                           const SizedBox(height: AppSpacing.lg),
                         ],
-                        // Seller-only, and only when `/auth/me` says the
-                        // account is a seller. A buyer never sees it, which is
-                        // also why My Listings is not a tab in the buyer shell's
-                        // bottom navigation: the tab would exist for them and
-                        // lead to a screen whose every request is a 403. Seller
-                        // Mode has its own shell and a real My Listings tab.
-                        if (user.isSeller)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.screenGutter,
-                            ),
-                            child: SellerListingsEntryCard(user: user),
-                          ),
                       ],
                     ),
                   ),
