@@ -39,6 +39,13 @@ Route::prefix('auth')->group(function (): void {
     Route::post('/login', [MobileAuthController::class, 'login'])
         ->middleware('throttle:10,1');
 
+    // Password recovery, for a signed-out user. Each route names its throttle
+    // bucket, because `throttle:5,1` alone is shared with `/register`.
+    Route::post('/forgot-password', [MobileAuthController::class, 'forgotPassword'])
+        ->middleware('throttle:5,1,forgot-password');
+    Route::post('/reset-password', [MobileAuthController::class, 'resetPassword'])
+        ->middleware('throttle:5,1,reset-password');
+
     Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
         Route::get('/me', [MobileAuthController::class, 'me']);
         Route::post('/logout', [MobileAuthController::class, 'logout']);
