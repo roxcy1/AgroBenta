@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
+import '../widgets/listing_social_proof.dart';
 import '../../../repositories/marketplace_repository.dart';
 import '../../../widgets/detail_row.dart';
 import '../../auth/state/auth_scope.dart';
@@ -285,6 +286,8 @@ class _SummarySection extends StatelessWidget {
               ],
             ),
           ],
+          const SizedBox(height: AppSpacing.sm),
+          ListingSocialProof(completedSales: listing.completedSales),
         ],
       ),
     );

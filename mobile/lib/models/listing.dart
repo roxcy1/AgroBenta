@@ -122,6 +122,7 @@ class Listing {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.completedSales = 0,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
@@ -149,6 +150,7 @@ class Listing {
               ))
           .toList(growable: false),
       status: ListingStatus.fromValue(readString(json, 'status')),
+      completedSales: readNullableInt(json, 'completed_sales') ?? 0,
       createdAt: readNullableDateTime(json, 'created_at'),
       updatedAt: readNullableDateTime(json, 'updated_at'),
     );
@@ -220,6 +222,10 @@ class Listing {
   final List<String> photos;
 
   final ListingStatus status;
+
+  /// Completed transactions for this listing, from the marketplace API.
+  /// `0` is a real answer: no completed sale yet.
+  final int completedSales;
 
   final DateTime? createdAt;
 

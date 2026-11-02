@@ -153,24 +153,6 @@ class MarketplaceController extends ChangeNotifier {
     await _loadFirstPage();
   }
 
-  /// Clears the search term and reloads page 1 at once.
-  ///
-  /// The field's X calls this instead of [submitSearch]: clearing the field
-  /// programmatically does not fire `onChanged`, so without publishing the
-  /// empty term first the reload would still carry the old query. A term that
-  /// is already empty is a no-op — tapping X twice is not two requests.
-  Future<void> clearSearch() async {
-    _searchDebounce?.cancel();
-    _searchDebounce = null;
-
-    if (_state.searchText.isEmpty) {
-      return;
-    }
-
-    _set(_state.copyWith(searchText: ''));
-    await _loadFirstPage();
-  }
-
   /// Applies a new filter selection and reloads from page 1.
   ///
   /// Pagination is always reset: keeping page 3 of the previous result set while

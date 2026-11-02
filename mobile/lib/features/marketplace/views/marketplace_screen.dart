@@ -137,15 +137,32 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
-  /// Clears the search term and re-queries page 1 once.
+  /// Applies one Browse category to the shared marketplace filter.
   ///
-  /// The field is cleared here, the controller is told the term is now empty,
-  /// and only then is one request made. Clearing the field alone changes
-  /// nothing server-side, and letting the debounce fire would add a second
-  /// request for text the user has already removed.
-  Future<void> _clearSearch() async {
+  /// A tap is a filter change like any other: the controller resets pagination
+  /// and issues one request. Re-tapping the selected chip is a no-op.
+  Future<void> _selectCategory(String? value) async {
+    final String next = (value ?? '').trim();
+    if (next == _controller.state.filters.livestockType) {
+      return;
+    }
+
+    await _controller.applyFilters(
+      _controller.state.filters.copyWith(livestockType: next),
+    );
+    if (mounted) {
+      _scrollToTop();
+    }
+  }
+
+  /// Removes only the category filter, keeping search and the other filters.
+  Future<void> _clearCategory() => _selectCategory(null);
+
+  /// Clears the search term, the category and every other filter, then reloads
+  /// once. This is the field's X: one request that restores all listings.
+  Future<void> _clearSearchAndFilters() async {
     _searchField.clear();
-    await _controller.clearSearch();
+    await _controller.clearSearchAndFilters();
     if (mounted) {
       _scrollToTop();
     }
@@ -187,7 +204,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   searchField: _searchField,
                   state: state,
                   onOpenFilters: () => _openFilters(state),
-                  onClearSearch: _clearSearch,
+                  onClearSearch: _clearSearchAndFilters,
+                  onSelectCategory: _selectCategory,
+                  onClearCategory: _clearCategory,
                 ),
                 const Divider(height: 1),
                 Expanded(child: _body(state)),
@@ -227,7 +246,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         // Photo band (16:9) plus the compact fact block below it. A single
         // extent keeps both columns pixel-aligned regardless of how much text
         // a seller wrote.
-        final double itemExtent = (itemWidth * 9 / 16) + 152;
+        final double itemExtent = (itemWidth * 9 / 16) + 184;
 
         return RefreshIndicator(
           // Pull-to-refresh keeps the current results mounted: `refresh` publishes
@@ -311,6 +330,8 @@ class _SearchAndFilters extends StatelessWidget {
     required this.state,
     required this.onOpenFilters,
     required this.onClearSearch,
+    required this.onSelectCategory,
+    required this.onClearCategory,
   });
 
   final MarketplaceController controller;
@@ -318,6 +339,8 @@ class _SearchAndFilters extends StatelessWidget {
   final MarketplaceState state;
   final VoidCallback onOpenFilters;
   final VoidCallback onClearSearch;
+  final ValueChanged<String?> onSelectCategory;
+  final VoidCallback onClearCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -326,37 +349,135 @@ class _SearchAndFilters extends StatelessWidget {
         AppSpacing.screenGutter,
         AppSpacing.sm,
         AppSpacing.screenGutter,
-        AppSpacing.sm,
+        AppSpacing.xs,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Expanded(
-            child: TextField(
-              controller: searchField,
-              textInputAction: TextInputAction.search,
-              onChanged: controller.updateSearch,
-              // Committing from the keyboard skips the remaining debounce. On a
-              // slow connection that is the difference between results now and
-              // results a moment later.
-              onSubmitted: (String _) => controller.submitSearch(),
-              decoration: InputDecoration(
-                hintText: 'Search livestock',
-                prefixIcon: const Icon(Icons.search),
-                isDense: true,
-                suffixIcon: state.searchText.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close),
-                        tooltip: 'Clear search',
-                        onPressed: onClearSearch,
-                      ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: searchField,
+                  textInputAction: TextInputAction.search,
+                  onChanged: controller.updateSearch,
+                  // Committing from the keyboard skips the remaining debounce. On a
+                  // slow connection that is the difference between results now and
+                  // results a moment later.
+                  onSubmitted: (String _) => controller.submitSearch(),
+                  decoration: InputDecoration(
+                    hintText: 'Search livestock',
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    suffixIcon: state.searchText.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Clear search and filters',
+                            onPressed: onClearSearch,
+                          ),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.xs),
+              MarketplaceFilterButton(state: state, onPressed: onOpenFilters),
+            ],
           ),
-          const SizedBox(width: AppSpacing.xs),
-          MarketplaceFilterButton(state: state, onPressed: onOpenFilters),
+          const SizedBox(height: AppSpacing.xs),
+          // Directly below the search bar, per the Browse prototype. These
+          // chips drive the same exact-match `livestock_type` filter as the
+          // Filter screen, so the two can never disagree.
+          _BrowseCategoryChips(
+            selected: state.filters.livestockType.trim(),
+            onSelect: onSelectCategory,
+          ),
+          if (state.filters.livestockType.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.xs),
+            _ActiveCategoryIndicator(
+              label: state.filters.livestockType.trim(),
+              onClear: onClearCategory,
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// The five Browse categories, matching the Filter screen's Animal Type tiles.
+class _BrowseCategory {
+  const _BrowseCategory(this.label, this.value);
+
+  final String label;
+
+  /// `null` is "All" — no `livestock_type` filter.
+  final String? value;
+
+  static const List<_BrowseCategory> values = <_BrowseCategory>[
+    _BrowseCategory('All', null),
+    _BrowseCategory('Cattle', 'Cattle'),
+    _BrowseCategory('Swine', 'Swine'),
+    _BrowseCategory('Goat', 'Goat'),
+    _BrowseCategory('Carabao', 'Carabao'),
+  ];
+}
+
+/// A horizontally scrollable chip row. Selecting a chip applies its
+/// `livestock_type`; "All" clears it. The selected chip is derived from the
+/// shared filter state, so a selection made on Home or in the Filter screen is
+/// reflected here without any extra request.
+class _BrowseCategoryChips extends StatelessWidget {
+  const _BrowseCategoryChips({required this.selected, required this.onSelect});
+
+  final String selected;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _BrowseCategory.values.length,
+        separatorBuilder: (BuildContext context, int index) =>
+            const SizedBox(width: AppSpacing.xs),
+        itemBuilder: (BuildContext context, int index) {
+          final _BrowseCategory category = _BrowseCategory.values[index];
+          final bool isSelected = category.value == null
+              ? selected.isEmpty
+              : selected.toLowerCase() == category.value!.toLowerCase();
+
+          return ChoiceChip(
+            key: ValueKey<String>(
+              'browse-category-${category.value?.toLowerCase() ?? 'all'}',
+            ),
+            label: Text(category.label),
+            selected: isSelected,
+            showCheckmark: false,
+            onSelected: (_) => onSelect(category.value),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The active category, stated beside the search field and removable without
+/// opening the Filter screen.
+class _ActiveCategoryIndicator extends StatelessWidget {
+  const _ActiveCategoryIndicator({required this.label, required this.onClear});
+
+  final String label;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputChip(
+      key: const ValueKey<String>('active-category-filter'),
+      label: Text('Category: $label'),
+      onDeleted: onClear,
+      deleteIcon: const Icon(Icons.close, size: 18),
+      deleteButtonTooltipMessage: 'Remove category filter',
     );
   }
 }
@@ -390,7 +511,7 @@ class _LoadingList extends StatelessWidget {
             crossAxisCount: 2,
             mainAxisSpacing: spacing,
             crossAxisSpacing: spacing,
-            mainAxisExtent: (itemWidth * 9 / 16) + 152,
+            mainAxisExtent: (itemWidth * 9 / 16) + 184,
           ),
           itemCount: 4,
           itemBuilder: (BuildContext context, int index) =>

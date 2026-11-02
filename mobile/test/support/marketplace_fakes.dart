@@ -9,6 +9,40 @@ import 'package:http/testing.dart';
 
 import 'auth_fakes.dart';
 
+/// One `PopularLivestockCategoryResource` payload.
+Map<String, dynamic> popularCategoryJson({
+  String livestockType = 'Cattle',
+  int completedSales = 4,
+  String? photoUrl,
+}) {
+  return <String, dynamic>{
+    'livestock_type': livestockType,
+    'completed_sales': completedSales,
+    'photo_url': photoUrl,
+  };
+}
+
+/// A successful `GET /marketplace/popular-livestock`.
+http.Response popularLivestockResponse({
+  List<Map<String, dynamic>>? categories,
+  int windowDays = 30,
+  int statusCode = 200,
+}) {
+  return http.Response(
+    jsonEncode(
+      successEnvelope(
+        data: <String, dynamic>{
+          'window_days': windowDays,
+          'categories': categories ?? <Map<String, dynamic>>[],
+        },
+      ),
+    ),
+    statusCode,
+    headers: const <String, String>{'content-type': 'application/json'},
+  );
+}
+
+
 /// A `MobileListingResource` payload exactly as the backend serialises one.
 ///
 /// Field names, nullability and value spellings are copied from
@@ -40,6 +74,7 @@ Map<String, dynamic> listingJson({
   Object? createdAt = '2026-09-20T08:15:00.000000Z',
   Object? updatedAt = '2026-09-20T08:15:00.000000Z',
   Map<String, dynamic>? seller,
+  Object? completedSales = 0,
 }) {
   return <String, dynamic>{
     'id': id,
@@ -60,6 +95,7 @@ Map<String, dynamic> listingJson({
     'additional_notes': additionalNotes,
     'photos': photos ?? <Object?>[],
     'status': status,
+    'completed_sales': completedSales,
     'created_at': createdAt,
     'updated_at': updatedAt,
   };

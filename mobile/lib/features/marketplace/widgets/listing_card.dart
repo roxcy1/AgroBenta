@@ -5,6 +5,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
 import 'listing_photo.dart';
+import 'listing_social_proof.dart';
 
 /// One listing in the marketplace list.
 ///
@@ -84,6 +85,8 @@ class ListingCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: AppSpacing.xs),
+                  ListingSocialProof(completedSales: listing.completedSales),
                   const SizedBox(height: AppSpacing.xs),
                   _MetaRow(
                     icon: Icons.place_outlined,

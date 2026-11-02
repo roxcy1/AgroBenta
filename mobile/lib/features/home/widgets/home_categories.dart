@@ -63,13 +63,13 @@ class HomeCategory {
     HomeCategory(
       id: 'goats',
       label: 'Goats',
-      livestockType: 'Goats',
+      livestockType: 'Goat',
       icon: FontAwesomeIcons.paw,
     ),
     HomeCategory(
       id: 'pigs',
       label: 'Pigs',
-      livestockType: 'Pigs',
+      livestockType: 'Swine',
       icon: FontAwesomeIcons.bacon,
     ),
     HomeCategory(

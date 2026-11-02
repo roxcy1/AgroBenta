@@ -16,10 +16,12 @@ import '../../marketplace/views/listing_detail_screen.dart';
 import '../../marketplace/views/marketplace_filter_screen.dart';
 import '../../marketplace/widgets/marketplace_filter_button.dart';
 import '../../notifications/state/notifications_scope.dart';
+import '../state/popular_livestock_controller.dart';
 import '../widgets/home_categories.dart';
 import '../widgets/home_header.dart';
 import '../widgets/home_hero_banner.dart';
 import '../widgets/home_listings_section.dart';
+import '../widgets/popular_livestock_section.dart';
 
 /// The authenticated landing screen, per the approved Home design.
 ///
@@ -70,6 +72,7 @@ class BuyerHomeScreen extends StatefulWidget {
 
 class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   late final MarketplaceController _marketplace;
+  late final PopularLivestockController _popular;
   late final TextEditingController _searchField;
 
   @override
@@ -81,6 +84,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     NotificationsScope.readOf(context).refreshUnreadCount();
 
     _marketplace = MarketplaceScope.readOf(context).controller;
+    _popular = PopularLivestockController(
+      MarketplaceScope.readOf(context).repository,
+    )..load();
     _searchField = TextEditingController(text: _marketplace.state.searchText);
     _marketplace.addListener(_onMarketplaceChanged);
 
@@ -93,6 +99,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
   @override
   void dispose() {
+    _popular.dispose();
     _marketplace.removeListener(_onMarketplaceChanged);
     _searchField.dispose();
     super.dispose();
@@ -156,14 +163,22 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     widget.onBrowseMarketplace?.call();
   }
 
-  /// Applies a category as the marketplace's existing exact-match
-  /// `livestock_type` filter, then follows the buyer to the marketplace tab.
+  /// Applies the category to the shared marketplace filter and follows the
+  /// buyer to Browse.
+  ///
+  /// The values match the Filter screen's Animal Type tiles (`Cattle`, `Swine`,
+  /// `Goat`, `Carabao`), so the Browse chips show the selection the user made
+  /// here rather than a second vocabulary.
   void _selectCategory(HomeCategory category) {
+    _applyCategory(category.livestockType);
+  }
+
+  /// Applies a canonical category from the Popular Livestock section and
+  /// follows the buyer to Browse, exactly like a Home category tile.
+  void _applyCategory(String livestockType) {
     unawaited(
       _marketplace.applyFilters(
-        _marketplace.state.filters.copyWith(
-          livestockType: category.livestockType,
-        ),
+        _marketplace.state.filters.copyWith(livestockType: livestockType),
       ),
     );
     widget.onBrowseMarketplace?.call();
@@ -231,6 +246,12 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                         HomeCategories(
                           onSelect: _selectCategory,
                           onSeeAll: widget.onBrowseMarketplace,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        // Real completed-sale ranking, above Recent Listings.
+                        PopularLivestockSection(
+                          controller: _popular,
+                          onSelectCategory: _applyCategory,
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         HomeListingsSection(

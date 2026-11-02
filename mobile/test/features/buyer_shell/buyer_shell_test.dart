@@ -8,6 +8,7 @@ import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/buyer_shell/view/buyer_shell.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
+import 'package:agrobenta_mobile/features/home/widgets/home_categories.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/marketplace_screen.dart';
@@ -82,6 +83,8 @@ void main() {
           return Future<http.Response>.value(unreadCountResponse());
         case '/notifications':
           return Future<http.Response>.value(notificationsPageResponse());
+        case '/marketplace/popular-livestock':
+          return Future<http.Response>.value(popularLivestockResponse());
         default:
           return handler != null
               ? handler(request)
@@ -332,5 +335,37 @@ void main() {
           'page 1 and throw away what the buyer had',
     );
     expect(find.text('Kept'), findsOneWidget);
+  });
+
+  testWidgets('a Home category opens Browse with the category applied', (
+    WidgetTester tester,
+  ) async {
+    await pumpShell(tester);
+
+    final Finder cattle = find.descendant(
+      of: find.byType(HomeCategories),
+      matching: find.text('Cattle'),
+    );
+    await tester.ensureVisible(cattle);
+    await tester.pumpAndSettle();
+    await tester.tap(cattle);
+    await settleMarketplace(tester, frames: 12);
+
+    await tester.tap(find.text('Browse'));
+    await settleMarketplace(tester, frames: 12);
+
+    expect(find.text('Category: Cattle'), findsOneWidget);
+    final ChoiceChip chip = tester.widget<ChoiceChip>(
+      find.byKey(const ValueKey<String>('browse-category-cattle')),
+    );
+    expect(chip.selected, isTrue);
+    expect(
+      recorded.where(
+        (RecordedRequest request) =>
+            request.apiPath == '/listings' &&
+            request.query['livestock_type'] == 'Cattle',
+      ),
+      isNotEmpty,
+    );
   });
 }

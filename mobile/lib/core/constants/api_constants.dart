@@ -57,6 +57,12 @@ abstract final class MarketplaceEndpoints {
   /// client-selected filter.
   static const String browse = '/listings';
 
+  /// `GET` — Buyer Home's Popular Livestock ranking. 200, plain envelope.
+  ///
+  /// Completed sales in the last 30 days, grouped over the canonical livestock
+  /// categories. Read-only and token-scoped; no query parameters.
+  static const String popularLivestock = '/marketplace/popular-livestock';
+
   /// `GET` — one listing's detail. 200, plain envelope.
   ///
   /// [id] is appended to build the path. It is a selector, not proof of
