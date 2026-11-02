@@ -264,8 +264,9 @@ Future<void> tapDocumentPick(
   await settleSellerVerification(tester);
 }
 
-/// Advances through the Documents step by uploading both required images.
+/// Advances through the Documents step by uploading the required images.
 Future<void> uploadBothDocuments(WidgetTester tester) async {
   await tapDocumentPick(tester, 'Valid Government-Issued ID');
+  await tapDocumentPick(tester, 'Proof of Address');
   await tapDocumentPick(tester, 'Selfie Holding Your ID');
 }

@@ -157,7 +157,7 @@ class SellerVerificationController extends ChangeNotifier {
   /// On success the screen moves to the pending state. `seller_capability` is
   /// untouched — see the class documentation.
   Future<bool> submit({
-    required String businessName,
+    String? businessName,
     String? businessLocation,
     String? businessDescription,
     String? idDocumentRef,

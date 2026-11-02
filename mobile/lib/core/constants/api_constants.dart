@@ -125,6 +125,11 @@ abstract final class SellerVerificationEndpoints {
   static String deleteDocument(String type) =>
       '/seller-verification/documents/$type';
 
+  /// `GET` streams one submitted farm photo; `DELETE` removes one staged farm
+  /// photo. Farm photos are several files, so each is named by its id.
+  static String farmPhoto(String photoId) =>
+      '/seller-verification/documents/farm_photo/$photoId';
+
   /// The multipart field name the document bytes travel in.
   static const String documentFileField = 'document';
 

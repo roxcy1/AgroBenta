@@ -13,6 +13,7 @@ import '../state/seller_verification_documents_state.dart';
 import '../state/seller_verification_scope.dart';
 import '../state/seller_verification_state.dart';
 import '../widgets/seller_verification_document_card.dart';
+import '../widgets/seller_verification_farm_photos_card.dart';
 import 'seller_verification_documents.dart';
 import 'seller_verification_submitted_screen.dart';
 import 'seller_verification_validators.dart';
@@ -38,10 +39,11 @@ import 'seller_verification_views.dart';
 /// `business_description` — the allow-listed fields
 /// `SubmitSellerVerificationRequest` accepts. Full name is shown read-only from
 /// the account ([accountName]) because it comes from `/auth/me`, not the
-/// application. Phone number is not collected: there is no column. The two
-/// required evidence documents are uploaded through
+/// application. Phone number is not collected: there is no column. All three
+/// are optional. The evidence documents are uploaded through
 /// `/seller-verification/documents` before submission, because the submit
-/// endpoint refuses an application whose documents are missing (a `422`). The app
+/// endpoint refuses an application whose required documents are missing (a
+/// `422`). The app
 /// never sends `role` or `seller_capability`.
 ///
 /// The same screen serves a first application and a resubmission;
@@ -124,7 +126,7 @@ class _SellerVerificationFormScreenState
     // server's own values from the record already on screen — no local copy of
     // the application is kept anywhere.
     if (widget.isResubmission && previous != null) {
-      _businessName.text = previous.businessName;
+      _businessName.text = previous.businessName ?? '';
       _businessLocation.text = previous.businessLocation ?? '';
       _businessDescription.text = previous.businessDescription ?? '';
     }
@@ -169,7 +171,7 @@ class _SellerVerificationFormScreenState
   }
 
   void _goToReview() {
-    if (_documents.state.bothUploaded) {
+    if (_documents.state.allRequiredUploaded) {
       setState(() => _step = 2);
     }
   }
@@ -186,6 +188,16 @@ class _SellerVerificationFormScreenState
       return;
     }
     await _documents.pickAndUpload(type: type, file: file);
+  }
+
+  Future<void> _pickFarmPhoto() async {
+    final Future<XFile?> Function(VerificationDocumentType) picker =
+        widget.pickImage ?? pickVerificationImage;
+    final XFile? file = await picker(VerificationDocumentType.farmPhoto);
+    if (file == null || !mounted) {
+      return;
+    }
+    await _documents.addFarmPhoto(file);
   }
 
   Future<void> _submit() async {
@@ -217,12 +229,12 @@ class _SellerVerificationFormScreenState
     // reset the error cache so the field validators run once the fields mount.
     if (_controller.state.validationErrors.isNotEmpty) {
       setState(() {
-        // Document field errors (`id_document`, `selfie`) belong on the
-        // Documents step; business field errors on Basic Information.
+        // Document field errors belong on the Documents step; business field
+        // errors on Basic Information.
         _step = _controller.state.validationErrors.keys.any(
-          (String key) =>
-              key == VerificationDocumentType.idDocument.value ||
-              key == VerificationDocumentType.selfie.value,
+          (String key) => VerificationDocumentType.values.any(
+            (VerificationDocumentType type) => type.value == key,
+          ),
         )
             ? 1
             : 0;
@@ -333,7 +345,7 @@ class _SellerVerificationFormScreenState
               enabled: !isSubmitting,
               decoration: const InputDecoration(
                 labelText: 'Business name',
-                helperText: 'Required.',
+                helperText: 'Optional. Your farm or business name.',
               ),
               validator: (String? value) =>
                   validateBusinessName(value) ??
@@ -389,14 +401,14 @@ class _SellerVerificationFormScreenState
 
   List<Widget> _documentsStep(SellerVerificationDocumentsState documents) {
     final ThemeData theme = Theme.of(context);
-    final bool bothUploaded = documents.bothUploaded;
+    final bool allRequiredUploaded = documents.allRequiredUploaded;
 
     return <Widget>[
       Text('Upload Required Documents', style: theme.textTheme.titleLarge),
       const SizedBox(height: AppSpacing.xs),
       Text(
-        'Upload both documents below. Each is uploaded as soon as you choose '
-        'it, and you can continue once both show as uploaded.',
+        'Upload the required documents below. Each is uploaded as soon as you '
+        'choose it, and you can continue once all show as uploaded.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: AppColors.textSecondary,
         ),
@@ -419,6 +431,24 @@ class _SellerVerificationFormScreenState
       ),
       const SizedBox(height: AppSpacing.md),
       SellerVerificationDocumentCard(
+        title: 'Proof of Address',
+        instruction:
+            'Upload a clear photo of a document showing your address, such as '
+            'a utility bill or barangay certificate.',
+        qualityGuidance:
+            'Your name and address must be readable, with no blur, glare or '
+            'cropped edges.',
+        document: documents.proofOfAddress,
+        pickLabel: 'Take Photo',
+        changeLabel: 'Change',
+        onPick: () => _pick(VerificationDocumentType.proofOfAddress),
+        onRemove: () =>
+            _documents.remove(VerificationDocumentType.proofOfAddress),
+        onRetry: () =>
+            _documents.retry(VerificationDocumentType.proofOfAddress),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      SellerVerificationDocumentCard(
         title: 'Selfie Holding Your ID',
         instruction:
             'Take a clear selfie while holding the same ID beside your face. '
@@ -433,6 +463,13 @@ class _SellerVerificationFormScreenState
         onRemove: () => _documents.remove(VerificationDocumentType.selfie),
         onRetry: () => _documents.retry(VerificationDocumentType.selfie),
       ),
+      const SizedBox(height: AppSpacing.md),
+      SellerVerificationFarmPhotosCard(
+        documents: documents,
+        onAdd: _pickFarmPhoto,
+        onRemove: _documents.removeFarmPhoto,
+        onRetry: _documents.retryFarmPhoto,
+      ),
       const SizedBox(height: AppSpacing.lg),
       Row(
         children: <Widget>[
@@ -445,19 +482,21 @@ class _SellerVerificationFormScreenState
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: FilledButton(
-              // Gated on both documents being _persisted_, not merely picked:
+              // Gated on the documents being _persisted_, not merely picked:
               // the submit endpoint refuses an application whose documents are
               // missing, so a locally-selected file must not advance the flow.
-              onPressed: bothUploaded && !documents.isBusy ? _goToReview : null,
+              onPressed: allRequiredUploaded && !documents.isBusy
+                  ? _goToReview
+                  : null,
               child: const Text('Next'),
             ),
           ),
         ],
       ),
-      if (!bothUploaded) ...<Widget>[
+      if (!allRequiredUploaded) ...<Widget>[
         const SizedBox(height: AppSpacing.sm),
         Text(
-          'Both documents must be uploaded before you can continue.',
+          'All required documents must be uploaded before you can continue.',
           style: theme.textTheme.labelSmall?.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -471,6 +510,7 @@ class _SellerVerificationFormScreenState
     SellerVerificationDocumentsState documents,
   ) {
     final ThemeData theme = Theme.of(context);
+    final String businessName = _businessName.text.trim();
     final String location = _businessLocation.text.trim();
     final String description = _businessDescription.text.trim();
 
@@ -490,7 +530,10 @@ class _SellerVerificationFormScreenState
         children: <Widget>[
           if (widget.accountName != null)
             DetailRow(label: 'Full name', value: widget.accountName!),
-          DetailRow(label: 'Business name', value: _businessName.text.trim()),
+          DetailRow(
+            label: 'Business name',
+            value: businessName.isEmpty ? 'Not provided' : businessName,
+          ),
           DetailRow(
             label: 'Business location',
             value: location.isEmpty ? 'Not provided' : location,
@@ -519,8 +562,20 @@ class _SellerVerificationFormScreenState
           ),
           const SizedBox(height: AppSpacing.xs),
           _DocumentSummaryRow(
+            label: 'Proof of Address',
+            document: documents.proofOfAddress,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _DocumentSummaryRow(
             label: 'Selfie Holding ID',
             document: documents.selfie,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          DetailRow(
+            label: 'Farm photos',
+            value: documents.uploadedFarmPhotoCount == 0
+                ? 'Not provided'
+                : '${documents.uploadedFarmPhotoCount} uploaded',
           ),
           const SizedBox(height: AppSpacing.xs),
           Align(

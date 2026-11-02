@@ -303,7 +303,10 @@ class SellerVerificationAwaitingReviewView extends StatelessWidget {
               'once it is approved. You cannot send another application while this '
               'one is being reviewed.',
           children: <Widget>[
-            DetailRow(label: 'Business', value: verification.businessName),
+            DetailRow(
+              label: 'Business',
+              value: verification.businessName ?? 'Not provided',
+            ),
             if (verification.businessLocation != null &&
                 verification.businessLocation!.trim().isNotEmpty)
               DetailRow(
@@ -357,7 +360,10 @@ class SellerVerificationRejectedView extends StatelessWidget {
         child: const Text('Resubmit Verification'),
       ),
       children: <Widget>[
-        DetailRow(label: 'Business', value: verification.businessName),
+        DetailRow(
+              label: 'Business',
+              value: verification.businessName ?? 'Not provided',
+            ),
         if (verification.adminNote != null &&
             verification.adminNote!.trim().isNotEmpty)
           NoticeBanner(
@@ -399,7 +405,10 @@ class SellerVerificationApprovedView extends StatelessWidget {
               'Your seller verification was approved, so your account now has seller '
               'capability. Account type is shown on your Home screen.',
           children: <Widget>[
-            DetailRow(label: 'Business', value: verification.businessName),
+            DetailRow(
+              label: 'Business',
+              value: verification.businessName ?? 'Not provided',
+            ),
             if (verification.reviewedAt != null)
               DetailRow(
                 label: 'Approved',

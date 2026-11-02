@@ -132,7 +132,7 @@ class AdminSellerVerificationService
             $this->activity->log(
                 $reviewer,
                 $action,
-                sprintf('%s for "%s".', $action->label(), $latest->business_name),
+                sprintf('%s for "%s".', $action->label(), $latest->business_name ?? $applicant->name),
                 [
                     'target_type' => 'seller_verification',
                     'target_id' => $latest->getKey(),

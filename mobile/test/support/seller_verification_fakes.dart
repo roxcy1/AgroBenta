@@ -22,7 +22,7 @@ import 'auth_fakes.dart';
 /// `seller_verification_test.dart` asserts the model rejects them if they appear.
 Map<String, dynamic> sellerVerificationJson({
   Object? id = 4,
-  String businessName = 'Rizal Farms',
+  String? businessName = 'Rizal Farms',
   Object? businessLocation = 'Mabalacat, Pampanga',
   Object? businessDescription = 'Family-run cattle farm, trading since 2011.',
   Object? idDocumentRef = 'PHL-ID-88213',
@@ -32,6 +32,8 @@ Map<String, dynamic> sellerVerificationJson({
   Object? reviewedAt,
   bool hasIdDocument = true,
   bool hasSelfie = true,
+  bool hasProofOfAddress = true,
+  List<String> farmPhotoIds = const <String>[],
 }) {
   return <String, dynamic>{
     'id': id,
@@ -41,6 +43,8 @@ Map<String, dynamic> sellerVerificationJson({
     'id_document_ref': idDocumentRef,
     'has_id_document': hasIdDocument,
     'has_selfie': hasSelfie,
+    'has_proof_of_address': hasProofOfAddress,
+    'farm_photo_ids': farmPhotoIds,
     'status': status,
     'admin_note': adminNote,
     'submitted_at': submittedAt,
@@ -83,12 +87,17 @@ http.Response sellerVerificationConflictResponse({
 /// with `{ type, uploaded: true }` and no path.
 http.Response sellerVerificationDocumentUploadedResponse({
   String type = 'id_document',
+  String? photoId,
   int statusCode = 201,
 }) => http.Response(
   jsonEncode(
     successEnvelope(
       message: 'Document uploaded.',
-      data: <String, dynamic>{'type': type, 'uploaded': true},
+      data: <String, dynamic>{
+        'type': type,
+        'uploaded': true,
+        'photo_id': ?photoId,
+      },
     ),
   ),
   statusCode,

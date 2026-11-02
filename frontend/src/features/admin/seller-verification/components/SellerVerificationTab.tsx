@@ -180,7 +180,7 @@ export function SellerVerificationTab() {
                     onKeyDown={(event) => handleRowKeyDown(event, verification)}
                   >
                     <td className="lv-name-cell">{verification.seller?.name ?? '\u2014'}</td>
-                    <td>{verification.business_name}</td>
+                    <td>{verification.business_name ?? '—'}</td>
                     <td>{verification.business_location ?? '\u2014'}</td>
                     <td>
                       <span className={`lv-badge lv-badge--${verification.status}`}>

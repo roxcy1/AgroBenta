@@ -81,12 +81,13 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification
     Route::get('/me', [MobileSellerVerificationController::class, 'me']);
     Route::post('/', [MobileSellerVerificationController::class, 'store']);
 
-    // Document upload (government ID + selfie). Staged under the caller's own
-    // id before submission, replaced or deleted while the application is still
-    // being assembled, and promoted onto the record when `POST /` succeeds.
+    // Document upload (see SellerVerificationDocumentType). Staged under the
+    // caller's own id before submission, replaced or deleted while the application
+    // is still being assembled, and promoted onto the record when `POST /` succeeds.
     //
-    // Neither route takes an id: the account is the token, so there is no path
-    // that could stage a file against somebody else's application. The file
+    // No route takes an account or record id: the account is the token, so there
+    // is no path that could stage a file against somebody else's application. A
+    // farm photo's `{photo}` is only matched against the caller's own files. The file
     // rules live in UploadSellerVerificationDocumentRequest and are enforced on
     // the bytes, not the client's filename. The response never carries a path
     // or URL — the file is on private storage and is read back only through
@@ -94,6 +95,8 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification
     Route::post('/documents', [MobileSellerVerificationController::class, 'storeDocument']);
     Route::get('/documents/{type}', [MobileSellerVerificationController::class, 'showDocument']);
     Route::delete('/documents/{type}', [MobileSellerVerificationController::class, 'destroyDocument']);
+    Route::get('/documents/farm_photo/{photo}', [MobileSellerVerificationController::class, 'showFarmPhoto']);
+    Route::delete('/documents/farm_photo/{photo}', [MobileSellerVerificationController::class, 'destroyFarmPhoto']);
 });
 
 // Seller listing management, for the caller's own account. `seller` is the
@@ -300,6 +303,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     // by this group's admin ability, and never by a public URL — the web server
     // has no route to the storage root.
     Route::get('/seller-verifications/{sellerVerification}/documents/{type}', [SellerVerificationController::class, 'document']);
+    Route::get('/seller-verifications/{sellerVerification}/documents/farm_photo/{photo}', [SellerVerificationController::class, 'farmPhoto']);
     Route::post('/seller-verifications/{sellerVerification}/approve', [SellerVerificationController::class, 'approve']);
     Route::post('/seller-verifications/{sellerVerification}/reject', [SellerVerificationController::class, 'reject']);
     Route::get('/transactions', [TransactionController::class, 'index']);
