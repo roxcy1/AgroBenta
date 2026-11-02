@@ -3,22 +3,20 @@ import 'dart:convert';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
+import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
+import 'package:agrobenta_mobile/features/inquiries/view/inquire_screen.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
-import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
-import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
-import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
-import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
+import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
+import '../../support/inquiry_fakes.dart';
 import '../../support/marketplace_fakes.dart';
-import '../../support/messaging_fakes.dart';
-import '../../support/transaction_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -37,7 +35,7 @@ void main() {
 
   /// Pumps the listing detail as the app does: every scope it can reach sits
   /// above `MaterialApp`, one transport answers every endpoint the screen and
-  /// the chat it can push will hit.
+  /// the inquiry form it can push will hit.
   Future<void> pumpDetail(
     WidgetTester tester, {
     required int sellerId,
@@ -54,21 +52,6 @@ void main() {
             photos: photos,
           ),
         );
-      }
-      // ChatScreen opens the thread with the seller and marks it read.
-      if (path == '/conversations/$sellerId/messages') {
-        return messageThreadResponse();
-      }
-      if (path == '/conversations/$sellerId/read') {
-        return threadReadResponse();
-      }
-      if (path == '/transactions') {
-        return request.method == 'POST'
-            ? transactionCreatedResponse(transaction: transactionJson(id: 1))
-            : transactionListResponse();
-      }
-      if (path == '/transactions/1') {
-        return transactionDetailResponse(transaction: transactionJson(id: 1));
       }
       return marketplaceListResponse();
     }
@@ -93,20 +76,15 @@ void main() {
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
 
-    final transactionRepository = buildTransactionRepository(
+    // The screen's Inquire action pushes a form over this route, so the
+    // repository it reads must be in scope exactly as `main.dart` installs it.
+    final InquiryRepository inquiryRepository = buildInquiryRepository(
       tokenStore,
-      transport,
+      (RecordedRequest request) async => request.method == 'POST'
+          ? inquiryCreatedResponse()
+          : marketplaceListResponse(),
       recorded: recorded,
     );
-
-    final messagingRepository = buildMessagingRepository(
-      tokenStore,
-      transport,
-      recorded: recorded,
-    );
-    final ConversationsController conversationsController =
-        ConversationsController(messagingRepository);
-    addTearDown(conversationsController.dispose);
 
     tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1.0;
@@ -118,15 +96,11 @@ void main() {
         child: MarketplaceScope(
           repository: marketplaceRepository,
           controller: marketplaceController,
-          child: TransactionScope(
-            repository: transactionRepository,
-            child: MessagingScope(
-              repository: messagingRepository,
-              conversationsController: conversationsController,
-              child: MaterialApp(
-                theme: AppTheme.light(),
-                home: const ListingDetailScreen(listingId: 12),
-              ),
+          child: InquiryScope(
+            repository: inquiryRepository,
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: const ListingDetailScreen(listingId: 12),
             ),
           ),
         ),
@@ -217,47 +191,46 @@ void main() {
   });
 
   group('listing detail actions', () {
-    testWidgets('a non-owner gets Message, Inquire and Buy', (
+    testWidgets('a non-owner gets the single Inquire action', (
       WidgetTester tester,
     ) async {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
-      expect(find.widgetWithText(OutlinedButton, 'Message'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Inquire'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'Buy'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Inquire About Livestock'),
+        findsOneWidget,
+      );
+      // The detail screen no longer offers chat or purchase actions; both
+      // remain reachable from their own destinations.
+      expect(find.text('Message'), findsNothing);
+      expect(find.text('Buy'), findsNothing);
+      expect(find.text('Inquire'), findsNothing);
     });
 
     testWidgets('the owner gets no actions', (WidgetTester tester) async {
       await pumpDetail(tester, sellerId: 7, viewerId: 7);
 
+      expect(find.text('Inquire About Livestock'), findsNothing);
       expect(find.text('Message'), findsNothing);
       expect(find.text('Inquire'), findsNothing);
       expect(find.text('Buy'), findsNothing);
     });
 
-    testWidgets('Message opens the existing chat thread with the seller', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('Inquire About Livestock opens the inquiry form and sends '
+        'nothing by itself', (WidgetTester tester) async {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Message'));
-      await settle(tester, frames: 16);
-
-      expect(find.byType(ChatScreen), findsOneWidget);
-      expect(
-        recorded.any(
-          (RecordedRequest r) => r.apiPath == '/conversations/3/messages',
-        ),
-        isTrue,
-        reason: 'the existing thread endpoint is reused, not invented',
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Inquire About Livestock'),
       );
+      await settle(tester);
+
+      expect(find.byType(InquireScreen), findsOneWidget);
+      expect(find.text('Message *'), findsOneWidget);
       expect(
-        recorded.any(
-          (RecordedRequest r) =>
-              r.method == 'POST' && r.apiPath == '/conversations/3/read',
-        ),
-        isTrue,
-        reason: 'opening the chat marks it read, as the chat feature does',
+        recorded.where((RecordedRequest r) => r.method == 'POST'),
+        isEmpty,
+        reason: 'opening the form is navigation, not a submission',
       );
     });
   });

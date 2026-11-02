@@ -7,10 +7,16 @@ import 'inquiry_state.dart';
 
 /// Presentation logic for sending an inquiry.
 ///
-/// The only thing that mutates [state]. The screen calls [send] and listens.
+/// The only thing that mutates [state]. The screen calls [checkExisting] once
+/// on open and [send] on submit, and listens.
 ///
 /// ## The rules this class exists to enforce
 ///
+/// * **Check before the form.** [checkExisting] asks the server whether this
+///   buyer already sent an inquiry about this listing. When one exists the
+///   screen shows the already-sent state instead of a form that could only
+///   fail; a failed check still renders the form, because the backend's
+///   duplicate guard is authoritative.
 /// * **Success is the server's answer, never an optimistic one.**
 ///   [InquiryUiStatus.succeeded] is published only from the create response,
 ///   so the confirmation view cannot appear for a request that failed or timed
@@ -29,8 +35,9 @@ import 'inquiry_state.dart';
 ///    [InquiryState.errorFor]. The screen re-validates so they appear beside
 ///    their fields rather than only in a banner.
 ///  * `409` / `404` — the listing stopped being eligible (it is not active, it
-///    is the caller's own, or it is gone). A form-level message: nothing the
-///    buyer typed is wrong, and retrying cannot help.
+///    is the caller's own, the buyer already asked, or it is gone). A
+///    form-level message: nothing the buyer typed is wrong, and retrying
+///    cannot help.
 ///  * everything else — a form-level message carrying the server's wording.
 class InquiryController extends ChangeNotifier {
   InquiryController(this._repository);
@@ -42,24 +49,95 @@ class InquiryController extends ChangeNotifier {
 
   bool _disposed = false;
 
+  /// Asks the server whether this buyer already has an inquiry for [listingId].
+  ///
+  /// Runs once when the screen opens. A found inquiry is published in
+  /// [InquiryState.existingInquiry]; a failure is published in
+  /// [InquiryState.existingCheckError] and leaves the form usable. The call is
+  /// deliberately silent on a re-entry while one is already in flight, the
+  /// same one-request-at-a-time rule [send] follows.
+  Future<void> checkExisting({required int listingId}) async {
+    if (_state.isCheckingExisting || _state.isBusy) {
+      return;
+    }
+
+    _set(
+      _state.copyWith(
+        isCheckingExisting: true,
+        clearExistingInquiry: true,
+        clearExistingCheckError: true,
+      ),
+    );
+
+    try {
+      final Inquiry? existing = await _repository.findExistingForListing(
+        listingId,
+      );
+      if (_disposed) {
+        return;
+      }
+      _set(
+        _state.copyWith(
+          isCheckingExisting: false,
+          existingInquiry: existing,
+          clearExistingInquiry: existing == null,
+        ),
+      );
+    } on ApiException catch (error) {
+      if (_disposed) {
+        return;
+      }
+      _set(
+        _state.copyWith(
+          isCheckingExisting: false,
+          existingCheckError: error.message,
+        ),
+      );
+    } on Object {
+      if (_disposed) {
+        return;
+      }
+      _set(
+        _state.copyWith(
+          isCheckingExisting: false,
+          existingCheckError:
+              'Could not check whether you have already sent an inquiry. '
+              'You can still send one.',
+        ),
+      );
+    }
+  }
+
   /// Sends an inquiry. Returns `true` only when the server confirmed it.
   ///
   /// Validation of required fields happens in the screen, before this is
   /// called; here, [ApiErrorKind.validation] means the server enforced a rule
   /// the client did not model, and those messages are merged into
   /// [InquiryState.validationErrors].
+  ///
+  /// [paymentMethod] and [collectionMethod] are non-nullable here even though
+  /// [InquiryRepository.create] keeps them optional: the form now requires
+  /// both, so the screen has no path that could call this without them.
   Future<bool> send({
     required int listingId,
     required String message,
+    required InquiryCollectionDateOption collectionDateOption,
+    DateTime? preferredSchedule,
+    required InquiryPaymentMethod paymentMethod,
+    required InquiryCollectionMethod collectionMethod,
     String? subject,
-    required bool purchaseInterest,
+    bool? purchaseInterest,
     InquiryTransactionMethod? transactionMethod,
     InquiryDeliveryMethod? deliveryMethod,
     String? deliveryFee,
     InquiryContactMethod? contactMethod,
-    DateTime? preferredSchedule,
   }) async {
-    if (_state.isBusy) {
+    if (_state.isBusy || _state.isCheckingExisting) {
+      return false;
+    }
+    // A found inquiry means the screen is showing the already-sent state; a
+    // send from a stale frame must not create a second record.
+    if (_state.existingInquiry != null) {
       return false;
     }
 
@@ -75,13 +153,16 @@ class InquiryController extends ChangeNotifier {
       final Inquiry inquiry = await _repository.create(
         listingId: listingId,
         message: message,
+        collectionDateOption: collectionDateOption,
+        preferredSchedule: preferredSchedule,
         subject: subject,
         purchaseInterest: purchaseInterest,
         transactionMethod: transactionMethod,
         deliveryMethod: deliveryMethod,
         deliveryFee: deliveryFee,
         contactMethod: contactMethod,
-        preferredSchedule: preferredSchedule,
+        paymentMethod: paymentMethod,
+        collectionMethod: collectionMethod,
       );
 
       if (_disposed) {

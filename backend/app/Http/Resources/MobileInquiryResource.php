@@ -47,7 +47,13 @@ class MobileInquiryResource extends JsonResource
             'delivery_fee' => $this->delivery_fee,
             'contact_method' => $this->contact_method?->value,
             'preferred_schedule' => $this->preferred_schedule?->toDateString(),
+            'collection_date_option' => $this->collection_date_option,
+            'payment_method' => $this->payment_method?->value,
+            'collection_method' => $this->collection_method?->value,
             'created_at' => $this->created_at?->toISOString(),
+            // The conversation counterpart (seller) id, so the buyer can open
+            // the exact thread from "Go to Messages".
+            'conversation_counterpart_id' => $this->seller_id,
         ];
     }
 }

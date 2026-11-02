@@ -233,6 +233,8 @@ class SellerInquiryTest extends TestCase
             'id' => $listing->id,
             'livestock_type' => 'goat',
             'breed' => 'Boer',
+            'asking_price' => '50000.00',
+            'photo_url' => null,
         ], $data['listing']);
         $this->assertSame('Bulk purchase', $data['subject']);
         $this->assertSame('Can I buy three?', $data['message']);

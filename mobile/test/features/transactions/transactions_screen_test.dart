@@ -346,4 +346,50 @@ void main() {
     expect(recorded.last.query.containsKey('status'), isFalse);
     expect(find.text('No purchases yet'), findsOneWidget);
   });
+
+  testWidgets('returning to the tab refreshes the loaded filter without '
+      'rebuilding the screen', (WidgetTester tester) async {
+    int calls = 0;
+    final TransactionRepository repository = buildTransactionRepository(
+      tokenStore,
+      (_) async {
+        calls++;
+        return emptyList();
+      },
+      recorded: recorded,
+    );
+
+    bool active = true;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      TransactionScope(
+        repository: repository,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              rebuild = setState;
+              return TransactionsScreen(
+                role: TransactionRole.buyer,
+                isActive: active,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+    expect(calls, 1);
+
+    // Leaving the tab changes nothing: the screen stays alive in the shell.
+    rebuild(() => active = false);
+    await tester.pump();
+    expect(calls, 1);
+
+    // Coming back refreshes what is already loaded, which is how a
+    // transaction created in a chat appears without a manual pull.
+    rebuild(() => active = true);
+    await settle(tester);
+    expect(calls, 2);
+  });
 }

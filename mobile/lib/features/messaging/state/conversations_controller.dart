@@ -133,14 +133,7 @@ class ConversationsController extends ChangeNotifier {
     final List<Conversation> updated = _state.conversations
         .map((Conversation c) {
           if (c.counterpart.id == counterpartId && c.hasUnread) {
-            return Conversation(
-              counterpart: c.counterpart,
-              listingId: c.listingId,
-              listingTitle: c.listingTitle,
-              lastMessage: c.lastMessage,
-              lastMessageAt: c.lastMessageAt,
-              unreadCount: 0,
-            );
+            return c.copyWith(unreadCount: 0);
           }
           return c;
         })

@@ -1,33 +1,31 @@
-import 'dart:convert';
-
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
-import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
-import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
-import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
-import 'package:agrobenta_mobile/features/inquiries/view/inquire_screen.dart';
-import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
-import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
-import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
-import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
-import 'package:agrobenta_mobile/features/transactions/views/transaction_detail_screen.dart';
-import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
-import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
+import 'package:agrobenta_mobile/features/transactions/widgets/buy_sheet.dart';
+import 'package:agrobenta_mobile/models/listing.dart';
+import 'package:agrobenta_mobile/models/transaction.dart';
+import 'package:agrobenta_mobile/repositories/transaction_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
-import '../../support/inquiry_fakes.dart';
 import '../../support/marketplace_fakes.dart';
 import '../../support/transaction_fakes.dart';
 
+/// The Buy / Inquire sheet's own behaviour.
+///
+/// The listing detail screen offers a single Inquire action, so the sheet is
+/// no longer reached from there. Its create path is still live and is tested
+/// here through [BuySheet.show] directly, with the same rules as before: the
+/// confirmation is explicit, and the body is exactly `listing_id` and
+/// `quantity` — `total_amount` is server-derived (§6.1).
 void main() {
   late FakeTokenStore tokenStore;
   late List<RecordedRequest> recorded;
+  late Future<Transaction?>? sheetResult;
 
   setUp(() {
     tokenStore = FakeTokenStore('token');
     recorded = <RecordedRequest>[];
+    sheetResult = null;
   });
 
   Future<void> settle(WidgetTester tester, {int frames = 12}) async {
@@ -36,155 +34,67 @@ void main() {
     }
   }
 
-  /// Pumps the listing detail as the app does: scopes above `MaterialApp`,
-  /// one transport answering every endpoint the screen can reach.
-  Future<void> pumpDetail(
-    WidgetTester tester, {
-    required int sellerId,
-    required int viewerId,
-  }) async {
-    Future<http.Response> transport(RecordedRequest request) async {
-      switch (request.apiPath) {
-        case '/listings/12':
-          return listingDetailResponse(
-            listing: listingJson(seller: sellerJson(id: sellerId)),
-          );
-        case '/transactions':
-          if (request.method == 'POST') {
-            return transactionCreatedResponse(
-              transaction: transactionJson(id: 1, status: 'pending'),
-            );
-          }
-          return transactionListResponse();
-        case '/transactions/1':
-          return transactionDetailResponse(
-            transaction: transactionJson(id: 1, status: 'pending'),
-          );
-        default:
-          return marketplaceListResponse();
-      }
-    }
-
-    final MarketplaceRepository marketplaceRepository =
-        buildMarketplaceRepository(tokenStore, transport, recorded: recorded);
-    final MarketplaceController marketplaceController = MarketplaceController(
-      marketplaceRepository,
-    );
-    addTearDown(marketplaceController.dispose);
-
-    final AuthController authController = AuthController(
-      buildAuthRepository(
-        tokenStore,
-        (_) async => http.Response(
-          jsonEncode(successEnvelope(data: userJson(id: viewerId))),
-          200,
-        ),
-      ),
-    );
-    addTearDown(authController.dispose);
-    tokenStore.token = 'stored-token';
-    await authController.restoreSession();
-
-    final transactionRepository = buildTransactionRepository(
-      tokenStore,
-      transport,
-      recorded: recorded,
-    );
-
-    // The screen's Inquire button pushes a form over this route, so the
-    // repository it reads must be in scope exactly as `main.dart` installs it.
-    final InquiryRepository inquiryRepository = buildInquiryRepository(
+  /// Pumps a stand-in screen whose button opens the sheet exactly as the
+  /// removed listing-detail action did, and taps it.
+  Future<void> pumpSheet(WidgetTester tester) async {
+    final TransactionRepository repository = buildTransactionRepository(
       tokenStore,
       (RecordedRequest request) async => request.method == 'POST'
-          ? inquiryCreatedResponse()
-          : marketplaceListResponse(),
+          ? transactionCreatedResponse(
+              transaction: transactionJson(id: 1, status: 'pending'),
+            )
+          : transactionListResponse(),
       recorded: recorded,
     );
+    final Listing listing = Listing.fromJson(listingJson());
 
     tester.view.physicalSize = const Size(800, 1800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      InquiryScope(
-        repository: inquiryRepository,
-        child: AuthScope(
-          controller: authController,
-          child: MarketplaceScope(
-            repository: marketplaceRepository,
-            controller: marketplaceController,
-            child: TransactionScope(
-              repository: transactionRepository,
-              child: MaterialApp(
-                theme: AppTheme.light(),
-                home: const ListingDetailScreen(listingId: 12),
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: Builder(
+            builder: (BuildContext context) => Center(
+              child: FilledButton(
+                onPressed: () {
+                  sheetResult = BuySheet.show(
+                    context,
+                    listing: listing,
+                    repository: repository,
+                  );
+                },
+                child: const Text('Open buy sheet'),
               ),
             ),
           ),
         ),
       ),
     );
+
+    await tester.tap(find.text('Open buy sheet'));
     await settle(tester);
   }
 
-  testWidgets('a seller viewing their own listing gets no actions', (
+  testWidgets('the sheet shows the listing, quantity and no live total', (
     WidgetTester tester,
   ) async {
-    // The viewer owns this listing (seller 7, viewer 7): a seller has no
-    // create endpoint and cannot transact with themselves (§6.2).
-    await pumpDetail(tester, sellerId: 7, viewerId: 7);
+    await pumpSheet(tester);
 
-    expect(find.text('Holstein'), findsOneWidget);
-    // A seller cannot transact with, or message, themselves.
-    expect(find.text('Inquire'), findsNothing);
-    expect(find.text('Buy'), findsNothing);
-    expect(find.text('Message'), findsNothing);
-    expect(recorded.where((RecordedRequest r) => r.method == 'POST'), isEmpty);
-  });
-
-  testWidgets('another viewer gets Buy and the sheet', (
-    WidgetTester tester,
-  ) async {
-    await pumpDetail(tester, sellerId: 3, viewerId: 7);
-
-    expect(find.widgetWithText(OutlinedButton, 'Buy'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Buy'));
-    await settle(tester);
-
-    // The sheet keeps its own Buy / Inquire title; the screen button is just
-    // "Buy".
     expect(find.text('Buy / Inquire'), findsOneWidget);
+    expect(find.text('Holstein'), findsOneWidget);
     expect(find.text('Quantity'), findsOneWidget);
     expect(find.text('Create transaction'), findsOneWidget);
     // No live total anywhere: the amount is server-derived (§6.1).
     expect(find.textContaining('Total'), findsNothing);
   });
 
-  testWidgets('Inquire opens the inquiry form and sends nothing by itself', (
-    WidgetTester tester,
-  ) async {
-    await pumpDetail(tester, sellerId: 3, viewerId: 7);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Inquire'));
-    await settle(tester);
-
-    expect(find.byType(InquireScreen), findsOneWidget);
-    expect(find.text('Inquire About Livestock'), findsOneWidget);
-    expect(find.text('Message *'), findsOneWidget);
-    expect(
-      recorded.where((RecordedRequest r) => r.method == 'POST'),
-      isEmpty,
-      reason: 'opening the form is navigation, not a submission',
-    );
-  });
-
   testWidgets('create confirms first, then sends only listing and quantity', (
     WidgetTester tester,
   ) async {
-    await pumpDetail(tester, sellerId: 3, viewerId: 7);
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Buy'));
-    await settle(tester);
+    await pumpSheet(tester);
 
     // Quantity selector: 1 -> 2.
     await tester.tap(find.byIcon(Icons.add_circle_outline));
@@ -223,18 +133,17 @@ void main() {
     expect(posts.single.body['listing_id'], 12);
     expect(posts.single.body['quantity'], 2);
 
-    // The created pending record opens on the detail screen.
-    expect(find.byType(TransactionDetailScreen), findsOneWidget);
-    expect(find.text('TRX-001'), findsWidgets);
-    expect(find.text('Ongoing'), findsWidgets);
+    // The sheet closes with the record the server returned.
+    final Transaction? created = await sheetResult;
+    expect(created, isNotNull);
+    expect(created!.id, 1);
+    expect(created.status, TransactionStatus.pending);
   });
 
   testWidgets('backing out of the confirm dialog creates nothing', (
     WidgetTester tester,
   ) async {
-    await pumpDetail(tester, sellerId: 3, viewerId: 7);
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Buy'));
-    await settle(tester);
+    await pumpSheet(tester);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Create transaction'));
     await settle(tester);

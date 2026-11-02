@@ -15,6 +15,7 @@ import 'features/marketplace/state/marketplace_controller.dart';
 import 'features/marketplace/state/marketplace_scope.dart';
 import 'features/messaging/state/conversations_controller.dart';
 import 'features/messaging/state/messaging_scope.dart';
+import 'features/offers/state/offer_scope.dart';
 import 'features/profile/state/profile_controller.dart';
 import 'features/profile/state/profile_scope.dart';
 import 'features/seller_dashboard/state/seller_dashboard_scope.dart';
@@ -27,6 +28,7 @@ import 'repositories/auth_repository.dart';
 import 'repositories/inquiry_repository.dart';
 import 'repositories/marketplace_repository.dart';
 import 'repositories/messaging_repository.dart';
+import 'repositories/offer_repository.dart';
 import 'repositories/profile_repository.dart';
 import 'repositories/seller_dashboard_repository.dart';
 import 'repositories/seller_listing_repository.dart';
@@ -36,6 +38,7 @@ import 'services/auth_service.dart';
 import 'services/inquiry_service.dart';
 import 'services/marketplace_service.dart';
 import 'services/messaging_service.dart';
+import 'services/offer_service.dart';
 import 'services/profile_service.dart';
 import 'services/seller_dashboard_service.dart';
 import 'services/seller_listing_service.dart';
@@ -112,6 +115,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final NotificationsController _notificationsController;
   late final InquiryService _inquiryService;
   late final InquiryRepository _inquiryRepository;
+  late final OfferService _offerService;
+  late final OfferRepository _offerRepository;
 
   @override
   void initState() {
@@ -183,7 +188,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // session-scoped so the buyer shell's unread badge and the Conversations
     // screen read the same state. The chat controller is per-screen and lives
     // inside the chat screen itself.
-        _messagingService = MessagingService(_apiClient);
+    _messagingService = MessagingService(_apiClient);
     _messagingRepository = MessagingRepository(_messagingService);
     _conversationsController = ConversationsController(_messagingRepository);
 
@@ -202,7 +207,15 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // screen can reach it.
     _inquiryService = InquiryService(_apiClient);
     _inquiryRepository = InquiryRepository(_inquiryService);
+
+    // Offers. No session-scoped controller: making an offer is a one-shot form
+    // and the chat's offer list is per-thread, so only the repository is
+    // shared — through a scope above `MaterialApp`, where both the pushed
+    // make-offer screen and every chat route can reach it.
+    _offerService = OfferService(_apiClient);
+    _offerRepository = OfferRepository(_offerService);
   }
+
   @override
   void dispose() {
     // The controllers own no transport of their own, and the client they were
@@ -282,18 +295,26 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                       // controller and disposes it with the route.
                       child: InquiryScope(
                         repository: _inquiryRepository,
-                        // The seller dashboard repository sits above
-                        // `MaterialApp` like every other scope. Seller Home
-                        // creates its own controller, so only the repository
-                        // is long-lived.
-                        child: SellerDashboardScope(
-                          repository: _sellerDashboardRepository,
-                          child: MaterialApp(
-                            title: 'AgroBenta',
-                            debugShowCheckedModeBanner: false,
-                            theme: AppTheme.light(),
-                            home: AuthGate(
-                              authenticatedView: _buildAccountModeShell,
+                        // Offers sit above `MaterialApp` for the same reason:
+                        // the make-offer form is pushed from the seller's
+                        // inquiry inbox and the offer panel lives inside every
+                        // chat route, so both must be able to reach the shared
+                        // repository. The controllers are per-screen.
+                        child: OfferScope(
+                          repository: _offerRepository,
+                          // The seller dashboard repository sits above
+                          // `MaterialApp` like every other scope. Seller Home
+                          // creates its own controller, so only the repository
+                          // is long-lived.
+                          child: SellerDashboardScope(
+                            repository: _sellerDashboardRepository,
+                            child: MaterialApp(
+                              title: 'AgroBenta',
+                              debugShowCheckedModeBanner: false,
+                              theme: AppTheme.light(),
+                              home: AuthGate(
+                                authenticatedView: _buildAccountModeShell,
+                              ),
                             ),
                           ),
                         ),

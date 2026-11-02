@@ -2,6 +2,7 @@ import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
 import '../models/inquiry.dart';
+import '../models/inquiry_list_item.dart';
 import '../models/received_inquiry_page.dart';
 
 /// The inquiry API surface: the buyer's create path and the seller's inbox.
@@ -27,6 +28,32 @@ class InquiryService {
 
   final ApiClient _apiClient;
 
+  /// `GET /inquiries` — the caller's active inquiries on one side.
+  ///
+  /// [role] is the active Account Mode; omitting it asks for both sides. The
+  /// scope is always the token, and inquiries already accepted are excluded
+  /// server-side.
+  Future<List<InquiryListItem>> listActive({String? role}) {
+    final Map<String, dynamic> query = <String, dynamic>{};
+    if (role != null) {
+      query['role'] = role;
+    }
+
+    return _apiClient.get<List<InquiryListItem>>(
+      InquiryEndpoints.list,
+      query: query,
+      parse: (Object? data) {
+        final Map<String, dynamic> map = _asObject(data, 'GET /inquiries');
+        final List<dynamic> raw =
+            (map['inquiries'] as List<dynamic>?) ?? const <dynamic>[];
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map(InquiryListItem.fromJson)
+            .toList(growable: false);
+      },
+    );
+  }
+
   /// `GET /seller/inquiries` — one page of the authenticated seller's inbox.
   ///
   /// [page] and [perPage] are the entire query allow-list;
@@ -50,6 +77,30 @@ class InquiryService {
     );
   }
 
+  /// `GET /inquiries/listing/{listing}` — the caller's inquiry about one
+  /// listing, or `null`.
+  ///
+  /// The pre-check the Inquire screen runs before rendering the form. Buyer
+  /// scoping is the token, so there is no buyer id to send and no query that
+  /// could widen the result. An inquiry in any status is returned: the rule is
+  /// one per buyer per listing, whatever its status.
+  ///
+  /// The backend answers `data: null` when nothing has been sent; a `404` here
+  /// means the listing id no longer exists.
+  Future<Inquiry?> findExistingForListing(int listingId) {
+    return _apiClient.get<Inquiry?>(
+      InquiryEndpoints.existingForListing(listingId),
+      parse: (Object? data) {
+        if (data == null) {
+          return null;
+        }
+        return Inquiry.fromJson(
+          _asObject(data, 'GET /inquiries/listing/{listing}'),
+        );
+      },
+    );
+  }
+
   /// `POST /inquiries` — send an inquiry about [listingId].
   ///
   /// Throws [ApiException]:
@@ -63,13 +114,16 @@ class InquiryService {
   Future<Inquiry> create({
     required int listingId,
     required String message,
+    required InquiryCollectionDateOption collectionDateOption,
+    DateTime? preferredSchedule,
     String? subject,
     bool? purchaseInterest,
     InquiryTransactionMethod? transactionMethod,
     InquiryDeliveryMethod? deliveryMethod,
     String? deliveryFee,
     InquiryContactMethod? contactMethod,
-    DateTime? preferredSchedule,
+    InquiryPaymentMethod? paymentMethod,
+    InquiryCollectionMethod? collectionMethod,
   }) {
     return _apiClient.post<Inquiry>(
       InquiryEndpoints.create,
@@ -78,6 +132,7 @@ class InquiryService {
         // a form adds later has to be named here to be sent.
         'listing_id': listingId,
         'message': message.trim(),
+        'collection_date_option': collectionDateOption.value,
         if (_present(subject)) 'subject': subject!.trim(),
         'purchase_interest': ?purchaseInterest,
         if (transactionMethod != null)
@@ -87,6 +142,9 @@ class InquiryService {
         if (contactMethod != null) 'contact_method': contactMethod.value,
         if (preferredSchedule != null)
           'preferred_schedule': _dateOnly(preferredSchedule),
+        if (paymentMethod != null) 'payment_method': paymentMethod.value,
+        if (collectionMethod != null)
+          'collection_method': collectionMethod.value,
       },
       parse: (Object? data) =>
           Inquiry.fromJson(_asObject(data, 'POST /inquiries')),
