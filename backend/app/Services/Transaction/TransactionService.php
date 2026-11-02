@@ -8,6 +8,8 @@ use App\Enums\TransactionStatus;
 use App\Models\Listing;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Notifications\TransactionCreated;
+use App\Notifications\TransactionStatusChanged;
 use App\Repositories\Transaction\TransactionRepository;
 use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -146,6 +148,14 @@ class TransactionService
                 ],
             );
 
+            // Notify the seller that a buyer started a transaction for their
+            // listing. The buyer already knows — they just created it. Only the
+            // seller needs to learn about it, and only once per row.
+            $seller = $locked->seller;
+            if ($seller !== null) {
+                $seller->notify(new TransactionCreated($transaction->fresh(['listing', 'buyer'])));
+            }
+
             return $transaction;
         });
     }
@@ -186,6 +196,22 @@ class TransactionService
                     ],
                 ],
             );
+
+            // Notify the counterparty about the cancellation. The actor already
+            // knows they cancelled it; only the other party needs to learn.
+            $counterpartyId = $actor->getKey() === $transaction->buyer_id
+                ? $transaction->seller_id
+                : $transaction->buyer_id;
+
+            $counterparty = User::find($counterpartyId);
+            if ($counterparty !== null) {
+                $counterparty->notify(new TransactionStatusChanged(
+                    $cancelled->fresh(['listing']),
+                    $actor->getKey(),
+                    TransactionStatus::Pending->value,
+                    TransactionStatus::Cancelled->value,
+                ));
+            }
 
             return $cancelled;
         });

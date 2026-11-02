@@ -36,6 +36,10 @@ class MessageResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'sender' => new UserSummaryResource($this->whenLoaded('sender')),
             'receiver' => new UserSummaryResource($this->whenLoaded('receiver')),
+            // Present only on the message that opened an inquiry; the thread
+            // service attaches it so the client can render a card instead of
+            // re-parsing the generated text body.
+            'inquiry' => $this->inquiry_preview ?? null,
         ];
     }
 }

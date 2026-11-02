@@ -5,14 +5,14 @@ import '../../../models/message.dart';
 
 /// The inbox category filters.
 ///
-/// Only filters the conversation data can actually decide exist here. There
-/// is no category column: a conversation's sole classification is whether it
-/// is tied to a listing (`listing_id`), which is exactly what
-/// [InboxFilter.inquiries] selects. "Transactions" is deliberately absent — the
-/// API models no transaction-message relationship (GAP-11), so the screen
-/// renders that chip disabled. "Notifications" is not a filter at all:
-/// notifications have their own destination, which the screen links to.
-enum InboxFilter { all, inquiries }
+/// There is no category column. The server computes two pair-level facts over
+/// the caller's messages — whether an inquiry exists between the two users and
+/// whether a transaction does — and [InboxFilter.inquiries] and
+/// [InboxFilter.transactions] read those facts. A conversation can belong to
+/// both, because a pair can reach a transaction through an inquiry.
+/// "Notifications" is not a filter at all: notifications have their own
+/// destination, which the screen links to.
+enum InboxFilter { all, inquiries, transactions }
 
 /// The lifecycle states for the conversations list.
 enum ConversationsStatus { initial, loading, ready, failed }
@@ -46,28 +46,43 @@ class ConversationsState {
   /// The selected category filter.
   final InboxFilter filter;
 
-  /// Whether any conversation has unread messages — used for the tab badge.
-  int get totalUnread => conversations.fold<int>(
-    0,
-    (int sum, Conversation c) => sum + c.unreadCount,
-  );
+  /// The unread total for one account mode.
+  ///
+  /// The Messages badge is mode-scoped: Buyer Mode counts only threads where
+  /// the caller acts as a buyer, Seller Mode only seller-side threads. A
+  /// thread the caller is on both sides of counts in both modes.
+  int unreadCount({required bool sellerMode}) => conversations
+      .where((Conversation c) => c.matchesMode(sellerMode: sellerMode))
+      .fold<int>(0, (int sum, Conversation c) => sum + c.unreadCount);
 
-  bool get hasUnread => totalUnread > 0;
+  bool hasUnread({required bool sellerMode}) =>
+      unreadCount(sellerMode: sellerMode) > 0;
 
   bool get isInitialLoad =>
       status == ConversationsStatus.initial ||
       status == ConversationsStatus.loading;
 
-  /// What the list actually renders: [filter] first, then a case-insensitive
-  /// local search over the participant name, the listing title and the last
-  /// message preview. Local because the API offers no conversation search and
-  /// the whole inbox is one response (Messages design §3.2).
-  List<Conversation> get visibleConversations {
+  /// What the list actually renders: the account-mode filter first, then the
+  /// category filter, then a case-insensitive local search over the
+  /// participant name, the listing title and the last message preview. Local
+  /// because the API offers no conversation search and the whole inbox is one
+  /// response (Messages design §3.2).
+  ///
+  /// [sellerMode] comes from the existing Account Mode — the same switch that
+  /// chooses BuyerShell or SellerShell. A thread where the caller acts in both
+  /// roles (or whose role cannot be determined) is visible in both modes.
+  List<Conversation> visibleConversations({required bool sellerMode}) {
     final String needle = query.trim().toLowerCase();
     return conversations
         .where((Conversation conversation) {
-          if (filter == InboxFilter.inquiries &&
-              conversation.listingId == null) {
+          if (!conversation.matchesMode(sellerMode: sellerMode)) {
+            return false;
+          }
+          if (filter == InboxFilter.inquiries && !conversation.hasInquiry) {
+            return false;
+          }
+          if (filter == InboxFilter.transactions &&
+              !conversation.hasTransaction) {
             return false;
           }
           if (needle.isEmpty) {

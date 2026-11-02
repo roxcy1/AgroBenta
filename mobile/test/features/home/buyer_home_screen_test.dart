@@ -9,6 +9,7 @@ import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.da
 import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
 import 'package:agrobenta_mobile/features/notifications/state/notifications_controller.dart';
 import 'package:agrobenta_mobile/features/notifications/state/notifications_scope.dart';
+import 'package:agrobenta_mobile/features/seller_listings/view/seller_listings_screen.dart';
 import 'package:agrobenta_mobile/models/user.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
 import 'package:agrobenta_mobile/repositories/notification_repository.dart';
@@ -385,14 +386,21 @@ void main() {
       );
     });
 
-    testWidgets('appears for a seller', (WidgetTester tester) async {
+    testWidgets('never appears in Buyer Mode, even for a seller account', (
+      WidgetTester tester,
+    ) async {
+      // `seller_capability` is a server fact; Account Mode is the view the
+      // user chose. Buyer Mode must not offer listing management, so a
+      // seller-capable account sees exactly what a buyer sees here.
       await pumpSignedIn(tester, user: userJson(sellerCapability: 'seller'));
 
-      expect(find.text('My Listings'), findsOneWidget);
+      expect(find.text('My Listings'), findsNothing);
       expect(
         find.widgetWithText(FilledButton, 'Manage my listings'),
-        findsOneWidget,
+        findsNothing,
+        reason: 'listing management lives in Seller Mode only',
       );
+      expect(find.byType(SellerListingsScreen), findsNothing);
     });
   });
 

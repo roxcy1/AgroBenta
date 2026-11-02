@@ -25,6 +25,9 @@ void main() {
           deliveryFee: '1500.00',
           contactMethod: 'in_app_message',
           preferredSchedule: '2026-10-25',
+          collectionDateOption: 'next_few_days',
+          paymentMethod: 'gcash',
+          collectionMethod: 'discuss_with_seller',
           createdAt: '2026-10-19T08:15:00.000000Z',
         ),
       );
@@ -45,6 +48,15 @@ void main() {
       expect(inquiry.contactMethod, InquiryContactMethod.inAppMessage);
       expect(inquiry.deliveryFee, '1500.00');
       expect(inquiry.preferredSchedule, DateTime(2026, 10, 25));
+      expect(
+        inquiry.collectionDateOption,
+        InquiryCollectionDateOption.nextFewDays,
+      );
+      expect(inquiry.paymentMethod, InquiryPaymentMethod.gcash);
+      expect(
+        inquiry.collectionMethod,
+        InquiryCollectionMethod.discussWithSeller,
+      );
       expect(inquiry.createdAt, isNotNull);
     });
 
@@ -72,6 +84,9 @@ void main() {
       json['delivery_fee'] = null;
       json['contact_method'] = null;
       json['preferred_schedule'] = null;
+      json['collection_date_option'] = null;
+      json['payment_method'] = null;
+      json['collection_method'] = null;
       json['created_at'] = null;
 
       final ReceivedInquiry inquiry = ReceivedInquiry.fromJson(json);
@@ -83,6 +98,9 @@ void main() {
       expect(inquiry.deliveryFee, isNull);
       expect(inquiry.contactMethod, isNull);
       expect(inquiry.preferredSchedule, isNull);
+      expect(inquiry.collectionDateOption, isNull);
+      expect(inquiry.paymentMethod, isNull);
+      expect(inquiry.collectionMethod, isNull);
       expect(inquiry.createdAt, isNull);
     });
 

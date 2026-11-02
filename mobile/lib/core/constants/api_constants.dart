@@ -416,8 +416,6 @@ abstract final class NotificationEndpoints {
   ];
 }
 
-
-
 /// Profile endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the
@@ -467,10 +465,11 @@ abstract final class ProfileEndpoints {
 ///
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `inquiries`-creating mobile group: one write path, `POST /inquiries`, the
-/// buyer's structured contact with a seller about a listing. Reading received
-/// inquiries is the seller surface in [SellerInquiryEndpoints]; triaging and
-/// re-statusing an inquiry are the Admin Web's `/admin/inquiries*` flow and are
-/// not part of this app's contract.
+/// buyer's structured contact with a seller about a listing, plus the buyer's
+/// pre-check `GET /inquiries/listing/{listing}`. Reading received inquiries is
+/// the seller surface in [SellerInquiryEndpoints]; triaging and re-statusing an
+/// inquiry are the Admin Web's `/admin/inquiries*` flow and are not part of
+/// this app's contract.
 ///
 /// The route takes no user id. The buyer is the token and the seller is
 /// `listing.seller_id`, resolved server-side, so there is no parameter or body
@@ -484,6 +483,23 @@ abstract final class InquiryEndpoints {
   /// transaction.
   static const String create = '/inquiries';
 
+  /// `GET` - the caller's active inquiries on one side. 200, plain envelope.
+  ///
+  /// Query allow-list is `role` (`buyer`|`seller`, the active Account Mode).
+  /// Ownership filters are refused server-side with `422`. Inquiries already
+  /// converted to an accepted transaction are excluded.
+  static const String list = '/inquiries';
+
+  /// `GET` — the authenticated buyer's inquiry about one listing, or
+  /// `data: null`. 200, plain envelope.
+  ///
+  /// The pre-check the Inquire screen runs before rendering the form. The
+  /// buyer is the token, so the path carries only the listing id and no query
+  /// can widen it to another buyer's record. An inquiry in any status is
+  /// returned: the buyer may have only one per listing, whatever its status.
+  static String existingForListing(int listingId) =>
+      '/inquiries/listing/$listingId';
+
   /// The field names `StoreInquiryRequest` accepts.
   ///
   /// Listed as an explicit allow-list so the service body is visibly exactly
@@ -491,12 +507,13 @@ abstract final class InquiryEndpoints {
   /// later change to a model. `buyer_id`, `seller_id` and `status` are absent
   /// **by construction**: the server marks them `prohibited`.
   ///
-  /// `listing_id` and `message` are the two the server requires; everything
-  /// after them is a nullable preference the schema stores or does not, as the
-  /// buyer filled it in.
+  /// `listing_id`, `message`, `payment_method` and `collection_method` are the
+  /// four the server requires; everything after them is an optional preference
+  /// the schema stores or does not, as the buyer filled it in.
   static const List<String> writableFields = <String>[
     'listing_id',
     'message',
+    'collection_date_option',
     'subject',
     'purchase_interest',
     'transaction_method',
@@ -504,6 +521,8 @@ abstract final class InquiryEndpoints {
     'delivery_fee',
     'contact_method',
     'preferred_schedule',
+    'payment_method',
+    'collection_method',
   ];
 }
 
@@ -549,6 +568,48 @@ abstract final class SellerDashboardEndpoints {
   /// The seller comes from the token. Ownership-shaped query parameters are
   /// refused server-side with `422`, and this service sends no query at all.
   static const String summary = '/seller/dashboard';
+}
+
+/// Purchase-offer endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under
+/// `auth:sanctum` + `ability:mobile`. Creating and withdrawing an offer also
+/// require the `seller` capability gate server-side; reading, accepting and
+/// declining are open to the buyer who is party to the offer.
+///
+/// An offer is tied to one inquiry (hence one listing) and one buyer–seller
+/// pair. Every route resolves the caller from the token, and the repository
+/// scopes the result to the caller's pair, so no path or query can widen it to
+/// another pair's offers.
+abstract final class OfferEndpoints {
+  /// `GET` — the caller's offers, newest first. 200, plain envelope.
+  ///
+  /// Query allow-list is `inquiry_id`, `listing_id`, `counterpart_id` and
+  /// `status`; ownership-shaped filters (`buyer_id`, `seller_id`, `user_id`)
+  /// are refused with a `422`. The list is not paginated.
+  static const String list = '/offers';
+
+  /// `POST` — create a purchase offer as the listing's seller. 201.
+  ///
+  /// Body allow-list is exactly `inquiry_id`, `listing_id` and
+  /// `proposed_amount`. `buyer_id`, `seller_id`, `status` and `responded_at`
+  /// are server-owned and refused with `422`.
+  static const String create = '/offers';
+
+  /// `GET` — one offer the caller is party to. 200, plain envelope.
+  static String detail(int id) => '/offers/$id';
+
+  /// `POST` — the buyer accepts a pending offer. 200.
+  ///
+  /// The response carries both the accepted offer and the `pending`
+  /// transaction the acceptance created.
+  static String accept(int id) => '/offers/$id/accept';
+
+  /// `POST` — the buyer declines a pending offer. 200, plain envelope.
+  static String decline(int id) => '/offers/$id/decline';
+
+  /// `POST` — the creating seller withdraws a pending offer. 200.
+  static String withdraw(int id) => '/offers/$id/withdraw';
 }
 
 /// Mobile authentication endpoints, relative to the API root.

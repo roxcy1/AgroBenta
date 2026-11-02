@@ -33,6 +33,10 @@ class _BuyerShellState extends State<BuyerShell> {
   /// index is not a bare `1` in a list of widgets.
   static const int _browseIndex = 1;
 
+  /// The transactions tab's position, so returning to it can refresh its
+  /// loaded filters without rebuilding the screen.
+  static const int _transactionsIndex = 3;
+
   /// The profile tab's position, for the Home header's avatar action.
   static const int _profileIndex = 4;
 
@@ -42,7 +46,7 @@ class _BuyerShellState extends State<BuyerShell> {
     // so this shell rebuilds whenever the inbox state changes. That is what
     // makes the unread badge on the Messages tab update live.
     final ConversationsController messaging = MessagingScope.of(context);
-    final int unread = messaging.state.totalUnread;
+    final int unread = messaging.state.unreadCount(sellerMode: false);
 
     return Scaffold(
       body: IndexedStack(
@@ -53,8 +57,11 @@ class _BuyerShellState extends State<BuyerShell> {
             onOpenProfile: () => setState(() => _index = _profileIndex),
           ),
           const MarketplaceScreen(),
-          const ConversationsScreen(),
-          const TransactionsScreen(role: TransactionRole.buyer),
+          const ConversationsScreen(sellerMode: false),
+          TransactionsScreen(
+            role: TransactionRole.buyer,
+            isActive: _index == _transactionsIndex,
+          ),
           const ProfileScreen(),
         ],
       ),

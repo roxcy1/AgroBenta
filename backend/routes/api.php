@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListing
 use App\Http\Controllers\Api\Messaging\ConversationController;
 use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
+use App\Http\Controllers\Api\Offer\OfferController;
 use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerDashboard\SellerDashboardController;
 use App\Http\Controllers\Api\SellerInquiry\SellerInquiryController;
@@ -176,7 +177,15 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
 // 500-character message ceiling and `auth:sanctum` are the abuse bounds that
 // exist today. Revisit under D-09 if a limit is decided.
 Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    // The buyer's pre-check: the inquiry they already sent about one listing,
+    // or `data: null`. Buyer-scoped from the token, so it cannot read another
+    // buyer's record. Declared before the write route for readability; the
+    // verbs differ, so neither shadows the other.
+    Route::get('/inquiries/listing/{listing}', [MobileInquiryController::class, 'existing']);
     Route::post('/inquiries', [MobileInquiryController::class, 'store']);
+    // The Messages "Inquiries" tab: the caller's own active inquiries, on the
+    // side the active Account Mode selects.
+    Route::get('/inquiries', [MobileInquiryController::class, 'index']);
 });
 
 // Profile — the caller's own account details and credentials.
@@ -216,6 +225,29 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
     Route::post('/messages', [MessageController::class, 'store']);
     Route::patch('/messages/{id}/read', [MessageController::class, 'markRead'])
         ->whereNumber('id');
+});
+
+// Offers - a seller's purchase offer to a buyer within a conversation.
+//
+// An offer is tied to one inquiry (hence one listing) and one buyer-seller
+// pair. Only the listing's seller may create one; only the inquiry's buyer
+// may accept or decline it; only the creating seller may withdraw it. Every
+// route resolves the caller from the token.
+//
+// Only creation and withdrawal sit behind the `seller` capability gate. The
+// buyer is not an approved seller by definition, so the read, accept and
+// decline routes must not require that capability — ownership is enforced by
+// the repository's party scope and the service's state checks instead.
+Route::middleware('auth:sanctum', 'ability:mobile')->prefix('offers')->group(function (): void {
+    Route::get('/', [OfferController::class, 'index']);
+    Route::get('/{offer}', [OfferController::class, 'show'])->whereNumber('offer');
+    Route::post('/{offer}/accept', [OfferController::class, 'accept'])->whereNumber('offer');
+    Route::post('/{offer}/decline', [OfferController::class, 'decline'])->whereNumber('offer');
+
+    Route::middleware('seller')->group(function (): void {
+        Route::post('/', [OfferController::class, 'store']);
+        Route::post('/{offer}/withdraw', [OfferController::class, 'withdraw'])->whereNumber('offer');
+    });
 });
 
 // Notifications — the caller's own notification feed.

@@ -111,13 +111,21 @@ class TransactionRepository
         int $listingId,
         int $quantity,
         string $totalAmount,
+        ?int $offerId = null,
+        ?string $paymentMethod = null,
+        ?string $collectionMethod = null,
+        ?string $pickupDate = null,
     ): Transaction {
         return Transaction::query()->create([
             'buyer_id' => $buyer->getKey(),
             'seller_id' => $sellerId,
             'listing_id' => $listingId,
+            'offer_id' => $offerId,
             'quantity' => $quantity,
             'total_amount' => $totalAmount,
+            'payment_method' => $paymentMethod,
+            'collection_method' => $collectionMethod,
+            'pickup_date' => $pickupDate,
             'status' => TransactionStatus::Pending,
         ]);
     }

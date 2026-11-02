@@ -297,11 +297,14 @@ the shell falls back to `BuyerShell` if the selected mode and capability
 disagree. Signing out, changing accounts or losing capability clears the mode.
 
 * **BuyerShell** keeps Home, Browse, Messages, Transactions, Profile. Its
-  Transactions screen is **My Purchases** and sends `role=buyer`.
+  Transactions screen is **My Purchases** and sends `role=buyer`. Buyer Mode
+  exposes **no listing management**: Buyer Home has no My Listings card or
+  Manage Listings shortcut, even when the account is seller-capable. A seller
+  who wants to manage listings switches to Seller Mode.
 * **SellerShell** has Home, My Listings, Messages, Transactions, Profile. Its
   Transactions screen is **My Sales** and sends `role=seller`. My Listings is a
-  real tab here; the buyer Home entry card still switches to it through
-  `SellerListingsEntryCard.onManage` instead of pushing a duplicate screen.
+  real tab here, and Seller Home's dashboard links to it; listing management is
+  available in Seller Mode only.
 * **Seller Home** is the seller landing and token-scoped summary: the account
   greeting, notification bell, real listing/inquiry/transaction counts, My
   Listings entry, Profile action and a link to Received Inquiries. The counts
@@ -530,31 +533,51 @@ by design, so listing existence is not disclosed — the app renders a single
 by the app; it is admin-only and returns seller fields the marketplace must not
 expose.
 
-**Resolved for the Inquire screen (buyer inquiries).** The backend now exposes
-one write endpoint behind the same `auth:sanctum` + `ability:mobile` guard:
+**Resolved for the Inquire screen (buyer inquiries).** The backend exposes one
+write endpoint and one buyer-scoped pre-check behind the same `auth:sanctum` +
+`ability:mobile` guard:
 
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/inquiries` | Files one buyer inquiry against an `active` listing. Returns `201` with the `MobileInquiryResource` and the envelope message `Inquiry sent.`. |
+| `GET /api/inquiries/listing/{listing}` | The caller's own inquiry for that listing in `data`, or `data: null`. Buyer-scoped from the token; `404` only when the listing does not exist. |
 
 The body allow-list (`StoreInquiryRequest`, mirrored by
 `InquiryEndpoints.writableFields`) is exactly `listing_id`, `message`,
-`subject`, `purchase_interest`, `transaction_method`, `delivery_method`,
-`delivery_fee`, `contact_method` and `preferred_schedule`; `buyer_id`,
-`seller_id` and `status` are rejected with `422` (see the security
-requirements above — the app builds the body from the allow-list only).
-`InquiryService` answers `409` for a non-active listing and `409` for the
+`payment_method`, `collection_method`, `subject`, `purchase_interest`,
+`transaction_method`, `delivery_method`, `delivery_fee`, `contact_method` and
+`preferred_schedule`; `buyer_id`, `seller_id` and `status` are rejected with
+`422` (see the security requirements above — the app builds the body from the
+allow-list only). `payment_method` and `collection_method` are **required**:
+the form validates both before sending, and the server rejects a body missing
+either with `422`. Their values are `cash`/`gcash`/`maya`/`other` and
+`farm_pickup`/`buyer_arranged_transportation`/`discuss_with_seller`.
+
+**One inquiry per buyer per listing, whatever its status.** The service answers
+`409` with `You have already sent an inquiry about this listing.` when the
+pair already exists; the unique index
+`inquiries_buyer_id_listing_id_unique` makes that true under concurrent
+requests, and the service maps that violation to the same `409` rather than a
+`500`. A different buyer may still inquire about the same listing.
+`InquiryService` also answers `409` for a non-active listing and `409` for the
 caller's own listing, and `404` when the listing does not exist. Creating an
 inquiry changes nothing else: no transaction, no listing status change, no
 notification. There are no administrator inquiry endpoints: an inquiry is
 between the buyer and the seller only.
 
+The Inquire screen runs the pre-check before rendering the form. A record in
+any status shows **Inquiry Already Sent** — "You've already sent an inquiry
+about this livestock. You can continue the conversation in Messages." — with
+**Go to Messages** and **Back to Browse**. A failed pre-check still shows the
+form with a notice, because the server's duplicate guard is authoritative.
+
 The **Inquiry Sent** confirmation is rendered entirely from that create
 response — the record it returns is the screen's single source of truth, and
 its status card is a fixed, honest sentence, never a fetched or modelled
-server status. There is still no buyer endpoint to re-read an inquiry (GAP-19),
-so "View Inquiry" ships disabled with an honest caption rather than faking a
-route.
+server status. There is still no buyer inquiry-detail endpoint (GAP-19), so
+**Go to Messages** pushes the existing `ConversationsScreen` rather than
+pretending an inquiry-detail route exists. It is a pushed route, not a switch
+of the BuyerShell Messages tab.
 
 **Resolved for the Seller Home dashboard (HTTP only).** The backend exposes a
 token-scoped summary behind the same `auth:sanctum` + `ability:mobile` guard
@@ -634,20 +657,110 @@ exposes the caller's own conversations and messages behind the same
 | `PATCH /api/messages/{id}/read` | Marks one message read. |
 
 `ConversationResource` carries `counterpart{id,name,avatar_url}`, `listing_id`,
-`listing_title`, `last_message`, `last_message_at` and `unread_count`;
-`MessageResource` carries the message plus embedded sender/receiver summaries.
-The app's `Conversation` and `Message` models mirror them exactly. Search and
+`listing_title`, `listing_price`, `last_message`, `last_message_at`,
+`unread_count`, `has_inquiry`, `has_transaction`, `roles`, `listing_count`,
+`latest_offer` and `eligible_inquiry`; `MessageResource` carries the message
+plus embedded sender/receiver summaries. The app's `Conversation` and `Message`
+models mirror them exactly. A conversation is the buyer–seller pair, not one
+listing: `listing_id`/`listing_title`/`listing_price` describe the **most
+relevant** listing, and `listing_count` says how many distinct listings the
+thread covers. Relevance is server-decided: a pending offer's listing first,
+then an open inquiry's, then the newest message's — so the price and status on
+a preview always belong to the same listing. The client renders `+N more
+listings` when the count exceeds one. Search and
 the category chips are **local view filters** — the API has no conversation
-search and no category column. "Inquiries" selects listing-scoped threads;
-"Transactions" renders disabled — the API links no conversation to a
-transaction, and My Purchases / My Sales are separate screens over
-`/api/transactions`;
-"Notifications" is a shortcut to the existing, separate notifications
-destination, not a thread filter. Opening a thread marks it read through the
+search and no category column. "Inquiries" and "Transactions" read the server's
+pair-level booleans; neither guesses from `listing_id`.
+
+The inbox is also scoped by the **existing Account Mode**. `roles` is the
+server-computed set of sides the caller acts on with that counterpart
+(`buyer`, `seller`, both, or none). Buyer Mode shows buyer-side threads, Seller
+Mode seller-side threads, a pair traded both ways appears in both, and a thread
+whose role cannot be determined is shown in both rather than hidden. The
+unread badge counts unread **messages** (never the caller's own) for the active
+mode. `latest_offer` and `eligible_inquiry` exist so the preview and the
+in-chat offer action never guess: `eligible_inquiry` is the seller's own newest
+**open** inquiry from that buyer with no pending or accepted offer, carries the
+buyer's original preferences (payment, collection, preferred date, asking price,
+listing photo) so the offer form can prefill them without another request, and
+is null on the buyer side.
+
+The Messages chips are real tabs over three server surfaces:
+**All** is `GET /conversations` (the shared buyer–seller thread);
+**Inquiries** is `GET /api/inquiries?role=<mode>`, one row per active inquiry
+that still needs negotiation or a buyer decision, with the listing, asking
+price, counterpart and latest offer, and inquiries converted to an accepted
+transaction excluded; **Transactions** reuses `GET /transactions?role=<mode>`
+(read-only records with View details and Open chat). The bottom Transactions
+module remains the place that manages transactions. Each tab loads its own
+list on first open; search filters the loaded rows locally.
+
+Messages exposes All, Inquiries and Transactions only. Notifications is not a
+conversation category and is no longer a chip on this screen; it remains on
+Home's bell, which opens the existing notifications destination. The chat
+header shows the counterpart's public avatar/name/role (initials when there is
+no photo) and opens a compact panel built only from `UserSummaryResource`.
+The message that opened an inquiry carries the service-attached `inquiry`
+object (`listing{id,title,asking_price,photo_url}`, payment/collection values,
+preferred date and the buyer's message); the client renders it as one
+structured card and never re-parses the generated prose body, so a thread with
+several inquiries shows one card each and no duplicates. Opening a
+thread marks it read through the
 same endpoint from two callers by design (the inbox optimistically, the chat
 screen on open). **There is no real-time transport** (GAP-20): the inbox and
 thread recover via pull-to-refresh and an on-return refresh, and the app ships
 no WebSocket client, no invented event names and no fake reconnect.
+
+**Resolved for purchase offers (MS-05).** A seller answers an inquiry with a
+structured offer behind the same `auth:sanctum` + `ability:mobile` guard;
+creation and withdrawal additionally require the `seller` gate:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/offers` | The caller's offers, newest first. Optional `inquiry_id`, `listing_id`, `counterpart_id`, `status`; ownership filters are `422`. |
+| `POST /api/offers` | Creates a `pending` offer from `inquiry_id`, `listing_id` and `proposed_amount` (numeric, min 0.01). Seller-only. |
+| `GET /api/offers/{offer}` | One offer the caller is party to; `404` for a non-party. |
+| `POST /api/offers/{offer}/accept` | The inquiry's buyer accepts; atomically creates exactly one `pending` transaction whose `total_amount` is `proposed_amount`. |
+| `POST /api/offers/{offer}/decline` | The inquiry's buyer declines. |
+| `POST /api/offers/{offer}/withdraw` | The creating seller withdraws. |
+
+`OfferResource` carries `id`, `inquiry_id`, `listing_id`, `seller_id`,
+`buyer_id`, `proposed_amount` (decimal string), `proposed_pickup_date`,
+`payment_method`, `collection_method`, `note`, `status`
+(`pending`/`accepted`/`declined`/`withdrawn`/`expired`), `responded_at`,
+`created_at`, a `listing{id,livestock_type,breed,asking_price,photo_url}`
+summary, and
+`original_terms{payment_method,collection_method,pickup_date}` copied from the
+buyer's inquiry. Offer rules are server-owned: one **pending** offer per
+inquiry; **acceptance is permanent** (no further offer for that inquiry, ever);
+a **declined or withdrawn** offer may be revised; the inquiry is locked for the
+duration, so concurrent creates collapse to one. The seller inbox and the
+inquiry-list projection expose `can_make_offer`, and both the Received
+Inquiries card and the in-chat action are hidden when it is false. The client diffs the offer terms against `original_terms` to
+highlight what the seller changed; it never reconstructs the buyer's originals.
+An offer carries **no transaction id**, so "View transaction" is shown
+only in the accept response dialog, from `data.transaction`; an
+already-accepted offer loaded from the list never fabricates a link. The seller
+starts an offer from a `ReceivedInquiryCard`, or from the chat's **Make an
+Offer** action when `ConversationResource.eligible_inquiry` is present (Seller
+Mode only — the server already excluded inquiries with a pending offer and
+inquiries where the caller is the buyer). Both entry points open the same
+structured form: buyer, listing (with photo) and listed price are read-only,
+while the final price (prefilled with the listed price), pickup date, payment
+method, collection method and note are editable and prefilled from the inquiry.
+The pickup date is future-only in both layers: the Flutter picker starts
+tomorrow, and `StoreOfferRequest` refuses a past `proposed_pickup_date` with
+`422`. When the buyer's preferred date has already passed, the form starts on
+tomorrow and keeps the original preference only for the change marker. The chat's offer panel loads
+`GET /offers?counterpart_id=` and lets the buyer accept or decline and the
+seller withdraw. Acceptance copies the accepted price and terms onto exactly
+one `pending` transaction (`transactions.offer_id` is unique), so the agreement
+is snapshotted independently of later offer/inquiry/listing edits, and the
+resulting transaction appears in My Purchases and My Sales through the existing
+transaction list.
+Buyer and seller lists refresh when their shell selects the Transactions tab
+(`TransactionsScreen.isActive`). Completion remains unavailable (OQ-15,
+backend `501`).
 
 **Resolved for the Transactions screens (My Purchases / My Sales, HTTP only).**
 The backend exposes the caller's transactions behind the same `auth:sanctum` +
@@ -767,11 +880,11 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-10 | AI price suggestion | `AiPriceEstimate` model and `ai_price_estimates` table exist. No controller, service, route or job. No pricing algorithm in the repository. `OPEN`. | AI price suggestion |
 | GAP-11 | Transactions | **CLOSED** for the mobile surface. `GET /api/transactions` (own records only; `?role`, `?status`, paginated), `POST /api/transactions` (buyer creates `pending` from an `active` listing; body `listing_id` + `quantity` only; `total_amount` server-derived), `GET /api/transactions/{id}` (party-only; `404` otherwise) and `POST /api/transactions/{id}/cancel` (pending-only, either party; `409` once terminal), behind `auth:sanctum` + `ability:mobile`, served by `Api/Transaction/TransactionController` over `MobileTransactionResource`. `POST /{id}/complete` is **not implemented** and answers `501` (OQ-15), so the client offers no completion. Tests: `backend/tests/Feature/Transaction/MobileTransactionTest.php`. | Completion (OQ-15) |
 | GAP-12 | Notifications | **CLOSED.** `GET /api/notifications` (paginated `notifications` list with `pagination` and `unread_count`), `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `POST /api/notifications/read-all` and `DELETE /api/notifications/{id}`, all behind `auth:sanctum` + `ability:mobile` and served by `Api/Notification/NotificationController` over `NotificationResource`. Every route resolves the record from the token — no route takes a user id — and notification ids are UUID strings. The app consumes this through its own Notifications screen, reached from the Home bell and from the Messages screen's Notifications chip. | — |
-| GAP-13 | Messaging | **CLOSED.** `GET /api/conversations`, `POST /api/conversations/{userId}/read`, `GET /api/conversations/{userId}/messages`, `POST /api/messages` and `PATCH /api/messages/{id}/read`, behind `auth:sanctum` + `ability:mobile`, served by `Api/Messaging/ConversationController` and `MessageController` over `ConversationResource` / `MessageResource`. Conversations are derived from message pairs (no table, no id); the caller's own participation scopes every query, and `sender_id`/`receiver_id` are server-derived on send. Consumed by the Messages inbox and chat screens. **No broadcasting** accompanies any of it — see GAP-20. No backend feature tests exist for these routes. | — |
+| GAP-13 | Messaging | **CLOSED.** `GET /api/conversations`, `POST /api/conversations/{userId}/read`, `GET /api/conversations/{userId}/messages`, `POST /api/messages` and `PATCH /api/messages/{id}/read`, behind `auth:sanctum` + `ability:mobile`, served by `Api/Messaging/ConversationController` and `MessageController` over `ConversationResource` / `MessageResource`. Conversations are derived from message pairs (no table, no id); the caller's own participation scopes every query, and `sender_id`/`receiver_id` are server-derived on send. Consumed by the Messages inbox and chat screens. `ConversationResource` also carries the pair-level `has_inquiry` / `has_transaction` booleans the inbox filters use; backend coverage lives in `backend/tests/Feature/Messaging/ConversationClassificationTest.php`. **No broadcasting** accompanies any of it — see GAP-20. | — |
 | GAP-14 | Profile read/update for the current user | No endpoint. Admin can list users but not edit them. `OPEN`. | Profile |
 | GAP-15 | Token lifetime policy | Mobile tokens are issued non-expiring, the same as admin tokens. No expiry, no refresh, no revocation-all. Still needs an explicit decision before shipping, so a mobile session currently lasts until it is logged out or revoked. | Security |
 | GAP-16 | Sanctum token ability scoping for mobile | **CLOSED.** Mobile tokens carry `['mobile']`; mobile routes require `ability:mobile`. The `admin` group now also requires `ability:admin`, so a mobile token is refused by admin routes and an admin token is refused by mobile routes. Both directions are covered by `backend/tests/Feature/Auth/MobileAuthTest.php`. | — |
-| GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry. `GET /api/seller/inquiries` lists the approved seller's own inbox through `SellerInquiryResource`, which omits `status` deliberately (open/responded/closed is an internal bookmark that no administrator route sets any more) and omits buyer email. The administrator inquiry routes (`/api/admin/inquiries*`) were removed: an inquiry is between the buyer and the seller only. There is still no buyer read endpoint, no inquiry detail for either side, and no seller response/status action. | Buyer inquiry list/detail, the Inquiry Sent screen's "View Inquiry" (rendered disabled with an honest caption), seller inquiry response/status, any server-driven status display |
+| GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry, and `GET /api/inquiries/listing/{listing}` pre-checks the buyer's existing inquiry for a listing. `GET /api/seller/inquiries` lists the approved seller's inquiries through `SellerInquiryResource`, which omits buyer email and inquiry status. Administrator inquiry endpoints have been removed; inquiries are handled between buyers and sellers only. The app directs buyers to Messages after submitting an inquiry or when an inquiry already exists. Buyer inquiry list/detail and dedicated seller inquiry detail/status actions remain unavailable. | Buyer inquiry list/detail, dedicated seller inquiry detail/status actions, any remaining server-driven status display |
 | GAP-20 | Real-time messaging / notifications | **OPEN.** Nothing in the backend broadcasts messages or notifications: `BROADCAST_CONNECTION=log` in `backend/.env`/`.env.example`, no `config/broadcasting.php` or `config/reverb.php`, no `routes/channels.php`, no `app/Events/`, and `laravel/reverb` is not a dependency. The `reverb` service in `compose.yaml` is commented out. The app therefore has no WebSocket client (and no WS/echo package in `pubspec.yaml`), no event names to subscribe to, and no reconnect logic. Both inbox and thread recover by HTTP refresh instead. Building real-time requires broadcasting, authenticated private channels and named events on the server first. | Real-time message delivery, live badge/notification updates |
 
 ### Gaps that are design questions, not missing code

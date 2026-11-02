@@ -8,8 +8,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'buyer_id', 'seller_id', 'listing_id', 'quantity',
-    'total_amount', 'status',
+    'buyer_id', 'seller_id', 'listing_id', 'offer_id', 'quantity',
+    'total_amount', 'pickup_date', 'payment_method', 'collection_method',
+    'status',
 ])]
 class Transaction extends Model
 {
@@ -24,6 +25,7 @@ class Transaction extends Model
             'status' => TransactionStatus::class,
             'quantity' => 'integer',
             'total_amount' => 'decimal:2',
+            'pickup_date' => 'date',
         ];
     }
 

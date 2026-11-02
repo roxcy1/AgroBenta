@@ -4,17 +4,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
-import '../../../models/message.dart';
-import '../../../models/transaction.dart';
 import '../../../repositories/marketplace_repository.dart';
-import '../../../repositories/transaction_repository.dart';
 import '../../../widgets/detail_row.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../inquiries/view/inquire_screen.dart';
-import '../../messaging/view/chat_screen.dart';
-import '../../transactions/state/transaction_scope.dart';
-import '../../transactions/views/transaction_detail_screen.dart';
-import '../../transactions/widgets/buy_sheet.dart';
 import '../state/listing_detail_controller.dart';
 import '../state/listing_detail_state.dart';
 import '../state/marketplace_scope.dart';
@@ -545,28 +538,10 @@ class _ActionBar extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
-            child: OutlinedButton(
-              style: _barButtonStyle,
-              onPressed: viewerId == null
-                  ? null
-                  : () => _openThread(context, viewerId),
-              child: const Text('Message'),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
             child: FilledButton(
               style: _barButtonStyle,
               onPressed: () => _openInquiry(context),
-              child: const Text('Inquire'),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: OutlinedButton(
-              style: _barButtonStyle,
-              onPressed: () => _openBuy(context),
-              child: const Text('Buy'),
+              child: const Text('Inquire About Livestock'),
             ),
           ),
         ],
@@ -574,35 +549,13 @@ class _ActionBar extends StatelessWidget {
     );
   }
 
-  /// Tighter horizontal padding so all three labels fit at the narrowest
+  /// Tighter horizontal padding so the single button fits at the narrowest
   /// widths the app supports, without shrinking the touch target's height.
-  /// Shared by all three buttons, so the row stays even.
   static final ButtonStyle _barButtonStyle = ButtonStyle(
     padding: WidgetStatePropertyAll<EdgeInsets>(
       const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
     ),
   );
-
-  /// Opens the existing chat thread with the seller, tied to this listing.
-  ///
-  /// `MessagingScope` is read by [ChatScreen] in its own `initState`, not here:
-  /// this screen must build without a messaging scope so the marketplace tests
-  /// that mount it do not need one.
-  void _openThread(BuildContext context, int viewerId) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) => ChatScreen(
-          counterpart: ChatUser(
-            id: listing.seller.id,
-            name: listing.seller.name,
-            avatarUrl: null,
-          ),
-          currentUserId: viewerId,
-          listingId: listing.id,
-        ),
-      ),
-    );
-  }
 
   /// Opens the structured inquiry form with the listing it asks about.
   ///
@@ -616,24 +569,6 @@ class _ActionBar extends StatelessWidget {
     );
   }
 
-  /// Opens the existing Buy sheet and, on success, the created transaction.
-  /// The sheet is the single create path; this button only opens it.
-  Future<void> _openBuy(BuildContext context) async {
-    final TransactionRepository repository = TransactionScope.readOf(context);
-    final Transaction? created = await BuySheet.show(
-      context,
-      listing: listing,
-      repository: repository,
-    );
-    if (created != null && context.mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              TransactionDetailScreen(transactionId: created.id),
-        ),
-      );
-    }
-  }
 }
 
 /// What the detail screen shows when the listing is not visible to the caller.

@@ -13,13 +13,23 @@ import '../../../models/received_inquiry.dart';
 /// that does not exist. The buyer is identity and name only, matching
 /// `SellerInquiryResource`; no email is modelled or rendered.
 ///
-/// There is deliberately no status badge and no response control: the
-/// administrator-facing inquiry status is not part of the mobile API, and
-/// replying or changing a status is not implemented.
+/// There is deliberately no status badge: the administrator-facing inquiry
+/// status is not part of the mobile API. A seller may answer with the
+/// structured purchase offer this card's optional action opens — not by
+/// re-statusing the inquiry, which remains an administrator bookmark.
 class ReceivedInquiryCard extends StatelessWidget {
-  const ReceivedInquiryCard({required this.inquiry, super.key});
+  const ReceivedInquiryCard({
+    required this.inquiry,
+    this.onMakeOffer,
+    super.key,
+  });
 
   final ReceivedInquiry inquiry;
+
+  /// Opens the make-offer form for this inquiry. `null` when the buyer or
+  /// listing projection is missing, because an offer without them cannot be
+  /// created truthfully.
+  final VoidCallback? onMakeOffer;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +46,12 @@ class ReceivedInquiryCard extends StatelessWidget {
         ? null
         : 'Proposed delivery fee: '
               '${AppFormatters.formatMoney(inquiry.deliveryFee) ?? inquiry.deliveryFee}';
+    final String? collectionPlan =
+        inquiry.collectionDateOption == null ||
+            inquiry.collectionDateOption ==
+                InquiryCollectionDateOption.specificDate
+        ? null
+        : 'Collection plan: ${inquiry.collectionDateOption!.label}';
 
     return Card(
       child: Padding(
@@ -108,6 +124,7 @@ class ReceivedInquiryCard extends StatelessWidget {
             ],
             if (preferences != null ||
                 schedule != null ||
+                collectionPlan != null ||
                 deliveryFee != null) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
               if (preferences != null)
@@ -116,11 +133,29 @@ class ReceivedInquiryCard extends StatelessWidget {
                 if (preferences != null) const SizedBox(height: AppSpacing.xxs),
                 Text(schedule, style: theme.textTheme.bodySmall),
               ],
-              if (deliveryFee != null) ...<Widget>[
+              if (collectionPlan != null) ...<Widget>[
                 if (preferences != null || schedule != null)
+                  const SizedBox(height: AppSpacing.xxs),
+                Text(collectionPlan, style: theme.textTheme.bodySmall),
+              ],
+              if (deliveryFee != null) ...<Widget>[
+                if (preferences != null ||
+                    schedule != null ||
+                    collectionPlan != null)
                   const SizedBox(height: AppSpacing.xxs),
                 Text(deliveryFee, style: theme.textTheme.bodySmall),
               ],
+            ],
+            if (onMakeOffer != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: onMakeOffer,
+                  icon: const Icon(Icons.local_offer_outlined, size: 18),
+                  label: const Text('Make an offer'),
+                ),
+              ),
             ],
           ],
         ),
@@ -141,6 +176,8 @@ class ReceivedInquiryCard extends StatelessWidget {
 
   String? _preferences() {
     final List<String> values = <String>[
+      if (inquiry.paymentMethod != null) inquiry.paymentMethod!.label,
+      if (inquiry.collectionMethod != null) inquiry.collectionMethod!.label,
       if (inquiry.transactionMethod != null) inquiry.transactionMethod!.label,
       if (inquiry.deliveryMethod != null) inquiry.deliveryMethod!.label,
       if (inquiry.contactMethod != null) inquiry.contactMethod!.label,

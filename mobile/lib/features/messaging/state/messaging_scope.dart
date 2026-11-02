@@ -12,11 +12,11 @@ import 'conversations_controller.dart';
 ///
 /// ## Why the controller lives here and not on the screen
 ///
-/// The inbox controller is session-scoped on purpose. The buyer shell needs
-/// to read its `hasUnread` to show a badge on the Messages tab, and that
-/// badge must reflect the same state the Conversations screen shows. If the
-/// controller were per-screen, the shell would need its own copy and the two
-/// could disagree.
+/// The inbox controller is session-scoped on purpose. Each account-mode shell
+/// reads its mode-scoped unread total to show a badge on the Messages tab, and
+/// that badge must reflect the same state the Conversations screen shows. If
+/// the controller were per-screen, the shell would need its own copy and the
+/// two could disagree.
 ///
 /// The [ChatController] is *not* here — it is per-screen, created and
 /// disposed by the chat screen itself.

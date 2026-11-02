@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\Inquiry;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Inquiry\IndexInquiryRequest;
 use App\Http\Requests\Inquiry\StoreInquiryRequest;
+use App\Http\Resources\InquiryListItemResource;
 use App\Http\Resources\MobileInquiryResource;
 use App\Models\Listing;
 use App\Services\Inquiry\InquiryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * Create a buyer inquiry — the mobile write path.
@@ -28,6 +31,55 @@ class InquiryController extends Controller
     public function __construct(private readonly InquiryService $inquiries)
     {
         //
+    }
+
+    /**
+     * `GET /api/inquiries` — the caller's active inquiries.
+     *
+     * Backs the Messages "Inquiries" tab. The scope is the token; `role`
+     * only selects which side of the caller's own records to return. An
+     * inquiry whose offer was accepted is excluded — that agreement belongs
+     * to the Transactions tab and must never be offered again.
+     */
+    public function index(IndexInquiryRequest $request): JsonResponse
+    {
+        $role = $request->validated('role');
+
+        $inquiries = $this->inquiries->activeFor($request->user(), $role);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'inquiries' => InquiryListItemResource::collection($inquiries),
+            ],
+        ], 200);
+    }
+
+    /**
+     * The authenticated buyer's inquiry about [listing], or `data: null`.
+     *
+     * The pre-check the Inquire screen runs before it renders the form: an
+     * inquiry already sent - in any status - is shown as "Inquiry Already
+     * Sent" instead of a second form. Buyer-scoped from the token, so no query
+     * parameter can read another buyer's record.
+     *
+     * The listing is route-model bound, so an id that does not exist is a 404
+     * from Laravel. A listing the buyer has not asked about is a normal `null`,
+     * not an error.
+     */
+    public function existing(Request $request, Listing $listing): JsonResponse
+    {
+        $inquiry = $this->inquiries->findForBuyerAndListing(
+            $request->user(),
+            $listing,
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $inquiry === null
+                ? null
+                : new MobileInquiryResource($inquiry),
+        ]);
     }
 
     /**
@@ -56,6 +108,9 @@ class InquiryController extends Controller
                 'delivery_fee',
                 'contact_method',
                 'preferred_schedule',
+                'collection_date_option',
+                'payment_method',
+                'collection_method',
             ]),
         );
 
