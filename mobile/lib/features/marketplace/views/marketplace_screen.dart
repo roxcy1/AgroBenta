@@ -137,6 +137,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
+  /// Clears the search term and re-queries page 1 once.
+  ///
+  /// The field is cleared here, the controller is told the term is now empty,
+  /// and only then is one request made. Clearing the field alone changes
+  /// nothing server-side, and letting the debounce fire would add a second
+  /// request for text the user has already removed.
+  Future<void> _clearSearch() async {
+    _searchField.clear();
+    await _controller.clearSearch();
+    if (mounted) {
+      _scrollToTop();
+    }
+  }
+
   /// Clears both the search term and the filters, then reloads.
   ///
   /// One request, not two: the search text and the filters are a single query,
@@ -173,6 +187,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   searchField: _searchField,
                   state: state,
                   onOpenFilters: () => _openFilters(state),
+                  onClearSearch: _clearSearch,
                 ),
                 const Divider(height: 1),
                 Expanded(child: _body(state)),
@@ -203,53 +218,87 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       );
     }
 
-    return RefreshIndicator(
-      // Pull-to-refresh keeps the current results mounted: `refresh` publishes
-      // `refreshing`, which is not a blocking state, so the list below stays
-      // visible and the indicator itself is what communicates the request.
-      onRefresh: _controller.refresh,
-      child: ListView.separated(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenGutter,
-          AppSpacing.md,
-          AppSpacing.screenGutter,
-          0,
-        ),
-        itemCount:
-            state.listings.length +
-            1 +
-            (state.refreshErrorMessage != null ? 1 : 0),
-        separatorBuilder: (BuildContext context, int index) =>
-            const SizedBox(height: AppSpacing.sm),
-        itemBuilder: (BuildContext context, int index) {
-          if (state.refreshErrorMessage != null && index == 0) {
-            return PagedListRefreshNotice(
-              message: 'Could not refresh. ${state.refreshErrorMessage}',
-              onRetry: () => unawaited(_controller.refresh()),
-            );
-          }
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        const double spacing = AppSpacing.sm;
+        final double availableWidth =
+            constraints.maxWidth - (AppSpacing.screenGutter * 2);
+        final double itemWidth = (availableWidth - spacing) / 2;
+        // Photo band (16:9) plus the compact fact block below it. A single
+        // extent keeps both columns pixel-aligned regardless of how much text
+        // a seller wrote.
+        final double itemExtent = (itemWidth * 9 / 16) + 152;
 
-          final int listingIndex =
-              index - (state.refreshErrorMessage != null ? 1 : 0);
-
-          if (listingIndex == state.listings.length) {
-            return PagedListLoadMoreFooter(
-              isLoading: state.status == MarketplaceStatus.loadingMore,
-              hasMore: state.hasMorePages,
-              errorMessage: state.loadMoreErrorMessage,
-              onLoadMore: _controller.loadMore,
-            );
-          }
-
-          final Listing listing = state.listings[listingIndex];
-          return ListingCard(
-            listing: listing,
-            onTap: () => _openListing(listing),
-          );
-        },
-      ),
+        return RefreshIndicator(
+          // Pull-to-refresh keeps the current results mounted: `refresh` publishes
+          // `refreshing`, which is not a blocking state, so the grid below stays
+          // visible and the indicator itself is what communicates the request.
+          onRefresh: _controller.refresh,
+          child: CustomScrollView(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: <Widget>[
+              if (state.refreshErrorMessage != null)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenGutter,
+                    AppSpacing.sm,
+                    AppSpacing.screenGutter,
+                    0,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: PagedListRefreshNotice(
+                      message: 'Could not refresh. ${state.refreshErrorMessage}',
+                      onRetry: () => unawaited(_controller.refresh()),
+                    ),
+                  ),
+                ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenGutter,
+                  AppSpacing.md,
+                  AppSpacing.screenGutter,
+                  0,
+                ),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: spacing,
+                    crossAxisSpacing: spacing,
+                    mainAxisExtent: itemExtent,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (BuildContext context, int index) {
+                      final Listing listing = state.listings[index];
+                      return ListingCard(
+                        listing: listing,
+                        onTap: () => _openListing(listing),
+                      );
+                    },
+                    childCount: state.listings.length,
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenGutter,
+                    AppSpacing.sm,
+                    AppSpacing.screenGutter,
+                    0,
+                  ),
+                  child: PagedListLoadMoreFooter(
+                    isLoading: state.status == MarketplaceStatus.loadingMore,
+                    hasMore: state.hasMorePages,
+                    errorMessage: state.loadMoreErrorMessage,
+                    onLoadMore: _controller.loadMore,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -261,12 +310,14 @@ class _SearchAndFilters extends StatelessWidget {
     required this.searchField,
     required this.state,
     required this.onOpenFilters,
+    required this.onClearSearch,
   });
 
   final MarketplaceController controller;
   final TextEditingController searchField;
   final MarketplaceState state;
   final VoidCallback onOpenFilters;
+  final VoidCallback onClearSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -297,10 +348,7 @@ class _SearchAndFilters extends StatelessWidget {
                     : IconButton(
                         icon: const Icon(Icons.close),
                         tooltip: 'Clear search',
-                        onPressed: () {
-                          searchField.clear();
-                          controller.submitSearch();
-                        },
+                        onPressed: onClearSearch,
                       ),
               ),
             ),
@@ -323,17 +371,32 @@ class _LoadingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenGutter,
-        AppSpacing.md,
-        AppSpacing.screenGutter,
-        0,
-      ),
-      itemCount: 4,
-      separatorBuilder: (BuildContext context, int index) =>
-          const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (BuildContext context, int index) => const _SkeletonCard(),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        const double spacing = AppSpacing.sm;
+        final double availableWidth =
+            constraints.maxWidth - (AppSpacing.screenGutter * 2);
+        final double itemWidth = (availableWidth - spacing) / 2;
+
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenGutter,
+            AppSpacing.md,
+            AppSpacing.screenGutter,
+            0,
+          ),
+          physics: const AlwaysScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: spacing,
+            crossAxisSpacing: spacing,
+            mainAxisExtent: (itemWidth * 9 / 16) + 152,
+          ),
+          itemCount: 4,
+          itemBuilder: (BuildContext context, int index) =>
+              const _SkeletonCard(),
+        );
+      },
     );
   }
 }
@@ -344,34 +407,30 @@ class _SkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Container(
-              width: 108,
-              height: 108,
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                border: Border.all(color: AppColors.border),
-              ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(color: AppColors.background),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const _Bar(width: 54),
+                const SizedBox(height: AppSpacing.xs),
+                const _Bar(width: 110),
+                const SizedBox(height: AppSpacing.xs),
+                const _Bar(width: 80),
+                const SizedBox(height: AppSpacing.sm),
+                const _Bar(width: 96),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  _Bar(width: 90),
-                  const SizedBox(height: AppSpacing.xs),
-                  _Bar(width: 160),
-                  const SizedBox(height: AppSpacing.md),
-                  _Bar(width: 110),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

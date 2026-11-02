@@ -48,7 +48,7 @@ class ListingCard extends StatelessWidget {
               child: ListingPhoto(listing: listing),
             ),
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.all(AppSpacing.sm),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
