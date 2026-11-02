@@ -133,10 +133,41 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Shows the transaction the acceptance created, with the one honest link
-  /// the app can offer. An already-accepted offer loaded from the list cannot
-  /// be linked: `OfferResource` carries no transaction id.
+  /// Asks the buyer to confirm, then accepts the offer and shows the
+  /// transaction the acceptance created, with the one honest link the app can
+  /// offer. An already-accepted offer loaded from the list cannot be linked:
+  /// `OfferResource` carries no transaction id.
+  ///
+  /// Accepting creates a real pending transaction in one request, so it is
+  /// confirmed first, as Decline and Withdraw are; a mis-tap must not create one.
   Future<void> _acceptOffer(Offer offer) async {
+    final String offerAmount =
+        AppFormatters.formatMoney(offer.proposedAmount) ?? offer.proposedAmount;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Accept this offer?'),
+        content: Text(
+          'Accepting creates a pending transaction for $offerAmount with the '
+          'seller. Payment and receipt are handled directly between you and '
+          'the seller.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Accept offer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     final OfferAcceptance? result = await _offers.accept(offer);
     if (result == null || !mounted) {
       return;
