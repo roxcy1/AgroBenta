@@ -11,6 +11,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -290,6 +291,67 @@ class OfferTest extends TestCase
         $this->assertSame(1, Offer::query()->count());
         $this->assertSame(1, Transaction::query()->count());
         $this->assertSame('accepted', Offer::query()->sole()->status->value);
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function listingChangesThatBlockAcceptance(): array
+    {
+        return [
+            'sold' => [['status' => ListingStatus::Sold]],
+            'inactive' => [['status' => ListingStatus::Inactive]],
+            'out of stock' => [['quantity' => 0]],
+        ];
+    }
+
+    /**
+     * An offer can be days old. If the listing was sold, deactivated or ran out
+     * of stock since, accepting it must be refused exactly as a direct purchase
+     * of that listing would be, and must not leave a transaction behind.
+     *
+     * @param  array<string, mixed>  $change
+     */
+    #[Test]
+    #[DataProvider('listingChangesThatBlockAcceptance')]
+    public function accepting_an_offer_is_refused_once_the_listing_is_no_longer_available(array $change): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 1]);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $listing->forceFill($change)->save();
+
+        $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(409);
+
+        $this->assertSame(0, Transaction::query()->count());
+        $this->assertSame('pending', Offer::query()->findOrFail($offerId)->status->value);
+
+        // Still pending, so the seller can clear it up.
+        $this->postOfferAction('withdraw', $offerId, $this->seller)->assertStatus(200);
+        $this->assertSame('withdrawn', Offer::query()->findOrFail($offerId)->status->value);
+    }
+
+    #[Test]
+    public function the_last_unit_can_still_be_accepted(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 1]);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(200);
+
+        $this->assertSame(1, Transaction::query()->count());
     }
 
     #[Test]

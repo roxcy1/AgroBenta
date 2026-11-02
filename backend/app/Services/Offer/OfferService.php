@@ -157,7 +157,10 @@ class OfferService
      * Creates exactly one `pending` transaction using the agreed
      * `proposed_amount`, inside the same database transaction as the offer
      * status change. The offer row is locked before its state is read, so a
-     * concurrent acceptance cannot create a second transaction.
+     * concurrent acceptance cannot create a second transaction. The listing
+     * row is then locked and must still be `active` with stock, exactly as for
+     * a direct purchase. Lock order is offer, then listing; nothing that holds
+     * the listing lock waits on an offer row.
      *
      * @return array{offer: Offer, transaction: Transaction}
      */
@@ -175,6 +178,24 @@ class OfferService
 
             if ($offer->status !== OfferStatus::Pending) {
                 abort(409, 'This offer is no longer pending.');
+            }
+
+            // The offer may be days old. Re-check the listing under a row lock,
+            // with the same guards a direct purchase uses, so an offer cannot
+            // become a transaction on a listing that has since been sold,
+            // deactivated or run out of stock. The offer stays pending when
+            // this refuses, so the seller can still withdraw it.
+            $listing = $this->offers->lockListing((int) $offer->listing_id);
+            if ($listing === null) {
+                abort(404, 'Listing not found.');
+            }
+
+            if ($listing->status !== ListingStatus::Active) {
+                abort(409, 'This listing is not available for new transactions.');
+            }
+
+            if ((int) $listing->quantity < 1) {
+                abort(409, 'There is not enough stock for the requested quantity.');
             }
 
             $accepted = $this->offers->updateStatus(

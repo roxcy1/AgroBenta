@@ -96,6 +96,22 @@ class OfferRepository
     }
 
     /**
+     * Re-read a listing with a row lock, so its status and stock cannot change
+     * until the surrounding database transaction ends.
+     *
+     * The same listing-row lock `TransactionService::create()` and
+     * `SellerListingService::markSold()` take, so accepting an offer cannot
+     * race a sale of the same listing.
+     */
+    public function lockListing(int $listingId): ?Listing
+    {
+        return Listing::query()
+            ->whereKey($listingId)
+            ->lockForUpdate()
+            ->first();
+    }
+
+    /**
      * Find the pending offer for an inquiry, if any.
      *
      * Used to prevent a seller from creating more than one actionable offer
