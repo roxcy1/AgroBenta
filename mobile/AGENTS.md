@@ -297,11 +297,14 @@ the shell falls back to `BuyerShell` if the selected mode and capability
 disagree. Signing out, changing accounts or losing capability clears the mode.
 
 * **BuyerShell** keeps Home, Browse, Messages, Transactions, Profile. Its
-  Transactions screen is **My Purchases** and sends `role=buyer`.
+  Transactions screen is **My Purchases** and sends `role=buyer`. Buyer Mode
+  exposes **no listing management**: Buyer Home has no My Listings card or
+  Manage Listings shortcut, even when the account is seller-capable. A seller
+  who wants to manage listings switches to Seller Mode.
 * **SellerShell** has Home, My Listings, Messages, Transactions, Profile. Its
   Transactions screen is **My Sales** and sends `role=seller`. My Listings is a
-  real tab here; the buyer Home entry card still switches to it through
-  `SellerListingsEntryCard.onManage` instead of pushing a duplicate screen.
+  real tab here, and Seller Home's dashboard links to it; listing management is
+  available in Seller Mode only.
 * **Seller Home** is the seller landing and token-scoped summary: the account
   greeting, notification bell, real listing/inquiry/transaction counts, My
   Listings entry, Profile action and a link to Received Inquiries. The counts
