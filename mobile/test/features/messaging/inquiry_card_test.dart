@@ -71,7 +71,10 @@ void main() {
   testWidgets('a normal message stays a plain bubble', (
     WidgetTester tester,
   ) async {
-    await pumpBubble(tester, message: messageJson(body: 'Yes, still available.'));
+    await pumpBubble(
+      tester,
+      message: messageJson(body: 'Yes, still available.'),
+    );
 
     expect(find.text('Yes, still available.'), findsOneWidget);
     expect(find.text('Inquiry'), findsNothing);

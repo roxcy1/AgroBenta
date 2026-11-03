@@ -232,7 +232,6 @@ String? validateAdditionalNotes(String? value) {
 /// A trailing decimal point (`12.`) is rejected: it is a half-typed number, not
 /// a value the seller means to store.
 bool _isPlainDecimal(String value) {
-  return RegExp(
-    '^\\d+(\\.\\d{1,$kListingMaxDecimalPlaces})?\$',
-  ).hasMatch(value);
+  return RegExp('^\\d+(\\.\\d{1,$kListingMaxDecimalPlaces})?\$')
+      .hasMatch(value);
 }

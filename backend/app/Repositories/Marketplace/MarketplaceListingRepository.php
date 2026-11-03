@@ -202,8 +202,10 @@ class MarketplaceListingRepository
     /**
      * Apply the documented marketplace filters.
      *
-     * `livestock_type` stays free text and is compared exactly; it is not an
-     * enum and must not become one (functional documentation §4.1).
+     * `livestock_type` is compared exactly and the read filter stays
+     * permissive, so historical values outside the approved write vocabulary
+     * remain discoverable. New and updated listings are validated against
+     * [\App\Enums\LivestockType].
      */
     private function applyFilters(
         Builder $query,

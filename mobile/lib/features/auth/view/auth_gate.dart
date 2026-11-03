@@ -5,6 +5,7 @@ import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
+import 'reset_password_screen.dart';
 import 'session_status_screens.dart';
 import 'sign_in_screen.dart';
 
@@ -34,6 +35,12 @@ class _AuthGateState extends State<AuthGate> {
   /// it means nothing to the server and must not survive a sign-out.
   bool _showRegistration = false;
   bool _showForgotPassword = false;
+
+  /// The email a reset code was requested for. Set while the reset form shows.
+  String? _resetEmail;
+
+  /// A confirmation for the sign-in form, set after a password reset.
+  String? _signInNotice;
 
   bool _restoreStarted = false;
   bool _wasSignedIn = false;
@@ -77,12 +84,11 @@ class _AuthGateState extends State<AuthGate> {
     if (signedIn != _wasSignedIn) {
       _wasSignedIn = signedIn;
       if (!signedIn) {
-        if (_showRegistration || _showForgotPassword) {
-          setState(() {
-            _showRegistration = false;
-            _showForgotPassword = false;
-          });
+        if (_showRegistration || _showForgotPassword || _resetEmail != null) {
+          _showSignIn();
         }
+      } else {
+        _signInNotice = null;
       }
     }
   }
@@ -94,30 +100,56 @@ class _AuthGateState extends State<AuthGate> {
     return switch (state.status) {
       AuthStatus.restoring => const RestoringSessionScreen(),
       AuthStatus.restoreFailed => RestoreFailedScreen(state: state),
-      AuthStatus.signedOut => _showForgotPassword
-          ? ForgotPasswordScreen(onBackToSignIn: _showSignIn)
-          : _showRegistration
-              ? RegisterScreen(onSignIn: _showSignIn)
-              : SignInScreen(
-                  onRegister: _showRegister,
-                  onForgotPassword: _goToForgotPassword,
-                ),
+      AuthStatus.signedOut =>
+        _resetEmail != null
+            ? ResetPasswordScreen(
+                email: _resetEmail!,
+                onBackToSignIn: _showSignIn,
+                onPasswordReset: _finishPasswordReset,
+              )
+            : _showForgotPassword
+            ? ForgotPasswordScreen(
+                onBackToSignIn: _showSignIn,
+                onCodeRequested: _goToResetPassword,
+              )
+            : _showRegistration
+            ? RegisterScreen(onSignIn: _showSignIn)
+            : SignInScreen(
+                onRegister: _showRegister,
+                onForgotPassword: _goToForgotPassword,
+                notice: _signInNotice,
+              ),
       AuthStatus.signedIn => widget.authenticatedView(context),
     };
   }
 
   void _showRegister() => setState(() {
-        _showRegistration = true;
-        _showForgotPassword = false;
-      });
+    _showRegistration = true;
+    _showForgotPassword = false;
+    _signInNotice = null;
+  });
 
   void _goToForgotPassword() => setState(() {
-        _showForgotPassword = true;
-        _showRegistration = false;
-      });
+    _showForgotPassword = true;
+    _showRegistration = false;
+    _signInNotice = null;
+  });
+
+  void _goToResetPassword(String email) => setState(() {
+    _resetEmail = email;
+  });
+
+  void _finishPasswordReset() {
+    _showSignIn();
+    setState(() {
+      _signInNotice =
+          'Your password has been reset. Sign in with your new password.';
+    });
+  }
 
   void _showSignIn() => setState(() {
-        _showRegistration = false;
-        _showForgotPassword = false;
-      });
+    _showRegistration = false;
+    _showForgotPassword = false;
+    _resetEmail = null;
+  });
 }

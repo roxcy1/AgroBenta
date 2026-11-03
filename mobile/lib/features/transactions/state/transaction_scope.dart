@@ -9,13 +9,17 @@ import '../../../repositories/transaction_repository.dart';
 /// descendant, so a scope inside `home` would be invisible to the
 /// transaction detail screen.
 class TransactionScope extends InheritedWidget {
-  const TransactionScope({required this.repository, required super.child, super.key});
+  const TransactionScope({
+    required this.repository,
+    required super.child,
+    super.key,
+  });
 
   final TransactionRepository repository;
 
   static TransactionRepository readOf(BuildContext context) {
-    final TransactionScope? scope =
-        context.getInheritedWidgetOfExactType<TransactionScope>();
+    final TransactionScope? scope = context
+        .getInheritedWidgetOfExactType<TransactionScope>();
     assert(scope != null, 'No TransactionScope found above this widget.');
     return scope!.repository;
   }

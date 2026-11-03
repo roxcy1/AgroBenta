@@ -75,10 +75,12 @@ class SellerVerificationDocumentsController extends ChangeNotifier {
           }
           _set(
             _state.withDocument(
-              _state.forType(type).copyWith(
-                status: VerificationDocumentStatus.uploading,
-                progress: total == 0 ? 0.0 : sent / total,
-              ),
+              _state
+                  .forType(type)
+                  .copyWith(
+                    status: VerificationDocumentStatus.uploading,
+                    progress: total == 0 ? 0.0 : sent / total,
+                  ),
             ),
           );
         },
@@ -102,11 +104,13 @@ class SellerVerificationDocumentsController extends ChangeNotifier {
       }
       _set(
         _state.withDocument(
-          _state.forType(type).copyWith(
-            status: VerificationDocumentStatus.failed,
-            clearProgress: true,
-            error: error.message,
-          ),
+          _state
+              .forType(type)
+              .copyWith(
+                status: VerificationDocumentStatus.failed,
+                clearProgress: true,
+                error: error.message,
+              ),
         ),
       );
     } on Object {
@@ -115,11 +119,13 @@ class SellerVerificationDocumentsController extends ChangeNotifier {
       }
       _set(
         _state.withDocument(
-          _state.forType(type).copyWith(
-            status: VerificationDocumentStatus.failed,
-            clearProgress: true,
-            error: 'Upload failed. Please try again.',
-          ),
+          _state
+              .forType(type)
+              .copyWith(
+                status: VerificationDocumentStatus.failed,
+                clearProgress: true,
+                error: 'Upload failed. Please try again.',
+              ),
         ),
       );
     }
@@ -151,11 +157,7 @@ class SellerVerificationDocumentsController extends ChangeNotifier {
 
     // Clear locally first: the user asked for it gone, and a failed server
     // delete should not leave a thumbnail they cannot get rid of.
-    _set(
-      _state.withDocument(
-        VerificationDocument(type: type),
-      ),
-    );
+    _set(_state.withDocument(VerificationDocument(type: type)));
 
     if (!wasOnServer) {
       return;
@@ -169,10 +171,12 @@ class SellerVerificationDocumentsController extends ChangeNotifier {
       if (error.kind != ApiErrorKind.notFound && !_disposed) {
         _set(
           _state.withDocument(
-            _state.forType(type).copyWith(
-              status: VerificationDocumentStatus.failed,
-              error: error.message,
-            ),
+            _state
+                .forType(type)
+                .copyWith(
+                  status: VerificationDocumentStatus.failed,
+                  error: error.message,
+                ),
           ),
         );
       }
@@ -180,10 +184,12 @@ class SellerVerificationDocumentsController extends ChangeNotifier {
       if (!_disposed) {
         _set(
           _state.withDocument(
-            _state.forType(type).copyWith(
-              status: VerificationDocumentStatus.failed,
-              error: 'Could not remove the document. Please try again.',
-            ),
+            _state
+                .forType(type)
+                .copyWith(
+                  status: VerificationDocumentStatus.failed,
+                  error: 'Could not remove the document. Please try again.',
+                ),
           ),
         );
       }

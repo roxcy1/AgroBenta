@@ -63,7 +63,9 @@ class ActiveInquiriesController extends ChangeNotifier {
       return;
     }
     _loading = true;
-    _set(_state.copyWith(status: ActiveInquiriesStatus.loading, clearError: true));
+    _set(
+      _state.copyWith(status: ActiveInquiriesStatus.loading, clearError: true),
+    );
 
     try {
       final List<InquiryListItem> items = await _repository.listActive(
@@ -72,9 +74,7 @@ class ActiveInquiriesController extends ChangeNotifier {
       if (_disposed) {
         return;
       }
-      _set(
-        _state.copyWith(status: ActiveInquiriesStatus.ready, items: items),
-      );
+      _set(_state.copyWith(status: ActiveInquiriesStatus.ready, items: items));
     } on ApiException catch (error) {
       if (_disposed) {
         return;

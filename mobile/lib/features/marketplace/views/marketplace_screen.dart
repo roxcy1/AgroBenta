@@ -267,7 +267,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
                   sliver: SliverToBoxAdapter(
                     child: PagedListRefreshNotice(
-                      message: 'Could not refresh. ${state.refreshErrorMessage}',
+                      message:
+                          'Could not refresh. ${state.refreshErrorMessage}',
                       onRetry: () => unawaited(_controller.refresh()),
                     ),
                   ),
@@ -286,16 +287,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     crossAxisSpacing: spacing,
                     mainAxisExtent: itemExtent,
                   ),
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext context, int index) {
-                      final Listing listing = state.listings[index];
-                      return ListingCard(
-                        listing: listing,
-                        onTap: () => _openListing(listing),
-                      );
-                    },
-                    childCount: state.listings.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((
+                    BuildContext context,
+                    int index,
+                  ) {
+                    final Listing listing = state.listings[index];
+                    return ListingCard(
+                      listing: listing,
+                      onTap: () => _openListing(listing),
+                    );
+                  }, childCount: state.listings.length),
                 ),
               ),
               SliverToBoxAdapter(
@@ -394,7 +395,7 @@ class _SearchAndFilters extends StatelessWidget {
           if (state.filters.livestockType.trim().isNotEmpty) ...<Widget>[
             const SizedBox(height: AppSpacing.xs),
             _ActiveCategoryIndicator(
-              label: state.filters.livestockType.trim(),
+              label: _BrowseCategory.labelFor(state.filters.livestockType.trim()),
               onClear: onClearCategory,
             ),
           ],
@@ -413,12 +414,22 @@ class _BrowseCategory {
   /// `null` is "All" — no `livestock_type` filter.
   final String? value;
 
+  /// The chip label for a filter value; an unknown value is shown as typed.
+  static String labelFor(String value) {
+    for (final _BrowseCategory category in values) {
+      if (category.value == value) {
+        return category.label;
+      }
+    }
+    return value;
+  }
+
   static const List<_BrowseCategory> values = <_BrowseCategory>[
     _BrowseCategory('All', null),
-    _BrowseCategory('Cattle', 'Cattle'),
-    _BrowseCategory('Swine', 'Swine'),
-    _BrowseCategory('Goat', 'Goat'),
-    _BrowseCategory('Carabao', 'Carabao'),
+    _BrowseCategory('Cattle', 'cattle'),
+    _BrowseCategory('Swine', 'swine'),
+    _BrowseCategory('Goat', 'goat'),
+    _BrowseCategory('Carabao', 'carabao'),
   ];
 }
 

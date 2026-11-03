@@ -48,7 +48,7 @@ Map<String, dynamic> transactionJson({
 /// The embedded `listing` snapshot: identity, species, breed and photos only.
 Map<String, dynamic> transactionListingJson({
   Object? id = 12,
-  String livestockType = 'Cattle',
+  String livestockType = 'cattle',
   String breed = 'Holstein',
   List<Object?>? photos,
 }) {

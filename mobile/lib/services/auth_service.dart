@@ -92,6 +92,41 @@ class AuthService {
     );
   }
 
+  /// `POST /auth/forgot-password` — asks the server to email a reset code.
+  ///
+  /// Success says nothing about whether [email] is registered. A `429` means
+  /// too many requests from this device.
+  Future<void> forgotPassword({required String email}) {
+    return _apiClient.post<void>(
+      AuthEndpoints.forgotPassword,
+      body: <String, dynamic>{'email': email},
+      parse: (Object? _) {},
+    );
+  }
+
+  /// `POST /auth/reset-password` — sets a new password from an emailed code.
+  ///
+  /// The server's field for [code] is `token`. A `422` means the code is wrong
+  /// or expired, or the password was refused. Success revokes every token the
+  /// account holds, so the user must sign in again.
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+    required String passwordConfirmation,
+  }) {
+    return _apiClient.post<void>(
+      AuthEndpoints.resetPassword,
+      body: <String, dynamic>{
+        'email': email,
+        'token': code,
+        'password': password,
+        'password_confirmation': passwordConfirmation,
+      },
+      parse: (Object? _) {},
+    );
+  }
+
   /// Casts an unwrapped `data` payload to a JSON object with a message that
   /// names the endpoint, instead of a bare cast error.
   ///

@@ -88,10 +88,7 @@ class ListingCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xs),
                   ListingSocialProof(completedSales: listing.completedSales),
                   const SizedBox(height: AppSpacing.xs),
-                  _MetaRow(
-                    icon: Icons.place_outlined,
-                    text: listing.location,
-                  ),
+                  _MetaRow(icon: Icons.place_outlined, text: listing.location),
                   if (listing.weightLabel != null ||
                       listing.quantity > 0) ...<Widget>[
                     const SizedBox(height: AppSpacing.xxs),

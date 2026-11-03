@@ -18,7 +18,8 @@ class PopularLivestockController extends ChangeNotifier {
   final MarketplaceRepository _repository;
 
   PopularLivestockStatus _status = PopularLivestockStatus.initial;
-  List<PopularLivestockCategory> _categories = const <PopularLivestockCategory>[];
+  List<PopularLivestockCategory> _categories =
+      const <PopularLivestockCategory>[];
   String? _errorMessage;
 
   bool _disposed = false;
@@ -36,8 +37,8 @@ class PopularLivestockController extends ChangeNotifier {
     _publish(PopularLivestockStatus.loading, clearError: true);
 
     try {
-      final List<PopularLivestockCategory> categories =
-          await _repository.popularLivestock();
+      final List<PopularLivestockCategory> categories = await _repository
+          .popularLivestock();
       if (_disposed) {
         return;
       }

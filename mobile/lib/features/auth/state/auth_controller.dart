@@ -154,6 +154,40 @@ class AuthController extends ChangeNotifier {
     _set(const AuthState(status: AuthStatus.signedOut));
   }
 
+  /// Asks the server to email a password reset code.
+  ///
+  /// Like [resetPassword], this leaves [state] alone: the device stays signed
+  /// out either way, so the screen holds its own progress and error, and a
+  /// failure cannot appear on the sign-in form later. Throws on failure; turn
+  /// the error into text with [passwordResetErrorMessage].
+  Future<void> requestPasswordReset({required String email}) =>
+      _repository.forgotPassword(email: email);
+
+  /// Sets a new password from an emailed reset code.
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+    required String passwordConfirmation,
+  }) {
+    return _repository.resetPassword(
+      email: email,
+      code: code,
+      password: password,
+      passwordConfirmation: passwordConfirmation,
+    );
+  }
+
+  /// The text to show for a failed password reset request.
+  static String passwordResetErrorMessage(Object error) {
+    if (error is! ApiException) {
+      return 'Something went wrong. Please try again.';
+    }
+    return error.kind == ApiErrorKind.rateLimited
+        ? 'Too many attempts. Please try again in a minute.'
+        : error.message;
+  }
+
   /// Discards the current error so a form can be retried cleanly.
   void clearError() {
     if (_state.errorMessage == null && _state.validationErrors.isEmpty) {

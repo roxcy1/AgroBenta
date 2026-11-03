@@ -213,7 +213,10 @@ void main() {
       await controller.loadInitial();
 
       expect(controller.state.status, TransactionsStatus.failed);
-      expect(controller.state.errorMessage, 'Something went wrong on the server.');
+      expect(
+        controller.state.errorMessage,
+        'Something went wrong on the server.',
+      );
       expect(controller.state.transactions, isEmpty);
     });
 
@@ -300,7 +303,10 @@ void main() {
 
       expect(controller.state.status, TransactionsStatus.ready);
       expect(controller.state.transactions, hasLength(1));
-      expect(controller.state.loadMoreErrorMessage, 'Something went wrong on the server.');
+      expect(
+        controller.state.loadMoreErrorMessage,
+        'Something went wrong on the server.',
+      );
     });
   });
 
@@ -348,7 +354,10 @@ void main() {
 
       expect(controller.state.status, TransactionsStatus.ready);
       expect(controller.state.transactions, hasLength(1));
-      expect(controller.state.refreshErrorMessage, 'Something went wrong on the server.');
+      expect(
+        controller.state.refreshErrorMessage,
+        'Something went wrong on the server.',
+      );
     });
   });
 

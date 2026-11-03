@@ -42,7 +42,6 @@ http.Response popularLivestockResponse({
   );
 }
 
-
 /// A `MobileListingResource` payload exactly as the backend serialises one.
 ///
 /// Field names, nullability and value spellings are copied from
@@ -55,7 +54,7 @@ http.Response popularLivestockResponse({
 /// `42500.0`. Both must parse to the same [Listing].
 Map<String, dynamic> listingJson({
   Object? id = 12,
-  String livestockType = 'Cattle',
+  String livestockType = 'cattle',
   String breed = 'Holstein',
   Object? ageValue = '18.0',
   Object? ageUnit = 'month',

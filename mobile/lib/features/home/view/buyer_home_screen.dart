@@ -176,9 +176,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   /// Applies a canonical category from the Popular Livestock section and
   /// follows the buyer to Browse, exactly like a Home category tile.
   void _applyCategory(String livestockType) {
+    // The ranking labels categories for display ("Cattle"); the filter uses
+    // the catalog value ("cattle").
     unawaited(
       _marketplace.applyFilters(
-        _marketplace.state.filters.copyWith(livestockType: livestockType),
+        _marketplace.state.filters.copyWith(
+          livestockType: livestockType.toLowerCase(),
+        ),
       ),
     );
     widget.onBrowseMarketplace?.call();

@@ -121,15 +121,9 @@ void main() {
           grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
       expect(delegate.crossAxisCount, 2);
 
-      final Offset first = tester.getTopLeft(
-        find.byType(ListingCard).at(0),
-      );
-      final Offset second = tester.getTopLeft(
-        find.byType(ListingCard).at(1),
-      );
-      final Offset third = tester.getTopLeft(
-        find.byType(ListingCard).at(2),
-      );
+      final Offset first = tester.getTopLeft(find.byType(ListingCard).at(0));
+      final Offset second = tester.getTopLeft(find.byType(ListingCard).at(1));
+      final Offset third = tester.getTopLeft(find.byType(ListingCard).at(2));
 
       expect(first.dy, second.dy, reason: 'first two share a row');
       expect(first.dx, isNot(second.dx), reason: 'and sit side by side');
@@ -434,16 +428,19 @@ void main() {
         handler: (_) async => marketplaceListResponse(),
       );
 
-      ChoiceChip chip(String value) =>
-          tester.widget<ChoiceChip>(find.byKey(ValueKey<String>('browse-category-$value')));
+      ChoiceChip chip(String value) => tester.widget<ChoiceChip>(
+        find.byKey(ValueKey<String>('browse-category-$value')),
+      );
 
       expect(chip('all').selected, isTrue);
       expect(find.text('Category:'), findsNothing);
 
-      await tester.tap(find.byKey(const ValueKey<String>('browse-category-swine')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-swine')),
+      );
       await settleMarketplace(tester, frames: 12);
 
-      expect(harness.recorded.last.query['livestock_type'], 'Swine');
+      expect(harness.recorded.last.query['livestock_type'], 'swine');
       expect(chip('swine').selected, isTrue);
       expect(chip('all').selected, isFalse);
       expect(find.text('Category: Swine'), findsOneWidget);
@@ -459,7 +456,7 @@ void main() {
       );
 
       await harness.controller.applyFilters(
-        const ListingFilters(livestockType: 'Carabao'),
+        const ListingFilters(livestockType: 'carabao'),
       );
       await tester.pumpAndSettle();
 
@@ -479,7 +476,9 @@ void main() {
         handler: (_) async => marketplaceListResponse(),
       );
 
-      await tester.tap(find.byKey(const ValueKey<String>('browse-category-goat')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-goat')),
+      );
       await settleMarketplace(tester, frames: 12);
 
       await tester.tap(
@@ -490,7 +489,10 @@ void main() {
       );
       await settleMarketplace(tester, frames: 12);
 
-      expect(harness.recorded.last.query.containsKey('livestock_type'), isFalse);
+      expect(
+        harness.recorded.last.query.containsKey('livestock_type'),
+        isFalse,
+      );
       expect(find.textContaining('Category: '), findsNothing);
       final ChoiceChip all = tester.widget<ChoiceChip>(
         find.byKey(const ValueKey<String>('browse-category-all')),
@@ -509,7 +511,9 @@ void main() {
 
       await tester.enterText(find.byType(TextField), 'angus');
       await settleMarketplace(tester, frames: 12);
-      await tester.tap(find.byKey(const ValueKey<String>('browse-category-cattle')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-cattle')),
+      );
       await settleMarketplace(tester, frames: 12);
 
       final int beforeClear = harness.recorded.length;
@@ -611,7 +615,9 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.tap(find.byKey(const ValueKey<String>('animal-type-Cattle')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
+      );
       await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester, frames: 12);
 
@@ -630,7 +636,9 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.tap(find.byKey(const ValueKey<String>('animal-type-Cattle')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
+      );
       await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester, frames: 12);
 
@@ -819,12 +827,12 @@ void main() {
 
     test('counts each set field', () {
       const ListingFilters filters = ListingFilters(
-        livestockType: 'Cattle',
+        livestockType: 'cattle',
         maxPrice: '50000',
       );
 
       expect(filters.activeCount, 2);
-      expect(filters.summary, contains('Cattle'));
+      expect(filters.summary, contains('cattle'));
     });
 
     test('treats whitespace as unset', () {
@@ -853,12 +861,12 @@ void main() {
 
     test('compares by value so a re-apply can be recognised', () {
       expect(
-        const ListingFilters(livestockType: 'Cattle'),
-        const ListingFilters(livestockType: 'Cattle'),
+        const ListingFilters(livestockType: 'cattle'),
+        const ListingFilters(livestockType: 'cattle'),
       );
       expect(
-        const ListingFilters(livestockType: 'Cattle'),
-        isNot(const ListingFilters(livestockType: 'Goat')),
+        const ListingFilters(livestockType: 'cattle'),
+        isNot(const ListingFilters(livestockType: 'goat')),
       );
     });
   });

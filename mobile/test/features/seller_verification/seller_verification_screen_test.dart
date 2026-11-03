@@ -49,10 +49,7 @@ void main() {
       expect(find.text('Get verified'), findsOneWidget);
       expect(find.text('Manage your listings'), findsOneWidget);
       expect(find.text('Connect with buyers'), findsOneWidget);
-      expect(
-        find.widgetWithText(FilledButton, 'Get Started'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(FilledButton, 'Get Started'), findsOneWidget);
     });
 
     testWidgets('shows an open application as under review, with no form', (
@@ -73,10 +70,7 @@ void main() {
       expect(find.text('Submitted'), findsOneWidget);
       // No way to start another application: the server answers that with a 409,
       // so offering the form here would walk the user into a dead end.
-      expect(
-        find.widgetWithText(FilledButton, 'Get Started'),
-        findsNothing,
-      );
+      expect(find.widgetWithText(FilledButton, 'Get Started'), findsNothing);
       expect(
         find.widgetWithText(FilledButton, 'Resubmit Verification'),
         findsNothing,
@@ -177,30 +171,31 @@ void main() {
   });
 
   group('form', () {
-    testWidgets('asks only for the supported fields, never lead with unsupported ones', (
-      WidgetTester tester,
-    ) async {
-      await SellerVerificationHarness.pump(
-        tester,
-        tokenStore: tokenStore,
-        accountName: 'Ana Reyes',
-        handler: (_) async => sellerVerificationNotFoundResponse(),
-      );
-      await openSellerVerificationForm(tester, resubmission: false);
+    testWidgets(
+      'asks only for the supported fields, never lead with unsupported ones',
+      (WidgetTester tester) async {
+        await SellerVerificationHarness.pump(
+          tester,
+          tokenStore: tokenStore,
+          accountName: 'Ana Reyes',
+          handler: (_) async => sellerVerificationNotFoundResponse(),
+        );
+        await openSellerVerificationForm(tester, resubmission: false);
 
-      expect(find.byType(SellerVerificationFormScreen), findsOneWidget);
+        expect(find.byType(SellerVerificationFormScreen), findsOneWidget);
 
-      // Full name is read-only account data, plus the three writable contract
-      // fields. The reference's Phone Number is not sent and not shown, and the
-      // ID document reference is gone with the Documents step.
-      expect(find.byType(TextFormField), findsNWidgets(4));
-      expect(find.text('Full name'), findsOneWidget);
-      expect(find.text('Business name'), findsOneWidget);
-      expect(find.text('Business location'), findsOneWidget);
-      expect(find.text('Business description'), findsOneWidget);
-      expect(find.text('Phone Number'), findsNothing);
-      expect(find.text('ID document reference'), findsNothing);
-    });
+        // Full name is read-only account data, plus the three writable contract
+        // fields. The reference's Phone Number is not sent and not shown, and the
+        // ID document reference is gone with the Documents step.
+        expect(find.byType(TextFormField), findsNWidgets(4));
+        expect(find.text('Full name'), findsOneWidget);
+        expect(find.text('Business name'), findsOneWidget);
+        expect(find.text('Business location'), findsOneWidget);
+        expect(find.text('Business description'), findsOneWidget);
+        expect(find.text('Phone Number'), findsNothing);
+        expect(find.text('ID document reference'), findsNothing);
+      },
+    );
 
     testWidgets('collects both required documents on the Documents step', (
       WidgetTester tester,
@@ -332,8 +327,7 @@ void main() {
       final Map<String, dynamic> body = harness.recorded
           .singleWhere(
             (RecordedRequest r) =>
-                r.method == 'POST' &&
-                r.apiPath == '/seller-verification',
+                r.method == 'POST' && r.apiPath == '/seller-verification',
           )
           .body;
       expect(body, containsPair('business_name', 'Rizal Farms'));
@@ -614,29 +608,30 @@ void main() {
       expect(next.onPressed, isNotNull);
     });
 
-    testWidgets('offers a retry when an upload fails, and never fakes success', (
-      WidgetTester tester,
-    ) async {
-      await openDocumentsStep(
-        tester,
-        handler: (RecordedRequest request) async =>
-            request.apiPath == '/seller-verification/documents'
-            ? throw http.ClientException('connection refused')
-            : sellerVerificationNotFoundResponse(),
-      );
+    testWidgets(
+      'offers a retry when an upload fails, and never fakes success',
+      (WidgetTester tester) async {
+        await openDocumentsStep(
+          tester,
+          handler: (RecordedRequest request) async =>
+              request.apiPath == '/seller-verification/documents'
+              ? throw http.ClientException('connection refused')
+              : sellerVerificationNotFoundResponse(),
+        );
 
-      await tapDocumentPick(tester, 'Valid Government-Issued ID');
+        await tapDocumentPick(tester, 'Valid Government-Issued ID');
 
-      // The failure is stated; the slot is not shown as uploaded, and Next stays
-      // disabled because the server never confirmed the document.
-      expect(find.text('Upload failed'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
-      expect(find.text('Uploaded'), findsNothing);
-      final FilledButton next = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Next'),
-      );
-      expect(next.onPressed, isNull);
-    });
+        // The failure is stated; the slot is not shown as uploaded, and Next stays
+        // disabled because the server never confirmed the document.
+        expect(find.text('Upload failed'), findsOneWidget);
+        expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
+        expect(find.text('Uploaded'), findsNothing);
+        final FilledButton next = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Next'),
+        );
+        expect(next.onPressed, isNull);
+      },
+    );
 
     testWidgets('a cancelled picker changes nothing', (
       WidgetTester tester,
@@ -659,8 +654,7 @@ void main() {
 
       expect(
         harness.recorded.where(
-          (RecordedRequest r) =>
-              r.apiPath == '/seller-verification/documents',
+          (RecordedRequest r) => r.apiPath == '/seller-verification/documents',
         ),
         isEmpty,
         reason: 'a cancelled picker must not upload a document',

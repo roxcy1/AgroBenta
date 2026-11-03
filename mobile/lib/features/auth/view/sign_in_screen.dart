@@ -7,25 +7,24 @@ import '../../../core/theme/app_spacing.dart';
 import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
+import '../widgets/auth_notice_banner.dart';
 import '../widgets/auth_scenic_header.dart';
 import 'auth_validators.dart';
 
 /// `POST /auth/login`.
 ///
-/// Email and password only. There is no "forgot password", no "remember me" and
-/// no social sign-in: this app has one account per person and one way in, so
-/// there is no role choice here either.
+/// Email and password only. There is no "remember me" and no social sign-in:
+/// this app has one account per person and one way in, so there is no role
+/// choice here either.
 ///
 /// The layout follows `AgroBenta_Login_DESIGN.md` — the branded landscape hero
 /// overlapped by the white login card, mirroring the registration screen so the
-/// two read as one experience. Three controls the reference shows are **not**
+/// two read as one experience. Two controls the reference shows are **not**
 /// backed by the backend, and are handled honestly rather than faked:
 ///
 ///  * **Remember me** — a Sanctum token is always kept until logout, so there is
 ///    no "remembered" versus "session" distinction to switch. The checkbox is
 ///    rendered inert.
-///  * **Forgot Password?** — there is no password-recovery endpoint, so the
-///    label is styled but not navigable; no destination is invented.
 ///  * **Social sign-in** — the backend implements no Google/Facebook OAuth, so
 ///    the buttons are rendered disabled rather than implying a capability that
 ///    is not there.
@@ -33,12 +32,16 @@ class SignInScreen extends StatefulWidget {
   const SignInScreen({
     required this.onRegister,
     required this.onForgotPassword,
+    this.notice,
     super.key,
   });
 
   /// Switches to the registration form.
   final VoidCallback onRegister;
   final VoidCallback onForgotPassword;
+
+  /// A confirmation to show above the form, such as after a password reset.
+  final String? notice;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -90,9 +93,8 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
-    final bool signedIn = await AuthScope.of(
-      context,
-    ).signIn(email: _email.text.trim(), password: _password.text);
+    final bool signedIn = await AuthScope.of(context)
+        .signIn(email: _email.text.trim(), password: _password.text);
 
     if (!signedIn && mounted) {
       _password.clear();
@@ -107,9 +109,10 @@ class _SignInScreenState extends State<SignInScreen> {
     // The hero scales with the text scale so an enlarged brand block can never
     // overflow a fixed-height decoration, and is capped so it cannot swallow
     // the screen on a short device.
-    final double textScale = MediaQuery.textScalerOf(
-      context,
-    ).scale(1).clamp(1.0, 1.8).toDouble();
+    final double textScale = MediaQuery.textScalerOf(context)
+        .scale(1)
+        .clamp(1.0, 1.8)
+        .toDouble();
     final double heroHeight =
         (MediaQuery.sizeOf(context).height * 0.30 * textScale)
             .clamp(200.0, 300.0)
@@ -155,9 +158,7 @@ class _SignInScreenState extends State<SignInScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -198,6 +199,9 @@ class _SignInScreenState extends State<SignInScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 if (state.errorMessage != null) ...<Widget>[
                   AuthErrorBanner(message: state.errorMessage!),
+                  const SizedBox(height: AppSpacing.lg),
+                ] else if (widget.notice != null) ...<Widget>[
+                  AuthNoticeBanner(message: widget.notice!),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 _buildFields(state),
@@ -314,13 +318,17 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
-        // Styled as a link but deliberately not navigable: no approved
-        // password-recovery destination exists, and inventing one is forbidden.
-        Text(
-          'Forgot Password?',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w700,
+        InkWell(
+          onTap: widget.onForgotPassword,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: Text(
+              'Forgot Password?',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ),
       ],

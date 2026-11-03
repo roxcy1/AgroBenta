@@ -9,7 +9,11 @@ void main() {
       final Inquiry inquiry = Inquiry.fromJson(
         inquiryJson(
           id: 42,
-          listing: inquiryListingJson(id: 9, livestockType: 'Goat', breed: 'Boer'),
+          listing: inquiryListingJson(
+            id: 9,
+            livestockType: 'Goat',
+            breed: 'Boer',
+          ),
           subject: 'General Inquiry',
           message: 'Is this one still available?',
           purchaseInterest: false,
@@ -30,7 +34,10 @@ void main() {
       expect(inquiry.subject, 'General Inquiry');
       expect(inquiry.message, 'Is this one still available?');
       expect(inquiry.purchaseInterest, isFalse);
-      expect(inquiry.transactionMethod, InquiryTransactionMethod.arrangeDelivery);
+      expect(
+        inquiry.transactionMethod,
+        InquiryTransactionMethod.arrangeDelivery,
+      );
       expect(inquiry.deliveryMethod, InquiryDeliveryMethod.arrangeDelivery);
       expect(inquiry.contactMethod, InquiryContactMethod.inAppMessage);
       expect(inquiry.paymentMethod, InquiryPaymentMethod.cash);
@@ -167,7 +174,10 @@ void main() {
   group('enum values', () {
     test('carry exactly the strings the API stores', () {
       expect(InquiryTransactionMethod.directDeal.value, 'direct_deal');
-      expect(InquiryTransactionMethod.arrangeDelivery.value, 'arrange_delivery');
+      expect(
+        InquiryTransactionMethod.arrangeDelivery.value,
+        'arrange_delivery',
+      );
       expect(InquiryDeliveryMethod.buyerPickup.value, 'buyer_pickup');
       expect(InquiryDeliveryMethod.arrangeDelivery.value, 'arrange_delivery');
       expect(InquiryContactMethod.inAppMessage.value, 'in_app_message');
@@ -176,19 +186,20 @@ void main() {
       expect(InquiryPaymentMethod.maya.value, 'maya');
       expect(InquiryPaymentMethod.other.value, 'other');
       expect(InquiryCollectionMethod.farmPickup.value, 'farm_pickup');
-      expect(InquiryCollectionMethod.buyerArrangedTransportation.value,
-          'buyer_arranged_transportation');
-      expect(InquiryCollectionMethod.discussWithSeller.value,
-          'discuss_with_seller');
+      expect(
+        InquiryCollectionMethod.buyerArrangedTransportation.value,
+        'buyer_arranged_transportation',
+      );
+      expect(
+        InquiryCollectionMethod.discussWithSeller.value,
+        'discuss_with_seller',
+      );
     });
 
     test('fromValue round-trips every case', () {
       for (final InquiryTransactionMethod value
           in InquiryTransactionMethod.values) {
-        expect(
-          InquiryTransactionMethod.fromValue(value.value),
-          value,
-        );
+        expect(InquiryTransactionMethod.fromValue(value.value), value);
       }
       for (final InquiryDeliveryMethod value in InquiryDeliveryMethod.values) {
         expect(InquiryDeliveryMethod.fromValue(value.value), value);

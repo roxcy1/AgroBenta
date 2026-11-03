@@ -219,11 +219,12 @@ class _SellerVerificationFormScreenState
       setState(() {
         // Document field errors (`id_document`, `selfie`) belong on the
         // Documents step; business field errors on Basic Information.
-        _step = _controller.state.validationErrors.keys.any(
-          (String key) =>
-              key == VerificationDocumentType.idDocument.value ||
-              key == VerificationDocumentType.selfie.value,
-        )
+        _step =
+            _controller.state.validationErrors.keys.any(
+              (String key) =>
+                  key == VerificationDocumentType.idDocument.value ||
+                  key == VerificationDocumentType.selfie.value,
+            )
             ? 1
             : 0;
         _displayedErrors = const <String, List<String>>{};
@@ -240,8 +241,7 @@ class _SellerVerificationFormScreenState
           listenable: Listenable.merge(<Listenable>[_controller, _documents]),
           builder: (BuildContext context, Widget? child) {
             final SellerVerificationState state = _controller.state;
-            final SellerVerificationDocumentsState documents =
-                _documents.state;
+            final SellerVerificationDocumentsState documents = _documents.state;
             final bool isSubmitting =
                 state.status == SellerVerificationUiStatus.submitting;
 

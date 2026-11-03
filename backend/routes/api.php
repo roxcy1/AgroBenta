@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
 use App\Http\Controllers\Api\Inquiry\InquiryController as MobileInquiryController;
+use App\Http\Controllers\Api\LivestockTypeController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
 use App\Http\Controllers\Api\Marketplace\PopularLivestockController;
 use App\Http\Controllers\Api\Messaging\ConversationController;
@@ -28,6 +29,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
 
+// Shared reference data for both mobile and admin tokens. Deliberately outside
+// the `ability:mobile` and `ability:admin` groups so either token can read it.
+Route::middleware('auth:sanctum')->get('/livestock-types', LivestockTypeController::class);
+
 Route::post('/admin/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');
 
@@ -39,6 +44,13 @@ Route::prefix('auth')->group(function (): void {
         ->middleware('throttle:5,1');
     Route::post('/login', [MobileAuthController::class, 'login'])
         ->middleware('throttle:10,1');
+
+    // Password recovery, for a signed-out user. Each route names its throttle
+    // bucket, because `throttle:5,1` alone is shared with `/register`.
+    Route::post('/forgot-password', [MobileAuthController::class, 'forgotPassword'])
+        ->middleware('throttle:5,1,forgot-password');
+    Route::post('/reset-password', [MobileAuthController::class, 'resetPassword'])
+        ->middleware('throttle:5,1,reset-password');
 
     Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
         Route::get('/me', [MobileAuthController::class, 'me']);

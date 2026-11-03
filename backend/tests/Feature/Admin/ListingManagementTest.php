@@ -232,6 +232,25 @@ class ListingManagementTest extends TestCase
         $this->assertEquals('sold', $data['listings'][0]['status']);
     }
 
+    public function test_legacy_unsupported_types_remain_visible_and_searchable(): void
+    {
+        $this->createListing(['livestock_type' => 'chicken']);
+
+        $token = $this->adminToken();
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/admin/listings?search=chicken')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.listings.0.livestock_type', 'chicken');
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/admin/listings?livestock_type=chicken')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.listings.0.livestock_type', 'chicken');
+    }
+
     public function test_combined_search_and_filter(): void
     {
         $this->createListing(['livestock_type' => 'cattle', 'breed' => 'Angus']);

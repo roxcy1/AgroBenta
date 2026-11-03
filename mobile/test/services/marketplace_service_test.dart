@@ -99,7 +99,7 @@ void main() {
 
       await service.browse(
         search: 'holstein',
-        livestockType: 'Cattle',
+        livestockType: 'cattle',
         location: 'Pampanga',
         minPrice: '10000',
         maxPrice: '50000',
@@ -109,7 +109,7 @@ void main() {
 
       final Map<String, String> query = recorded.single.query;
       expect(query['search'], 'holstein');
-      expect(query['livestock_type'], 'Cattle');
+      expect(query['livestock_type'], 'cattle');
       expect(query['location'], 'Pampanga');
       expect(query['min_price'], '10000');
       expect(query['max_price'], '50000');
@@ -122,9 +122,9 @@ void main() {
         (_) async => marketplaceListResponse(),
       );
 
-      await service.browse(livestockType: '  Cattle  ');
+      await service.browse(livestockType: '  cattle  ');
 
-      expect(recorded.single.query['livestock_type'], 'Cattle');
+      expect(recorded.single.query['livestock_type'], 'cattle');
     });
 
     test(
@@ -293,7 +293,7 @@ void main() {
       final Listing listing = await service.detail(12);
 
       expect(listing.seller.name, 'Rizal Farms');
-      expect(listing.livestockType, 'Cattle');
+      expect(listing.livestockType, 'cattle');
       expect(listing.askingPrice, '42500.00');
       expect(listing.photos, isEmpty);
     });

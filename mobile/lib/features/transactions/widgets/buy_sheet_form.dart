@@ -12,7 +12,11 @@ import '../../../repositories/transaction_repository.dart';
 /// Stateful so the sheet shell stays a cheap layout widget. The quantity
 /// feeds the create call only — no live total is shown anywhere.
 class BuySheetForm extends StatefulWidget {
-  const BuySheetForm({required this.listing, required this.repository, super.key});
+  const BuySheetForm({
+    required this.listing,
+    required this.repository,
+    super.key,
+  });
 
   final Listing listing;
   final TransactionRepository repository;
