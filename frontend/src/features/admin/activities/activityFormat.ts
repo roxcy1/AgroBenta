@@ -1,3 +1,6 @@
+import { emptyListMessage } from '../../../lib/emptyState';
+import { formatDateTime } from '../../../lib/format';
+
 export interface ActivityChange {
   field: string;
   label: string;
@@ -157,22 +160,11 @@ export function hasActiveActivityFilters(filters: {
 }
 
 export function emptyActivitiesMessage(hasFilters: boolean): string {
-  return hasFilters
-    ? 'No activities match the current filters.'
-    : 'No activities have been recorded yet.';
+  return emptyListMessage('activities', hasFilters);
 }
 
 export function formatActivityTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '\u2014';
-
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatDateTime(value);
 }
 
 export function getActivityTargetLink(

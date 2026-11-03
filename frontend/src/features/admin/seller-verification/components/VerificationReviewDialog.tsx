@@ -5,25 +5,14 @@ import {
   useRejectVerification,
 } from '../api/useSellerVerifications';
 import type { VerificationActionConfig } from './verificationModeration';
-import { statusLabel, verificationErrorMessage } from './verificationModeration';
+import { verificationErrorMessage } from './verificationModeration';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDateTime } from '../../../../lib/format';
 
 interface VerificationReviewDialogProps {
   verification: SellerVerification;
   action: VerificationActionConfig;
   onClose: () => void;
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 /**
@@ -106,9 +95,7 @@ export default function VerificationReviewDialog({
               <tr>
                 <th>Status</th>
                 <td>
-                  <span className={`lv-badge lv-badge--${verification.status}`}>
-                    {statusLabel(verification.status)}
-                  </span>
+                  <StatusBadge status={verification.status} />
                 </td>
               </tr>
               {rows.map(([label, value]) => (

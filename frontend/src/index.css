@@ -13,6 +13,39 @@
   --color-text-secondary: #666666;
   --color-text-muted: #8A8A8A;
   --color-border: #E0E0E0;
+  --color-primary-tint: #E8F5E9;
+  --color-danger-tint: #FFEBEE;
+  --color-warning-tint: #FFF3E0;
+  --color-warning-dark: #E65100;
+  --color-info: #1565C0;
+  --color-info-tint: #E3F2FD;
+
+  /* Status tones: one palette for every badge (see src/lib/status.ts). */
+  --status-neutral-bg: var(--color-bg);
+  --status-neutral-fg: var(--color-text-secondary);
+  --status-warning-bg: var(--color-warning-tint);
+  --status-warning-fg: var(--color-warning-dark);
+  --status-success-bg: var(--color-primary-tint);
+  --status-success-fg: var(--color-primary);
+  --status-info-bg: var(--color-info-tint);
+  --status-info-fg: var(--color-info);
+  --status-danger-bg: var(--color-danger-tint);
+  --status-danger-fg: var(--color-danger);
+
+  /* Charts: grid, axes, series and the pie palette. */
+  --chart-grid: var(--color-border);
+  --chart-axis: var(--color-text-secondary);
+  --chart-bar: var(--color-primary);
+  --chart-bar-secondary: var(--color-primary-light);
+  --chart-line-accent: var(--color-accent);
+  --chart-pie-1: #1B5E20;
+  --chart-pie-2: #2E7D32;
+  --chart-pie-3: #4CAF50;
+  --chart-pie-4: #66BB6A;
+  --chart-pie-5: #81C784;
+  --chart-pie-6: #A5D6A7;
+  --chart-pie-7: #C8E6C9;
+
   --color-sidebar-bg: #1B5E20;
   --color-sidebar-text: #FFFFFF;
   --color-sidebar-active: rgba(255, 255, 255, 0.12);
@@ -25,6 +58,10 @@
   --radius-lg: 12px;
 
   --ring-primary: rgba(27, 94, 32, 0.14);
+
+  /* Controls: one height for buttons and inputs (DESIGN.md §8, §13). */
+  --control-height: 40px;
+  --control-padding-x: 20px;
 
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
   --shadow-card-hover: 0 2px 4px rgba(16, 24, 40, 0.05), 0 6px 16px rgba(16, 24, 40, 0.08);
@@ -288,7 +325,7 @@ input {
 
 .login-error {
   padding: 12px 16px;
-  background: #FFEBEE;
+  background: var(--color-danger-tint);
   color: var(--color-danger);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -479,6 +516,7 @@ input {
 /* Main Content */
 .admin-main {
   flex: 1;
+  min-width: 0;
   margin-left: var(--sidebar-width);
   min-height: 100vh;
   background: var(--color-bg);
@@ -799,18 +837,18 @@ input {
 }
 
 .dashboard-stat-icon--users {
-  background: #E8F5E9;
-  color: #1B5E20;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
 }
 
 .dashboard-stat-icon--listings {
-  background: #FFF3E0;
-  color: #E65100;
+  background: var(--color-warning-tint);
+  color: var(--color-warning-dark);
 }
 
 .dashboard-stat-icon--transactions {
-  background: #E3F2FD;
-  color: #1565C0;
+  background: var(--color-info-tint);
+  color: var(--color-info);
 }
 
 .dashboard-stat-icon--sellers {
@@ -930,7 +968,8 @@ input {
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .dashboard-table {
@@ -962,16 +1001,6 @@ input {
 
 .dashboard-table tr:hover td {
   background: #FAFAFA;
-}
-
-.dashboard-activity-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  background: #E8F5E9;
-  color: #1B5E20;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 500;
 }
 
 .dashboard-activity-description {
@@ -1274,7 +1303,8 @@ input {
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .users-table {
@@ -1332,34 +1362,6 @@ input {
   color: var(--color-text-secondary);
   font-size: 13px;
   white-space: nowrap;
-}
-
-.users-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.users-badge--admin {
-  background: #E8F5E9;
-  color: #1B5E20;
-}
-
-.users-badge--user {
-  background: #F5F5F5;
-  color: #666666;
-}
-
-.users-badge--seller {
-  background: #E8F5E9;
-  color: #1B5E20;
-}
-
-.users-badge--buyer {
-  background: #F5F5F5;
-  color: #666666;
 }
 
 .users-pagination {
@@ -1757,43 +1759,43 @@ input {
 }
 
 .lv-stat-icon--total {
-  background: #E3F2FD;
-  color: #1565C0;
+  background: var(--color-info-tint);
+  color: var(--color-info);
 }
 
 .lv-stat-icon--pending {
-  background: #FFF3E0;
-  color: #E65100;
+  background: var(--color-warning-tint);
+  color: var(--color-warning-dark);
 }
 
 .lv-stat-icon--completed {
-  background: #E8F5E9;
-  color: #1B5E20;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
 }
 
 .lv-stat-icon--active {
-  background: #E8F5E9;
-  color: #1B5E20;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
 }
 
 .lv-stat-icon--cancelled {
-  background: #FFEBEE;
-  color: #C62828;
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 .lv-stat-icon--inactive {
-  background: #F5F5F5;
+  background: var(--color-bg);
   color: var(--color-text-muted);
 }
 
 .lv-stat-icon--buyer {
-  background: #E3F2FD;
-  color: #1565C0;
+  background: var(--color-info-tint);
+  color: var(--color-info);
 }
 
 .lv-stat-icon--seller {
-  background: #E8F5E9;
-  color: #1B5E20;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
 }
 
 .lv-stat-icon--admin {
@@ -1842,7 +1844,8 @@ input {
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .lv-table {
@@ -1907,7 +1910,10 @@ input {
   background: #F0F4F0;
 }
 
-.lv-badge {
+/* One badge: the shape is shared, the tone comes from the status (src/lib/status.ts). */
+.lv-badge,
+.users-badge,
+.dashboard-activity-badge {
   display: inline-block;
   padding: 4px 10px;
   border-radius: var(--radius-sm);
@@ -1915,59 +1921,34 @@ input {
   font-weight: 500;
 }
 
-.lv-badge--draft {
-  background: #F5F5F5;
-  color: #666666;
+.lv-badge--neutral,
+.users-badge--user,
+.users-badge--buyer {
+  background: var(--status-neutral-bg);
+  color: var(--status-neutral-fg);
 }
 
-.lv-badge--pending {
-  background: #FFF3E0;
-  color: #E65100;
+.lv-badge--warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
 }
 
-.lv-badge--active {
-  background: #E8F5E9;
-  color: #1B5E20;
+.lv-badge--success,
+.users-badge--admin,
+.users-badge--seller,
+.dashboard-activity-badge {
+  background: var(--status-success-bg);
+  color: var(--status-success-fg);
 }
 
-.lv-badge--sold {
-  background: #E3F2FD;
-  color: #1565C0;
+.lv-badge--info {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
 }
 
-.lv-badge--inactive {
-  background: #F5F5F5;
-  color: var(--color-text-muted);
-}
-
-.lv-badge--submitted {
-  background: #E3F2FD;
-  color: #1565C0;
-}
-
-.lv-badge--pending_review {
-  background: #FFF3E0;
-  color: #E65100;
-}
-
-.lv-badge--approved {
-  background: #E8F5E9;
-  color: #1B5E20;
-}
-
-.lv-badge--rejected {
-  background: #FFEBEE;
-  color: #C62828;
-}
-
-.lv-badge--completed {
-  background: #E8F5E9;
-  color: #1B5E20;
-}
-
-.lv-badge--cancelled {
-  background: #FFEBEE;
-  color: #C62828;
+.lv-badge--danger {
+  background: var(--status-danger-bg);
+  color: var(--status-danger-fg);
 }
 
 .lv-action-buttons {
@@ -1986,8 +1967,8 @@ input {
 }
 
 .lv-action-btn--approve {
-  background: #E8F5E9;
-  color: #1B5E20;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
 }
 
 .lv-action-btn--approve:hover:not(:disabled) {
@@ -1995,8 +1976,8 @@ input {
 }
 
 .lv-action-btn--reject {
-  background: #FFEBEE;
-  color: #C62828;
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 .lv-action-btn--reject:hover:not(:disabled) {
@@ -2049,7 +2030,7 @@ input {
 
 .verification-panel .lv-tab--active,
 .verification-panel .lv-tab--active:hover {
-  background: #E8F5E9;
+  background: var(--color-primary-tint);
   color: var(--color-primary);
 }
 
@@ -2649,13 +2630,13 @@ input {
 }
 
 .settings-message--success {
-  background: #E8F5E9;
-  color: #1B5E20;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
 }
 
 .settings-message--error {
-  background: #FFEBEE;
-  color: #C62828;
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 .settings-group {
@@ -2842,7 +2823,7 @@ input {
 }
 
 .toast--success {
-  border-left-color: #1B5E20;
+  border-left-color: var(--color-primary);
 }
 
 .toast--error {
@@ -2962,6 +2943,11 @@ input {
 }
 
 @media (max-width: 768px) {
+  /* The sidebar becomes a top bar, so the layout stacks instead of sitting side by side. */
+  .admin-layout {
+    flex-direction: column;
+  }
+
   .sidebar {
     width: 100%;
     height: auto;
@@ -3082,4 +3068,44 @@ input {
   .settings-save-button {
     width: 100%;
   }
+}
+
+/* ------------------------------------------------------------------------
+   Shared button metrics and keyboard focus (DESIGN.md §8)
+
+   The buttons below were each sized on their own (10px 20px, 0 18px, a fixed
+   40px...). They now share one height and padding. Colours, hover and disabled
+   states stay with each component. Placed last so it wins at equal specificity.
+   ------------------------------------------------------------------------ */
+.dashboard-retry-button,
+.users-retry-button,
+.lv-retry-button,
+.settings-retry-button,
+.users-search-button,
+.lv-search-button,
+.settings-save-button,
+.lv-action-confirm,
+.lv-action-cancel,
+.users-page-button,
+.lv-page-button,
+.reports-clear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* One visible focus ring for keyboard users on anything without its own. */
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[role='button']:focus-visible,
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }

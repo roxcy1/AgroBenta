@@ -8,7 +8,8 @@ import {
 } from '../api/useListings';
 import ListingPhotos from './ListingPhotos';
 import type { ModerationOption } from './listingModeration';
-import { statusLabel } from './listingModeration';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDateTime, formatPeso } from '../../../../lib/format';
 
 interface ListingReviewDialogProps {
   listing: Listing;
@@ -77,13 +78,13 @@ export default function ListingReviewDialog({
     ['Gender', listing.gender],
     ['Weight', listing.weight_value !== null ? `${listing.weight_value} ${listing.weight_unit ?? ''}`.trim() : null],
     ['Quantity', String(listing.quantity)],
-    ['Asking price', listing.asking_price],
+    ['Asking price', formatPeso(listing.asking_price)],
     ['Location', listing.location],
     ['Health status', listing.health_status],
     ['Vaccination', listing.vaccination],
     ['Description', listing.short_description],
     ['Additional notes', listing.additional_notes],
-    ['Submitted', new Date(listing.created_at).toLocaleString()],
+    ['Submitted', formatDateTime(listing.created_at)],
   ];
 
   return (
@@ -115,9 +116,7 @@ export default function ListingReviewDialog({
               <tr>
                 <th>Status</th>
                 <td>
-                  <span className={`lv-badge lv-badge--${listing.status}`}>
-                    {statusLabel(listing.status)}
-                  </span>
+                  <StatusBadge status={listing.status} />
                 </td>
               </tr>
               {rows.map(([label, value]) => (

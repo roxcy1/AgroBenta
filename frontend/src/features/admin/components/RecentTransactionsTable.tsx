@@ -1,5 +1,6 @@
 import type { DashboardRecentTransaction } from '../api/useDashboard';
 import { formatCurrency, formatDate } from './dashboardFormat';
+import { StatusBadge } from './StatusBadge';
 
 interface RecentTransactionsTableProps {
   transactions: DashboardRecentTransaction[];
@@ -41,9 +42,7 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
               </td>
               <td className="lv-price-cell">{formatCurrency(transaction.total_amount)}</td>
               <td>
-                <span className={`lv-badge lv-badge--${transaction.status}`}>
-                  {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-                </span>
+                <StatusBadge status={transaction.status} />
               </td>
               <td className="lv-date-cell">{formatDate(transaction.created_at)}</td>
             </tr>

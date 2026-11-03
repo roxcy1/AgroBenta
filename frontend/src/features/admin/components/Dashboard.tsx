@@ -22,12 +22,12 @@ import {
 } from 'recharts';
 import { useDashboard } from '../api/useDashboard';
 import { useReports } from '../reports/api/useReports';
-import { formatDate } from './dashboardFormat';
+import { formatDateTime } from '../../../lib/format';
 import { RecentListingsTable } from './RecentListingsTable';
 import { RecentTransactionsTable } from './RecentTransactionsTable';
-import { TopNavBar } from './TopNavBar';
-
-const PIE_COLORS = ['#1B5E20', '#2E7D32', '#4CAF50', '#66BB6A', '#81C784', '#A5D6A7', '#C8E6C9'];
+import { Header } from './Header';
+import { statusChartColor, statusLabel } from '../../../lib/status';
+import { CHART_AXIS, CHART_BAR, CHART_GRID, CHART_PIE_COLORS, CHART_TICK, CHART_TOOLTIP_STYLE } from '../../../lib/chartTheme';
 
 export function Dashboard() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -41,7 +41,7 @@ export function Dashboard() {
   if (isLoading) {
     return (
       <>
-        <TopNavBar />
+        <Header title="Dashboard" subtitle="Overview of marketplace activity and key metrics" />
         <div className="dashboard-content">
           <div className="dashboard-loading">
             <div className="loading-spinner" />
@@ -55,7 +55,7 @@ export function Dashboard() {
   if (error) {
     return (
       <>
-        <TopNavBar />
+        <Header title="Dashboard" subtitle="Overview of marketplace activity and key metrics" />
         <div className="dashboard-content">
           <div className="dashboard-error">
             <p className="dashboard-error-text">Failed to load dashboard data.</p>
@@ -71,7 +71,7 @@ export function Dashboard() {
   if (!data) {
     return (
       <>
-        <TopNavBar />
+        <Header title="Dashboard" subtitle="Overview of marketplace activity and key metrics" />
         <div className="dashboard-content">
           <div className="dashboard-empty">
             <p>No dashboard data available.</p>
@@ -100,32 +100,32 @@ export function Dashboard() {
   });
   const transactionsThisMonth = transaction_trend[currentMonthIndex]?.count ?? 0;
 
-  const listingStatusData = [
-    { status: 'Draft', count: listings.draft, color: '#9E9E9E' },
-    { status: 'Pending', count: listings.pending, color: '#F57F17' },
-    { status: 'Active', count: listings.active, color: '#1B5E20' },
-    { status: 'Sold', count: listings.sold, color: '#1565C0' },
-    { status: 'Inactive', count: listings.inactive, color: '#BDBDBD' },
-  ];
+  const listingStatusData = (['draft', 'pending', 'active', 'sold', 'inactive'] as const).map((key) => ({
+    status: statusLabel(key),
+    count: listings[key],
+    color: statusChartColor(key),
+  }));
 
   const approvedVerifications = reportsData?.seller_verifications.approved ?? 0;
   const rejectedVerifications = reportsData?.seller_verifications.rejected ?? 0;
   const verificationOutcomeData = [
-    { outcome: 'Approved', count: approvedVerifications, color: '#2E7D32' },
-    { outcome: 'Rejected', count: rejectedVerifications, color: '#C62828' },
+    {
+      outcome: statusLabel('approved'),
+      count: approvedVerifications,
+      color: statusChartColor('approved'),
+    },
+    {
+      outcome: statusLabel('rejected'),
+      count: rejectedVerifications,
+      color: statusChartColor('rejected'),
+    },
   ];
 
   return (
     <>
-      <TopNavBar />
+      <Header title="Dashboard" subtitle="Overview of marketplace activity and key metrics" />
 
       <div className="dashboard-content">
-        <div className="dashboard-welcome">
-          <p className="dashboard-welcome-text">
-            Here is an overview of your marketplace activity and key metrics.
-          </p>
-        </div>
-
         <div className="dashboard-stats-grid dashboard-stats-grid--five">
           <div className="dashboard-stat-card">
             <div className="dashboard-stat-icon dashboard-stat-icon--users">
@@ -199,10 +199,10 @@ export function Dashboard() {
                     layout="vertical"
                     margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
-                    <YAxis type="category" dataKey="status" width={82} tick={{ fontSize: 12 }} stroke="#666666" />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={{ fontSize: 13 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis type="category" dataKey="status" width={82} tick={CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
                     <Bar dataKey="count" radius={[0, 2, 2, 0]} name="Listings">
                       {listingStatusData.map((entry) => (
                         <Cell key={entry.status} fill={entry.color} />
@@ -240,10 +240,10 @@ export function Dashboard() {
                     data={verificationOutcomeData}
                     margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                    <XAxis dataKey="outcome" tick={{ fontSize: 12 }} stroke="#666666" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={{ fontSize: 13 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                    <XAxis dataKey="outcome" tick={CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis allowDecimals={false} tick={CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={CHART_TOOLTIP_STYLE} />
                     <Bar dataKey="count" radius={[2, 2, 0, 0]} name="Verifications">
                       {verificationOutcomeData.map((entry) => (
                         <Cell key={entry.outcome} fill={entry.color} />
@@ -267,11 +267,11 @@ export function Dashboard() {
               {transaction_trend.some(item => item.count > 0) ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={transaction_trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#666666" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={{ fontSize: 13 }} />
-                    <Bar dataKey="count" fill="#1B5E20" radius={[2, 2, 0, 0]} name="Transactions" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                    <XAxis dataKey="month" tick={CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis allowDecimals={false} tick={CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Bar dataKey="count" fill={CHART_BAR} radius={[2, 2, 0, 0]} name="Transactions" />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -303,10 +303,10 @@ export function Dashboard() {
                       labelLine={false}
                     >
                       {livestock_distribution.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        <Cell key={`cell-${index}`} fill={CHART_PIE_COLORS[index % CHART_PIE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={{ fontSize: 13 }} />
+                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -363,7 +363,7 @@ export function Dashboard() {
                       </td>
                       <td className="dashboard-activity-description">{activity.description}</td>
                       <td>{activity.user?.name ?? '—'}</td>
-                      <td className="dashboard-activity-date">{formatDate(activity.created_at)}</td>
+                      <td className="dashboard-activity-date">{formatDateTime(activity.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
