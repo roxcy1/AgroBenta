@@ -647,4 +647,12 @@ abstract final class AuthEndpoints {
 
   /// `POST` — revokes the caller's current mobile token. 200.
   static const String logout = '/auth/logout';
+
+  /// `POST` — emails a reset code. The same 200 whether or not the email is
+  /// registered.
+  static const String forgotPassword = '/auth/forgot-password';
+
+  /// `POST` — sets a new password from a reset code. 200, or 422 for a wrong or
+  /// expired code.
+  static const String resetPassword = '/auth/reset-password';
 }

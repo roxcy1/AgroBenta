@@ -516,6 +516,21 @@ One contract detail to keep in mind: **`POST /api/auth/logout` returns
 success envelope that omits `data` to `data: null`; `ApiEnvelope` itself stays
 strict and still rejects a missing `success`.
 
+**Resolved for password recovery (MS-10).** Two public routes, for a signed-out
+user:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/auth/forgot-password` | Emails a six-digit code (`email`). The same `200` for every valid email, including unknown and administrator addresses. |
+| `POST /api/auth/reset-password` | Sets a new password (`email`, `token`, `password`, `password_confirmation`) and revokes all the account's tokens. `422` for a wrong or expired code. |
+
+Each is limited to 5 requests a minute per client (`429`). A code lasts 60
+minutes and works once, and an email gets 5 attempts across all its codes in
+that time. Both routes return `{ success, message }` with no `data`, so the app
+shows its own wording. The flow is `ForgotPasswordScreen` →
+`ResetPasswordScreen` → the sign-in form with a confirmation; there is no
+session until the user signs in with the new password.
+
 **Resolved for M2 (marketplace browse).** The backend now exposes a read-only
 buyer marketplace behind the same `auth:sanctum` + `ability:mobile` guard:
 

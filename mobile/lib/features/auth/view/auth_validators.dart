@@ -26,6 +26,19 @@ String? validateRequiredEmail(String? value) {
   return null;
 }
 
+/// The length of an emailed password reset code.
+const int resetCodeLength = 6;
+
+String? validateResetCode(String? value) {
+  final String code = value?.trim() ?? '';
+  if (code.isEmpty) {
+    return 'Enter the code from your email.';
+  }
+  return RegExp('^\\d{$resetCodeLength}\$').hasMatch(code)
+      ? null
+      : 'Enter the $resetCodeLength-digit code.';
+}
+
 String? validateRequiredPassword(String? value) =>
     (value == null || value.isEmpty) ? 'Enter your password.' : null;
 
