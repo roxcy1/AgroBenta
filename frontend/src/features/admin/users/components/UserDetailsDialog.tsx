@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { AdminUser } from '../api/useUsers';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDateTime } from '../../../../lib/format';
 
 type VerificationStatus = 'submitted' | 'pending_review' | 'approved' | 'rejected';
 
@@ -21,38 +23,12 @@ function orDash(value: string | number | null | undefined): string {
   return String(value);
 }
 
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '\u2014';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '\u2014';
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
 function roleLabel(role: AdminUser['role']): string {
   return role === 'admin' ? 'Administrator' : 'User';
 }
 
 function capabilityLabel(capability: AdminUser['seller_capability']): string {
   return capability === 'seller' ? 'Seller' : 'Buyer';
-}
-
-function verificationLabel(status: VerificationStatus): string {
-  switch (status) {
-    case 'submitted':
-      return 'Submitted';
-    case 'pending_review':
-      return 'Pending Review';
-    case 'approved':
-      return 'Approved';
-    case 'rejected':
-      return 'Rejected';
-  }
 }
 
 export default function UserDetailsDialog({
@@ -76,9 +52,7 @@ export default function UserDetailsDialog({
         [
           'Verification status',
           verificationStatus ? (
-            <span key="verification" className={`lv-badge lv-badge--${verificationStatus}`}>
-              {verificationLabel(verificationStatus)}
-            </span>
+            <StatusBadge key="verification" status={verificationStatus} />
           ) : (
             '\u2014'
           ),

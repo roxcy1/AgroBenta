@@ -2,30 +2,9 @@ import { ArrowLeftRight, Package, Store, Users as UsersIcon } from 'lucide-react
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
 import { useReports } from '../api/useReports';
-
-const PIE_COLORS = ['#1B5E20', '#2E7D32', '#4CAF50', '#66BB6A', '#81C784', '#A5D6A7', '#C8E6C9'];
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#F57F17',
-  completed: '#2E7D32',
-  cancelled: '#C62828',
-  active: '#1B5E20',
-  sold: '#1565C0',
-  draft: '#666666',
-  inactive: '#999999',
-  submitted: '#1565C0',
-  pending_review: '#F57F17',
-  approved: '#2E7D32',
-  rejected: '#C62828',
-};
-
-function formatCurrency(value: number): string {
-  if (value === 0) return '₱0';
-  return `₱${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-PH');
-}
+import { formatNumber, formatPeso } from '../../../../lib/format';
+import { statusChartColor } from '../../../../lib/status';
+import { CHART_AXIS, CHART_BAR, CHART_BAR_SECONDARY, CHART_GRID, CHART_LINE_ACCENT, CHART_PIE_COLORS, CHART_TICK, CHART_TICK_SMALL, CHART_TOOLTIP_STYLE } from '../../../../lib/chartTheme';
 
 export function ReportsPage() {
   const [dateFrom, setDateFrom] = useState('');
@@ -234,10 +213,10 @@ export function ReportsPage() {
                     labelLine={false}
                   >
                     {users.seller_distribution.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={CHART_PIE_COLORS[index % CHART_PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Users']} contentStyle={{ fontSize: 13 }} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Users']} contentStyle={CHART_TOOLTIP_STYLE} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -278,11 +257,11 @@ export function ReportsPage() {
             {listings.by_type.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={listings.by_type} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                  <XAxis dataKey="type" tick={{ fontSize: 12 }} stroke="#666666" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#666666" />
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={{ fontSize: 13 }} />
-                  <Bar dataKey="count" fill="#1B5E20" radius={[2, 2, 0, 0]} name="Listings" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="type" tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill={CHART_BAR} radius={[2, 2, 0, 0]} name="Listings" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -308,10 +287,10 @@ export function ReportsPage() {
                     labelLine={false}
                   >
                     {listings.by_status.map((entry) => (
-                      <Cell key={`cell-${entry.status}`} fill={STATUS_COLORS[entry.status] ?? '#666666'} />
+                      <Cell key={`cell-${entry.status}`} fill={statusChartColor(entry.status)} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={{ fontSize: 13 }} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -327,19 +306,19 @@ export function ReportsPage() {
             <ul className="dashboard-breakdown-list">
               <li>
                 <span className="dashboard-breakdown-label">Average Price</span>
-                <span className="dashboard-breakdown-value">{formatCurrency(listings.price_stats.avg_price)}</span>
+                <span className="dashboard-breakdown-value">{formatPeso(listings.price_stats.avg_price)}</span>
               </li>
               <li>
                 <span className="dashboard-breakdown-label">Min Price</span>
-                <span className="dashboard-breakdown-value">{formatCurrency(listings.price_stats.min_price)}</span>
+                <span className="dashboard-breakdown-value">{formatPeso(listings.price_stats.min_price)}</span>
               </li>
               <li>
                 <span className="dashboard-breakdown-label">Max Price</span>
-                <span className="dashboard-breakdown-value">{formatCurrency(listings.price_stats.max_price)}</span>
+                <span className="dashboard-breakdown-value">{formatPeso(listings.price_stats.max_price)}</span>
               </li>
               <li>
                 <span className="dashboard-breakdown-label">Total Value</span>
-                <span className="dashboard-breakdown-value">{formatCurrency(listings.price_stats.total_value)}</span>
+                <span className="dashboard-breakdown-value">{formatPeso(listings.price_stats.total_value)}</span>
               </li>
             </ul>
           </div>
@@ -390,14 +369,14 @@ export function ReportsPage() {
             {transactions.trend.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={transactions.trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#666666" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#666666" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="month" tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
                   <Tooltip
                     formatter={(value) => [String(value ?? 0), 'Transactions']}
-                    contentStyle={{ fontSize: 13 }}
+                    contentStyle={CHART_TOOLTIP_STYLE}
                   />
-                  <Line type="monotone" dataKey="count" stroke="#1B5E20" strokeWidth={2} dot={{ r: 3 }} name="Transactions" />
+                  <Line type="monotone" dataKey="count" stroke={CHART_BAR} strokeWidth={2} dot={{ r: 3 }} name="Transactions" />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -423,10 +402,10 @@ export function ReportsPage() {
                     labelLine={false}
                   >
                     {transactions.by_status.map((entry) => (
-                      <Cell key={`cell-${entry.status}`} fill={STATUS_COLORS[entry.status] ?? '#666666'} />
+                      <Cell key={`cell-${entry.status}`} fill={statusChartColor(entry.status)} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={{ fontSize: 13 }} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={CHART_TOOLTIP_STYLE} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -442,11 +421,11 @@ export function ReportsPage() {
             <ul className="dashboard-breakdown-list">
               <li>
                 <span className="dashboard-breakdown-label">Recorded Arrangement Value</span>
-                <span className="dashboard-breakdown-value">{formatCurrency(transactions.total_revenue)}</span>
+                <span className="dashboard-breakdown-value">{formatPeso(transactions.total_revenue)}</span>
               </li>
               <li>
                 <span className="dashboard-breakdown-label">Average Amount</span>
-                <span className="dashboard-breakdown-value">{formatCurrency(transactions.avg_amount)}</span>
+                <span className="dashboard-breakdown-value">{formatPeso(transactions.avg_amount)}</span>
               </li>
             </ul>
             <p className="dashboard-chart-caption">
@@ -479,7 +458,7 @@ export function ReportsPage() {
                 transactions.by_livestock.map((item) => (
                   <li key={item.livestock_type}>
                     <span className="dashboard-breakdown-label">{item.livestock_type}</span>
-                    <span className="dashboard-breakdown-value">{formatNumber(item.count)} ({formatCurrency(item.total_amount)})</span>
+                    <span className="dashboard-breakdown-value">{formatNumber(item.count)} ({formatPeso(item.total_amount)})</span>
                   </li>
                 ))
               ) : (
@@ -501,11 +480,11 @@ export function ReportsPage() {
             {seller_verifications.submission_trend.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={seller_verifications.submission_trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#666666" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#666666" />
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Submissions']} contentStyle={{ fontSize: 13 }} />
-                  <Bar dataKey="count" fill="#6A1B9A" radius={[2, 2, 0, 0]} name="Submissions" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="month" tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Submissions']} contentStyle={CHART_TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill={CHART_BAR_SECONDARY} radius={[2, 2, 0, 0]} name="Submissions" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -531,10 +510,10 @@ export function ReportsPage() {
                     labelLine={false}
                   >
                     {seller_verifications.status_distribution.map((entry) => (
-                      <Cell key={`cell-${entry.status}`} fill={STATUS_COLORS[entry.status] ?? '#666666'} />
+                      <Cell key={`cell-${entry.status}`} fill={statusChartColor(entry.status)} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={{ fontSize: 13 }} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={CHART_TOOLTIP_STYLE} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -603,11 +582,11 @@ export function ReportsPage() {
             {activities.trend.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={activities.trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#666666" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#666666" />
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Activities']} contentStyle={{ fontSize: 13 }} />
-                  <Line type="monotone" dataKey="count" stroke="#4CAF50" strokeWidth={2} dot={{ r: 3 }} name="Activities" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="month" tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Activities']} contentStyle={CHART_TOOLTIP_STYLE} />
+                  <Line type="monotone" dataKey="count" stroke={CHART_LINE_ACCENT} strokeWidth={2} dot={{ r: 3 }} name="Activities" />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -620,11 +599,11 @@ export function ReportsPage() {
             {activities.by_action.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={activities.by_action.slice(0, 8)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                  <XAxis dataKey="action" tick={{ fontSize: 11 }} stroke="#666666" angle={-45} textAnchor="end" height={60} />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#666666" />
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Count']} contentStyle={{ fontSize: 13 }} />
-                  <Bar dataKey="count" fill="#4CAF50" radius={[2, 2, 0, 0]} name="Count" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="action" tick={CHART_TICK_SMALL} stroke={CHART_AXIS} angle={-45} textAnchor="end" height={60} />
+                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Count']} contentStyle={CHART_TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill={CHART_LINE_ACCENT} radius={[2, 2, 0, 0]} name="Count" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

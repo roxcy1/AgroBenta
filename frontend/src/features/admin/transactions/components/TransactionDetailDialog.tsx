@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import type { Transaction } from '../api/useTransactions';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDateTime, formatPeso } from '../../../../lib/format';
 
 interface TransactionDetailDialogProps {
   transaction: Transaction;
@@ -25,34 +27,6 @@ function contactLabel(name?: string | null, email?: string | null): string {
   return parts.length > 0 ? parts.join(' ') : '\u2014';
 }
 
-/**
- * The ₱ prefix is added to the exact amount string the API returned.
- *
- * The backend already casts the amount to a two-decimal string, so the value is
- * displayed as-is: no parsing, formatting, or re-rounding happens here.
- */
-function formatAmount(value: string | null | undefined): string {
-  if (value === null || value === undefined || value === '') return '\u2014';
-  return `\u20B1${value}`;
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '\u2014';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '\u2014';
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
 export default function TransactionDetailDialog({
   transaction,
   onClose,
@@ -71,7 +45,7 @@ export default function TransactionDetailDialog({
     ['Livestock type', orDash(transaction.listing?.livestock_type)],
     ['Breed', orDash(transaction.listing?.breed)],
     ['Quantity', orDash(transaction.quantity)],
-    ['Total amount', formatAmount(transaction.total_amount)],
+    ['Total amount', formatPeso(transaction.total_amount)],
     ['Created', formatDateTime(transaction.created_at)],
     ['Updated', formatDateTime(transaction.updated_at)],
   ];
@@ -98,9 +72,7 @@ export default function TransactionDetailDialog({
               <tr>
                 <th>Status</th>
                 <td>
-                  <span className={`lv-badge lv-badge--${transaction.status}`}>
-                    {statusLabel(transaction.status)}
-                  </span>
+                  <StatusBadge status={transaction.status} />
                 </td>
               </tr>
               <tr>

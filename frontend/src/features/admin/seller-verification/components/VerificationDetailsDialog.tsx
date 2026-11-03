@@ -5,7 +5,8 @@ import {
   fetchVerificationDocument,
   useSellerVerification,
 } from '../api/useSellerVerifications';
-import { statusLabel } from './verificationModeration';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDateTime } from '../../../../lib/format';
 
 interface VerificationDetailsDialogProps {
   verificationId: number;
@@ -22,23 +23,6 @@ interface DetailSection {
 function orDash(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '\u2014';
   return String(value);
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '\u2014';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '\u2014';
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return <span className={`lv-badge lv-badge--${status}`}>{statusLabel(status)}</span>;
 }
 
 function historyTable(history: SellerVerification[]): ReactNode {

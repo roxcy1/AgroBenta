@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Listing } from '../api/useListings';
 import ListingPhotos from './ListingPhotos';
-import { statusLabel } from './listingModeration';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDateTime, formatPeso } from '../../../../lib/format';
 
 interface ListingDetailsDialogProps {
   listing: Listing;
@@ -18,29 +19,6 @@ interface DetailSection {
 function orDash(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '\u2014';
   return String(value);
-}
-
-function formatCurrency(value: string | null | undefined): string {
-  if (value === null || value === undefined || value === '') return '\u2014';
-  const amount = parseFloat(value);
-  if (Number.isNaN(amount)) return `\u20B1${value}`;
-  return `\u20B1${amount.toLocaleString('en-PH', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '\u2014';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '\u2014';
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 export default function ListingDetailsDialog({ listing, onClose }: ListingDetailsDialogProps) {
@@ -59,9 +37,7 @@ export default function ListingDetailsDialog({ listing, onClose }: ListingDetail
         ['Listing ID', `#${listing.id}`],
         [
           'Status',
-          <span key="status" className={`lv-badge lv-badge--${listing.status}`}>
-            {statusLabel(listing.status)}
-          </span>,
+          <StatusBadge key="status" status={listing.status} />,
         ],
       ],
     },
@@ -89,7 +65,7 @@ export default function ListingDetailsDialog({ listing, onClose }: ListingDetail
     {
       title: 'Price & Location',
       rows: [
-        ['Asking price', formatCurrency(listing.asking_price)],
+        ['Asking price', formatPeso(listing.asking_price)],
         ['Location', orDash(listing.location)],
       ],
     },

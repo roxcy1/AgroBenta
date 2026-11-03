@@ -1,6 +1,6 @@
 import type { DashboardRecentListing } from '../api/useDashboard';
-import { statusLabel } from '../livestock/components/listingModeration';
 import { formatCurrency, formatDate } from './dashboardFormat';
+import { StatusBadge } from './StatusBadge';
 
 interface RecentListingsTableProps {
   listings: DashboardRecentListing[];
@@ -35,9 +35,7 @@ export function RecentListingsTable({ listings }: RecentListingsTableProps) {
               <td>{listing.breed ?? '—'}</td>
               <td className="lv-price-cell">{formatCurrency(listing.asking_price)}</td>
               <td>
-                <span className={`lv-badge lv-badge--${listing.status}`}>
-                  {statusLabel(listing.status)}
-                </span>
+                <StatusBadge status={listing.status} />
               </td>
               <td className="lv-seller-cell">{listing.seller?.name ?? '—'}</td>
               <td className="lv-date-cell">{formatDate(listing.created_at)}</td>

@@ -11,6 +11,9 @@ import UserStatsCards from './UserStatsCards';
 import type { UserCardKey } from './UserStatsCards';
 import UserDetailsDialog from './UserDetailsDialog';
 import VerificationDetailsDialog from '../../seller-verification/components/VerificationDetailsDialog';
+import { statusBadgeClass, statusLabel } from '../../../../lib/status';
+import { formatDate } from '../../../../lib/format';
+import { emptyListMessage } from '../../../../lib/emptyState';
 
 const ROLE_OPTIONS = [
   { value: '', label: 'All Roles' },
@@ -23,30 +26,6 @@ const SELLER_OPTIONS = [
   { value: 'buyer', label: 'Buyer' },
   { value: 'seller', label: 'Seller' },
 ] as const;
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function statusLabel(status: string | null): string {
-  switch (status) {
-    case 'submitted':
-      return 'Submitted';
-    case 'pending_review':
-      return 'Pending Review';
-    case 'approved':
-      return 'Approved';
-    case 'rejected':
-      return 'Rejected';
-    default:
-      return '—';
-  }
-}
 
 export function UsersPage() {
   const [search, setSearch] = useState('');
@@ -368,7 +347,7 @@ export function UsersPage() {
 
         {users.length === 0 ? (
           <div className="users-empty">
-            <p>{filtersActive ? 'No users found matching your criteria.' : 'No users found.'}</p>
+            <p>{emptyListMessage('users', filtersActive)}</p>
           </div>
         ) : (
           <>
@@ -396,7 +375,7 @@ export function UsersPage() {
                     {displayUsers.map((user) => {
                       const v = verificationMap.get(user.id);
                       const vStatus = v?.status ?? null;
-                      const vLabel = statusLabel(vStatus);
+                      const vLabel = vStatus ? statusLabel(vStatus) : '—';
                       return (
                         <tr
                           key={user.id}
@@ -421,7 +400,7 @@ export function UsersPage() {
                           <td>
                             {v && v.status && v.verificationId !== null ? (
                               <span
-                                className={`lv-badge lv-badge--${vStatus}`}
+                                className={statusBadgeClass(v.status)}
                                 role="button"
                                 tabIndex={0}
                                 style={{ cursor: 'pointer' }}

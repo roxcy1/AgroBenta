@@ -254,6 +254,7 @@ export function ActivitiesPage() {
             <input
               type="text"
               className="lv-search-input"
+              aria-label="Search activities"
               placeholder="Search by action, description, or user..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
