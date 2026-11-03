@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
 use App\Http\Controllers\Api\Inquiry\InquiryController as MobileInquiryController;
+use App\Http\Controllers\Api\LivestockTypeController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
 use App\Http\Controllers\Api\Messaging\ConversationController;
 use App\Http\Controllers\Api\Messaging\MessageController;
@@ -26,6 +27,10 @@ use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransact
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
+
+// Shared reference data for both mobile and admin tokens. Deliberately outside
+// the `ability:mobile` and `ability:admin` groups so either token can read it.
+Route::middleware('auth:sanctum')->get('/livestock-types', LivestockTypeController::class);
 
 Route::post('/admin/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');

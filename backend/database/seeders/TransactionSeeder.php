@@ -71,7 +71,7 @@ class TransactionSeeder extends Seeder
         1 => [
             ['swine', 'Landrace', 20, 12000.00, 'Negros Occidental'],
             ['cattle', 'Holstein', 3, 62000.00, 'Negros Occidental'],
-            ['chicken', 'Broiler', 200, 180.00, 'Negros Occidental'],
+            ['swine', 'Duroc', 40, 15000.00, 'Negros Occidental'],
         ],
         2 => [
             ['cattle', 'Angus', 4, 55000.00, 'Lanao del Norte'],
