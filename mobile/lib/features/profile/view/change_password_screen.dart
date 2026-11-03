@@ -60,9 +60,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     );
 
     if (changed && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password changed.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Password changed.')));
       Navigator.of(context).pop();
     }
   }

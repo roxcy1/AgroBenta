@@ -41,6 +41,7 @@ void main() {
     required int sellerId,
     required int viewerId,
     List<Object?>? photos,
+    int completedSales = 0,
   }) async {
     Future<http.Response> transport(RecordedRequest request) async {
       final String path = request.apiPath;
@@ -50,6 +51,7 @@ void main() {
           listing: listingJson(
             seller: sellerJson(id: sellerId),
             photos: photos,
+            completedSales: completedSales,
           ),
         );
       }
@@ -136,6 +138,16 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Rizal Farms'), findsOneWidget);
+    });
+
+    testWidgets('shows completed sales and the placeholder rating', (
+      WidgetTester tester,
+    ) async {
+      await pumpDetail(tester, sellerId: 3, viewerId: 7, completedSales: 3);
+
+      expect(find.text('3 completed sales'), findsOneWidget);
+      expect(find.text('4.8 · 24 reviews'), findsOneWidget);
+      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
     });
 
     testWidgets('shows a neutral placeholder when there is no photo', (

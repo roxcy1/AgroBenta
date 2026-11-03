@@ -45,6 +45,7 @@ void main() {
     required Future<http.Response> Function(RecordedRequest request) handler,
     List<RecordedRequest>? recorded,
     VoidCallback? onRegister,
+    VoidCallback? onForgotPassword,
   }) async {
     final AuthController controller = AuthController(
       buildAuthRepository(tokenStore, handler, recorded: recorded),
@@ -58,7 +59,7 @@ void main() {
           controller: controller,
           child: SignInScreen(
             onRegister: onRegister ?? () {},
-            onForgotPassword: () {}, // No-op: there is no forgot password flow
+            onForgotPassword: onForgotPassword ?? () {},
           ),
         ),
       ),
@@ -140,13 +141,15 @@ void main() {
     expect(obscureOf(tester), isTrue, reason: 'password hides again');
   });
 
-  signInTest('remember me is inert and forgot password uses link styling', (
+  signInTest('remember me is inert and forgot password is a working link', (
     WidgetTester tester,
   ) async {
     final List<RecordedRequest> recorded = <RecordedRequest>[];
+    int forgotTaps = 0;
     await pumpSignIn(
       tester,
       recorded: recorded,
+      onForgotPassword: () => forgotTaps++,
       handler: (_) async => fail('neither control may reach the API'),
     );
 
@@ -167,19 +170,9 @@ void main() {
       AppColors.primary,
       reason: 'still styled as a link, per the reference layout',
     );
-    expect(
-      find.ancestor(of: forgot, matching: find.byType(TextButton)),
-      findsNothing,
-      reason: 'this screen renders the label, not a tappable button',
-    );
-    expect(
-      find.ancestor(of: forgot, matching: find.byType(InkWell)),
-      findsNothing,
-    );
-    expect(
-      find.ancestor(of: forgot, matching: find.byType(GestureDetector)),
-      findsNothing,
-    );
+    await tester.ensureVisible(forgot);
+    await tester.tap(forgot);
+    expect(forgotTaps, 1);
     expect(recorded, isEmpty);
   });
 

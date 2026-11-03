@@ -32,8 +32,14 @@ void main() {
     WidgetTester tester,
   ) async {
     expect((await badge(tester, TransactionStatus.pending)).data, 'Ongoing');
-    expect((await badge(tester, TransactionStatus.completed)).data, 'Completed');
-    expect((await badge(tester, TransactionStatus.cancelled)).data, 'Cancelled');
+    expect(
+      (await badge(tester, TransactionStatus.completed)).data,
+      'Completed',
+    );
+    expect(
+      (await badge(tester, TransactionStatus.cancelled)).data,
+      'Cancelled',
+    );
   });
 
   testWidgets('uses the distinct DESIGN.md §26 tokens for the three states', (
@@ -78,8 +84,7 @@ void main() {
         matching: find.byType(Container),
       ),
     );
-    final BoxDecoration decoration =
-        container.decoration! as BoxDecoration;
+    final BoxDecoration decoration = container.decoration! as BoxDecoration;
     expect(decoration.color, isNotNull);
     expect(decoration.border, isNotNull);
   });

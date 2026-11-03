@@ -89,7 +89,10 @@ void main() {
     await controller.loadInitial();
 
     expect(controller.state.status, SellerDashboardStatus.failed);
-    expect(controller.state.errorMessage, 'Something went wrong on the server.');
+    expect(
+      controller.state.errorMessage,
+      'Something went wrong on the server.',
+    );
 
     await controller.retry();
 
@@ -116,7 +119,10 @@ void main() {
 
       expect(controller.state.status, SellerDashboardStatus.ready);
       expect(controller.state.dashboard?.listings.total, 6);
-      expect(controller.state.refreshErrorMessage, 'Something went wrong on the server.');
+      expect(
+        controller.state.refreshErrorMessage,
+        'Something went wrong on the server.',
+      );
       expect(controller.state.errorMessage, isNull);
     },
   );

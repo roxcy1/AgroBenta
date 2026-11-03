@@ -55,17 +55,36 @@ void main() {
   String fieldText(WidgetTester tester, String label) =>
       tester.widget<TextFormField>(field(label)).controller!.text;
 
+  Finder ageUnitDropdown() => find.ancestor(
+    of: find.text('Age unit'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
+  Finder livestockTypeDropdown() => find.ancestor(
+    of: find.text('Type of livestock'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
   String? fieldError(WidgetTester tester, String label) {
+    if (label == 'Type of livestock') {
+      return tester
+          .widget<DropdownButtonFormField<String>>(livestockTypeDropdown())
+          .decoration
+          .errorText;
+    }
     final TextField input = tester.widget<TextField>(
       find.descendant(of: field(label), matching: find.byType(TextField)),
     );
     return input.decoration?.errorText;
   }
 
-  Finder ageUnitDropdown() => find.ancestor(
-    of: find.text('Age unit'),
-    matching: find.byType(DropdownButtonFormField<String>),
-  );
+  Future<void> selectLivestockType(WidgetTester tester, String label) async {
+    final Finder dropdown = livestockTypeDropdown();
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
 
   Future<void> selectAgeUnit(WidgetTester tester, String label) async {
     final Finder dropdown = ageUnitDropdown();
@@ -106,7 +125,7 @@ void main() {
 
   /// Fills the required fields and walks to the Review step.
   Future<void> fillAndReview(WidgetTester tester) async {
-    await tester.enterText(field('Type of livestock'), 'Cattle');
+    await selectLivestockType(tester, 'Cattle');
     await tester.pump();
     await tapContinue(tester);
 
@@ -225,7 +244,7 @@ void main() {
     await openForm(tester, handler: emptyListHandler);
 
     // Step 1 is still empty. It must not block leaving step 0.
-    await tester.enterText(field('Type of livestock'), 'Cattle');
+    await selectLivestockType(tester, 'Cattle');
     await tester.pump();
     await tapContinue(tester);
 
@@ -249,7 +268,7 @@ void main() {
       },
     );
 
-    await tester.enterText(field('Type of livestock'), 'Cattle');
+    await selectLivestockType(tester, 'Cattle');
     await tester.pump();
     await tapContinue(tester);
 
@@ -266,7 +285,7 @@ void main() {
         .where((RecordedRequest r) => r.method == 'POST')
         .toList();
     expect(posts, hasLength(1));
-    expect(posts.single.body['livestock_type'], 'Cattle');
+    expect(posts.single.body['livestock_type'], 'cattle');
     expect(posts.single.body['quantity'], 2);
     expect(posts.single.body['asking_price'], '42500');
     expect(posts.single.body['location'], 'Trinidad, Bohol');
@@ -294,7 +313,7 @@ void main() {
       },
     );
 
-    await tester.enterText(field('Type of livestock'), 'Cattle');
+    await selectLivestockType(tester, 'Cattle');
     await tester.pump();
     await tapContinue(tester);
 
@@ -342,7 +361,7 @@ void main() {
       },
     );
 
-    await tester.enterText(field('Type of livestock'), 'Cattle');
+    await selectLivestockType(tester, 'Cattle');
     await tester.pump();
     await tapContinue(tester);
 

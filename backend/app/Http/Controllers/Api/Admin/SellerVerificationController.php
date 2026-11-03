@@ -66,7 +66,16 @@ class SellerVerificationController extends Controller
     }
 
     /**
-     * Stream one submitted document for review (government ID or selfie).
+     * Stream one submitted farm photo for review, under the same protections
+     * as {@see document()}.
+     */
+    public function farmPhoto(SellerVerification $sellerVerification, string $photo): StreamedResponse
+    {
+        return $this->documents->farmPhotoResponse($sellerVerification, $photo);
+    }
+
+    /**
+     * Stream one submitted document for review.
      *
      * Administrator-only: this route lives inside the `admin` group, and the
      * file itself is on private storage the web server cannot address. The

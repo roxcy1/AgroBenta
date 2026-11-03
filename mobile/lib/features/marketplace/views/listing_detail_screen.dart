@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
+import '../widgets/listing_social_proof.dart';
 import '../../../repositories/marketplace_repository.dart';
 import '../../../widgets/detail_row.dart';
 import '../../auth/state/auth_scope.dart';
@@ -33,7 +34,10 @@ class ListingDetailScreen extends StatelessWidget {
       // The gallery deliberately runs under the app bar's lower edge, so the
       // top inset is not reserved here; the bottom inset is, so the pinned
       // action bar clears the system navigation area.
-      body: SafeArea(top: false, child: _ListingDetailBody(listingId: listingId)),
+      body: SafeArea(
+        top: false,
+        child: _ListingDetailBody(listingId: listingId),
+      ),
     );
   }
 }
@@ -58,9 +62,8 @@ class _ListingDetailBodyState extends State<_ListingDetailBody> {
     // list controller's state. The screen is pushed above the shell but still
     // under the `MarketplaceScope` that `main.dart` installs, so the lookup
     // resolves the same way it would from the list.
-    final MarketplaceRepository repository = MarketplaceScope.readOf(
-      context,
-    ).repository;
+    final MarketplaceRepository repository = MarketplaceScope.readOf(context)
+        .repository;
     _controller = ListingDetailController(repository, widget.listingId);
     _controller.load();
   }
@@ -140,10 +143,7 @@ class _DetailContent extends StatelessWidget {
           child: SingleChildScrollView(
             child: Stack(
               children: <Widget>[
-                ListingPhotoCarousel(
-                  listing: listing,
-                  height: _galleryHeight,
-                ),
+                ListingPhotoCarousel(listing: listing, height: _galleryHeight),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
@@ -180,9 +180,7 @@ class _DetailsPanel extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.xl),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
         border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
       ),
       child: Column(
@@ -191,18 +189,17 @@ class _DetailsPanel extends StatelessWidget {
           _SummarySection(listing: listing),
           const _PanelDivider(),
           _AttributesSection(listing: listing),
-          if (listing.healthStatus != null || listing.vaccination != null) ...<Widget>[
+          if (listing.healthStatus != null ||
+              listing.vaccination != null) ...<Widget>[
             const _PanelDivider(),
             _FactsSection(listing: listing),
           ],
           if (listing.shortDescription.trim().isNotEmpty) ...<Widget>[
             const _PanelDivider(),
-            _TextSection(
-              title: 'Description',
-              body: listing.shortDescription,
-            ),
+            _TextSection(title: 'Description', body: listing.shortDescription),
           ],
-          if (additionalNotes != null && additionalNotes.trim().isNotEmpty) ...<Widget>[
+          if (additionalNotes != null &&
+              additionalNotes.trim().isNotEmpty) ...<Widget>[
             const _PanelDivider(),
             _TextSection(title: 'Seller’s notes', body: additionalNotes),
           ],
@@ -285,6 +282,8 @@ class _SummarySection extends StatelessWidget {
               ],
             ),
           ],
+          const SizedBox(height: AppSpacing.sm),
+          ListingSocialProof(completedSales: listing.completedSales),
         ],
       ),
     );
@@ -363,10 +362,10 @@ class _AttributeSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const VerticalDivider(
-        width: AppSpacing.md,
-        thickness: 1,
-        color: AppColors.border,
-      );
+    width: AppSpacing.md,
+    thickness: 1,
+    color: AppColors.border,
+  );
 }
 
 /// Health and vaccination, when the listing records them.
@@ -568,7 +567,6 @@ class _ActionBar extends StatelessWidget {
       ),
     );
   }
-
 }
 
 /// What the detail screen shows when the listing is not visible to the caller.

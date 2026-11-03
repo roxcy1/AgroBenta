@@ -57,6 +57,12 @@ abstract final class MarketplaceEndpoints {
   /// client-selected filter.
   static const String browse = '/listings';
 
+  /// `GET` — Buyer Home's Popular Livestock ranking. 200, plain envelope.
+  ///
+  /// Completed sales in the last 30 days, grouped over the canonical livestock
+  /// categories. Read-only and token-scoped; no query parameters.
+  static const String popularLivestock = '/marketplace/popular-livestock';
+
   /// `GET` — one listing's detail. 200, plain envelope.
   ///
   /// [id] is appended to build the path. It is a selector, not proof of
@@ -77,6 +83,21 @@ abstract final class MarketplaceEndpoints {
   /// clamps to this rather than letting a screen discover the limit by
   /// provoking an error.
   static const int maxPerPage = 50;
+}
+
+/// The approved livestock-type catalog, relative to the API root.
+///
+/// This is the backend enum's public projection. The four values are the only
+/// ones a seller may write; historical rows may still hold values outside the
+/// catalog, and those remain readable everywhere.
+abstract final class LivestockTypeEndpoints {
+  /// `GET` - the approved categories. 200, **not** the standard envelope.
+  ///
+  /// The controller returns `{ "data": [...] }` directly, without the
+  /// `{success, message, data}` wrapper every other JSON endpoint uses. It is
+  /// fetched through [ApiClient.getRawJson] so the exception stays local to this
+  /// one endpoint instead of weakening envelope handling everywhere.
+  static const String catalog = '/livestock-types';
 }
 
 /// Seller verification endpoints, relative to the API root.
@@ -124,6 +145,11 @@ abstract final class SellerVerificationEndpoints {
   /// `DELETE` — remove a staged document by type. 200.
   static String deleteDocument(String type) =>
       '/seller-verification/documents/$type';
+
+  /// `GET` streams one submitted farm photo; `DELETE` removes one staged farm
+  /// photo. Farm photos are several files, so each is named by its id.
+  static String farmPhoto(String photoId) =>
+      '/seller-verification/documents/farm_photo/$photoId';
 
   /// The multipart field name the document bytes travel in.
   static const String documentFileField = 'document';
@@ -632,4 +658,12 @@ abstract final class AuthEndpoints {
 
   /// `POST` — revokes the caller's current mobile token. 200.
   static const String logout = '/auth/logout';
+
+  /// `POST` — emails a reset code. The same 200 whether or not the email is
+  /// registered.
+  static const String forgotPassword = '/auth/forgot-password';
+
+  /// `POST` — sets a new password from a reset code. 200, or 422 for a wrong or
+  /// expired code.
+  static const String resetPassword = '/auth/reset-password';
 }

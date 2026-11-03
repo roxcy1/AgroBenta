@@ -143,13 +143,16 @@ void main() {
           TextEditingValue(text: newText),
         );
 
-    test('accepts whole numbers, one or two decimals, and a trailing point', () {
-      expect(apply('', '42500').text, '42500');
-      expect(apply('42500', '42500.5').text, '42500.5');
-      expect(apply('42500.5', '42500.50').text, '42500.50');
-      expect(apply('42500', '42500.').text, '42500.');
-      expect(apply('42500.50', '').text, '');
-    });
+    test(
+      'accepts whole numbers, one or two decimals, and a trailing point',
+      () {
+        expect(apply('', '42500').text, '42500');
+        expect(apply('42500', '42500.5').text, '42500.5');
+        expect(apply('42500.5', '42500.50').text, '42500.50');
+        expect(apply('42500', '42500.').text, '42500.');
+        expect(apply('42500.50', '').text, '');
+      },
+    );
 
     test('rejects a third decimal instead of truncating it', () {
       expect(apply('42500.12', '42500.123').text, '42500.12');

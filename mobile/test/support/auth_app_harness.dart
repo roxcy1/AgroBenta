@@ -8,6 +8,8 @@ import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/auth/view/auth_gate.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/notifications/state/notifications_controller.dart';
@@ -27,6 +29,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'auth_fakes.dart';
+import 'livestock_type_fakes.dart';
 import 'seller_verification_app_harness.dart';
 
 /// The signed-in destination the gate is given in tests. Kept as a function
@@ -128,6 +131,13 @@ class AuthTestHarness {
     );
     addTearDown(marketplaceController.dispose);
 
+    final catalogRepository = buildLivestockTypeRepository(tokenStore);
+    final LivestockTypesController catalogController = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalogController.dispose);
+    await catalogController.ensureLoaded();
+
     final NotificationRepository notificationRepository =
         NotificationRepository(
           NotificationService(
@@ -181,16 +191,20 @@ class AuthTestHarness {
           child: MarketplaceScope(
             repository: marketplaceRepository,
             controller: marketplaceController,
-            child: NotificationsScope(
-              repository: notificationRepository,
-              controller: notificationsController,
-              child: NeverSubmittedVerificationScope(
-                child: ProfileScope(
-                  repository: profileRepository,
-                  controller: profileController,
-                  child: MaterialApp(
-                    theme: AppTheme.light(),
-                    home: const AuthGate(authenticatedView: _signedInView),
+            child: LivestockTypesScope(
+              repository: catalogRepository,
+              controller: catalogController,
+              child: NotificationsScope(
+                repository: notificationRepository,
+                controller: notificationsController,
+                child: NeverSubmittedVerificationScope(
+                  child: ProfileScope(
+                    repository: profileRepository,
+                    controller: profileController,
+                    child: MaterialApp(
+                      theme: AppTheme.light(),
+                      home: const AuthGate(authenticatedView: _signedInView),
+                    ),
                   ),
                 ),
               ),

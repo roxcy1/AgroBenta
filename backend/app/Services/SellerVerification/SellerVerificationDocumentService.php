@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -15,8 +16,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * ## Why the paths, not the files, live in the database
  *
- * `seller_verifications.id_document_path` and `selfie_path` hold disk-relative
- * paths on the private `seller-verification-documents` disk. The columns never
+ * The `seller_verifications` document columns hold disk-relative paths on the
+ * private `seller-verification-documents` disk. They never
  * hold a URL: a URL is a capability, and a stored one would outlive every check
  * this class performs. Documents are served only through authenticated,
  * owner-or-administrator streaming endpoints.
@@ -26,12 +27,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * A seller uploads before they submit, so the review step can show that both
  * files are actually persisted. Uploads therefore go to `staging/{userId}/`
  * first and are promoted to `verifications/{verificationId}/` inside the
- * submission transaction. A staged file belongs to exactly one account, is
- * replaced rather than appended, and is deleted after promotion.
+ * submission transaction. A staged file belongs to exactly one account and is
+ * deleted after promotion. A single document is replaced by a new upload; farm
+ * photos are added, up to {@see MAX_FARM_PHOTOS}.
  *
  * Nothing here trusts a client-supplied path: the only path segments are the
  * authenticated user's id and the server-generated verification id, and the
- * filename is the enum value plus an extension the validator already allowed.
+ * filename is the enum value, plus a random id for a farm photo, plus an
+ * extension the validator already allowed.
  */
 class SellerVerificationDocumentService
 {
@@ -40,6 +43,12 @@ class SellerVerificationDocumentService
      * by configuration without touching the code.
      */
     public const string DISK = 'seller-verification-documents';
+
+    /**
+     * The most farm photos one application can hold. Matches the limit on
+     * listing photos.
+     */
+    public const int MAX_FARM_PHOTOS = 10;
 
     /**
      * Store (or replace) one staged document for [user].
@@ -70,6 +79,46 @@ class SellerVerificationDocumentService
     }
 
     /**
+     * Add one staged farm photo for [user] and return its id, or null when the
+     * application already holds {@see MAX_FARM_PHOTOS}.
+     *
+     * Unlike the single documents this adds rather than replaces, so each file
+     * gets a random server-generated name.
+     */
+    public function stageFarmPhoto(User $user, UploadedFile $file): ?string
+    {
+        if (count($this->stagedFarmPhotoPaths($user)) >= self::MAX_FARM_PHOTOS) {
+            return null;
+        }
+
+        $id = Str::lower((string) Str::ulid());
+
+        $this->disk()->putFileAs(
+            $this->stagingDirectory($user),
+            $file,
+            "farm_photo_{$id}.{$this->extensionFor($file)}",
+        );
+
+        return $id;
+    }
+
+    /**
+     * Remove one staged farm photo. Returns false when [user] has none with
+     * that id. The id is only compared with [user]'s own staged filenames, so it
+     * never becomes part of a disk path.
+     */
+    public function forgetStagedFarmPhoto(User $user, string $id): bool
+    {
+        foreach ($this->stagedFarmPhotoPaths($user) as $path) {
+            if (pathinfo($path, PATHINFO_FILENAME) === "farm_photo_{$id}") {
+                return $this->disk()->delete($path);
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Remove a staged document. Returns false when there was nothing to remove,
      * which the controller turns into a 404 rather than a success.
      */
@@ -97,7 +146,7 @@ class SellerVerificationDocumentService
     }
 
     /**
-     * The document types [user] has not staged yet.
+     * The required document types [user] has not staged yet.
      *
      * Used by the submission controller to answer 422 with per-field errors
      * instead of creating a record whose documents are missing.
@@ -108,7 +157,8 @@ class SellerVerificationDocumentService
     {
         return array_values(array_filter(
             SellerVerificationDocumentType::cases(),
-            fn (SellerVerificationDocumentType $type): bool => ! $this->hasStaged($user, $type),
+            fn (SellerVerificationDocumentType $type): bool => $type->isRequired()
+                && ! $this->hasStaged($user, $type),
         ));
     }
 
@@ -121,7 +171,7 @@ class SellerVerificationDocumentService
      * so a rejected-and-resubmitted application cannot inherit documents from
      * the previous attempt.
      *
-     * @return array<string, string>
+     * @return array<string, string|list<string>>
      *
      * @throws \RuntimeException when a staged file vanished between the
      *                           controller's pre-check and the move.
@@ -131,7 +181,18 @@ class SellerVerificationDocumentService
         $paths = [];
         $destination = "verifications/{$verification->getKey()}";
 
+        foreach ($this->stagedFarmPhotoPaths($user) as $staged) {
+            $target = "{$destination}/".basename($staged);
+
+            $this->disk()->move($staged, $target);
+            $paths[SellerVerificationDocumentType::FarmPhoto->column()][] = $target;
+        }
+
         foreach (SellerVerificationDocumentType::cases() as $type) {
+            if (! $type->isRequired()) {
+                continue;
+            }
+
             $staged = $this->stagedPath($user, $type);
 
             if ($staged === null) {
@@ -192,14 +253,34 @@ class SellerVerificationDocumentService
         SellerVerification $verification,
         SellerVerificationDocumentType $type,
     ): StreamedResponse {
-        $path = $this->pathFor($verification, $type);
+        return $this->stream(
+            $this->pathFor($verification, $type),
+            "agrobenta-{$type->value}-{$verification->getKey()}",
+        );
+    }
+
+    /**
+     * The same private response for one farm photo. [id] is only compared with
+     * the record's own ids, so an unknown id is a 404 and never reaches the disk.
+     */
+    public function farmPhotoResponse(SellerVerification $verification, string $id): StreamedResponse
+    {
+        $index = array_search($id, $verification->farmPhotoIds(), true);
+
+        return $this->stream(
+            $index === false ? null : $verification->farm_photo_paths[$index],
+            "agrobenta-farm-photo-{$verification->getKey()}-{$id}",
+        );
+    }
+
+    private function stream(?string $path, string $name): StreamedResponse
+    {
         $disk = $this->disk();
 
         abort_if($path === null || ! $disk->exists($path), 404);
 
         $extension = pathinfo($path, PATHINFO_EXTENSION);
-        $filename = "agrobenta-{$type->value}-{$verification->getKey()}"
-            .($extension !== '' ? ".{$extension}" : '');
+        $filename = $name.($extension !== '' ? ".{$extension}" : '');
 
         return response()->streamDownload(
             function () use ($disk, $path): void {
@@ -261,6 +342,17 @@ class SellerVerificationDocumentService
         SellerVerificationDocumentType $type,
     ): bool {
         return str_starts_with(basename($path), "{$type->value}.");
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stagedFarmPhotoPaths(User $user): array
+    {
+        return array_values(array_filter(
+            $this->disk()->files($this->stagingDirectory($user)),
+            fn (string $path): bool => str_starts_with(basename($path), 'farm_photo_'),
+        ));
     }
 
     private function stagingDirectory(User $user): string

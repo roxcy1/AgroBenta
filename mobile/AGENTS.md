@@ -516,6 +516,21 @@ One contract detail to keep in mind: **`POST /api/auth/logout` returns
 success envelope that omits `data` to `data: null`; `ApiEnvelope` itself stays
 strict and still rejects a missing `success`.
 
+**Resolved for password recovery (MS-10).** Two public routes, for a signed-out
+user:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/auth/forgot-password` | Emails a six-digit code (`email`). The same `200` for every valid email, including unknown and administrator addresses. |
+| `POST /api/auth/reset-password` | Sets a new password (`email`, `token`, `password`, `password_confirmation`) and revokes all the account's tokens. `422` for a wrong or expired code. |
+
+Each is limited to 5 requests a minute per client (`429`). A code lasts 60
+minutes and works once, and an email gets 5 attempts across all its codes in
+that time. Both routes return `{ success, message }` with no `data`, so the app
+shows its own wording. The flow is `ForgotPasswordScreen` →
+`ResetPasswordScreen` → the sign-in form with a confirmation; there is no
+session until the user signs in with the new password.
+
 **Resolved for M2 (marketplace browse).** The backend now exposes a read-only
 buyer marketplace behind the same `auth:sanctum` + `ability:mobile` guard:
 
@@ -874,7 +889,7 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-04 | Logout for non-admins | **CLOSED.** `POST /api/auth/logout` revokes the calling mobile token. | — |
 | GAP-05 | Marketplace browse (list/detail/filter/paginate) | **CLOSED.** `GET /api/listings` and `GET /api/listings/{listing}`, served by `Api/Marketplace/MarketplaceController` over `MobileListingResource` (seller narrowed to `id` + `name` by `MobileSellerResource`). `active`-only list; `404` for any non-visible listing. | — |
 | GAP-06 | Listing photo delivery | **CLOSED.** [D-10]: `listings.photos` stores **bare filenames** (the model mutator normalises URLs, relative paths and filenames to the filename) and `MobileListingResource` serves **absolute URLs** via the `listing-photos` disk — local by default under `storage/app/public/listings` (requires `php artisan storage:link`), S3 by env (`LISTING_PHOTOS_DRIVER`). Sellers manage photos with `POST /api/seller/listings/{id}/photos` (multipart `photos[]`, jpeg/png/webp only, ≤5 MB each, ≤10 per listing including existing → `422`) and `DELETE /api/seller/listings/{id}/photos` (`photo` = the served URL or filename, unknown → `404`); owner-scoped (`404` for another seller), buyer → `403`, editable only while `draft`/`active` (`409`). The app's absolute-URL check now receives real URLs; the client never synthesises a base URL. | Listing management |
-| GAP-07 | Seller verification submission | **CLOSED.** `POST /api/seller-verification` (`routes/api.php`) with `Api/SellerVerification/SellerVerificationController@store` and `SellerVerificationService`. Creates a `submitted` record; **grants no capability** — `seller_capability` is still written only by the admin approval endpoint. A second submission while one is `submitted`/`pending_review` is `409`; an approved seller is `403`; a rejected record may be resubmitted as a new row. `SubmitSellerVerificationRequest` allow-lists the four client fields and rejects server-owned ones with `422`. Deliberately **unthrottled** — see D-09. | — |
+| GAP-07 | Seller verification submission | **CLOSED.** `POST /api/seller-verification` (`routes/api.php`) with `Api/SellerVerification/SellerVerificationController@store` and `SellerVerificationService`. Creates a `submitted` record; **grants no capability** — `seller_capability` is still written only by the admin approval endpoint. A second submission while one is `submitted`/`pending_review` is `409`; an approved seller is `403`; a rejected record may be resubmitted as a new row. `SubmitSellerVerificationRequest` allow-lists the four client fields, all optional, and rejects server-owned ones with `422`. Valid ID, Proof of Address and the selfie must be staged first through `POST /seller-verification/documents` (`type` is `id_document`, `proof_of_address`, `selfie` or `farm_photo`). Farm photos are optional, at most ten; the upload returns a `photo_id`, the record's `farm_photo_ids` lists them, and `GET`/`DELETE /seller-verification/documents/farm_photo/{id}` read a submitted photo or remove a staged one. Deliberately **unthrottled** — see D-09. | — |
 | GAP-08 | Own verification status retrieval | **CLOSED.** `GET /api/seller-verification/me` with `MobileSellerVerificationController@me`, returning the caller's latest record by `submitted_at DESC, id DESC` through `MobileSellerVerificationResource` (omits `seller`, `reviewer`, `user_id`, timestamps). `404` when the caller has never applied, which the app reads as "not submitted" rather than as an error. No route takes an id, so one buyer cannot read another's record. | — |
 | GAP-09 | Seller listing CRUD, own listings only | **CLOSED.** Five routes in `routes/api.php` under `auth:sanctum` + `ability:mobile` + the `seller` capability gate, served by `Api/SellerListing/SellerListingController` → `SellerListingRequest`s → `SellerListingService` → `SellerListingRepository`, returned through `MobileListingResource`. `GET` lists the owner's own listings in all five statuses (`?status`, `?search`, paginated; scope always server-derived — a `seller_id` filter is `422`). `POST` creates a `draft`; a client-sent `status` or `seller_id` is `422`, never silently dropped. `POST /{id}/submit` moves `draft → pending` only, re-validating the stored listing (invalid → `422`, not queued); its body allow-list is empty, so *any* body field is `422`. `PATCH` edits `draft`/`active` only (D-24). `DELETE` removes `draft`/`inactive` only (D-12/D-25). Non-owner → `404`, buyer → `403`, and no seller path reaches `active` (D-02 rules 6–8). Tests: `backend/tests/Feature/SellerListing/MobileSellerListingTest.php`. | — |
 | GAP-10 | AI price suggestion | `AiPriceEstimate` model and `ai_price_estimates` table exist. No controller, service, route or job. No pricing algorithm in the repository. `OPEN`. | AI price suggestion |

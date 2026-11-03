@@ -58,7 +58,8 @@ String? validateInquiryCollectionMethod(InquiryCollectionMethod? value) {
 
 /// Required: the buyer must choose a collection-date option.
 String? validateInquiryCollectionDateOption(
-    InquiryCollectionDateOption? value) {
+  InquiryCollectionDateOption? value,
+) {
   if (value == null) {
     return 'Please choose a preferred collection date.';
   }
@@ -73,7 +74,9 @@ String? validateInquiryCollectionDateOption(
 /// options (`thisWeek`) do not require a date, so this returns `null` for
 /// them even when [date] is null.
 String? validateInquiryPreferredDate(
-    InquiryCollectionDateOption? option, DateTime? date) {
+  InquiryCollectionDateOption? option,
+  DateTime? date,
+) {
   if (option == null) {
     return null;
   }
@@ -95,11 +98,7 @@ String? validateInquiryPreferredDate(
     return null;
   }
 
-  final DateTime selected = DateTime(
-    date.year,
-    date.month,
-    date.day,
-  );
+  final DateTime selected = DateTime(date.year, date.month, date.day);
 
   if (option == InquiryCollectionDateOption.specificDate) {
     if (selected.isBefore(today)) {

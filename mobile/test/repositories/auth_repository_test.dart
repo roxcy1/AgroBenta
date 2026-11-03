@@ -152,9 +152,8 @@ void main() {
       tokenStore.token = 'stored-token';
 
       await expectLater(
-        repository(
-          (_) async => http.Response(jsonEncode('Server error.'), 500),
-        ).restoreSession(),
+        repository((_) async => http.Response(jsonEncode('Server error.'), 500))
+            .restoreSession(),
         throwsA(
           isA<ApiException>().having(
             (ApiException e) => e.kind,
@@ -217,9 +216,8 @@ void main() {
     test('forgetLocalSession clears the token without a request', () async {
       tokenStore.token = 'stored-token';
 
-      await repository(
-        (_) async => fail('the API must not be called'),
-      ).forgetLocalSession();
+      await repository((_) async => fail('the API must not be called'))
+          .forgetLocalSession();
 
       expect(tokenStore.token, isNull);
       expect(recorded, isEmpty);

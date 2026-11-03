@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Services\MobileAuthService;
 use Illuminate\Http\JsonResponse;
@@ -87,6 +89,47 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Logged out successfully.',
+        ], 200);
+    }
+
+    /**
+     * Send a password reset code. The reply is the same for every valid email,
+     * so it cannot show whether an account exists.
+     */
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
+    {
+        $this->auth->sendPasswordResetCode($request->validated('email'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'If an account with that email exists, a reset code has been sent.',
+        ], 200);
+    }
+
+    /**
+     * Set a new password from an emailed reset code.
+     */
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
+    {
+        $reset = $this->auth->resetPassword(
+            $request->validated('email'),
+            $request->validated('token'),
+            $request->validated('password'),
+        );
+
+        if (! $reset) {
+            $message = 'The reset code is invalid or has expired.';
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+                'errors' => ['token' => [$message]],
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Your password has been reset.',
         ], 200);
     }
 }

@@ -116,7 +116,7 @@ class Message {
     this.inquiry,
   });
 
-    factory Message.fromJson(Map<String, dynamic> json) {
+  factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
       id: readInt(json, 'id'),
       body: readString(json, 'body'),
@@ -152,9 +152,9 @@ class Message {
   bool isSentBy(int userId) => senderId == userId;
 
   /// The other party — who this message is *to*, from `userId`'s perspective.
-  ChatUser counterpartOf(int userId) =>
-      senderId == userId ? receiver : sender;
+  ChatUser counterpartOf(int userId) => senderId == userId ? receiver : sender;
 
   @override
-  String toString() => 'Message($id, from=$senderId, to=$receiverId, read=$read)';
+  String toString() =>
+      'Message($id, from=$senderId, to=$receiverId, read=$read)';
 }

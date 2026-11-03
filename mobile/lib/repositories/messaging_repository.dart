@@ -55,10 +55,7 @@ class MessagingRepository {
   ///
   /// Returns the number of messages that changed state — zero on a thread
   /// that is already fully read, which is not an error.
-  Future<int> markThreadRead({
-    required int counterpartId,
-    int? listingId,
-  }) {
+  Future<int> markThreadRead({required int counterpartId, int? listingId}) {
     return _service.markThreadRead(
       counterpartId: counterpartId,
       listingId: listingId,

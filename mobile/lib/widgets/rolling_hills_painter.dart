@@ -98,7 +98,12 @@ class RollingHillsPainter extends CustomPainter {
     final Path path = Path()
       ..moveTo(0, y)
       ..quadraticBezierTo(size.width * 0.22, y - a, size.width * 0.48, y)
-      ..quadraticBezierTo(size.width * 0.74, y + a * 0.5, size.width, y - a * 0.4)
+      ..quadraticBezierTo(
+        size.width * 0.74,
+        y + a * 0.5,
+        size.width,
+        y - a * 0.4,
+      )
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();

@@ -2,6 +2,7 @@ import '../core/constants/api_constants.dart';
 import '../core/network/api_exception.dart';
 import '../models/listing.dart';
 import '../models/marketplace_page.dart';
+import '../models/popular_livestock_category.dart';
 import '../services/marketplace_service.dart';
 
 /// Orchestration for the buyer marketplace.
@@ -55,6 +56,10 @@ class MarketplaceRepository {
   /// Throws [ApiException] with [ApiErrorKind.notFound] when the listing is not
   /// visible to the caller.
   Future<Listing> detail(int id) => _service.detail(id);
+
+  /// Completed-sales ranking for Buyer Home's Popular Livestock section.
+  Future<List<PopularLivestockCategory>> popularLivestock() =>
+      _service.popularLivestock();
 
   static int _clampPerPage(int? perPage) {
     final int requested = perPage ?? MarketplaceEndpoints.defaultPerPage;

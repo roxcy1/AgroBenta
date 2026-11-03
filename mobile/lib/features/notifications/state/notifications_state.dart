@@ -3,13 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../models/app_notification.dart';
 
 /// The lifecycle states for the notifications list.
-enum NotificationsStatus {
-  initial,
-  loading,
-  ready,
-  failed,
-  loadingMore,
-}
+enum NotificationsStatus { initial, loading, ready, failed, loadingMore }
 
 /// The immutable state of the notifications feature.
 ///
@@ -80,8 +74,9 @@ class NotificationsState {
       status: status ?? this.status,
       notifications: notifications ?? this.notifications,
       unreadCount: unreadCount ?? this.unreadCount,
-      activeFilter:
-          clearActiveFilter ? null : (activeFilter ?? this.activeFilter),
+      activeFilter: clearActiveFilter
+          ? null
+          : (activeFilter ?? this.activeFilter),
       currentPage: currentPage ?? this.currentPage,
       lastPage: lastPage ?? this.lastPage,
       total: total ?? this.total,

@@ -66,7 +66,14 @@ enum VerificationDocumentType {
   idDocument('id_document'),
 
   /// A selfie of the applicant holding the same identity document.
-  selfie('selfie');
+  selfie('selfie'),
+
+  /// A document showing the applicant's address, e.g. a utility bill.
+  proofOfAddress('proof_of_address'),
+
+  /// An optional photo of the livestock or farm area. Unlike the others, an
+  /// application can hold several.
+  farmPhoto('farm_photo');
 
   const VerificationDocumentType(this.value);
 
@@ -103,6 +110,8 @@ class SellerVerification {
     required this.reviewedAt,
     this.hasIdDocument = false,
     this.hasSelfie = false,
+    this.hasProofOfAddress = false,
+    this.farmPhotoIds = const <String>[],
   });
 
   /// Field names the mobile resource must not contain.
@@ -127,7 +136,7 @@ class SellerVerification {
 
     return SellerVerification(
       id: readInt(json, 'id'),
-      businessName: readString(json, 'business_name'),
+      businessName: readNullableString(json, 'business_name'),
       businessLocation: readNullableString(json, 'business_location'),
       businessDescription: readNullableString(json, 'business_description'),
       idDocumentRef: readNullableString(json, 'id_document_ref'),
@@ -137,25 +146,25 @@ class SellerVerification {
       reviewedAt: readNullableDateTime(json, 'reviewed_at'),
       hasIdDocument: _readBool(json, 'has_id_document'),
       hasSelfie: _readBool(json, 'has_selfie'),
+      hasProofOfAddress: _readBool(json, 'has_proof_of_address'),
+      farmPhotoIds: _readStringList(json, 'farm_photo_ids'),
     );
   }
 
   /// `seller_verifications.id`.
   final int id;
 
-  /// The only required field of the form.
-  final String businessName;
+  /// The farm or business name. Optional, so `null` when it was left blank.
+  final String? businessName;
 
   final String? businessLocation;
 
   final String? businessDescription;
 
-  /// A reference to an identity document — **not** the document.
+  /// A free-text reference to an identity document, such as a document number.
   ///
-  /// There is no upload endpoint and no storage for one (functional documentation
-  /// §3.3), so this is a string the seller supplies: a document number, a
-  /// reference code, whatever their own process uses. The app must never present
-  /// a file picker here, which would imply a mechanism that does not exist.
+  /// This is **not** the document, which is uploaded separately, so the app must
+  /// never present a file picker for this field.
   final String? idDocumentRef;
 
   final SellerVerificationStatus status;
@@ -183,9 +192,27 @@ class SellerVerification {
   /// Whether a selfie has been uploaded for this application.
   final bool hasSelfie;
 
+  /// Whether a proof of address has been uploaded for this application.
+  final bool hasProofOfAddress;
+
+  /// The ids that name this application's farm photos on the document endpoint.
+  final List<String> farmPhotoIds;
+
+  /// Reads a list of strings the resource always sends.
+  static List<String> _readStringList(Map<String, dynamic> json, String key) {
+    final Object? value = json[key];
+    if (value is List) {
+      return value.cast<String>().toList(growable: false);
+    }
+    throw FormatException(
+      'Expected field "$key" to be a list, got ${value.runtimeType}.',
+      json.toString(),
+    );
+  }
+
   /// Reads a boolean the resource always sends.
   ///
-  /// A missing key is a contract change — the resource emits both flags on every
+  /// A missing key is a contract change — the resource emits every flag on every
   /// record — so it throws rather than defaulting, matching the strictness of
   /// the rest of this model's parsing.
   static bool _readBool(Map<String, dynamic> json, String key) {

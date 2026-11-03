@@ -102,10 +102,12 @@ abstract final class AppConfig {
       'Physical Android build requires --dart-define=API_BASE_URL '
       'pointing to a reachable backend. Get your machine\'s LAN IP '
       '(e.g. `ipconfig` on Windows, `ip addr` on Linux/macOS) and run:'
-          ' flutter run --dart-define=API_BASE_URL=http://<your-LAN-IP>:8001/api';
+      ' flutter run --dart-define=API_BASE_URL=http://<your-LAN-IP>:8001/api';
+
   /// CHANGE_THIS_DEV_LAN_IP: the development machine's address in
   /// `ipconfig`.
-  static const String physicalAndroidApiBaseUrl = 'http://192.168.1.14:8001/api';
+  static const String physicalAndroidApiBaseUrl =
+      'http://192.168.1.14:8001/api';
 
   /// `10.0.2.2` is the Android emulator's alias for the host machine's loopback
   /// interface. Selected **only** when the build opts in with
@@ -187,9 +189,10 @@ abstract final class AppConfig {
             // looking like an unreachable backend. `kIsWeb` is a compile-time
             // constant about the platform being built, so device emulation
             // cannot influence it.
-            TargetPlatform.android when !isWeb => androidTarget == 'emulator'
-                ? androidEmulatorApiBaseUrl
-                : throw StateError(_missingPhysicalAndroidApiBaseUrlError),
+            TargetPlatform.android when !isWeb =>
+              androidTarget == 'emulator'
+                  ? androidEmulatorApiBaseUrl
+                  : throw StateError(_missingPhysicalAndroidApiBaseUrlError),
             _ => localApiBaseUrl,
           };
 
