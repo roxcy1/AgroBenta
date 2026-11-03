@@ -478,7 +478,10 @@ class _SmallAvatar extends StatelessWidget {
     if (url == null || url.isEmpty) {
       return CircleAvatar(
         radius: 16,
-        child: Text(user.initial, style: const TextStyle(fontSize: 12)),
+        child: Text(
+          user.initial,
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
       );
     }
     return CircleAvatar(radius: 16, backgroundImage: NetworkImage(url));
@@ -556,7 +559,10 @@ class _ProfileAvatar extends StatelessWidget {
     if (url == null || url.isEmpty) {
       return CircleAvatar(
         radius: 32,
-        child: Text(user.initial, style: const TextStyle(fontSize: 24)),
+        child: Text(
+          user.initial,
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
       );
     }
     return CircleAvatar(radius: 32, backgroundImage: NetworkImage(url));

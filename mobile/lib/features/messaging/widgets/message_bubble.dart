@@ -46,7 +46,7 @@ class MessageBubble extends StatelessWidget {
           maxWidth: MediaQuery.sizeOf(context).width * 0.75,
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxxs),
           child: Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
@@ -72,7 +72,6 @@ class MessageBubble extends StatelessWidget {
                       _timeLabel(message.createdAt),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: textColor.withValues(alpha: 0.7),
-                        fontSize: 10,
                       ),
                     ),
                     if (isPlaceholder) ...<Widget>[

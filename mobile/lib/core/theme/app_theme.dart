@@ -250,6 +250,15 @@ abstract final class AppTheme {
   /// "conventional professional system font" the root `DESIGN.md` requires. Do
   /// not add a bundled or downloaded display font.
   static const TextTheme _textTheme = TextTheme(
+    // Brand title - the AgroBenta wordmark on the sign-in and register headers.
+    // The only large style; no screen title uses it.
+    displaySmall: TextStyle(
+      fontSize: 28,
+      height: 1.2,
+      fontWeight: FontWeight.w800,
+      color: AppColors.text,
+    ),
+
     // Screen title — 18–20sp bold. Top of the band keeps it present without
     // swallowing the screen.
     headlineMedium: TextStyle(

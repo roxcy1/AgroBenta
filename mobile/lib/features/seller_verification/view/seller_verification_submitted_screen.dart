@@ -152,7 +152,7 @@ class _NextStep extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.only(top: AppSpacing.xxxs),
               child: Text(text, style: theme.textTheme.bodyMedium),
             ),
           ),

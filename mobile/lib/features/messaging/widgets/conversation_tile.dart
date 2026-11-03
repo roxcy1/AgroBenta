@@ -203,7 +203,10 @@ class _Avatar extends StatelessWidget {
     final String? url = user.avatarUrl;
     final Widget fallback = CircleAvatar(
       radius: 24,
-      child: Text(user.initial, style: const TextStyle(fontSize: 18)),
+      child: Text(
+        user.initial,
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
     );
 
     return SizedBox(
@@ -256,7 +259,10 @@ class _StatusChip extends StatelessWidget {
         : AppColors.textSecondary;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxxs,
+      ),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
@@ -284,7 +290,10 @@ class _UnreadBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final String label = count > 99 ? '99+' : count.toString();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxxs,
+      ),
       constraints: const BoxConstraints(minWidth: 20),
       decoration: BoxDecoration(
         color: AppColors.primary,
@@ -293,9 +302,8 @@ class _UnreadBadge extends StatelessWidget {
       child: Text(
         label,
         textAlign: TextAlign.center,
-        style: const TextStyle(
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: Colors.white,
-          fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
       ),

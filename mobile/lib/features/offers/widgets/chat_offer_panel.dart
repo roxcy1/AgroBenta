@@ -295,7 +295,7 @@ class _OfferTerms extends StatelessWidget {
     String? original,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxxs),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

@@ -130,7 +130,7 @@ class SellerApplicationProgressIndicator extends StatelessWidget {
             Expanded(
               child: Padding(
                 // Aligns the connector with the centre of the 28dp marker.
-                padding: const EdgeInsets.only(top: 13),
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
                 child: Container(
                   height: 2,
                   color: i <= currentStep
