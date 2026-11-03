@@ -242,11 +242,11 @@ class _NetworkImage extends StatelessWidget {
         height: _tileSize,
         errorBuilder: (BuildContext context, Object error, StackTrace? _) =>
             const _Placeholder(showSpinner: false),
-        loadingBuilder:
-            (BuildContext context, Widget child, ImageChunkEvent? progress) =>
-                progress == null
-                ? child
-                : const _Placeholder(showSpinner: true),
+        loadingBuilder: (
+          BuildContext context,
+          Widget child,
+          ImageChunkEvent? progress,
+        ) => progress == null ? child : const _Placeholder(showSpinner: true),
         excludeFromSemantics: true,
       ),
     );

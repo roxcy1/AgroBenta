@@ -39,7 +39,10 @@ void main() {
       expect(transaction.status, TransactionStatus.completed);
       expect(transaction.listing.id, 9);
       expect(transaction.listing.title, 'Boer');
-      expect(transaction.listing.loadablePhotoUrl, 'https://cdn.example.test/goats.jpg');
+      expect(
+        transaction.listing.loadablePhotoUrl,
+        'https://cdn.example.test/goats.jpg',
+      );
       expect(transaction.counterparty.id, 7);
       expect(transaction.counterparty.name, 'Ana Reyes');
       expect(transaction.counterparty.email, 'ana@example.test');
@@ -146,10 +149,7 @@ void main() {
         ),
       );
       final TransactionPage empty = TransactionPage.fromJson(
-        transactionPageJson(
-          transactions: <Map<String, dynamic>>[],
-          total: 0,
-        ),
+        transactionPageJson(transactions: <Map<String, dynamic>>[], total: 0),
       );
 
       expect(last.hasMore, isFalse);

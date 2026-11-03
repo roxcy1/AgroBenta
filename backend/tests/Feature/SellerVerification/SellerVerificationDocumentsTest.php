@@ -118,9 +118,26 @@ class SellerVerificationDocumentsTest extends TestCase
 
     private function stageBoth(User $user): void
     {
-        foreach (DocType::cases() as $type) {
+        foreach ($this->requiredTypes() as $type) {
             $this->upload($user, $type)->assertCreated();
         }
+    }
+
+    /**
+     * @return list<DocType>
+     */
+    private function requiredTypes(): array
+    {
+        return array_values(array_filter(
+            DocType::cases(),
+            fn (DocType $type): bool => $type->isRequired(),
+        ));
+    }
+
+    private function submit(User $user, array $body = []): TestResponse
+    {
+        return $this->withToken($this->mobileToken($user))
+            ->postJson('/api/seller-verification', $body);
     }
 
     /**
@@ -169,9 +186,9 @@ class SellerVerificationDocumentsTest extends TestCase
     // -------------------------------------------------------------------
 
     #[Test]
-    public function a_buyer_can_upload_both_documents_and_no_path_is_returned(): void
+    public function a_buyer_can_upload_every_required_document_and_no_path_is_returned(): void
     {
-        foreach (DocType::cases() as $type) {
+        foreach ($this->requiredTypes() as $type) {
             $response = $this->upload($this->buyer, $type);
 
             $response->assertCreated()
@@ -183,7 +200,7 @@ class SellerVerificationDocumentsTest extends TestCase
         $files = Storage::disk(SellerVerificationDocumentService::DISK)
             ->files($staging);
 
-        $this->assertCount(2, $files);
+        $this->assertCount(3, $files);
 
         // The private location must not leave the server in any form.
         $body = json_encode($response->json(), JSON_THROW_ON_ERROR);
@@ -230,7 +247,7 @@ class SellerVerificationDocumentsTest extends TestCase
     {
         $this->withToken($this->mobileToken($this->buyer))
             ->post('/api/seller-verification/documents', [
-                'type' => 'proof_of_address',
+                'type' => 'drivers_license',
                 'document' => UploadedFile::fake()->image('x.png', 10, 10),
             ])
             ->assertUnprocessable()
@@ -369,8 +386,9 @@ class SellerVerificationDocumentsTest extends TestCase
                 'business_name' => 'Reyes Livestock',
             ])
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Upload both required documents before submitting.')
-            ->assertJsonValidationErrors(['id_document', 'selfie']);
+            ->assertJsonPath('message', 'Upload all required documents before submitting.')
+            ->assertJsonValidationErrors(['id_document', 'selfie', 'proof_of_address'])
+            ->assertJsonMissingValidationErrors('farm_photo');
 
         $this->assertDatabaseCount('seller_verifications', 0);
     }
@@ -495,7 +513,7 @@ class SellerVerificationDocumentsTest extends TestCase
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', ['business_name' => 'Retry Farm'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['id_document', 'selfie']);
+            ->assertJsonValidationErrors(['id_document', 'selfie', 'proof_of_address']);
 
         $this->stageBoth($this->buyer);
 
@@ -572,7 +590,7 @@ class SellerVerificationDocumentsTest extends TestCase
         $this->putDocument($verification, DocType::IdDocument);
 
         $this->withToken($this->mobileToken($this->buyer))
-            ->get('/api/seller-verification/documents/proof_of_address')
+            ->get('/api/seller-verification/documents/drivers_license')
             ->assertNotFound();
     }
 
@@ -656,6 +674,205 @@ class SellerVerificationDocumentsTest extends TestCase
                 json_encode($payload, JSON_THROW_ON_ERROR),
             );
         }
+    }
+
+    // -------------------------------------------------------------------
+    // Proof of address
+    // -------------------------------------------------------------------
+
+    #[Test]
+    public function submission_is_refused_without_proof_of_address(): void
+    {
+        $this->upload($this->buyer, DocType::IdDocument)->assertCreated();
+        $this->upload($this->buyer, DocType::Selfie)->assertCreated();
+
+        $this->submit($this->buyer)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('proof_of_address')
+            ->assertJsonMissingValidationErrors(['id_document', 'selfie']);
+    }
+
+    #[Test]
+    public function proof_of_address_can_be_replaced_and_removed(): void
+    {
+        $disk = Storage::disk(SellerVerificationDocumentService::DISK);
+        $staging = sprintf('staging/%d', $this->buyer->id);
+
+        $this->upload($this->buyer, DocType::ProofOfAddress)->assertCreated();
+        $this->upload($this->buyer, DocType::ProofOfAddress)->assertCreated();
+        $this->assertCount(1, $disk->files($staging));
+
+        $this->withToken($this->mobileToken($this->buyer))
+            ->delete('/api/seller-verification/documents/proof_of_address')
+            ->assertOk();
+        $this->assertSame([], $disk->files($staging));
+    }
+
+    #[Test]
+    public function proof_of_address_is_readable_by_the_owner_and_an_admin_only(): void
+    {
+        $verification = $this->createVerification($this->buyer);
+        $this->putDocument($verification, DocType::ProofOfAddress);
+        $url = "/admin/seller-verifications/{$verification->id}/documents/proof_of_address";
+
+        $this->withToken($this->mobileToken($this->buyer))
+            ->get('/api/seller-verification/documents/proof_of_address')
+            ->assertOk();
+        $this->withToken($this->mobileToken($this->otherBuyer))
+            ->get('/api/seller-verification/documents/proof_of_address')
+            ->assertNotFound();
+        $this->withToken($this->adminToken())->get("/api{$url}")->assertOk();
+        $this->withToken($this->mobileToken($this->buyer))->get("/api{$url}")->assertForbidden();
+    }
+
+    // -------------------------------------------------------------------
+    // Farm photos
+    // -------------------------------------------------------------------
+
+    #[Test]
+    public function an_application_can_be_submitted_without_farm_photos(): void
+    {
+        $this->stageBoth($this->buyer);
+
+        $this->submit($this->buyer)
+            ->assertCreated()
+            ->assertJsonPath('data.has_proof_of_address', true)
+            ->assertJsonPath('data.farm_photo_ids', []);
+    }
+
+    #[Test]
+    public function several_farm_photos_are_kept_and_moved_onto_the_record(): void
+    {
+        $this->stageBoth($this->buyer);
+        $first = $this->upload($this->buyer, DocType::FarmPhoto)
+            ->assertCreated()
+            ->json('data.photo_id');
+        $second = $this->upload($this->buyer, DocType::FarmPhoto)
+            ->assertCreated()
+            ->json('data.photo_id');
+
+        $this->assertNotSame($first, $second);
+
+        $response = $this->submit($this->buyer)->assertCreated();
+
+        $this->assertEqualsCanonicalizing(
+            [$first, $second],
+            $response->json('data.farm_photo_ids'),
+        );
+
+        $verification = SellerVerification::query()->firstOrFail();
+        $disk = Storage::disk(SellerVerificationDocumentService::DISK);
+
+        $this->assertCount(2, $verification->farm_photo_paths);
+        foreach ($verification->farm_photo_paths as $path) {
+            $this->assertStringStartsWith("verifications/{$verification->id}/", $path);
+            $this->assertTrue($disk->exists($path));
+        }
+        $this->assertSame([], $disk->files(sprintf('staging/%d', $this->buyer->id)));
+    }
+
+    #[Test]
+    public function farm_photos_are_limited_per_application(): void
+    {
+        for ($i = 0; $i < SellerVerificationDocumentService::MAX_FARM_PHOTOS; $i++) {
+            $this->upload($this->buyer, DocType::FarmPhoto)->assertCreated();
+        }
+
+        $this->upload($this->buyer, DocType::FarmPhoto)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('document');
+    }
+
+    #[Test]
+    public function a_staged_farm_photo_can_be_removed_by_its_owner_only(): void
+    {
+        $id = $this->upload($this->buyer, DocType::FarmPhoto)->json('data.photo_id');
+        $disk = Storage::disk(SellerVerificationDocumentService::DISK);
+        $staging = sprintf('staging/%d', $this->buyer->id);
+
+        $this->withToken($this->mobileToken($this->otherBuyer))
+            ->delete("/api/seller-verification/documents/farm_photo/{$id}")
+            ->assertNotFound();
+        $this->assertCount(1, $disk->files($staging));
+
+        $this->withToken($this->mobileToken($this->buyer))
+            ->delete("/api/seller-verification/documents/farm_photo/{$id}")
+            ->assertOk();
+        $this->assertSame([], $disk->files($staging));
+
+        $this->withToken($this->mobileToken($this->buyer))
+            ->delete("/api/seller-verification/documents/farm_photo/{$id}")
+            ->assertNotFound();
+    }
+
+    #[Test]
+    public function submitted_farm_photos_are_private_and_read_by_owner_or_admin(): void
+    {
+        $this->stageBoth($this->buyer);
+        $id = $this->upload($this->buyer, DocType::FarmPhoto)->json('data.photo_id');
+        $this->submit($this->buyer)->assertCreated();
+        $verification = SellerVerification::query()->firstOrFail();
+
+        $owner = $this->withToken($this->mobileToken($this->buyer))
+            ->get("/api/seller-verification/documents/farm_photo/{$id}");
+        $owner->assertOk();
+        $this->assertStringContainsString('no-store', $owner->headers->get('Cache-Control', ''));
+
+        $this->withToken($this->mobileToken($this->otherBuyer))
+            ->get("/api/seller-verification/documents/farm_photo/{$id}")
+            ->assertNotFound();
+
+        $adminUrl = "/api/admin/seller-verifications/{$verification->id}/documents/farm_photo/{$id}";
+        $this->withToken($this->adminToken())->get($adminUrl)->assertOk();
+        $this->withToken($this->mobileToken($this->buyer))->get($adminUrl)->assertForbidden();
+    }
+
+    #[Test]
+    public function an_id_outside_the_record_cannot_read_a_file(): void
+    {
+        $verification = $this->createVerification($this->buyer);
+        $this->putDocument($verification, DocType::IdDocument);
+
+        foreach (['unknown', '..%2F..%2F.env', 'id_document'] as $id) {
+            $this->withToken($this->adminToken())
+                ->get("/api/admin/seller-verifications/{$verification->id}/documents/farm_photo/{$id}")
+                ->assertNotFound();
+        }
+    }
+
+    #[Test]
+    public function no_response_carries_the_new_storage_paths(): void
+    {
+        $this->stageBoth($this->buyer);
+        $this->upload($this->buyer, DocType::FarmPhoto)->assertCreated();
+        $body = json_encode(
+            $this->submit($this->buyer)->assertCreated()->json(),
+            JSON_THROW_ON_ERROR,
+        );
+
+        $this->assertStringNotContainsString('verifications/', $body);
+        $this->assertStringNotContainsString('proof_of_address_path', $body);
+        $this->assertStringNotContainsString('farm_photo_paths', $body);
+    }
+
+    // -------------------------------------------------------------------
+    // Optional business name
+    // -------------------------------------------------------------------
+
+    #[Test]
+    public function an_application_without_a_business_name_can_be_reviewed(): void
+    {
+        $this->stageBoth($this->buyer);
+        $this->submit($this->buyer)
+            ->assertCreated()
+            ->assertJsonPath('data.business_name', null);
+
+        $verification = SellerVerification::query()->firstOrFail();
+
+        $this->withToken($this->adminToken())
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.business_name', null);
     }
 
     #[Test]

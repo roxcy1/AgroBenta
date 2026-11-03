@@ -30,6 +30,8 @@ class SellerVerificationResource extends JsonResource
             // are read through the admin-only streaming endpoint.
             'has_id_document' => filled($this->id_document_path),
             'has_selfie' => filled($this->selfie_path),
+            'has_proof_of_address' => filled($this->proof_of_address_path),
+            'farm_photo_ids' => $this->resource->farmPhotoIds(),
             'status' => $this->status?->value,
             'admin_note' => $this->admin_note,
             'submitted_at' => $this->submitted_at?->toISOString(),

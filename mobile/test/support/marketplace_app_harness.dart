@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/marketplace_screen.dart';
@@ -13,6 +15,7 @@ import 'package:http/http.dart' as http;
 
 import 'auth_fakes.dart';
 import 'marketplace_fakes.dart';
+import 'livestock_type_fakes.dart';
 
 /// Pumps the marketplace screen over a mock transport, with the same
 /// `MarketplaceScope` shape `main.dart` installs.
@@ -42,6 +45,13 @@ class MarketplaceHarness {
     final MarketplaceController controller = MarketplaceController(repository);
     addTearDown(controller.dispose);
 
+    final catalogRepository = buildLivestockTypeRepository(tokenStore);
+    final LivestockTypesController catalogController = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalogController.dispose);
+    await catalogController.ensureLoaded();
+
     // The listing detail screen reads the signed-in viewer from `AuthScope`
     // (the Buy / Inquire action needs to know who is buying), and `main.dart`
     // installs that scope above the navigator — so the harness must too, or a
@@ -49,10 +59,8 @@ class MarketplaceHarness {
     final AuthController authController = AuthController(
       buildAuthRepository(
         tokenStore,
-        (_) async => http.Response(
-          jsonEncode(successEnvelope(data: userJson())),
-          200,
-        ),
+        (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
       ),
     );
     addTearDown(authController.dispose);
@@ -77,9 +85,13 @@ class MarketplaceHarness {
         child: MarketplaceScope(
           repository: repository,
           controller: controller,
-          child: MaterialApp(
-            theme: AppTheme.light(),
-            home: const MarketplaceScreen(),
+          child: LivestockTypesScope(
+            repository: catalogRepository,
+            controller: catalogController,
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: const MarketplaceScreen(),
+            ),
           ),
         ),
       ),

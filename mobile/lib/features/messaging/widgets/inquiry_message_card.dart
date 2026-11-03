@@ -144,9 +144,7 @@ class InquiryMessageCard extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(
-            child: Text(value, style: theme.textTheme.labelMedium),
-          ),
+          Expanded(child: Text(value, style: theme.textTheme.labelMedium)),
         ],
       ),
     );

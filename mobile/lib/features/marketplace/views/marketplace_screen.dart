@@ -137,6 +137,37 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
+  /// Applies one Browse category to the shared marketplace filter.
+  ///
+  /// A tap is a filter change like any other: the controller resets pagination
+  /// and issues one request. Re-tapping the selected chip is a no-op.
+  Future<void> _selectCategory(String? value) async {
+    final String next = (value ?? '').trim();
+    if (next == _controller.state.filters.livestockType) {
+      return;
+    }
+
+    await _controller.applyFilters(
+      _controller.state.filters.copyWith(livestockType: next),
+    );
+    if (mounted) {
+      _scrollToTop();
+    }
+  }
+
+  /// Removes only the category filter, keeping search and the other filters.
+  Future<void> _clearCategory() => _selectCategory(null);
+
+  /// Clears the search term, the category and every other filter, then reloads
+  /// once. This is the field's X: one request that restores all listings.
+  Future<void> _clearSearchAndFilters() async {
+    _searchField.clear();
+    await _controller.clearSearchAndFilters();
+    if (mounted) {
+      _scrollToTop();
+    }
+  }
+
   /// Clears both the search term and the filters, then reloads.
   ///
   /// One request, not two: the search text and the filters are a single query,
@@ -173,6 +204,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   searchField: _searchField,
                   state: state,
                   onOpenFilters: () => _openFilters(state),
+                  onClearSearch: _clearSearchAndFilters,
+                  onSelectCategory: _selectCategory,
+                  onClearCategory: _clearCategory,
                 ),
                 const Divider(height: 1),
                 Expanded(child: _body(state)),
@@ -203,53 +237,88 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       );
     }
 
-    return RefreshIndicator(
-      // Pull-to-refresh keeps the current results mounted: `refresh` publishes
-      // `refreshing`, which is not a blocking state, so the list below stays
-      // visible and the indicator itself is what communicates the request.
-      onRefresh: _controller.refresh,
-      child: ListView.separated(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenGutter,
-          AppSpacing.md,
-          AppSpacing.screenGutter,
-          0,
-        ),
-        itemCount:
-            state.listings.length +
-            1 +
-            (state.refreshErrorMessage != null ? 1 : 0),
-        separatorBuilder: (BuildContext context, int index) =>
-            const SizedBox(height: AppSpacing.sm),
-        itemBuilder: (BuildContext context, int index) {
-          if (state.refreshErrorMessage != null && index == 0) {
-            return PagedListRefreshNotice(
-              message: 'Could not refresh. ${state.refreshErrorMessage}',
-              onRetry: () => unawaited(_controller.refresh()),
-            );
-          }
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        const double spacing = AppSpacing.sm;
+        final double availableWidth =
+            constraints.maxWidth - (AppSpacing.screenGutter * 2);
+        final double itemWidth = (availableWidth - spacing) / 2;
+        // Photo band (16:9) plus the compact fact block below it. A single
+        // extent keeps both columns pixel-aligned regardless of how much text
+        // a seller wrote.
+        final double itemExtent = (itemWidth * 9 / 16) + 184;
 
-          final int listingIndex =
-              index - (state.refreshErrorMessage != null ? 1 : 0);
-
-          if (listingIndex == state.listings.length) {
-            return PagedListLoadMoreFooter(
-              isLoading: state.status == MarketplaceStatus.loadingMore,
-              hasMore: state.hasMorePages,
-              errorMessage: state.loadMoreErrorMessage,
-              onLoadMore: _controller.loadMore,
-            );
-          }
-
-          final Listing listing = state.listings[listingIndex];
-          return ListingCard(
-            listing: listing,
-            onTap: () => _openListing(listing),
-          );
-        },
-      ),
+        return RefreshIndicator(
+          // Pull-to-refresh keeps the current results mounted: `refresh` publishes
+          // `refreshing`, which is not a blocking state, so the grid below stays
+          // visible and the indicator itself is what communicates the request.
+          onRefresh: _controller.refresh,
+          child: CustomScrollView(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: <Widget>[
+              if (state.refreshErrorMessage != null)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenGutter,
+                    AppSpacing.sm,
+                    AppSpacing.screenGutter,
+                    0,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: PagedListRefreshNotice(
+                      message:
+                          'Could not refresh. ${state.refreshErrorMessage}',
+                      onRetry: () => unawaited(_controller.refresh()),
+                    ),
+                  ),
+                ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenGutter,
+                  AppSpacing.md,
+                  AppSpacing.screenGutter,
+                  0,
+                ),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: spacing,
+                    crossAxisSpacing: spacing,
+                    mainAxisExtent: itemExtent,
+                  ),
+                  delegate: SliverChildBuilderDelegate((
+                    BuildContext context,
+                    int index,
+                  ) {
+                    final Listing listing = state.listings[index];
+                    return ListingCard(
+                      listing: listing,
+                      onTap: () => _openListing(listing),
+                    );
+                  }, childCount: state.listings.length),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenGutter,
+                    AppSpacing.sm,
+                    AppSpacing.screenGutter,
+                    0,
+                  ),
+                  child: PagedListLoadMoreFooter(
+                    isLoading: state.status == MarketplaceStatus.loadingMore,
+                    hasMore: state.hasMorePages,
+                    errorMessage: state.loadMoreErrorMessage,
+                    onLoadMore: _controller.loadMore,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -261,12 +330,18 @@ class _SearchAndFilters extends StatelessWidget {
     required this.searchField,
     required this.state,
     required this.onOpenFilters,
+    required this.onClearSearch,
+    required this.onSelectCategory,
+    required this.onClearCategory,
   });
 
   final MarketplaceController controller;
   final TextEditingController searchField;
   final MarketplaceState state;
   final VoidCallback onOpenFilters;
+  final VoidCallback onClearSearch;
+  final ValueChanged<String?> onSelectCategory;
+  final VoidCallback onClearCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -275,40 +350,145 @@ class _SearchAndFilters extends StatelessWidget {
         AppSpacing.screenGutter,
         AppSpacing.sm,
         AppSpacing.screenGutter,
-        AppSpacing.sm,
+        AppSpacing.xs,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Expanded(
-            child: TextField(
-              controller: searchField,
-              textInputAction: TextInputAction.search,
-              onChanged: controller.updateSearch,
-              // Committing from the keyboard skips the remaining debounce. On a
-              // slow connection that is the difference between results now and
-              // results a moment later.
-              onSubmitted: (String _) => controller.submitSearch(),
-              decoration: InputDecoration(
-                hintText: 'Search livestock',
-                prefixIcon: const Icon(Icons.search),
-                isDense: true,
-                suffixIcon: state.searchText.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close),
-                        tooltip: 'Clear search',
-                        onPressed: () {
-                          searchField.clear();
-                          controller.submitSearch();
-                        },
-                      ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: searchField,
+                  textInputAction: TextInputAction.search,
+                  onChanged: controller.updateSearch,
+                  // Committing from the keyboard skips the remaining debounce. On a
+                  // slow connection that is the difference between results now and
+                  // results a moment later.
+                  onSubmitted: (String _) => controller.submitSearch(),
+                  decoration: InputDecoration(
+                    hintText: 'Search livestock',
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    suffixIcon: state.searchText.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Clear search and filters',
+                            onPressed: onClearSearch,
+                          ),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.xs),
+              MarketplaceFilterButton(state: state, onPressed: onOpenFilters),
+            ],
           ),
-          const SizedBox(width: AppSpacing.xs),
-          MarketplaceFilterButton(state: state, onPressed: onOpenFilters),
+          const SizedBox(height: AppSpacing.xs),
+          // Directly below the search bar, per the Browse prototype. These
+          // chips drive the same exact-match `livestock_type` filter as the
+          // Filter screen, so the two can never disagree.
+          _BrowseCategoryChips(
+            selected: state.filters.livestockType.trim(),
+            onSelect: onSelectCategory,
+          ),
+          if (state.filters.livestockType.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.xs),
+            _ActiveCategoryIndicator(
+              label: _BrowseCategory.labelFor(state.filters.livestockType.trim()),
+              onClear: onClearCategory,
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// The five Browse categories, matching the Filter screen's Animal Type tiles.
+class _BrowseCategory {
+  const _BrowseCategory(this.label, this.value);
+
+  final String label;
+
+  /// `null` is "All" — no `livestock_type` filter.
+  final String? value;
+
+  /// The chip label for a filter value; an unknown value is shown as typed.
+  static String labelFor(String value) {
+    for (final _BrowseCategory category in values) {
+      if (category.value == value) {
+        return category.label;
+      }
+    }
+    return value;
+  }
+
+  static const List<_BrowseCategory> values = <_BrowseCategory>[
+    _BrowseCategory('All', null),
+    _BrowseCategory('Cattle', 'cattle'),
+    _BrowseCategory('Swine', 'swine'),
+    _BrowseCategory('Goat', 'goat'),
+    _BrowseCategory('Carabao', 'carabao'),
+  ];
+}
+
+/// A horizontally scrollable chip row. Selecting a chip applies its
+/// `livestock_type`; "All" clears it. The selected chip is derived from the
+/// shared filter state, so a selection made on Home or in the Filter screen is
+/// reflected here without any extra request.
+class _BrowseCategoryChips extends StatelessWidget {
+  const _BrowseCategoryChips({required this.selected, required this.onSelect});
+
+  final String selected;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _BrowseCategory.values.length,
+        separatorBuilder: (BuildContext context, int index) =>
+            const SizedBox(width: AppSpacing.xs),
+        itemBuilder: (BuildContext context, int index) {
+          final _BrowseCategory category = _BrowseCategory.values[index];
+          final bool isSelected = category.value == null
+              ? selected.isEmpty
+              : selected.toLowerCase() == category.value!.toLowerCase();
+
+          return ChoiceChip(
+            key: ValueKey<String>(
+              'browse-category-${category.value?.toLowerCase() ?? 'all'}',
+            ),
+            label: Text(category.label),
+            selected: isSelected,
+            showCheckmark: false,
+            onSelected: (_) => onSelect(category.value),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The active category, stated beside the search field and removable without
+/// opening the Filter screen.
+class _ActiveCategoryIndicator extends StatelessWidget {
+  const _ActiveCategoryIndicator({required this.label, required this.onClear});
+
+  final String label;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputChip(
+      key: const ValueKey<String>('active-category-filter'),
+      label: Text('Category: $label'),
+      onDeleted: onClear,
+      deleteIcon: const Icon(Icons.close, size: 18),
+      deleteButtonTooltipMessage: 'Remove category filter',
     );
   }
 }
@@ -323,17 +503,32 @@ class _LoadingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenGutter,
-        AppSpacing.md,
-        AppSpacing.screenGutter,
-        0,
-      ),
-      itemCount: 4,
-      separatorBuilder: (BuildContext context, int index) =>
-          const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (BuildContext context, int index) => const _SkeletonCard(),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        const double spacing = AppSpacing.sm;
+        final double availableWidth =
+            constraints.maxWidth - (AppSpacing.screenGutter * 2);
+        final double itemWidth = (availableWidth - spacing) / 2;
+
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenGutter,
+            AppSpacing.md,
+            AppSpacing.screenGutter,
+            0,
+          ),
+          physics: const AlwaysScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: spacing,
+            crossAxisSpacing: spacing,
+            mainAxisExtent: (itemWidth * 9 / 16) + 184,
+          ),
+          itemCount: 4,
+          itemBuilder: (BuildContext context, int index) =>
+              const _SkeletonCard(),
+        );
+      },
     );
   }
 }
@@ -344,34 +539,30 @@ class _SkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Container(
-              width: 108,
-              height: 108,
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                border: Border.all(color: AppColors.border),
-              ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(color: AppColors.background),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const _Bar(width: 54),
+                const SizedBox(height: AppSpacing.xs),
+                const _Bar(width: 110),
+                const SizedBox(height: AppSpacing.xs),
+                const _Bar(width: 80),
+                const SizedBox(height: AppSpacing.sm),
+                const _Bar(width: 96),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  _Bar(width: 90),
-                  const SizedBox(height: AppSpacing.xs),
-                  _Bar(width: 160),
-                  const SizedBox(height: AppSpacing.md),
-                  _Bar(width: 110),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

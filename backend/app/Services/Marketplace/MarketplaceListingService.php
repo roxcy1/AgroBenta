@@ -5,6 +5,7 @@ namespace App\Services\Marketplace;
 use App\Models\Listing;
 use App\Repositories\Marketplace\MarketplaceListingRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 /**
  * Application logic for the buyer marketplace.
@@ -41,6 +42,16 @@ class MarketplaceListingService
             maxPrice: $maxPrice,
             perPage: $perPage,
         );
+    }
+
+    /**
+     * The ranked livestock categories for Buyer Home.
+     *
+     * @return Collection<int, array{livestock_type: string, completed_sales: int, photo_url: string|null}>
+     */
+    public function popularLivestock(): Collection
+    {
+        return $this->listings->popularLivestock();
     }
 
     /**

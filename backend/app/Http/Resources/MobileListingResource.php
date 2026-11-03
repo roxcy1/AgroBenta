@@ -46,6 +46,10 @@ class MobileListingResource extends JsonResource
             'additional_notes' => $this->additional_notes,
             'photos' => $this->photoUrls(),
             'status' => $this->status?->value,
+            // Completed transactions for THIS listing. The count is supplied by
+            // the marketplace queries via `withCount`; other callers (seller
+            // screens reusing this resource) simply report zero.
+            'completed_sales' => (int) ($this->completed_sales ?? 0),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

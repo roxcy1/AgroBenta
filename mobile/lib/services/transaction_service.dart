@@ -80,8 +80,9 @@ class TransactionService {
   Future<Transaction> cancel(int id) {
     return _apiClient.post<Transaction>(
       TransactionEndpoints.cancel(id),
-      parse: (Object? data) =>
-          Transaction.fromJson(_asObject(data, 'POST /transactions/$id/cancel')),
+      parse: (Object? data) => Transaction.fromJson(
+        _asObject(data, 'POST /transactions/$id/cancel'),
+      ),
     );
   }
 

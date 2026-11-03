@@ -88,8 +88,8 @@ class ConversationTile extends StatelessWidget {
                           const SizedBox(width: AppSpacing.xs),
                           _StatusChip(
                             label: _statusLabel(conversation)!,
-                            emphasised: conversation.latestOffer?.isPending ??
-                                false,
+                            emphasised:
+                                conversation.latestOffer?.isPending ?? false,
                           ),
                         ],
                       ],

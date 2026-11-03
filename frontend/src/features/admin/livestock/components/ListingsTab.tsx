@@ -2,6 +2,11 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
 import { useListing, useListingCounts, useListings } from '../api/useListings';
+import {
+  listingTypeOptions,
+  requestLivestockTypesRefetch,
+  useLivestockTypes,
+} from '../api/useLivestockTypes';
 import type { Listing } from '../api/useListings';
 import ListingDetailsDialog from './ListingDetailsDialog';
 import { ListingPhotoThumb } from './ListingPhotos';
@@ -20,18 +25,6 @@ const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'sold', label: 'Sold' },
   { value: 'inactive', label: 'Inactive' },
-] as const;
-
-const LIVESTOCK_OPTIONS = [
-  { value: '', label: 'All Types' },
-  { value: 'cattle', label: 'Cattle' },
-  { value: 'carabao', label: 'Carabao' },
-  { value: 'goat', label: 'Goat' },
-  { value: 'pig', label: 'Pig' },
-  { value: 'chicken', label: 'Chicken' },
-  { value: 'duck', label: 'Duck' },
-  { value: 'horse', label: 'Horse' },
-  { value: 'sheep', label: 'Sheep' },
 ] as const;
 
 export function ListingsTab() {
@@ -58,6 +51,13 @@ export function ListingsTab() {
   });
 
   const { data: counts } = useListingCounts();
+  const {
+    data: livestockTypes,
+    isLoading: areLivestockTypesLoading,
+    isFetching: areLivestockTypesFetching,
+    isError: livestockTypesFailed,
+    refetch: refetchLivestockTypes,
+  } = useLivestockTypes();
   const { data: linkedListing, isError: linkedListingFailed } = useListing(linkedListingId);
 
   // A deep link opens the listing it names even when that row is not on the
@@ -172,13 +172,35 @@ export function ListingsTab() {
                     aria-label="Filter by livestock type"
                     value={typeFilter}
                     onChange={(e) => handleTypeChange(e.target.value)}
+                    disabled={areLivestockTypesLoading || areLivestockTypesFetching}
                   >
-                    {LIVESTOCK_OPTIONS.map((opt) => (
+                    {listingTypeOptions(livestockTypes).map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
                   </select>
+                  {areLivestockTypesLoading && <span className="lv-filter-status">Loading types...</span>}
+                  {livestockTypesFailed && (
+                    <>
+                      <span className="lv-filter-status">
+                        {areLivestockTypesFetching ? 'Retrying types...' : 'Types unavailable'}
+                      </span>
+                      <button
+                        type="button"
+                        className="lv-retry-button"
+                        disabled={areLivestockTypesFetching}
+                        onClick={() =>
+                          requestLivestockTypesRefetch(
+                            areLivestockTypesFetching,
+                            refetchLivestockTypes,
+                          )
+                        }
+                      >
+                        {areLivestockTypesFetching ? 'Retrying...' : 'Retry'}
+                      </button>
+                    </>
+                  )}
 
                   <select
                     className="lv-filter-select"

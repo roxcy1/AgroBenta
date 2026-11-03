@@ -8,6 +8,9 @@ import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/buyer_shell/view/buyer_shell.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
+import 'package:agrobenta_mobile/features/home/widgets/home_categories.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/marketplace_screen.dart';
@@ -34,6 +37,7 @@ import 'package:http/testing.dart';
 
 import '../../support/auth_fakes.dart';
 import '../../support/marketplace_fakes.dart';
+import '../../support/livestock_type_fakes.dart';
 import '../../support/marketplace_app_harness.dart';
 import '../../support/messaging_fakes.dart';
 import '../../support/notification_fakes.dart';
@@ -82,6 +86,8 @@ void main() {
           return Future<http.Response>.value(unreadCountResponse());
         case '/notifications':
           return Future<http.Response>.value(notificationsPageResponse());
+        case '/marketplace/popular-livestock':
+          return Future<http.Response>.value(popularLivestockResponse());
         default:
           return handler != null
               ? handler(request)
@@ -164,6 +170,13 @@ void main() {
         NotificationsController(notificationRepository);
     addTearDown(notificationsController.dispose);
 
+    final catalogRepository = buildLivestockTypeRepository(tokenStore);
+    final LivestockTypesController catalogController = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalogController.dispose);
+    await catalogController.ensureLoaded();
+
     await tester.pumpWidget(
       // Scopes above `MaterialApp`, matching `main.dart`: a route pushed onto
       // the navigator is a sibling of `home`, so a scope inside `home` would
@@ -181,19 +194,23 @@ void main() {
               child: MarketplaceScope(
                 repository: repository,
                 controller: controller,
-                // The Home tab's seller card reads the seller verification scope, so
-                // the shell harness carries the scopes `main.dart` installs.
-                // Answered with "never submitted" — this test is about navigation, and
-                // the card must not need a transport to render.
-                child: NeverSubmittedVerificationScope(
-                  child: ProfileScope(
-                    repository: profileRepository,
-                    controller: profileController,
-                    child: TransactionScope(
-                      repository: transactionRepository,
-                      child: MaterialApp(
-                        theme: AppTheme.light(),
-                        home: const BuyerShell(),
+                child: LivestockTypesScope(
+                  repository: catalogRepository,
+                  controller: catalogController,
+                  // The Home tab's seller card reads the seller verification scope, so
+                  // the shell harness carries the scopes `main.dart` installs.
+                  // Answered with "never submitted" — this test is about navigation, and
+                  // the card must not need a transport to render.
+                  child: NeverSubmittedVerificationScope(
+                    child: ProfileScope(
+                      repository: profileRepository,
+                      controller: profileController,
+                      child: TransactionScope(
+                        repository: transactionRepository,
+                        child: MaterialApp(
+                          theme: AppTheme.light(),
+                          home: const BuyerShell(),
+                        ),
                       ),
                     ),
                   ),
@@ -332,5 +349,37 @@ void main() {
           'page 1 and throw away what the buyer had',
     );
     expect(find.text('Kept'), findsOneWidget);
+  });
+
+  testWidgets('a Home category opens Browse with the category applied', (
+    WidgetTester tester,
+  ) async {
+    await pumpShell(tester);
+
+    final Finder cattle = find.descendant(
+      of: find.byType(HomeCategories),
+      matching: find.text('Cattle'),
+    );
+    await tester.ensureVisible(cattle);
+    await tester.pumpAndSettle();
+    await tester.tap(cattle);
+    await settleMarketplace(tester, frames: 12);
+
+    await tester.tap(find.text('Browse'));
+    await settleMarketplace(tester, frames: 12);
+
+    expect(find.text('Category: Cattle'), findsOneWidget);
+    final ChoiceChip chip = tester.widget<ChoiceChip>(
+      find.byKey(const ValueKey<String>('browse-category-cattle')),
+    );
+    expect(chip.selected, isTrue);
+    expect(
+      recorded.where(
+        (RecordedRequest request) =>
+            request.apiPath == '/listings' &&
+            request.query['livestock_type'] == 'cattle',
+      ),
+      isNotEmpty,
+    );
   });
 }

@@ -10,12 +10,12 @@ import '../core/theme/app_spacing.dart';
 /// reads like a table. Stacking keeps the value the primary text.
 class DetailRow extends StatelessWidget {
   const DetailRow({required this.label, required this.value, super.key})
-      : body = null;
+    : body = null;
 
   /// Paragraph form, for a description or note that has no label.
   const DetailRow.body(String this.body, {super.key})
-      : label = null,
-        value = null;
+    : label = null,
+      value = null;
 
   final String? label;
   final String? value;

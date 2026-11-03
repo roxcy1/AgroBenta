@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
+import '../core/utils/json_utils.dart';
 import '../models/seller_verification.dart';
 
 /// The seller verification API surface.
@@ -62,7 +63,8 @@ class SellerVerificationService {
   /// `POST /seller-verification` — file a verification.
   ///
   /// Blank optional fields are omitted rather than sent empty, so a submission
-  /// with only a business name carries one key. The server treats `null` and
+  /// with only a business name carries one key, and every field is optional. The
+  /// server treats `null` and
   /// absent identically, but an empty string is stored, and `""` is not the same
   /// thing as "not provided" when a human later reads the review queue.
   ///
@@ -76,7 +78,7 @@ class SellerVerificationService {
   ///  * [ApiErrorKind.validation] on a `422`, carrying per-field messages.
   ///  * [ApiErrorKind.rateLimited] on a `429`; the route is throttled to 5/min.
   Future<SellerVerification> submit({
-    required String businessName,
+    String? businessName,
     String? businessLocation,
     String? businessDescription,
     String? idDocumentRef,
@@ -86,7 +88,7 @@ class SellerVerificationService {
       body: <String, dynamic>{
         // Explicit allow-list, in the order the contract lists them. Anything a
         // form adds later has to be named here to be sent.
-        'business_name': businessName.trim(),
+        if (_present(businessName)) 'business_name': businessName!.trim(),
         if (_present(businessLocation))
           'business_location': businessLocation!.trim(),
         if (_present(businessDescription))
@@ -122,6 +124,35 @@ class SellerVerificationService {
     required VerificationDocumentType type,
     required XFile file,
     void Function(int sent, int total)? onProgress,
+  }) {
+    return _upload<void>(
+      type: type,
+      file: file,
+      onProgress: onProgress,
+      parse: (_) {},
+    );
+  }
+
+  /// `POST /seller-verification/documents` for one farm photo.
+  ///
+  /// Returns the server's `photo_id`, which names this photo among the
+  /// application's others. A `422` also means the photo limit was reached.
+  Future<String> uploadFarmPhoto({required XFile file}) {
+    return _upload<String>(
+      type: VerificationDocumentType.farmPhoto,
+      file: file,
+      parse: (Object? data) => readString(
+        _asObject(data, 'POST /seller-verification/documents'),
+        'photo_id',
+      ),
+    );
+  }
+
+  Future<T> _upload<T>({
+    required VerificationDocumentType type,
+    required XFile file,
+    required T Function(Object? data) parse,
+    void Function(int sent, int total)? onProgress,
   }) async {
     final int length = await file.length();
     int uploaded = 0;
@@ -136,11 +167,11 @@ class SellerVerificationService {
       filename: file.name,
     );
 
-    return _apiClient.postMultipart<void>(
+    return _apiClient.postMultipart<T>(
       path: SellerVerificationEndpoints.documents,
       files: <http.MultipartFile>[part],
       fields: <String, String>{'type': type.value},
-      parse: (_) {},
+      parse: parse,
     );
   }
 
@@ -159,17 +190,31 @@ class SellerVerificationService {
     );
   }
 
+  /// `DELETE /seller-verification/documents/farm_photo/{photoId}` — remove one
+  /// staged farm photo. A `404` means no staged photo has that id.
+  Future<void> deleteFarmPhoto(String photoId) {
+    return _apiClient.delete<void>(
+      SellerVerificationEndpoints.farmPhoto(photoId),
+      parse: (_) {},
+    );
+  }
+
   /// `GET /seller-verification/documents/{type}` — the stored document's bytes.
-  ///
+  Future<Uint8List?> fetchDocument(VerificationDocumentType type) =>
+      _fetchBytes(SellerVerificationEndpoints.document(type.value));
+
+  /// `GET /seller-verification/documents/farm_photo/{photoId}` — one submitted
+  /// farm photo's bytes.
+  Future<Uint8List?> fetchFarmPhoto(String photoId) =>
+      _fetchBytes(SellerVerificationEndpoints.farmPhoto(photoId));
+
   /// The success body is the file itself, not an envelope, so this goes through
   /// [ApiClient.getBytes]. Returns the bytes, or `null` for a `404` — the
   /// document has never been uploaded — which the caller renders as "not on
   /// file" rather than as a failure. Every other [ApiException] propagates.
-  Future<Uint8List?> fetchDocument(VerificationDocumentType type) async {
+  Future<Uint8List?> _fetchBytes(String path) async {
     try {
-      return await _apiClient.getBytes(
-        SellerVerificationEndpoints.document(type.value),
-      );
+      return await _apiClient.getBytes(path);
     } on ApiException catch (error) {
       if (error.kind == ApiErrorKind.notFound) {
         return null;

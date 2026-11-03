@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { SellerVerification, VerificationDocumentType } from '../api/useSellerVerifications';
+import type { SellerVerification } from '../api/useSellerVerifications';
 import {
   fetchVerificationDocument,
+  fetchVerificationFarmPhoto,
   useSellerVerification,
 } from '../api/useSellerVerifications';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -67,13 +68,11 @@ function historyTable(history: SellerVerification[]): ReactNode {
  * revoked when the lightbox closes so an open document does not leak a blob.
  */
 function DocumentViewer({
-  verificationId,
-  type,
+  fetchDocument,
   label,
   present,
 }: {
-  verificationId: number;
-  type: VerificationDocumentType;
+  fetchDocument: () => Promise<Blob>;
   label: string;
   present: boolean;
 }) {
@@ -91,7 +90,7 @@ function DocumentViewer({
     setLoading(true);
     setError(false);
     try {
-      const blob = await fetchVerificationDocument(verificationId, type);
+      const blob = await fetchDocument();
       setObjectUrl(URL.createObjectURL(blob));
     } catch {
       setError(true);
@@ -199,10 +198,21 @@ export default function VerificationDetailsDialog({
           content: (
             <dl className="lv-detail-list">
               <DocumentViewer
-                verificationId={verification.id}
-                type="id_document"
+                fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document')}
                 label="Government-issued ID"
                 present={verification.has_id_document}
+              />
+            </dl>
+          ),
+        },
+        {
+          title: 'Proof of address',
+          content: (
+            <dl className="lv-detail-list">
+              <DocumentViewer
+                fetchDocument={() => fetchVerificationDocument(verification.id, 'proof_of_address')}
+                label="Proof of address"
+                present={verification.has_proof_of_address}
               />
             </dl>
           ),
@@ -212,13 +222,30 @@ export default function VerificationDetailsDialog({
           content: (
             <dl className="lv-detail-list">
               <DocumentViewer
-                verificationId={verification.id}
-                type="selfie"
+                fetchDocument={() => fetchVerificationDocument(verification.id, 'selfie')}
                 label="Selfie holding ID"
                 present={verification.has_selfie}
               />
             </dl>
           ),
+        },
+        {
+          title: 'Farm photos',
+          content:
+            verification.farm_photo_ids.length === 0 ? (
+              <p className="lv-detail-value">{'—'} Not provided</p>
+            ) : (
+              <dl className="lv-detail-list">
+                {verification.farm_photo_ids.map((photoId, index) => (
+                  <DocumentViewer
+                    key={photoId}
+                    fetchDocument={() => fetchVerificationFarmPhoto(verification.id, photoId)}
+                    label={`Farm photo ${index + 1}`}
+                    present
+                  />
+                ))}
+              </dl>
+            ),
         },
         {
           title: 'Decision',

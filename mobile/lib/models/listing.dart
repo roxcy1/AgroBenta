@@ -1,5 +1,6 @@
 import '../core/config/app_config.dart';
 import '../core/utils/json_utils.dart';
+import 'livestock_type.dart';
 
 /// A listing's publication status, as stored in `listings.status`.
 ///
@@ -122,6 +123,7 @@ class Listing {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.completedSales = 0,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
@@ -143,12 +145,13 @@ class Listing {
       shortDescription: readString(json, 'short_description'),
       additionalNotes: readNullableString(json, 'additional_notes'),
       photos: readStringList(json, 'photos')
-          .map((String url) => Listing.resolvePhotoUrl(
-                url,
-                apiOrigin: AppConfig.apiOrigin,
-              ))
+          .map(
+            (String url) =>
+                Listing.resolvePhotoUrl(url, apiOrigin: AppConfig.apiOrigin),
+          )
           .toList(growable: false),
       status: ListingStatus.fromValue(readString(json, 'status')),
+      completedSales: readNullableInt(json, 'completed_sales') ?? 0,
       createdAt: readNullableDateTime(json, 'created_at'),
       updatedAt: readNullableDateTime(json, 'updated_at'),
     );
@@ -221,6 +224,10 @@ class Listing {
 
   final ListingStatus status;
 
+  /// Completed transactions for this listing, from the marketplace API.
+  /// `0` is a real answer: no completed sale yet.
+  final int completedSales;
+
   final DateTime? createdAt;
 
   final DateTime? updatedAt;
@@ -274,11 +281,13 @@ class Listing {
   }
 
   /// A buyer-facing title for the listing: the breed when there is one,
-  /// otherwise the species.
+  /// otherwise a readable livestock-type label.
   ///
   /// Falls back rather than rendering an empty heading, because `breed` is a
-  /// non-null column but may legitimately be an empty string.
-  String get title => breed.trim().isEmpty ? livestockType : breed;
+  /// non-null column but may legitimately be an empty string. The raw API
+  /// value remains available through [livestockType]; this is display-only.
+  String get title =>
+      breed.trim().isEmpty ? LivestockType.titleCase(livestockType) : breed;
 
   /// Whether a photo path can be handed to `Image.network` as-is.
   ///
@@ -355,7 +364,9 @@ class Listing {
     // This covers '/storage/...' and 'storage/...'. A string containing
     // whitespace is not a valid path or URL (e.g. 'not a url') and is
     // returned unchanged rather than resolved into a bogus address.
-    if (!uri.hasScheme && uri.host.isEmpty && !trimmed.contains(RegExp(r'\s'))) {
+    if (!uri.hasScheme &&
+        uri.host.isEmpty &&
+        !trimmed.contains(RegExp(r'\s'))) {
       final String path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
       return '$apiOrigin$path';
     }

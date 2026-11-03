@@ -95,44 +95,46 @@ void main() {
       expect(recorded.single.body['proposed_amount'], '48000.00');
     });
 
-    test('sends the proposed terms without inventing any other field',
-        () async {
-      final MakeOfferController controller = build(
-        (_) async => offerCreatedResponse(
-          offer: offerJson(id: 9, proposedAmount: '47000.00'),
-        ),
-      );
+    test(
+      'sends the proposed terms without inventing any other field',
+      () async {
+        final MakeOfferController controller = build(
+          (_) async => offerCreatedResponse(
+            offer: offerJson(id: 9, proposedAmount: '47000.00'),
+          ),
+        );
 
-      await controller.submit(
-        inquiryId: 5,
-        listingId: 12,
-        amount: '47000.00',
-        pickupDate: DateTime(2026, 11, 12),
-        paymentMethod: InquiryPaymentMethod.cash,
-        collectionMethod: InquiryCollectionMethod.farmPickup,
-        note: '  Bring a helper.  ',
-      );
+        await controller.submit(
+          inquiryId: 5,
+          listingId: 12,
+          amount: '47000.00',
+          pickupDate: DateTime(2026, 11, 12),
+          paymentMethod: InquiryPaymentMethod.cash,
+          collectionMethod: InquiryCollectionMethod.farmPickup,
+          note: '  Bring a helper.  ',
+        );
 
-      final Map<String, dynamic> body = recorded.single.body;
-      expect(body.keys.toSet(), <String>{
-        'inquiry_id',
-        'listing_id',
-        'proposed_amount',
-        'proposed_pickup_date',
-        'payment_method',
-        'collection_method',
-        'note',
-      });
-      expect(body['proposed_pickup_date'], '2026-11-12');
-      expect(body['payment_method'], 'cash');
-      expect(body['collection_method'], 'farm_pickup');
-      expect(body['note'], 'Bring a helper.');
+        final Map<String, dynamic> body = recorded.single.body;
+        expect(body.keys.toSet(), <String>{
+          'inquiry_id',
+          'listing_id',
+          'proposed_amount',
+          'proposed_pickup_date',
+          'payment_method',
+          'collection_method',
+          'note',
+        });
+        expect(body['proposed_pickup_date'], '2026-11-12');
+        expect(body['payment_method'], 'cash');
+        expect(body['collection_method'], 'farm_pickup');
+        expect(body['note'], 'Bring a helper.');
 
-      // Server-owned fields never travel from the client.
-      expect(body.containsKey('buyer_id'), isFalse);
-      expect(body.containsKey('seller_id'), isFalse);
-      expect(body.containsKey('status'), isFalse);
-    });
+        // Server-owned fields never travel from the client.
+        expect(body.containsKey('buyer_id'), isFalse);
+        expect(body.containsKey('seller_id'), isFalse);
+        expect(body.containsKey('status'), isFalse);
+      },
+    );
 
     test('a server 422 becomes the amount field error', () async {
       final MakeOfferController controller = build(
