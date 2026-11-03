@@ -648,7 +648,7 @@ class _Avatar extends StatelessWidget {
         radius: 32,
         child: Text(
           name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
-          style: const TextStyle(fontSize: 24),
+          style: Theme.of(context).textTheme.headlineMedium,
         ),
       );
     }

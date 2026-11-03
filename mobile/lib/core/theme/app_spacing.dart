@@ -5,6 +5,8 @@
 /// in different phases.
 abstract final class AppSpacing {
   /// 4dp — icon-to-label gaps, badge padding.
+  /// Hairline offsets - a 2px nudge between a label and its neighbour.
+  static const double xxxs = 2;
   static const double xxs = 4;
 
   /// 8dp — gap between tightly related elements (label to field).

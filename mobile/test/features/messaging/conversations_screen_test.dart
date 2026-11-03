@@ -57,6 +57,8 @@ void main() {
     WidgetTester tester, {
     required Future<http.Response> Function(RecordedRequest request) handler,
     bool sellerMode = false,
+    Size surface = const Size(800, 1600),
+    double textScale = 1.0,
   }) async {
     final MessagingRepository repository = buildMessagingRepository(
       tokenStore,
@@ -98,7 +100,7 @@ void main() {
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
 
-    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.physicalSize = surface;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
@@ -116,6 +118,12 @@ void main() {
                 controller: authController,
                 child: MaterialApp(
                   theme: AppTheme.light(),
+                  builder: (BuildContext context, Widget? child) => MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(textScaler: TextScaler.linear(textScale)),
+                    child: child!,
+                  ),
                   home: ConversationsScreen(sellerMode: sellerMode),
                 ),
               ),
@@ -131,6 +139,49 @@ void main() {
     of: find.text(name),
     matching: find.byType(ConversationTile),
   );
+
+  group('small phone', () {
+    testWidgets('fits a 360dp phone at 1.3x text without overflow', (
+      WidgetTester tester,
+    ) async {
+      await pumpInbox(
+        tester,
+        surface: const Size(360, 740),
+        textScale: 1.3,
+        handler: (RecordedRequest request) async {
+          return conversationsResponse(
+            conversations: <Map<String, dynamic>>[
+              conversationJson(
+                counterpart: chatUserJson(
+                  id: 3,
+                  name: 'Rizal Farms and Livestock Trading Cooperative',
+                ),
+                listingTitle:
+                    'Brahman Bull, Two Years Old, Healthy and Vaccinated',
+                lastMessage:
+                    'Good day! Is this still available, and can we arrange a '
+                    'pickup this weekend at the farm?',
+                unreadCount: 128,
+                hasInquiry: true,
+                latestOffer: conversationOfferJson(status: 'pending'),
+              ),
+              conversationJson(
+                counterpart: chatUserJson(id: 4, name: 'Ana'),
+                unreadCount: 0,
+              ),
+            ],
+          );
+        },
+      );
+
+      expect(
+        find.text('Rizal Farms and Livestock Trading Cooperative'),
+        findsOneWidget,
+      );
+      // A RenderFlex overflow is reported as a framework exception.
+      expect(tester.takeException(), isNull);
+    });
+  });
 
   group('renders', () {
     testWidgets('real conversations with previews, times and unread badges', (

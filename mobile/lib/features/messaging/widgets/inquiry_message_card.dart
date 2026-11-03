@@ -131,7 +131,7 @@ class InquiryMessageCard extends StatelessWidget {
 
   Widget _row(ThemeData theme, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xxxs),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

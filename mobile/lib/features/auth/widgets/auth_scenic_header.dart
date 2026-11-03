@@ -49,9 +49,7 @@ class AuthScenicHeader extends StatelessWidget {
                   Text(
                     'AgroBenta',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
+                    style: theme.textTheme.displaySmall?.copyWith(
                       color: AppColors.primaryDark,
                     ),
                   ),

@@ -33,7 +33,10 @@ class OfferStatusBadge extends StatelessWidget {
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(AppSizes.circular),

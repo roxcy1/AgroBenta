@@ -147,7 +147,7 @@ class _PageIndicators extends StatelessWidget {
                 for (int i = 0; i < count; i++)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
                     width: current == i ? 9 : 6,
                     height: 6,
                     decoration: BoxDecoration(

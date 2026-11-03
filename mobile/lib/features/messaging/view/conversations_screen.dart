@@ -850,7 +850,10 @@ class _StatusBadge extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.only(left: AppSpacing.xs),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxxs,
+      ),
       decoration: BoxDecoration(
         color: emphasised ? AppColors.primary : AppColors.surface,
         borderRadius: BorderRadius.circular(999),

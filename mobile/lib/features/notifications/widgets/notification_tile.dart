@@ -85,7 +85,7 @@ class NotificationTile extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                margin: const EdgeInsets.only(top: 6),
+                margin: const EdgeInsets.only(top: AppSpacing.xs),
                 decoration: const BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
@@ -139,15 +139,15 @@ class _CategoryIcon extends StatelessWidget {
         icon = Icons.receipt_long_outlined;
       case NotificationType.inquiries:
       case NotificationType.inquiry:
-        color = Colors.blue;
+        color = AppColors.sold;
         icon = Icons.chat_bubble_outline;
       case NotificationType.listings:
       case NotificationType.listing:
-        color = Colors.orange;
+        color = AppColors.warning;
         icon = Icons.inventory_2_outlined;
       case NotificationType.verification:
       case NotificationType.sellerVerification:
-        color = Colors.green;
+        color = AppColors.success;
         icon = Icons.verified_outlined;
       case NotificationType.system:
         color = AppColors.textSecondary;
