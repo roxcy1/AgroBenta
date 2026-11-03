@@ -65,7 +65,7 @@ different, the manuscript wins and this document is corrected.
 | "seller verification" | "seller approval request" as a user-facing term |
 | "verified seller" **[MS]** | "approved account", "certified seller" |
 | "AI-based price suggestion" — a reference price from an external AI service **[MS]** | Wording that claims AgroBenta trained its own AI model (§5.4) |
-| "inquiry" — a structured buyer question about a listing, separate from messages **[MS]** | Using "inquiry" and "message" interchangeably |
+| "inquiry" — a structured buyer question about a listing, delivered to the seller as a message (§8.2) | Calling the seller's Messages screen an "inquiry inbox" |
 
 ---
 
@@ -210,8 +210,9 @@ Rules:
 3. **The server never trusts the mode.** Every seller action is authorised by
    the server from `seller_capability`, exactly as if no mode existed.
 4. Seller Mode shows the seller's surfaces (seller dashboard, My Listings,
-   received inquiries, seller-side transactions) **[MS-P Figures 21, 23, 25,
-   26]**. Buyer Mode shows the marketplace and the user's own purchases.
+   seller-side transactions) **[MS-P Figures 21, 23, 26]**; inquiries reach the
+   seller in Messages (§8.2). Buyer Mode shows the marketplace and the user's
+   own purchases.
 5. A verified seller remains able to buy. Buyer Mode is available to every
    account.
 6. The selected mode is a per-user preference. It must be cleared on logout so
@@ -642,12 +643,23 @@ model; the ERD is followed — §13, MS-04.)
 A user may read and send messages only where they are the sender or the
 receiver.
 
-### 8.2 Inquiries **[MS-P Figures 10, 11, 25]**
+### 8.2 Inquiries **[MS-P Figures 10, 11]** — PM decision 2026-10-29
 
-An inquiry is a structured question from a buyer about a specific listing. It
-is stored separately from messages and from transactions.
+An inquiry is a structured question from a buyer about a specific listing.
+**It is delivered to the seller as a message** (§8.1), as the first message of
+the conversation about that listing. There is **no separate seller inquiry
+inbox and no separate inquiry response flow**: the seller reads and answers it
+in Messages, so Inquiries and Messages are not two overlapping features.
 
-**The buyer sends** (Figure 10):
+> **[OPEN] MS-18 — this differs from the manuscript.** p.15 says *"Inquiries
+> will be recorded separately from ordinary messages"*, and Figure 25 shows a
+> separate "Respond to Inquiry — Seller" screen. The project manager decided on
+> 2026-10-29 to deliver inquiries as messages. The manuscript text and Figure
+> 25 must be updated by its author, or this decision reversed if the panel
+> requires the separate flow. Whether the existing `inquiries` table is kept as
+> a record of the structured fields is part of MS-18.
+
+**The buyer fills in** (Figure 10), and the fields are included in the message:
 
 | Field | Required |
 |---|---|
@@ -659,18 +671,24 @@ is stored separately from messages and from transactions.
 | Preferred contact method (in-app message) | yes |
 | Preferred schedule | no |
 
-**The seller views and responds** (Figure 25): availability (available / not
-available), a written response, an optional suggested price, and a delivery
-arrangement. The seller may also decline the inquiry.
+After sending, the buyer sees the "Inquiry Sent" confirmation (Figure 11) and
+the conversation continues in Messages. **The seller replies in Messages**; the
+separate respond screen of Figure 25 is not built (MS-18).
 
 Rules:
 
-1. The buyer is the authenticated user; the seller is derived from the
-   listing. Neither is accepted from the request.
-2. A seller sees only inquiries about their own listings.
+1. The buyer is the authenticated user (the message sender); the seller is
+   derived from the listing (the message receiver). Neither is accepted from
+   the request.
+2. The message carries the `listing_id`, so the seller sees which listing it is
+   about.
 3. Sending an inquiry does not change the listing, create a transaction or
    reserve stock.
-4. Administrators may view inquiries for monitoring.
+4. **Inquiries are between buyer and seller only.** The Admin Web has no
+   inquiry screen and no inquiry endpoints: the manuscript's administrator
+   functions (p.15–16) and admin prototype screens (p.83–86) do not include
+   inquiries.
+5. The seller is notified as for any new message (§7).
 
 ### 8.3 Eligibility
 
@@ -694,14 +712,13 @@ Whether messaging requires a listing context, and who may message whom, is
 | User management | Admin Web |
 | Listing monitoring (and moderation, §4.4) | Admin Web |
 | Transaction monitoring | Admin Web |
-| Inquiry monitoring | Admin Web |
 | Activity monitoring | Admin Web |
 | Data analytics and reports | Admin Web |
 | Platform settings | Admin Web |
 | Marketplace browsing, search and filtering | Mobile |
 | Listing creation and management | Mobile (verified sellers) |
 | AI price suggestion | Mobile (sellers; buyers see the reference, §5.1) |
-| Inquiries (send and respond) | Mobile |
+| Inquiry form (delivered as a message) | Mobile |
 | Messages | Mobile |
 | Transactions | Mobile (both parties) |
 | Notifications | Mobile |
@@ -763,7 +780,7 @@ from the request body. A path parameter is a selector, not proof of ownership.
 * Public marketplace responses never expose a seller's private email address.
 * A mobile response never contains administrator-only data: reviewer
   identities, internal notes, another user's verification documents.
-* Counterparty contact details appear only inside a transaction or inquiry the
+* Counterparty contact details appear only inside a transaction or conversation the
   viewer is a party to.
 
 ### 10.5 Authentication separation
@@ -816,7 +833,7 @@ The manuscript ERD (p.94) is the reference schema:
 
 | Data | Source | Note |
 |---|---|---|
-| **Inquiries** | **[MS p.15]** "recorded separately" | Stored in its own table. Add it to the manuscript ERD. |
+| **Inquiries** | **[MS p.15]** "recorded separately" | Since 2026-10-29 delivered as messages (§8.2). Whether the `inquiries` table stays is open (MS-18). |
 | **Verification documents** | **[MS p.14, p.20]** "supporting documents" | Stored privately (§3.3). Add to the manuscript ERD. |
 | Listing title | **[MS-P Figure 22]** | See §13, MS-08. |
 
@@ -859,7 +876,7 @@ for the manuscript's author.
 | ~~D-13~~ | Can buyers see a price suggestion? | **Yes**, as a reference **[MS p.48]** (§5.1). |
 | ~~Former §2.3 "no mode switch"~~ | Seller Mode / Buyer Mode | Allowed as a view switch for verified sellers (§2.7). |
 | ~~Former §3.3 "no document upload"~~ | Identity documents | Supporting documents are uploaded and stored privately (§3.3). |
-| ~~Former §11 "no inquiries entity"~~ | Inquiries | Kept separate from messages and transactions (§8.2). |
+| ~~Former §11 "no inquiries entity"~~ | Inquiries | Kept separate from messages and transactions (§8.2). **Changed 2026-10-29:** delivered as messages — see MS-18. |
 
 ### 13.2 Questions for the manuscript's author
 
@@ -882,6 +899,7 @@ for the manuscript's author.
 | **MS-15** | **Notifications:** the full list of events, and whether phone push notifications are required. |
 | **MS-16** | **"Verified Buyer"** appears in the seller transaction prototype (Figure 26). Is there a buyer verification, or is this label a mistake? |
 | **MS-17** | **Hosting for evaluation:** where will the system run for the 15 evaluators, and how will they install the app? |
+| **MS-18** | **Inquiries as messages:** the team decided (2026-10-29) that a buyer's inquiry is delivered to the seller as a message, with no separate seller inquiry inbox. Can the manuscript be updated to match (p.15 "recorded separately from ordinary messages"; Figure 25 "Respond to Inquiry — Seller")? Should the `inquiries` table still be kept as a record? |
 
 ### 13.3 Still open from the earlier planning round
 
@@ -931,6 +949,8 @@ Related: the manuscript (PDF, kept outside the repository),
 
 | Date | Change |
 |---|---|
+| 2026-10-29 | Inquiries are delivered to the seller as a **message** (§8.2, §0.3, §2.7, §9.2, §12.1); no separate seller inquiry inbox or respond screen. Decided by the project manager with the team to avoid two overlapping features. This **differs from the manuscript** (p.15, Figure 25) and is recorded as open item **MS-18** for the author. |
+| 2026-10-28 | Removed administrator access to inquiries (§8.2 rules 4–5, §9.2): the manuscript's admin functions (p.15–16) and admin prototype screens (p.83–86) do not include inquiries, and inquiries are buyer ↔ seller only. The 2026-10-24 wording "Administrators may view inquiries for monitoring" described the existing code, not the manuscript. Approved by the project manager. |
 | 2026-10-24 | Aligned to the capstone manuscript, confirmed by the project manager as the final document. Allowed the Seller Mode / Buyer Mode view switch (§2.7); added sign-in features (§2.8); replaced "no identity document upload" with private supporting documents (§3.3); limited livestock categories to cattle, carabao, goats and swine (§4.1); added "seller marks as sold" (§4.4); set the price suggestion to an external AI API, visible to buyers as a reference (§5); set the transaction flow to seller-accepts / buyer-confirms-receipt (§6.4); added inquiries separate from messages (§8.2); added analytics scope (§9.4); rewrote out-of-scope (§11) and open items (§13). Conflicts inside the manuscript recorded as MS-01 to MS-17. |
 | 2026-10-27 | Adopted project-owner decisions DEC-01 to DEC-03: unit-aware maximum age (25 years / 300 months / 9,125 days), at most two decimal places for weight and asking price, and the photo minimum at submission with an approval-time guard for legacy listings (§4.4, §4.5, §4.7, §13.4). Added the `[DEC-nn]` marker because the manuscript was unavailable; the rules must be re-checked against it. MS-08 (listing title) remains open. |
 | 2026-11-03 | Part of MS-10 decided: password recovery uses a six-digit email code (§2.8). The manuscript does not specify the method. The email service remains open. |
