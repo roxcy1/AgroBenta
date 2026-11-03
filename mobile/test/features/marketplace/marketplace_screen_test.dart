@@ -374,7 +374,9 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.tap(find.byKey(const ValueKey<String>('animal-type-Cattle')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
+      );
       await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester, frames: 12);
 
@@ -393,7 +395,9 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
-      await tester.tap(find.byKey(const ValueKey<String>('animal-type-Cattle')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
+      );
       await tester.tap(find.text('Apply Filters'));
       await settleMarketplace(tester, frames: 12);
 
@@ -582,12 +586,12 @@ void main() {
 
     test('counts each set field', () {
       const ListingFilters filters = ListingFilters(
-        livestockType: 'Cattle',
+        livestockType: 'cattle',
         maxPrice: '50000',
       );
 
       expect(filters.activeCount, 2);
-      expect(filters.summary, contains('Cattle'));
+      expect(filters.summary, contains('cattle'));
     });
 
     test('treats whitespace as unset', () {
@@ -616,12 +620,12 @@ void main() {
 
     test('compares by value so a re-apply can be recognised', () {
       expect(
-        const ListingFilters(livestockType: 'Cattle'),
-        const ListingFilters(livestockType: 'Cattle'),
+        const ListingFilters(livestockType: 'cattle'),
+        const ListingFilters(livestockType: 'cattle'),
       );
       expect(
-        const ListingFilters(livestockType: 'Cattle'),
-        isNot(const ListingFilters(livestockType: 'Goat')),
+        const ListingFilters(livestockType: 'cattle'),
+        isNot(const ListingFilters(livestockType: 'goat')),
       );
     });
   });

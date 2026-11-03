@@ -399,7 +399,7 @@ void main() {
 
       final Listing? created = await harness.controller.create(
         SellerListingDraft(
-          livestockType: 'Cattle',
+          livestockType: 'cattle',
           quantity: '4',
           askingPrice: '42500',
           location: 'Mabalacat, Pampanga',
@@ -410,7 +410,7 @@ void main() {
       final RecordedRequest sent = harness.recorded.first;
       expect(sent.method, 'POST');
       expect(sent.apiPath, '/seller/listings');
-      expect(sent.body['livestock_type'], 'Cattle');
+      expect(sent.body['livestock_type'], 'cattle');
       expect(sent.body['quantity'], 4);
       // An omitted optional field is absent, not null: on a PATCH a null would be
       // asking the server to clear something the seller never touched.
@@ -430,10 +430,10 @@ void main() {
       addTearDown(harness.controller.dispose);
 
       final Future<Listing?> first = harness.controller.create(
-        const SellerListingDraft(livestockType: 'Cattle'),
+        const SellerListingDraft(livestockType: 'cattle'),
       );
       final Listing? second = await harness.controller.create(
-        const SellerListingDraft(livestockType: 'Goat'),
+        const SellerListingDraft(livestockType: 'goat'),
       );
 
       expect(second, isNull);
@@ -455,7 +455,7 @@ void main() {
       addTearDown(harness.controller.dispose);
 
       final Listing? created = await harness.controller.create(
-        const SellerListingDraft(livestockType: 'Cattle'),
+        const SellerListingDraft(livestockType: 'cattle'),
       );
 
       expect(created, isNull);
@@ -614,7 +614,7 @@ void main() {
       final Listing? updated = await harness.controller.update(
         1,
         const SellerListingDraft(
-          livestockType: 'Cattle',
+          livestockType: 'cattle',
           breed: 'Brahman',
           quantity: '2',
           askingPrice: '50000',
@@ -644,7 +644,7 @@ void main() {
 
       await harness.controller.update(
         1,
-        const SellerListingDraft(livestockType: 'Cattle'),
+        const SellerListingDraft(livestockType: 'cattle'),
       );
 
       expect(harness.controller.state.conflictMessage, isNotNull);
@@ -962,16 +962,16 @@ void main() {
       // A draft is a value. If it were mutable, a body could be built from fields
       // that have since changed on screen.
       const SellerListingDraft first = SellerListingDraft(
-        livestockType: 'Cattle',
+        livestockType: 'cattle',
         quantity: '4',
       );
       final SellerListingDraft second = SellerListingDraft(
-        livestockType: 'Goat',
+        livestockType: 'goat',
         quantity: '9',
       );
 
-      expect(first.toRequestBody()['livestock_type'], 'Cattle');
-      expect(second.toRequestBody()['livestock_type'], 'Goat');
+      expect(first.toRequestBody()['livestock_type'], 'cattle');
+      expect(second.toRequestBody()['livestock_type'], 'goat');
     });
   });
 }

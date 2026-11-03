@@ -62,7 +62,7 @@ void main() {
     test('keeps every contract field and drops nothing else', () {
       final Map<String, dynamic> body =
           SellerListingService.writableBody(<String, dynamic>{
-            'livestock_type': 'Cattle',
+            'livestock_type': 'cattle',
             'breed': 'Holstein',
             'age_value': 18,
             'age_unit': 'month',
@@ -102,13 +102,13 @@ void main() {
         <String, dynamic>{
           'status': 'active',
           'seller_id': 3,
-          'livestock_type': 'Cattle',
+          'livestock_type': 'cattle',
         },
       );
 
       expect(body.containsKey('status'), isFalse);
       expect(body.containsKey('seller_id'), isFalse);
-      expect(body['livestock_type'], 'Cattle');
+      expect(body['livestock_type'], 'cattle');
     });
 
     test('photos is excluded until D-10 is resolved', () {

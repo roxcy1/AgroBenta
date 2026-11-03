@@ -11,6 +11,8 @@ import 'features/auth/state/auth_controller.dart';
 import 'features/auth/state/auth_scope.dart';
 import 'features/auth/view/auth_gate.dart';
 import 'features/inquiries/state/inquiry_scope.dart';
+import 'features/livestock_types/state/livestock_types_controller.dart';
+import 'features/livestock_types/state/livestock_types_scope.dart';
 import 'features/marketplace/state/marketplace_controller.dart';
 import 'features/marketplace/state/marketplace_scope.dart';
 import 'features/messaging/state/conversations_controller.dart';
@@ -26,6 +28,7 @@ import 'features/seller_verification/state/seller_verification_scope.dart';
 import 'features/transactions/state/transaction_scope.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/inquiry_repository.dart';
+import 'repositories/livestock_type_repository.dart';
 import 'repositories/marketplace_repository.dart';
 import 'repositories/messaging_repository.dart';
 import 'repositories/offer_repository.dart';
@@ -36,6 +39,7 @@ import 'repositories/seller_verification_repository.dart';
 import 'repositories/transaction_repository.dart';
 import 'services/auth_service.dart';
 import 'services/inquiry_service.dart';
+import 'services/livestock_type_service.dart';
 import 'services/marketplace_service.dart';
 import 'services/messaging_service.dart';
 import 'services/offer_service.dart';
@@ -117,6 +121,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final InquiryRepository _inquiryRepository;
   late final OfferService _offerService;
   late final OfferRepository _offerRepository;
+  late final LivestockTypeService _livestockTypeService;
+  late final LivestockTypeRepository _livestockTypeRepository;
+  late final LivestockTypesController _livestockTypesController;
 
   @override
   void initState() {
@@ -214,6 +221,14 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // make-offer screen and every chat route can reach it.
     _offerService = OfferService(_apiClient);
     _offerRepository = OfferRepository(_offerService);
+    // The approved livestock-type catalog. Session-scoped so the seller form,
+    // marketplace filter and every label read one server-owned list. The
+    // signed-in shell warms it; the form and filter can retry it independently.
+    _livestockTypeService = LivestockTypeService(_apiClient);
+    _livestockTypeRepository = LivestockTypeRepository(_livestockTypeService);
+    _livestockTypesController = LivestockTypesController(
+      _livestockTypeRepository,
+    );
   }
 
   @override
@@ -228,6 +243,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _profileController.dispose();
     _conversationsController.dispose();
     _notificationsController.dispose();
+    _livestockTypesController.dispose();
     _apiClient.close();
     super.dispose();
   }
@@ -241,79 +257,83 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // pushed route, which is exactly where the listing detail screen lives: the
     // scope lookups there would fail and the app would assert the moment a
     // buyer tapped a card.
-    return AuthScope(
-      controller: _authController,
-      child: AccountModeScope(
-        controller: _accountModeController,
-        child: MarketplaceScope(
-          repository: _marketplaceRepository,
-          controller: _marketplaceController,
-          // Outside `MarketplaceScope` rather than nested inside it: the seller
-          // verification screens are pushed from Home, and a scope nested in
-          // `home` would be invisible to them for the same reason the outer scopes
-          // must sit above `MaterialApp`.
-          child: SellerVerificationScope(
-            repository: _sellerVerificationRepository,
-            controller: _sellerVerificationController,
-            // Sibling of the other scopes, not nested inside one of them, for the
-            // same reason each of them sits above `MaterialApp`: My Listings and
-            // the form are pushed routes and need to reach this from a route
-            // pushed by a widget that is a descendant of the shell.
-            child: SellerListingScope(
-              repository: _sellerListingRepository,
-              controller: _sellerListingController,
-              // Profile sits as a sibling of the other scopes, above
-              // `MaterialApp`, for the same reason each of them does: the
-              // profile screens are pushed routes and a scope installed inside
-              // `home` would be invisible to them.
-              child: ProfileScope(
-                repository: _profileRepository,
-                controller: _profileController,
-                // Transactions sits as a sibling of the other scopes, above
+    return LivestockTypesScope(
+      repository: _livestockTypeRepository,
+      controller: _livestockTypesController,
+      child: AuthScope(
+        controller: _authController,
+        child: AccountModeScope(
+          controller: _accountModeController,
+          child: MarketplaceScope(
+            repository: _marketplaceRepository,
+            controller: _marketplaceController,
+            // Outside `MarketplaceScope` rather than nested inside it: the seller
+            // verification screens are pushed from Home, and a scope nested in
+            // `home` would be invisible to them for the same reason the outer scopes
+            // must sit above `MaterialApp`.
+            child: SellerVerificationScope(
+              repository: _sellerVerificationRepository,
+              controller: _sellerVerificationController,
+              // Sibling of the other scopes, not nested inside one of them, for the
+              // same reason each of them sits above `MaterialApp`: My Listings and
+              // the form are pushed routes and need to reach this from a route
+              // pushed by a widget that is a descendant of the shell.
+              child: SellerListingScope(
+                repository: _sellerListingRepository,
+                controller: _sellerListingController,
+                // Profile sits as a sibling of the other scopes, above
                 // `MaterialApp`, for the same reason each of them does: the
-                // detail screen is a pushed route.
-                child: TransactionScope(
-                  repository: _transactionRepository,
-                  // Messaging sits as a sibling of the other scopes, above
+                // profile screens are pushed routes and a scope installed inside
+                // `home` would be invisible to them.
+                child: ProfileScope(
+                  repository: _profileRepository,
+                  controller: _profileController,
+                  // Transactions sits as a sibling of the other scopes, above
                   // `MaterialApp`, for the same reason each of them does: the
-                  // chat screen is a pushed route and needs to reach the shared
-                  // repository and the conversations controller.
-                  child: MessagingScope(
-                    repository: _messagingRepository,
-                    conversationsController: _conversationsController,
-                    // Notifications sits as a sibling of the other scopes, above
+                  // detail screen is a pushed route.
+                  child: TransactionScope(
+                    repository: _transactionRepository,
+                    // Messaging sits as a sibling of the other scopes, above
                     // `MaterialApp`, for the same reason each of them does: the
-                    // Notifications screen is a pushed route and the bell icon
-                    // in the Home AppBar needs to reach the same controller.
-                    child: NotificationsScope(
-                      repository: _notificationRepository,
-                      controller: _notificationsController,
-                      // Inquiries sits as a sibling of the other scopes, above
+                    // chat screen is a pushed route and needs to reach the shared
+                    // repository and the conversations controller.
+                    child: MessagingScope(
+                      repository: _messagingRepository,
+                      conversationsController: _conversationsController,
+                      // Notifications sits as a sibling of the other scopes, above
                       // `MaterialApp`, for the same reason each of them does: the
-                      // inquire screen is a pushed route, and only the
-                      // repository is shared — the screen builds its own
-                      // controller and disposes it with the route.
-                      child: InquiryScope(
-                        repository: _inquiryRepository,
-                        // Offers sit above `MaterialApp` for the same reason:
-                        // the make-offer form is pushed from the seller's
-                        // inquiry inbox and the offer panel lives inside every
-                        // chat route, so both must be able to reach the shared
-                        // repository. The controllers are per-screen.
-                        child: OfferScope(
-                          repository: _offerRepository,
-                          // The seller dashboard repository sits above
-                          // `MaterialApp` like every other scope. Seller Home
-                          // creates its own controller, so only the repository
-                          // is long-lived.
-                          child: SellerDashboardScope(
-                            repository: _sellerDashboardRepository,
-                            child: MaterialApp(
-                              title: 'AgroBenta',
-                              debugShowCheckedModeBanner: false,
-                              theme: AppTheme.light(),
-                              home: AuthGate(
-                                authenticatedView: _buildAccountModeShell,
+                      // Notifications screen is a pushed route and the bell icon
+                      // in the Home AppBar needs to reach the same controller.
+                      child: NotificationsScope(
+                        repository: _notificationRepository,
+                        controller: _notificationsController,
+                        // Inquiries sits as a sibling of the other scopes, above
+                        // `MaterialApp`, for the same reason each of them does: the
+                        // inquire screen is a pushed route, and only the
+                        // repository is shared — the screen builds its own
+                        // controller and disposes it with the route.
+                        child: InquiryScope(
+                          repository: _inquiryRepository,
+                          // Offers sit above `MaterialApp` for the same reason:
+                          // the make-offer form is pushed from the seller's
+                          // inquiry inbox and the offer panel lives inside every
+                          // chat route, so both must be able to reach the shared
+                          // repository. The controllers are per-screen.
+                          child: OfferScope(
+                            repository: _offerRepository,
+                            // The seller dashboard repository sits above
+                            // `MaterialApp` like every other scope. Seller Home
+                            // creates its own controller, so only the repository
+                            // is long-lived.
+                            child: SellerDashboardScope(
+                              repository: _sellerDashboardRepository,
+                              child: MaterialApp(
+                                title: 'AgroBenta',
+                                debugShowCheckedModeBanner: false,
+                                theme: AppTheme.light(),
+                                home: AuthGate(
+                                  authenticatedView: _buildAccountModeShell,
+                                ),
                               ),
                             ),
                           ),

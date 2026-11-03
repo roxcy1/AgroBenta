@@ -4,6 +4,10 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../models/livestock_type.dart';
+import '../../livestock_types/state/livestock_types_controller.dart';
+import '../../livestock_types/state/livestock_types_scope.dart';
+import '../../livestock_types/state/livestock_types_state.dart';
 import '../state/listing_filters.dart';
 
 /// Opens the Filter Livestock screen and resolves to the applied filters, or
@@ -54,24 +58,17 @@ class _AnimalType {
   /// icon mapping.
   final FaIconData icon;
 
-  static const List<_AnimalType> options = <_AnimalType>[
-    _AnimalType(
-      label: 'Cattle',
-      value: 'Cattle',
-      icon: FontAwesomeIcons.cow,
-    ),
-    _AnimalType(
-      label: 'Swine',
-      value: 'Swine',
-      icon: FontAwesomeIcons.bacon,
-    ),
-    _AnimalType(label: 'Goat', value: 'Goat', icon: FontAwesomeIcons.paw),
-    _AnimalType(
-      label: 'Carabao',
-      value: 'Carabao',
-      icon: FontAwesomeIcons.hippo,
-    ),
-  ];
+  factory _AnimalType.fromCatalog(LivestockType type) => _AnimalType(
+    label: type.label,
+    value: type.value,
+    icon: switch (type.value) {
+      'cattle' => FontAwesomeIcons.cow,
+      'carabao' => FontAwesomeIcons.hippo,
+      'goat' => FontAwesomeIcons.paw,
+      'swine' => FontAwesomeIcons.bacon,
+      _ => FontAwesomeIcons.paw,
+    },
+  );
 }
 
 /// The Filter Livestock screen, over the existing marketplace filter state.
@@ -107,9 +104,8 @@ class MarketplaceFilterScreen extends StatefulWidget {
 }
 
 class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
-  late final TextEditingController _livestockType = TextEditingController(
-    text: widget.initial.livestockType,
-  );
+  late final LivestockTypesController _catalog;
+  late String _livestockType;
   late final TextEditingController _location = TextEditingController(
     text: widget.initial.location,
   );
@@ -128,8 +124,17 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
   bool _submitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    _catalog = LivestockTypesScope.readOf(context);
+    _livestockType = widget.initial.livestockType;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _catalog.ensureLoaded();
+    });
+  }
+
+  @override
   void dispose() {
-    _livestockType.dispose();
     _location.dispose();
     _minPrice.dispose();
     _maxPrice.dispose();
@@ -141,7 +146,7 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
   /// Read from the controllers rather than held in state, so the applied value
   /// and the displayed value cannot disagree after an edit.
   ListingFilters get _current => ListingFilters(
-    livestockType: _livestockType.text.trim(),
+    livestockType: _livestockType.trim(),
     location: _location.text.trim(),
     minPrice: _minPrice.text.trim(),
     maxPrice: _maxPrice.text.trim(),
@@ -174,7 +179,7 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
   /// by Reset followed by Apply.
   void _reset() {
     setState(() {
-      _livestockType.clear();
+      _livestockType = '';
       _location.clear();
       _minPrice.clear();
       _maxPrice.clear();
@@ -190,16 +195,16 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
   /// The text field is the single source of truth, so a tile is selected only
   /// while the field holds exactly its value — which keeps tiles and free text
   /// from disagreeing.
-  bool _isAnimalSelected(String value) => _livestockType.text.trim() == value;
+  bool _isAnimalSelected(String value) => _livestockType.trim() == value;
 
   void _selectAnimal(_AnimalType animal) {
     setState(() {
       if (_isAnimalSelected(animal.value)) {
         // Tapping the selected tile clears it: the backend is a single
         // exact-match value, so "none" is expressed by an empty field.
-        _livestockType.clear();
+        _livestockType = '';
       } else {
-        _livestockType.text = animal.value;
+        _livestockType = animal.value;
       }
     });
   }
@@ -236,50 +241,10 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  LayoutBuilder(
-                    builder: (BuildContext context, BoxConstraints constraints) {
-                      const double spacing = AppSpacing.sm;
-                      final int columns = (constraints.maxWidth / 108)
-                          .floor()
-                          .clamp(2, 4);
-                      final double tileWidth =
-                          (constraints.maxWidth - (columns - 1) * spacing) /
-                          columns;
-
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: <Widget>[
-                          for (final _AnimalType animal in _AnimalType.options)
-                            _AnimalTile(
-                              key: ValueKey<String>(
-                                'animal-type-${animal.value}',
-                              ),
-                              animal: animal,
-                              width: tileWidth,
-                              selected: _isAnimalSelected(animal.value),
-                              onTap: () => _selectAnimal(animal),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  TextField(
-                    controller: _livestockType,
-                    textInputAction: TextInputAction.next,
-                    onChanged: (String _) => setState(() {}),
-                    decoration: const InputDecoration(
-                      labelText: 'Other — exact wording',
-                      hintText: 'e.g. Holstein-Friesian',
-                      prefixIcon: Icon(Icons.pets_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Animal Type matches the seller’s wording exactly. If a '
-                    'listing does not appear, try the wording the seller used.',
-                    style: theme.textTheme.labelSmall,
+                  ListenableBuilder(
+                    listenable: _catalog,
+                    builder: (BuildContext context, Widget? child) =>
+                        _buildAnimalTypes(context, _catalog.state),
                   ),
                 ],
               ),
@@ -429,6 +394,73 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
       ),
     );
   }
+
+  Widget _buildAnimalTypes(
+    BuildContext context,
+    LivestockTypesState catalogState,
+  ) {
+    final ThemeData theme = Theme.of(context);
+    if (catalogState.hasFailed) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            catalogState.errorMessage ?? 'Could not load livestock types.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+          TextButton(onPressed: _catalog.retry, child: const Text('Retry')),
+        ],
+      );
+    }
+    if (!catalogState.isReady) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final List<_AnimalType> animals = catalogState.types
+        .map(_AnimalType.fromCatalog)
+        .toList(growable: false);
+    final bool selectedIsLegacy =
+        _livestockType.isNotEmpty && !catalogState.isSupported(_livestockType);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            const double spacing = AppSpacing.sm;
+            final int columns = (constraints.maxWidth / 108).floor().clamp(
+              2,
+              4,
+            );
+            final double tileWidth =
+                (constraints.maxWidth - (columns - 1) * spacing) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: <Widget>[
+                for (final _AnimalType animal in animals)
+                  _AnimalTile(
+                    key: ValueKey<String>('animal-type-${animal.value}'),
+                    animal: animal,
+                    width: tileWidth,
+                    selected: _isAnimalSelected(animal.value),
+                    onTap: () => _selectAnimal(animal),
+                  ),
+              ],
+            );
+          },
+        ),
+        if (selectedIsLegacy) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'The current category is a legacy value. Select a supported type or reset it.',
+            style: theme.textTheme.labelSmall,
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 /// A titled white panel holding one group of controls.
@@ -483,8 +515,7 @@ class _AnimalTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final Color foreground =
-        selected ? AppColors.primary : AppColors.text;
+    final Color foreground = selected ? AppColors.primary : AppColors.text;
 
     return Semantics(
       button: true,
@@ -560,8 +591,7 @@ class _UnavailableSection extends StatelessWidget {
             spacing: AppSpacing.xs,
             runSpacing: AppSpacing.xs,
             children: <Widget>[
-              for (final String option in options)
-                _DisabledPill(label: option),
+              for (final String option in options) _DisabledPill(label: option),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -574,9 +604,7 @@ class _UnavailableSection extends StatelessWidget {
                 color: AppColors.textSecondary,
               ),
               const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: Text(note, style: theme.textTheme.labelSmall),
-              ),
+              Expanded(child: Text(note, style: theme.textTheme.labelSmall)),
             ],
           ),
         ],
@@ -605,9 +633,9 @@ class _DisabledPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: AppColors.textSecondary,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
       ),
     );
   }
@@ -679,6 +707,5 @@ class _SortSection extends StatelessWidget {
 /// A convenience, not validation: the server's `numeric,min:0` rule is the
 /// authority. It cannot express a negative number, which matches `min:0`, and it
 /// keeps the keyboard from being unable to type a value the app will accept.
-final TextInputFormatter _priceInputFormatter = FilteringTextInputFormatter.allow(
-  RegExp(r'^\d*\.?\d*'),
-);
+final TextInputFormatter _priceInputFormatter =
+    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'));

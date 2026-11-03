@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../buyer_shell/view/buyer_shell.dart';
+import '../../livestock_types/state/livestock_types_controller.dart';
+import '../../livestock_types/state/livestock_types_scope.dart';
 import '../../seller_shell/view/seller_shell.dart';
 import '../state/account_mode.dart';
 import '../state/account_mode_controller.dart';
@@ -58,6 +60,10 @@ class _AccountModeShellState extends State<AccountModeShell>
   /// The mode whose shell is on screen. Lags [_target] while the cover fades in.
   AccountMode? _shown;
 
+  /// The catalog is warmed once per signed-in shell, not on every dependency
+  /// change. Forms and filters can retry it independently if this attempt fails.
+  bool _catalogRequested = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +83,17 @@ class _AccountModeShellState extends State<AccountModeShell>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    if (!_catalogRequested) {
+      _catalogRequested = true;
+      final LivestockTypesController catalog =
+          LivestockTypesScope.readOf(context);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          catalog.ensureLoaded();
+        }
+      });
+    }
 
     final AccountMode mode = AccountModeScope.of(context).mode;
     if (_target == null) {

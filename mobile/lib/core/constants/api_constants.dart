@@ -79,6 +79,21 @@ abstract final class MarketplaceEndpoints {
   static const int maxPerPage = 50;
 }
 
+/// The approved livestock-type catalog, relative to the API root.
+///
+/// This is the backend enum's public projection. The four values are the only
+/// ones a seller may write; historical rows may still hold values outside the
+/// catalog, and those remain readable everywhere.
+abstract final class LivestockTypeEndpoints {
+  /// `GET` - the approved categories. 200, **not** the standard envelope.
+  ///
+  /// The controller returns `{ "data": [...] }` directly, without the
+  /// `{success, message, data}` wrapper every other JSON endpoint uses. It is
+  /// fetched through [ApiClient.getRawJson] so the exception stays local to this
+  /// one endpoint instead of weakening envelope handling everywhere.
+  static const String catalog = '/livestock-types';
+}
+
 /// Seller verification endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the caller's

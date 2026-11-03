@@ -8,6 +8,8 @@ import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/buyer_shell/view/buyer_shell.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/marketplace_screen.dart';
@@ -34,6 +36,7 @@ import 'package:http/testing.dart';
 
 import '../../support/auth_fakes.dart';
 import '../../support/marketplace_fakes.dart';
+import '../../support/livestock_type_fakes.dart';
 import '../../support/marketplace_app_harness.dart';
 import '../../support/messaging_fakes.dart';
 import '../../support/notification_fakes.dart';
@@ -164,6 +167,13 @@ void main() {
         NotificationsController(notificationRepository);
     addTearDown(notificationsController.dispose);
 
+    final catalogRepository = buildLivestockTypeRepository(tokenStore);
+    final LivestockTypesController catalogController = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalogController.dispose);
+    await catalogController.ensureLoaded();
+
     await tester.pumpWidget(
       // Scopes above `MaterialApp`, matching `main.dart`: a route pushed onto
       // the navigator is a sibling of `home`, so a scope inside `home` would
@@ -181,19 +191,23 @@ void main() {
               child: MarketplaceScope(
                 repository: repository,
                 controller: controller,
-                // The Home tab's seller card reads the seller verification scope, so
-                // the shell harness carries the scopes `main.dart` installs.
-                // Answered with "never submitted" — this test is about navigation, and
-                // the card must not need a transport to render.
-                child: NeverSubmittedVerificationScope(
-                  child: ProfileScope(
-                    repository: profileRepository,
-                    controller: profileController,
-                    child: TransactionScope(
-                      repository: transactionRepository,
-                      child: MaterialApp(
-                        theme: AppTheme.light(),
-                        home: const BuyerShell(),
+                child: LivestockTypesScope(
+                  repository: catalogRepository,
+                  controller: catalogController,
+                  // The Home tab's seller card reads the seller verification scope, so
+                  // the shell harness carries the scopes `main.dart` installs.
+                  // Answered with "never submitted" — this test is about navigation, and
+                  // the card must not need a transport to render.
+                  child: NeverSubmittedVerificationScope(
+                    child: ProfileScope(
+                      repository: profileRepository,
+                      controller: profileController,
+                      child: TransactionScope(
+                        repository: transactionRepository,
+                        child: MaterialApp(
+                          theme: AppTheme.light(),
+                          home: const BuyerShell(),
+                        ),
                       ),
                     ),
                   ),

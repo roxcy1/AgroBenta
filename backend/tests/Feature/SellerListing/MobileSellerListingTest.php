@@ -244,6 +244,51 @@ class MobileSellerListingTest extends TestCase
             ->assertJsonValidationErrors(['livestock_type', 'location', 'asking_price', 'quantity']);
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function unsupportedLivestockTypes(): array
+    {
+        return [
+            'capitalized' => ['Cattle'],
+            'outside scope' => ['chicken'],
+            'free text' => ['Cow'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('unsupportedLivestockTypes')]
+    public function a_seller_cannot_create_a_listing_with_an_unsupported_type(string $type): void
+    {
+        $this->store(['livestock_type' => $type])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('livestock_type');
+
+        $this->assertDatabaseCount('listings', 0);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function approvedLivestockTypes(): array
+    {
+        return [
+            'cattle' => ['cattle'],
+            'carabao' => ['carabao'],
+            'goat' => ['goat'],
+            'swine' => ['swine'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('approvedLivestockTypes')]
+    public function a_seller_can_create_each_approved_type(string $type): void
+    {
+        $this->store(['livestock_type' => $type])
+            ->assertCreated()
+            ->assertJsonPath('data.livestock_type', $type);
+    }
+
     #[Test]
     public function a_half_supplied_value_and_unit_pair_is_rejected(): void
     {
@@ -617,6 +662,62 @@ class MobileSellerListingTest extends TestCase
     }
 
     #[Test]
+    public function an_edit_rejects_an_unsupported_livestock_type(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'livestock_type' => 'chicken',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('livestock_type');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'livestock_type' => 'cattle',
+        ]);
+    }
+
+    #[Test]
+    public function an_edit_to_a_legacy_listing_requires_a_supported_replacement(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'livestock_type' => 'chicken',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, ['breed' => 'Hereford'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('livestock_type');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'livestock_type' => 'chicken',
+            'breed' => 'Angus',
+        ]);
+    }
+
+    #[Test]
+    public function an_edit_can_replace_a_legacy_type_with_an_approved_one(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'livestock_type' => 'chicken',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'livestock_type' => 'goat',
+                'breed' => 'Boer',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.livestock_type', 'goat')
+            ->assertJsonPath('data.breed', 'Boer');
+    }
+
+    #[Test]
     public function an_active_listing_can_be_edited(): void
     {
         $listing = $this->createListing($this->seller, ['status' => ListingStatus::Active]);
@@ -924,6 +1025,25 @@ class MobileSellerListingTest extends TestCase
             ->postJson('/api/seller/listings/'.$listing->id.'/submit')
             ->assertStatus(422)
             ->assertJsonValidationErrors('quantity');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_legacy_unsupported_type_cannot_be_submitted(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'livestock_type' => 'chicken',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('livestock_type');
 
         $this->assertDatabaseHas('listings', [
             'id' => $listing->id,

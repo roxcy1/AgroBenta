@@ -3,9 +3,11 @@
 namespace App\Http\Requests\SellerListing;
 
 use App\Enums\ListingStatus;
+use App\Enums\LivestockType;
 use App\Models\Listing;
 use App\Rules\MaximumAgeForUnit;
 use App\Services\SettingService;
+use Illuminate\Validation\Rule;
 
 /**
  * The field rules for seller listing creation and update.
@@ -33,7 +35,10 @@ trait SellerListingRules
     protected function contentRules(): array
     {
         return [
-            'livestock_type' => ['string', 'max:255'],
+            // New and updated listings may only use the approved vocabulary.
+            // Historical rows are not normalized, so reads and admin searches
+            // stay permissive elsewhere.
+            'livestock_type' => [Rule::enum(LivestockType::class)],
 
             // `breed` and `short_description` are NOT NULL columns with no
             // database default, so they are optional at the API boundary but
@@ -117,12 +122,12 @@ trait SellerListingRules
     /**
      * The four fields a listing cannot be created without.
      *
-     * @return array<string, list<string>>
+     * @return array<string, list<mixed>>
      */
     protected function requiredFieldRules(): array
     {
         return [
-            'livestock_type' => ['string', 'max:255'],
+            'livestock_type' => [Rule::enum(LivestockType::class)],
             'location' => ['string', 'max:255'],
             'asking_price' => ['numeric', 'min:0', 'max:'.$this->maxAskingPrice()],
             'quantity' => ['integer', 'min:1'],

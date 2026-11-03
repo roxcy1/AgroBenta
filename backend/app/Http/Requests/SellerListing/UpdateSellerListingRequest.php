@@ -2,6 +2,10 @@
 
 namespace App\Http\Requests\SellerListing;
 
+use App\Enums\LivestockType;
+use App\Models\Listing;
+use Illuminate\Validation\Validator;
+
 /**
  * Body for editing a listing.
  *
@@ -60,5 +64,34 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
         }
 
         return $rules;
+    }
+
+    /**
+     * Require a supported replacement when editing a historical listing.
+     *
+     * A listing created before the controlled vocabulary existed may still hold
+     * an unsupported value. It must remain readable, but a seller cannot save
+     * unrelated changes and leave that value in place: the form must choose one
+     * of the approved categories first. Submission is already guarded by
+     * [SellerListingRules::submissionRules()].
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $listing = Listing::query()->find($this->route('listing'));
+
+            if ($listing === null || $this->has('livestock_type')) {
+                return;
+            }
+
+            if (LivestockType::tryFrom((string) $listing->livestock_type) !== null) {
+                return;
+            }
+
+            $validator->errors()->add(
+                'livestock_type',
+                'This listing uses an unsupported livestock type. Choose Cattle, Carabao, Goat, or Swine before saving.',
+            );
+        });
     }
 }
