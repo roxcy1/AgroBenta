@@ -23,7 +23,11 @@ void main() {
     conversation(counterpartId: 1, roles: <String>['buyer'], unread: 2),
     conversation(counterpartId: 2, roles: <String>['buyer'], unread: 3),
     conversation(counterpartId: 3, roles: <String>['seller'], unread: 4),
-    conversation(counterpartId: 4, roles: <String>['buyer', 'seller'], unread: 1),
+    conversation(
+      counterpartId: 4,
+      roles: <String>['buyer', 'seller'],
+      unread: 1,
+    ),
     conversation(counterpartId: 5, roles: <String>[], unread: 1),
   ];
 

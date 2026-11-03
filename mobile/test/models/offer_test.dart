@@ -66,15 +66,16 @@ void main() {
 
   group('OfferAcceptance.fromJson', () {
     test('carries the accepted offer and the created transaction', () {
-      final OfferAcceptance acceptance =
-          OfferAcceptance.fromJson(<String, dynamic>{
-            'offer': offerJson(id: 2, status: 'accepted'),
-            'transaction': transactionJson(
-              id: 41,
-              totalAmount: '48000.00',
-              status: 'pending',
-            ),
-          });
+      final OfferAcceptance acceptance = OfferAcceptance.fromJson(
+        <String, dynamic>{
+          'offer': offerJson(id: 2, status: 'accepted'),
+          'transaction': transactionJson(
+            id: 41,
+            totalAmount: '48000.00',
+            status: 'pending',
+          ),
+        },
+      );
 
       expect(acceptance.offer.id, 2);
       expect(acceptance.offer.status, OfferStatus.accepted);

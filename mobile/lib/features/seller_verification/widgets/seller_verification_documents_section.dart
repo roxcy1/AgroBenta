@@ -173,52 +173,54 @@ class _DocumentDialogState extends State<_DocumentDialog> {
             Flexible(
               child: FutureBuilder<Uint8List?>(
                 future: _future,
-                builder: (
-                  BuildContext context,
-                  AsyncSnapshot<Uint8List?> snapshot,
-                ) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Padding(
-                      padding: EdgeInsets.all(AppSpacing.xxl),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
+                builder:
+                    (BuildContext context, AsyncSnapshot<Uint8List?> snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Padding(
+                          padding: EdgeInsets.all(AppSpacing.xxl),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
 
-                  if (snapshot.hasError) {
-                    final Object error = snapshot.error!;
-                    final String message = error is ApiException
-                        ? error.message
-                        : 'Could not load this document.';
-                    return _DialogMessage(
-                      icon: Icons.cloud_off_outlined,
-                      message: message,
-                    );
-                  }
+                      if (snapshot.hasError) {
+                        final Object error = snapshot.error!;
+                        final String message = error is ApiException
+                            ? error.message
+                            : 'Could not load this document.';
+                        return _DialogMessage(
+                          icon: Icons.cloud_off_outlined,
+                          message: message,
+                        );
+                      }
 
-                  final Uint8List? bytes = snapshot.data;
-                  if (bytes == null || bytes.isEmpty) {
-                    // A `null` here is the repository's translation of a 404:
-                    // the record claimed a document but none is stored. Report
-                    // it honestly rather than showing a broken image.
-                    return _DialogMessage(
-                      icon: Icons.image_not_supported_outlined,
-                      message: 'This document is not available.',
-                    );
-                  }
+                      final Uint8List? bytes = snapshot.data;
+                      if (bytes == null || bytes.isEmpty) {
+                        // A `null` here is the repository's translation of a 404:
+                        // the record claimed a document but none is stored. Report
+                        // it honestly rather than showing a broken image.
+                        return _DialogMessage(
+                          icon: Icons.image_not_supported_outlined,
+                          message: 'This document is not available.',
+                        );
+                      }
 
-                  return InteractiveViewer(
-                    child: Image.memory(
-                      bytes,
-                      fit: BoxFit.contain,
-                      errorBuilder:
-                          (BuildContext context, Object error, StackTrace? _) =>
-                              const _DialogMessage(
+                      return InteractiveViewer(
+                        child: Image.memory(
+                          bytes,
+                          fit: BoxFit.contain,
+                          errorBuilder:
+                              (
+                                BuildContext context,
+                                Object error,
+                                StackTrace? _,
+                              ) => const _DialogMessage(
                                 icon: Icons.image_not_supported_outlined,
-                                message: 'This document could not be displayed.',
+                                message:
+                                    'This document could not be displayed.',
                               ),
-                    ),
-                  );
-                },
+                        ),
+                      );
+                    },
               ),
             ),
           ],

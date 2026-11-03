@@ -57,6 +57,12 @@ abstract final class MarketplaceEndpoints {
   /// client-selected filter.
   static const String browse = '/listings';
 
+  /// `GET` — Buyer Home's Popular Livestock ranking. 200, plain envelope.
+  ///
+  /// Completed sales in the last 30 days, grouped over the canonical livestock
+  /// categories. Read-only and token-scoped; no query parameters.
+  static const String popularLivestock = '/marketplace/popular-livestock';
+
   /// `GET` — one listing's detail. 200, plain envelope.
   ///
   /// [id] is appended to build the path. It is a selector, not proof of
@@ -77,6 +83,21 @@ abstract final class MarketplaceEndpoints {
   /// clamps to this rather than letting a screen discover the limit by
   /// provoking an error.
   static const int maxPerPage = 50;
+}
+
+/// The approved livestock-type catalog, relative to the API root.
+///
+/// This is the backend enum's public projection. The four values are the only
+/// ones a seller may write; historical rows may still hold values outside the
+/// catalog, and those remain readable everywhere.
+abstract final class LivestockTypeEndpoints {
+  /// `GET` - the approved categories. 200, **not** the standard envelope.
+  ///
+  /// The controller returns `{ "data": [...] }` directly, without the
+  /// `{success, message, data}` wrapper every other JSON endpoint uses. It is
+  /// fetched through [ApiClient.getRawJson] so the exception stays local to this
+  /// one endpoint instead of weakening envelope handling everywhere.
+  static const String catalog = '/livestock-types';
 }
 
 /// Seller verification endpoints, relative to the API root.

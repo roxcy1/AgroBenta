@@ -59,9 +59,8 @@ class NotificationService {
             (map['notifications'] as List<dynamic>?) ?? const <dynamic>[];
         final Map<String, dynamic> pagination =
             (map['pagination'] as Map<String, dynamic>?) ??
-                const <String, dynamic>{};
-        final int unreadCount =
-            (map['unread_count'] as num?)?.toInt() ?? 0;
+            const <String, dynamic>{};
+        final int unreadCount = (map['unread_count'] as num?)?.toInt() ?? 0;
 
         return NotificationPage(
           notifications: raw
@@ -102,10 +101,7 @@ class NotificationService {
   /// Returns nothing: the server's response is a message + new count, and
   /// the caller only needs to know the request succeeded.
   Future<void> markAllRead() {
-    return _client.post<void>(
-      NotificationEndpoints.readAll,
-      parse: (_) {},
-    );
+    return _client.post<void>(NotificationEndpoints.readAll, parse: (_) {});
   }
 
   static Map<String, dynamic> _asMap(Object? data) {

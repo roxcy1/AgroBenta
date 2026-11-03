@@ -252,8 +252,7 @@ class _SellerVerificationFormScreenState
           listenable: Listenable.merge(<Listenable>[_controller, _documents]),
           builder: (BuildContext context, Widget? child) {
             final SellerVerificationState state = _controller.state;
-            final SellerVerificationDocumentsState documents =
-                _documents.state;
+            final SellerVerificationDocumentsState documents = _documents.state;
             final bool isSubmitting =
                 state.status == SellerVerificationUiStatus.submitting;
 

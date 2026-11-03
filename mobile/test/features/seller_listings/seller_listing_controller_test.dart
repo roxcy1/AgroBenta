@@ -399,7 +399,7 @@ void main() {
 
       final Listing? created = await harness.controller.create(
         SellerListingDraft(
-          livestockType: 'Cattle',
+          livestockType: 'cattle',
           quantity: '4',
           askingPrice: '42500',
           location: 'Mabalacat, Pampanga',
@@ -410,7 +410,7 @@ void main() {
       final RecordedRequest sent = harness.recorded.first;
       expect(sent.method, 'POST');
       expect(sent.apiPath, '/seller/listings');
-      expect(sent.body['livestock_type'], 'Cattle');
+      expect(sent.body['livestock_type'], 'cattle');
       expect(sent.body['quantity'], 4);
       // An omitted optional field is absent, not null: on a PATCH a null would be
       // asking the server to clear something the seller never touched.
@@ -430,10 +430,10 @@ void main() {
       addTearDown(harness.controller.dispose);
 
       final Future<Listing?> first = harness.controller.create(
-        const SellerListingDraft(livestockType: 'Cattle'),
+        const SellerListingDraft(livestockType: 'cattle'),
       );
       final Listing? second = await harness.controller.create(
-        const SellerListingDraft(livestockType: 'Goat'),
+        const SellerListingDraft(livestockType: 'goat'),
       );
 
       expect(second, isNull);
@@ -455,7 +455,7 @@ void main() {
       addTearDown(harness.controller.dispose);
 
       final Listing? created = await harness.controller.create(
-        const SellerListingDraft(livestockType: 'Cattle'),
+        const SellerListingDraft(livestockType: 'cattle'),
       );
 
       expect(created, isNull);
@@ -614,7 +614,7 @@ void main() {
       final Listing? updated = await harness.controller.update(
         1,
         const SellerListingDraft(
-          livestockType: 'Cattle',
+          livestockType: 'cattle',
           breed: 'Brahman',
           quantity: '2',
           askingPrice: '50000',
@@ -644,7 +644,7 @@ void main() {
 
       await harness.controller.update(
         1,
-        const SellerListingDraft(livestockType: 'Cattle'),
+        const SellerListingDraft(livestockType: 'cattle'),
       );
 
       expect(harness.controller.state.conflictMessage, isNotNull);
@@ -945,7 +945,7 @@ void main() {
 
           expect(uploaded, isTrue);
           // The body carries raw PNG bytes, which are not valid UTF-8.
-        final String body = latin1.decode(uploads.single.request.bodyBytes);
+          final String body = latin1.decode(uploads.single.request.bodyBytes);
           final int c = body.indexOf('filename="c.png"');
           final int a = body.indexOf('filename="a.png"');
           final int b = body.indexOf('filename="b.png"');
@@ -958,21 +958,24 @@ void main() {
   });
 
   group('lifecycle rules', () {
-    test('the draft list is immutable, so a repeat save sends the same body', () {
-      // A draft is a value. If it were mutable, a body could be built from fields
-      // that have since changed on screen.
-      const SellerListingDraft first = SellerListingDraft(
-        livestockType: 'Cattle',
-        quantity: '4',
-      );
-      final SellerListingDraft second = SellerListingDraft(
-        livestockType: 'Goat',
-        quantity: '9',
-      );
+    test(
+      'the draft list is immutable, so a repeat save sends the same body',
+      () {
+        // A draft is a value. If it were mutable, a body could be built from fields
+        // that have since changed on screen.
+        const SellerListingDraft first = SellerListingDraft(
+          livestockType: 'cattle',
+          quantity: '4',
+        );
+        final SellerListingDraft second = SellerListingDraft(
+          livestockType: 'goat',
+          quantity: '9',
+        );
 
-      expect(first.toRequestBody()['livestock_type'], 'Cattle');
-      expect(second.toRequestBody()['livestock_type'], 'Goat');
-    });
+        expect(first.toRequestBody()['livestock_type'], 'cattle');
+        expect(second.toRequestBody()['livestock_type'], 'goat');
+      },
+    );
   });
 }
 

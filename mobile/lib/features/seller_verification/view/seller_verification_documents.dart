@@ -28,7 +28,9 @@ bool isAllowedVerificationDocument(XFile file) {
   if (dot < 0) {
     return false;
   }
-  return kVerificationDocumentAllowedExtensions.contains(name.substring(dot + 1));
+  return kVerificationDocumentAllowedExtensions.contains(
+    name.substring(dot + 1),
+  );
 }
 
 /// Picks one image for a document card using the platform picker.

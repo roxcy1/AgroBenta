@@ -191,15 +191,13 @@ class SellerVerificationDocumentsState {
   static SellerVerificationDocumentsState fromRecord(
     SellerVerification verification,
   ) {
-    VerificationDocument slot(
-      VerificationDocumentType type,
-      bool present,
-    ) => VerificationDocument(
-      type: type,
-      status: present
-          ? VerificationDocumentStatus.uploaded
-          : VerificationDocumentStatus.empty,
-    );
+    VerificationDocument slot(VerificationDocumentType type, bool present) =>
+        VerificationDocument(
+          type: type,
+          status: present
+              ? VerificationDocumentStatus.uploaded
+              : VerificationDocumentStatus.empty,
+        );
 
     return SellerVerificationDocumentsState(
       idDocument: slot(

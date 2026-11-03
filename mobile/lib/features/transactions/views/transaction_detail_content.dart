@@ -7,6 +7,7 @@ import '../../../models/listing.dart';
 import '../../../models/transaction.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
+import '../../livestock_types/state/livestock_types_scope.dart';
 import '../widgets/transaction_status_badge.dart';
 
 /// What the detail screen shows once the transaction is confirmed visible.
@@ -126,7 +127,10 @@ class TransactionDetailContent extends StatelessWidget {
                 children: <Widget>[
                   DetailRow(
                     label: 'Type',
-                    value: transaction.listing.livestockType,
+                    value: LivestockTypesScope.labelOf(
+                      context,
+                      transaction.listing.livestockType,
+                    ),
                   ),
                   if (transaction.listing.breed.trim().isNotEmpty)
                     DetailRow(label: 'Breed', value: transaction.listing.breed),

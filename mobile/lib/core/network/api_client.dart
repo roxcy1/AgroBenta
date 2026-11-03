@@ -70,6 +70,79 @@ class ApiClient {
     return _send<T>(method: 'GET', path: path, parse: parse, query: query);
   }
 
+  /// Performs a `GET` for a JSON body that is **not** wrapped in the standard
+  /// `{success, message, data}` envelope.
+  ///
+  /// This exists for exactly one contract: `GET /livestock-types`, whose
+  /// controller returns `{ "data": [...] }` directly. Keeping the exception
+  /// local means every other endpoint still goes through [get] and cannot
+  /// accidentally lose envelope validation.
+  ///
+  /// The method still owns the parts that must never be duplicated: the bearer
+  /// token, the timeout, and the translation of failures into [ApiException]
+  /// (including clearing a dead token on `401`). A `2xx` returns the decoded
+  /// body as-is; the caller is responsible for reading its shape.
+  Future<Object?> getRawJson(String path, {Map<String, dynamic>? query}) async {
+    final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
+
+    final Map<String, String> headers = <String, String>{
+      'Accept': ApiConstants.acceptJson,
+    };
+
+    final String? token = await _tokenStorage.read();
+    final bool authenticated = token != null && token.isNotEmpty;
+    if (authenticated) {
+      headers[ApiConstants.authorizationHeader] =
+          '${ApiConstants.bearerPrefix} $token';
+    }
+
+    final http.Request request = http.Request('GET', uri)
+      ..headers.addAll(headers);
+
+    http.StreamedResponse streamed;
+    try {
+      streamed = await _httpClient.send(request).timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException.network(
+        message:
+            'The request timed out after ${_timeout.inSeconds}s. '
+            'Check that the API is reachable at $baseUrl.',
+      );
+    } on http.ClientException catch (error) {
+      throw ApiException.network(
+        message:
+            'Could not reach the server. Check your connection and that the '
+            'API is running at $baseUrl.',
+        cause: error,
+      );
+    }
+
+    final http.Response response = await http.Response.fromStream(streamed);
+
+    bool decodeFailed = false;
+    Object? decoded;
+    try {
+      decoded = _decodeBody(response);
+    } on ApiException {
+      decodeFailed = true;
+    }
+
+    if (_isSuccessStatus(response.statusCode)) {
+      if (decodeFailed) {
+        throw const ApiException.malformedResponse(
+          message: 'The server returned a response that was not valid JSON.',
+        );
+      }
+      return decoded;
+    }
+
+    throw await _toApiException(
+      response,
+      decodeFailed ? null : decoded,
+      authenticated: authenticated,
+    );
+  }
+
   /// Performs a `GET` for a raw binary body — an image, a document — rather than
   /// a JSON envelope.
   ///
@@ -84,10 +157,7 @@ class ApiClient {
   /// handler even on a route whose success path is a stream — so the same
   /// [ApiException] surface applies, and a caller can distinguish "no document"
   /// (`notFound`) from "could not fetch" without inspecting a status code.
-  Future<Uint8List> getBytes(
-    String path, {
-    Map<String, dynamic>? query,
-  }) async {
+  Future<Uint8List> getBytes(String path, {Map<String, dynamic>? query}) async {
     final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
 
     final Map<String, String> headers = <String, String>{

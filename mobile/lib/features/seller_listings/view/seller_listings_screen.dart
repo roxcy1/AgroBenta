@@ -177,9 +177,7 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.sold,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.sold),
             child: const Text('Mark as sold'),
           ),
         ],

@@ -52,7 +52,10 @@ void main() {
     String confirmation = 'correct horse',
   }) async {
     await tester.enterText(find.byType(TextFormField).at(0), 'Ana Reyes');
-    await tester.enterText(find.byType(TextFormField).at(1), 'ana@example.test');
+    await tester.enterText(
+      find.byType(TextFormField).at(1),
+      'ana@example.test',
+    );
     await tester.enterText(find.byType(TextFormField).at(2), password);
     await tester.enterText(find.byType(TextFormField).at(3), confirmation);
   }
@@ -91,7 +94,10 @@ void main() {
   testWidgets('renders the branded hero, heading and account link', (
     WidgetTester tester,
   ) async {
-    await pumpRegister(tester, handler: (_) async => fail('no request expected'));
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+    );
 
     expect(find.text('Create Your Account'), findsOneWidget);
     expect(find.text('AgroBenta'), findsOneWidget);
@@ -103,7 +109,10 @@ void main() {
   testWidgets('social sign-up is shown but disabled', (
     WidgetTester tester,
   ) async {
-    await pumpRegister(tester, handler: (_) async => fail('no request expected'));
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+    );
 
     final OutlinedButton google = tester.widget<OutlinedButton>(
       find.widgetWithText(OutlinedButton, 'Google'),
@@ -232,7 +241,10 @@ void main() {
   testWidgets('password and confirmation visibility toggle independently', (
     WidgetTester tester,
   ) async {
-    await pumpRegister(tester, handler: (_) async => fail('no request expected'));
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+    );
 
     expect(obscureOf(tester, 2), isTrue);
     expect(obscureOf(tester, 3), isTrue);

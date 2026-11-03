@@ -184,10 +184,8 @@ class _LoadingRow extends StatelessWidget {
         // The same fixed width the real cards get: a horizontal list gives its
         // children an unbounded width, and without it the skeleton's own
         // `double.infinity` placeholder has nothing to resolve against.
-        itemBuilder: (BuildContext context, int index) => const SizedBox(
-          width: _cardWidth,
-          child: _SkeletonCard(),
-        ),
+        itemBuilder: (BuildContext context, int index) =>
+            const SizedBox(width: _cardWidth, child: _SkeletonCard()),
       ),
     );
   }

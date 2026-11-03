@@ -100,43 +100,44 @@ class _AuthGateState extends State<AuthGate> {
     return switch (state.status) {
       AuthStatus.restoring => const RestoringSessionScreen(),
       AuthStatus.restoreFailed => RestoreFailedScreen(state: state),
-      AuthStatus.signedOut => _resetEmail != null
-          ? ResetPasswordScreen(
-              email: _resetEmail!,
-              onBackToSignIn: _showSignIn,
-              onPasswordReset: _finishPasswordReset,
-            )
-          : _showForgotPassword
-              ? ForgotPasswordScreen(
-                  onBackToSignIn: _showSignIn,
-                  onCodeRequested: _goToResetPassword,
-                )
-              : _showRegistration
-                  ? RegisterScreen(onSignIn: _showSignIn)
-                  : SignInScreen(
-                      onRegister: _showRegister,
-                      onForgotPassword: _goToForgotPassword,
-                      notice: _signInNotice,
-                    ),
+      AuthStatus.signedOut =>
+        _resetEmail != null
+            ? ResetPasswordScreen(
+                email: _resetEmail!,
+                onBackToSignIn: _showSignIn,
+                onPasswordReset: _finishPasswordReset,
+              )
+            : _showForgotPassword
+            ? ForgotPasswordScreen(
+                onBackToSignIn: _showSignIn,
+                onCodeRequested: _goToResetPassword,
+              )
+            : _showRegistration
+            ? RegisterScreen(onSignIn: _showSignIn)
+            : SignInScreen(
+                onRegister: _showRegister,
+                onForgotPassword: _goToForgotPassword,
+                notice: _signInNotice,
+              ),
       AuthStatus.signedIn => widget.authenticatedView(context),
     };
   }
 
   void _showRegister() => setState(() {
-        _showRegistration = true;
-        _showForgotPassword = false;
-        _signInNotice = null;
-      });
+    _showRegistration = true;
+    _showForgotPassword = false;
+    _signInNotice = null;
+  });
 
   void _goToForgotPassword() => setState(() {
-        _showForgotPassword = true;
-        _showRegistration = false;
-        _signInNotice = null;
-      });
+    _showForgotPassword = true;
+    _showRegistration = false;
+    _signInNotice = null;
+  });
 
   void _goToResetPassword(String email) => setState(() {
-        _resetEmail = email;
-      });
+    _resetEmail = email;
+  });
 
   void _finishPasswordReset() {
     _showSignIn();
@@ -147,8 +148,8 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   void _showSignIn() => setState(() {
-        _showRegistration = false;
-        _showForgotPassword = false;
-        _resetEmail = null;
-      });
+    _showRegistration = false;
+    _showForgotPassword = false;
+    _resetEmail = null;
+  });
 }

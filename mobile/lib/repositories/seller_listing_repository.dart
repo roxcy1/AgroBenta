@@ -71,20 +71,18 @@ class SellerListingRepository {
     required int listingId,
     required List<XFile> files,
     required void Function(int sent, int total) onProgress,
-  }) =>
-      _service.uploadPhotos(
-        listingId: listingId,
-        files: files,
-        onProgress: onProgress,
-      );
+  }) => _service.uploadPhotos(
+    listingId: listingId,
+    files: files,
+    onProgress: onProgress,
+  );
 
   /// Removes one photo from a listing by the value the client was served
   /// (URL or bare filename; never by index).
   Future<Listing> removePhoto({
     required int listingId,
     required String photo,
-  }) =>
-      _service.removePhoto(listingId: listingId, photo: photo);
+  }) => _service.removePhoto(listingId: listingId, photo: photo);
 
   static int _clampPerPage(int? perPage) {
     final int requested = perPage ?? SellerListingEndpoints.defaultPerPage;

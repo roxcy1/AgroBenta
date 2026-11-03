@@ -249,7 +249,7 @@ class SellerVerificationIntroView extends StatelessWidget {
               children: <Widget>[
                 Icon(icon, size: 20, color: AppColors.primary),
                 const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text(label, style: theme.textTheme.bodySmall)),
+                Expanded(child: Text(label, style: theme.textTheme.bodySmall)),
               ],
             ),
           ),
@@ -259,10 +259,7 @@ class SellerVerificationIntroView extends StatelessWidget {
           height: 48,
           fit: BoxFit.contain,
         ),
-        FilledButton(
-          onPressed: onStart,
-          child: const Text('Get Started'),
-        ),
+        FilledButton(onPressed: onStart, child: const Text('Get Started')),
       ],
     );
   }

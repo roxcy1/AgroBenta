@@ -171,6 +171,37 @@ class ReportsTest extends TestCase
         $this->assertArrayHasKey('price_stats', $listings);
     }
 
+    public function test_reports_keep_legacy_livestock_values_visible(): void
+    {
+        $listing = $this->createListing('active');
+        $listing->update(['livestock_type' => 'chicken']);
+
+        Transaction::create([
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 1,
+            'total_amount' => 50000.00,
+            'status' => TransactionStatus::Completed,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/reports');
+
+        $response->assertStatus(200);
+
+        $byType = collect($response->json('data.listings.by_type'))
+            ->firstWhere('type', 'chicken');
+        $this->assertNotNull($byType);
+        $this->assertEquals(1, $byType['count']);
+
+        $byLivestock = collect($response->json('data.transactions.by_livestock'))
+            ->firstWhere('livestock_type', 'chicken');
+        $this->assertNotNull($byLivestock);
+        $this->assertEquals(1, $byLivestock['count']);
+        $this->assertEquals(50000.00, $byLivestock['total_amount']);
+    }
+
     public function test_transaction_report_returns_expected_data(): void
     {
         $listing = $this->createListing();

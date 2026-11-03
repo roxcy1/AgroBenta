@@ -51,7 +51,11 @@ class TransactionDetailController extends ChangeNotifier {
         return;
       }
       if (error.kind == ApiErrorKind.notFound) {
-        _set(const TransactionDetailState(status: TransactionDetailStatus.unavailable));
+        _set(
+          const TransactionDetailState(
+            status: TransactionDetailStatus.unavailable,
+          ),
+        );
         return;
       }
       _set(

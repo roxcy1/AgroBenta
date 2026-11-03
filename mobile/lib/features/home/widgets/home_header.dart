@@ -70,10 +70,7 @@ class HomeHeader extends StatelessWidget {
               tooltip: 'Profile',
               onPressed: onOpenProfile,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 48,
-                minHeight: 48,
-              ),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               icon: _Avatar(name: user.name, url: user.avatarUrl),
             ),
         ],
@@ -139,16 +136,11 @@ class _Avatar extends StatelessWidget {
         backgroundColor: AppColors.primarySurface,
         child: Text(
           name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(context).textTheme.labelLarge
+              ?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
         ),
       );
     }
-    return CircleAvatar(
-      radius: 18,
-      backgroundImage: NetworkImage(src),
-    );
+    return CircleAvatar(radius: 18, backgroundImage: NetworkImage(src));
   }
 }
