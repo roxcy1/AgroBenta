@@ -76,7 +76,7 @@ export default function VerificationReviewDialog({
   const rows: Array<[string, string]> = [
     ['Applicant', verification.seller?.name ?? '—'],
     ['Email', verification.seller?.email ?? '—'],
-    ['Business', verification.business_name],
+    ['Business', verification.business_name ?? '—'],
     ['Location', verification.business_location ?? '—'],
     ['Submitted', formatDateTime(verification.submitted_at)],
   ];

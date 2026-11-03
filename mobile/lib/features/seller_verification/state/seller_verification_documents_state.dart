@@ -1,8 +1,9 @@
 import 'package:image_picker/image_picker.dart';
 
 import '../../../models/seller_verification.dart';
+import '../view/seller_verification_documents.dart';
 
-/// The lifecycle of one required evidence document in the application form.
+/// The lifecycle of one evidence document in the application form.
 ///
 /// Mirrors the honest upload states doc 03 requires: a picked file is *selected
 /// locally*, never *uploaded*, until the server has confirmed it. A green
@@ -37,10 +38,14 @@ class VerificationDocument {
     this.file,
     this.progress,
     this.error,
+    this.photoId,
   });
 
-  /// Which of the two required documents this slot holds.
+  /// Which document this slot holds.
   final VerificationDocumentType type;
+
+  /// The server's id for a stored farm photo. Null for every other type.
+  final String? photoId;
 
   final VerificationDocumentStatus status;
 
@@ -77,6 +82,7 @@ class VerificationDocument {
       file: clearFile ? null : (file ?? this.file),
       progress: clearProgress ? null : (progress ?? this.progress),
       error: clearError ? null : (error ?? this.error),
+      photoId: photoId,
     );
   }
 
@@ -85,7 +91,7 @@ class VerificationDocument {
       'VerificationDocument(${type.value}, ${status.name}, ${file?.name})';
 }
 
-/// An immutable snapshot of both required document slots.
+/// An immutable snapshot of the application's document slots.
 class SellerVerificationDocumentsState {
   const SellerVerificationDocumentsState({
     this.idDocument = const VerificationDocument(
@@ -94,48 +100,89 @@ class SellerVerificationDocumentsState {
     this.selfie = const VerificationDocument(
       type: VerificationDocumentType.selfie,
     ),
+    this.proofOfAddress = const VerificationDocument(
+      type: VerificationDocumentType.proofOfAddress,
+    ),
+    this.farmPhotos = const <VerificationDocument>[],
   });
 
   final VerificationDocument idDocument;
   final VerificationDocument selfie;
+  final VerificationDocument proofOfAddress;
 
-  /// The slot for one document type.
-  VerificationDocument forType(VerificationDocumentType type) =>
-      type == VerificationDocumentType.idDocument ? idDocument : selfie;
+  /// The optional farm photos, in the order they were added.
+  final List<VerificationDocument> farmPhotos;
 
-  /// The two slots, in the order they appear on screen.
+  /// The slot for one single-file document type.
+  VerificationDocument forType(VerificationDocumentType type) => switch (type) {
+    VerificationDocumentType.idDocument => idDocument,
+    VerificationDocumentType.selfie => selfie,
+    VerificationDocumentType.proofOfAddress => proofOfAddress,
+    VerificationDocumentType.farmPhoto => throw ArgumentError.value(
+      type,
+      'type',
+      'Farm photos are held in farmPhotos.',
+    ),
+  };
+
+  /// The required slots, in the order they appear on screen.
   List<VerificationDocument> get all => <VerificationDocument>[
     idDocument,
+    proofOfAddress,
     selfie,
   ];
 
-  /// Whether both documents are stored on the server.
+  /// Whether every required document is stored on the server.
   ///
   /// This is what gates the step's `Next`: a locally-picked file is not enough,
-  /// because the submission endpoint requires both files to be staged.
-  bool get bothUploaded => idDocument.isUploaded && selfie.isUploaded;
+  /// because the submission endpoint requires these files to be staged.
+  bool get allRequiredUploaded =>
+      all.every((VerificationDocument document) => document.isUploaded);
 
-  /// Whether either slot has an upload in flight.
-  bool get isBusy => idDocument.isUploading || selfie.isUploading;
+  /// Whether any slot has a request in flight.
+  bool get isBusy =>
+      all.any((VerificationDocument document) => document.isUploading) ||
+      farmPhotos.any((VerificationDocument photo) => photo.isUploading);
+
+  /// Whether another farm photo can be added now.
+  bool get canAddFarmPhoto =>
+      !isBusy && farmPhotos.length < kMaxVerificationFarmPhotos;
+
+  /// How many farm photos the server has confirmed.
+  int get uploadedFarmPhotoCount =>
+      farmPhotos.where((VerificationDocument photo) => photo.isUploaded).length;
 
   SellerVerificationDocumentsState copyWith({
     VerificationDocument? idDocument,
     VerificationDocument? selfie,
+    VerificationDocument? proofOfAddress,
+    List<VerificationDocument>? farmPhotos,
   }) {
     return SellerVerificationDocumentsState(
       idDocument: idDocument ?? this.idDocument,
       selfie: selfie ?? this.selfie,
+      proofOfAddress: proofOfAddress ?? this.proofOfAddress,
+      farmPhotos: farmPhotos ?? this.farmPhotos,
     );
   }
 
-  /// A new state with one slot replaced, chosen by its type.
+  /// A new state with one single-file slot replaced, chosen by its type.
   SellerVerificationDocumentsState withDocument(
     VerificationDocument document,
-  ) => document.type == VerificationDocumentType.idDocument
-      ? copyWith(idDocument: document)
-      : copyWith(selfie: document);
+  ) => switch (document.type) {
+    VerificationDocumentType.idDocument => copyWith(idDocument: document),
+    VerificationDocumentType.selfie => copyWith(selfie: document),
+    VerificationDocumentType.proofOfAddress => copyWith(
+      proofOfAddress: document,
+    ),
+    VerificationDocumentType.farmPhoto => throw ArgumentError.value(
+      document.type,
+      'document',
+      'Farm photos are held in farmPhotos.',
+    ),
+  };
 
-  /// Seeds the two slots as already uploaded, from a record that reports the
+  /// Seeds the required slots as already uploaded, from a record that reports the
   /// documents are on file with no locally-picked file.
   ///
   /// Used when opening a resubmission, so the flow knows which files the server
@@ -158,11 +205,16 @@ class SellerVerificationDocumentsState {
         verification.hasIdDocument,
       ),
       selfie: slot(VerificationDocumentType.selfie, verification.hasSelfie),
+      proofOfAddress: slot(
+        VerificationDocumentType.proofOfAddress,
+        verification.hasProofOfAddress,
+      ),
     );
   }
 
   @override
   String toString() =>
       'SellerVerificationDocumentsState(${idDocument.status.name}, '
-      '${selfie.status.name})';
+      '${selfie.status.name}, ${proofOfAddress.status.name}, '
+      '${farmPhotos.length} farm photos)';
 }

@@ -19,12 +19,14 @@ export interface VerificationReviewer {
 export interface SellerVerification {
   id: number;
   seller: VerificationSeller;
-  business_name: string;
+  business_name: string | null;
   business_location: string | null;
   business_description: string | null;
   id_document_ref: string | null;
   has_id_document: boolean;
   has_selfie: boolean;
+  has_proof_of_address: boolean;
+  farm_photo_ids: string[];
   status: VerificationStatus;
   admin_note: string | null;
   submitted_at: string | null;
@@ -35,12 +37,13 @@ export interface SellerVerification {
 }
 
 /**
- * The two evidence documents an application can carry.
+ * The single evidence documents an application can carry.
  *
  * These are the `type` values the streaming endpoint accepts, and the same
- * values the server reports through `has_id_document` / `has_selfie`.
+ * values the server reports through its `has_*` flags. Farm photos are several
+ * files, so they are read by id with `fetchVerificationFarmPhoto`.
  */
-export type VerificationDocumentType = 'id_document' | 'selfie';
+export type VerificationDocumentType = 'id_document' | 'selfie' | 'proof_of_address';
 
 export interface VerificationsPagination {
   current_page: number;
@@ -141,6 +144,15 @@ export async function fetchVerificationDocument(
 ): Promise<Blob> {
   const response = await api.get<Blob>(
     `/admin/seller-verifications/${id}/documents/${type}`,
+    { responseType: 'blob' },
+  );
+  return response.data;
+}
+
+/** One farm photo's bytes, fetched the same way as a single document. */
+export async function fetchVerificationFarmPhoto(id: number, photoId: string): Promise<Blob> {
+  const response = await api.get<Blob>(
+    `/admin/seller-verifications/${id}/documents/farm_photo/${photoId}`,
     { responseType: 'blob' },
   );
   return response.data;

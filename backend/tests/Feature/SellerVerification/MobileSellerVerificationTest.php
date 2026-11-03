@@ -113,6 +113,10 @@ class MobileSellerVerificationTest extends TestCase
         $token = $this->mobileToken($user);
 
         foreach (SellerVerificationDocumentType::cases() as $type) {
+            if (! $type->isRequired()) {
+                continue;
+            }
+
             $this->withToken($token)
                 ->post('/api/seller-verification/documents', [
                     'type' => $type->value,
@@ -188,14 +192,16 @@ class MobileSellerVerificationTest extends TestCase
     }
 
     #[Test]
-    public function a_business_name_is_required(): void
+    public function a_business_name_is_optional(): void
     {
+        $this->stageDocuments($this->buyer);
+
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', [
                 'business_location' => 'Mabalacat, Pampanga',
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('business_name');
+            ->assertCreated()
+            ->assertJsonPath('data.business_name', null);
     }
 
     #[Test]

@@ -19,18 +19,9 @@ const int kSellerVerificationShortFieldMax = 255;
 /// The contract's `max` for `business_description`.
 const int kSellerVerificationDescriptionMax = 2000;
 
-/// `business_name` is the only required field.
-String? validateBusinessName(String? value) {
-  final String trimmed = value?.trim() ?? '';
-  if (trimmed.isEmpty) {
-    return 'Enter your business name.';
-  }
-  if (trimmed.length > kSellerVerificationShortFieldMax) {
-    return 'Business name must be $kSellerVerificationShortFieldMax characters '
-        'or fewer.';
-  }
-  return null;
-}
+/// `business_name` is optional, but bounded when given.
+String? validateBusinessName(String? value) =>
+    validateOptionalShortField(value, 'Business name');
 
 /// `business_location` is optional, but bounded when given.
 String? validateBusinessLocation(String? value) =>
@@ -38,8 +29,8 @@ String? validateBusinessLocation(String? value) =>
 
 /// `id_document_ref` is optional, but bounded when given.
 ///
-/// A reference, not a document. There is no upload endpoint, so this validates a
-/// string the seller supplies — a document number or their own reference code.
+/// A reference, not a document: a string the seller supplies, such as a document
+/// number or their own reference code.
 String? validateIdDocumentRef(String? value) =>
     validateOptionalShortField(value, 'ID document reference');
 

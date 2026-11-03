@@ -197,7 +197,7 @@ void main() {
       },
     );
 
-    testWidgets('collects both required documents on the Documents step', (
+    testWidgets('collects the Figure 19 documents on the Documents step', (
       WidgetTester tester,
     ) async {
       await SellerVerificationHarness.pump(
@@ -217,34 +217,27 @@ void main() {
       // The Documents step is the only place the flow offers an upload, and it
       // asks for the two pieces of evidence the design requires separately.
       expect(find.text('Valid Government-Issued ID'), findsOneWidget);
+      expect(find.text('Proof of Address'), findsOneWidget);
       expect(find.text('Selfie Holding Your ID'), findsOneWidget);
+      expect(find.text('Farm Photos'), findsOneWidget);
       expect(find.textContaining('Take Photo'), findsWidgets);
       // The ID image is never offered as the selfie — they are distinct.
       expect(find.textContaining('cannot be reused'), findsOneWidget);
     });
 
-    testWidgets('requires a business name before advancing', (
+    testWidgets('a blank business name can still advance', (
       WidgetTester tester,
     ) async {
-      final SellerVerificationHarness harness =
-          await SellerVerificationHarness.pump(
-            tester,
-            tokenStore: tokenStore,
-            handler: (_) async => sellerVerificationNotFoundResponse(),
-          );
+      await SellerVerificationHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => sellerVerificationNotFoundResponse(),
+      );
       await openSellerVerificationForm(tester, resubmission: false);
 
       await tapNext(tester);
 
-      expect(find.text('Enter your business name.'), findsOneWidget);
-      // Still on Basic Information, and nothing was sent.
-      expect(find.text('Upload Required Documents'), findsNothing);
-      expect(find.text('Review Your Information'), findsNothing);
-      expect(
-        harness.recorded.where((RecordedRequest r) => r.method == 'POST'),
-        isEmpty,
-        reason: 'a locally invalid form must not be sent',
-      );
+      expect(find.text('Upload Required Documents'), findsOneWidget);
     });
 
     testWidgets('reveals the review step and can go back', (
@@ -552,11 +545,10 @@ void main() {
             : sellerVerificationNotFoundResponse(),
       );
 
-      await tapDocumentPick(tester, 'Valid Government-Issued ID');
-      await tapDocumentPick(tester, 'Selfie Holding Your ID');
+      await uploadBothDocuments(tester);
 
       // One upload per chosen document, and the type is carried in the body —
-      // two rows staged, never one image sent twice.
+      // never one image sent twice.
       final List<RecordedRequest> uploads = harness.recorded
           .where(
             (RecordedRequest r) =>
@@ -564,16 +556,16 @@ void main() {
                 r.method == 'POST',
           )
           .toList();
-      expect(uploads, hasLength(2));
+      expect(uploads, hasLength(3));
       expect(uploads.first.query, isEmpty);
-      // Both slots are now persisted, so the Next action is live.
+      // All required slots are now persisted, so the Next action is live.
       final FilledButton next = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Next'),
       );
       expect(next.onPressed, isNotNull);
     });
 
-    testWidgets('blocks Next until both documents are persisted', (
+    testWidgets('blocks Next until every required document is persisted', (
       WidgetTester tester,
     ) async {
       await openDocumentsStep(
@@ -590,18 +582,21 @@ void main() {
       );
       expect(next.onPressed, isNull);
       expect(
-        find.text('Both documents must be uploaded before you can continue.'),
+        find.text(
+          'All required documents must be uploaded before you can continue.',
+        ),
         findsOneWidget,
       );
 
-      // One of two is still not enough.
+      // Two of three is still not enough.
       await tapDocumentPick(tester, 'Valid Government-Issued ID');
+      await tapDocumentPick(tester, 'Selfie Holding Your ID');
       next = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Next'),
       );
       expect(next.onPressed, isNull);
 
-      await tapDocumentPick(tester, 'Selfie Holding Your ID');
+      await tapDocumentPick(tester, 'Proof of Address');
       next = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Next'),
       );
@@ -659,7 +654,84 @@ void main() {
         isEmpty,
         reason: 'a cancelled picker must not upload a document',
       );
-      expect(find.text('Not selected'), findsNWidgets(2));
+      expect(find.text('Not selected'), findsNWidgets(3));
+    });
+
+    testWidgets('farm photos are optional, several, and removable', (
+      WidgetTester tester,
+    ) async {
+      int uploaded = 0;
+      final SellerVerificationHarness harness = await openDocumentsStep(
+        tester,
+        handler: (RecordedRequest request) async {
+          if (request.method == 'DELETE') {
+            return sellerVerificationDocumentDeletedResponse();
+          }
+          return request.apiPath == '/seller-verification/documents'
+              ? sellerVerificationDocumentUploadedResponse(
+                  type: 'farm_photo',
+                  photoId: 'photo${++uploaded}',
+                )
+              : sellerVerificationNotFoundResponse();
+        },
+      );
+
+      Future<void> addPhoto() async {
+        final Finder add = find.text('Add Photo');
+        await tester.ensureVisible(add);
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(add);
+        await settleSellerVerification(tester);
+      }
+
+      await addPhoto();
+      await addPhoto();
+      expect(find.text('Photo 1'), findsOneWidget);
+      expect(find.text('Photo 2'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Remove photo 1'));
+      await settleSellerVerification(tester);
+
+      expect(
+        harness.recorded.last.apiPath,
+        '/seller-verification/documents/farm_photo/photo1',
+      );
+      expect(find.text('Photo 2'), findsNothing);
+      expect(find.text('Photo 1'), findsOneWidget);
+    });
+
+    testWidgets('a farm photo the server still holds stays until removed', (
+      WidgetTester tester,
+    ) async {
+      await openDocumentsStep(
+        tester,
+        handler: (RecordedRequest request) async {
+          if (request.method == 'DELETE') {
+            return http.Response('{"message":"Server error"}', 500);
+          }
+          return request.apiPath == '/seller-verification/documents'
+              ? sellerVerificationDocumentUploadedResponse(
+                  type: 'farm_photo',
+                  photoId: 'photo1',
+                )
+              : sellerVerificationNotFoundResponse();
+        },
+      );
+
+      final Finder add = find.text('Add Photo');
+      await tester.ensureVisible(add);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(add);
+      await settleSellerVerification(tester);
+
+      await tester.tap(find.byTooltip('Remove photo 1'));
+      await settleSellerVerification(tester);
+
+      expect(find.text('Photo 1'), findsOneWidget);
+      expect(
+        find.text('Could not remove the photo. Please try again.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('seeds the slots from a rejected record on resubmission', (
@@ -675,6 +747,7 @@ void main() {
             businessName: 'Santos Cattle Co.',
             hasIdDocument: true,
             hasSelfie: false,
+            hasProofOfAddress: true,
           ),
         ),
       );
