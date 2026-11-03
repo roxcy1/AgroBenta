@@ -137,9 +137,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // The hero scales with the text scale so an enlarged brand block can never
     // overflow a fixed-height decoration, and is capped so it cannot swallow
     // the screen on a short device.
-    final double textScale = MediaQuery.textScalerOf(
-      context,
-    ).scale(1).clamp(1.0, 1.8).toDouble();
+    final double textScale = MediaQuery.textScalerOf(context)
+        .scale(1)
+        .clamp(1.0, 1.8)
+        .toDouble();
     final double heroHeight =
         (MediaQuery.sizeOf(context).height * 0.30 * textScale)
             .clamp(200.0, 300.0)
@@ -185,9 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -337,8 +336,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscureConfirmation,
-                onPressed: () =>
-                    setState(() => _obscureConfirmation = !_obscureConfirmation),
+                onPressed: () => setState(
+                  () => _obscureConfirmation = !_obscureConfirmation,
+                ),
               ),
             ),
             validator: _validateConfirmation,
@@ -360,9 +360,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       children: <Widget>[
         Checkbox(
           value: _agreedToTerms,
-          onChanged: busy
-              ? null
-              : (bool? value) => _setConsent(value ?? false),
+          onChanged: busy ? null : (bool? value) => _setConsent(value ?? false),
         ),
         Expanded(
           child: GestureDetector(

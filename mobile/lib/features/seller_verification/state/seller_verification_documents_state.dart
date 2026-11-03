@@ -129,8 +129,9 @@ class SellerVerificationDocumentsState {
   }
 
   /// A new state with one slot replaced, chosen by its type.
-  SellerVerificationDocumentsState withDocument(VerificationDocument document) =>
-      document.type == VerificationDocumentType.idDocument
+  SellerVerificationDocumentsState withDocument(
+    VerificationDocument document,
+  ) => document.type == VerificationDocumentType.idDocument
       ? copyWith(idDocument: document)
       : copyWith(selfie: document);
 
@@ -143,15 +144,13 @@ class SellerVerificationDocumentsState {
   static SellerVerificationDocumentsState fromRecord(
     SellerVerification verification,
   ) {
-    VerificationDocument slot(
-      VerificationDocumentType type,
-      bool present,
-    ) => VerificationDocument(
-      type: type,
-      status: present
-          ? VerificationDocumentStatus.uploaded
-          : VerificationDocumentStatus.empty,
-    );
+    VerificationDocument slot(VerificationDocumentType type, bool present) =>
+        VerificationDocument(
+          type: type,
+          status: present
+              ? VerificationDocumentStatus.uploaded
+              : VerificationDocumentStatus.empty,
+        );
 
     return SellerVerificationDocumentsState(
       idDocument: slot(

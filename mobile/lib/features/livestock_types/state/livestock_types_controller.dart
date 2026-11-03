@@ -50,10 +50,7 @@ class LivestockTypesController extends ChangeNotifier {
 
   Future<void> _performLoad() async {
     _set(
-      _state.copyWith(
-        status: LivestockTypesStatus.loading,
-        clearError: true,
-      ),
+      _state.copyWith(status: LivestockTypesStatus.loading, clearError: true),
     );
 
     try {

@@ -101,12 +101,9 @@ class _GalleryPhoto extends StatelessWidget {
       // the buyer's point of view the photo is simply not there.
       errorBuilder: (BuildContext context, Object error, StackTrace? _) =>
           const _GalleryPlaceholder(hasPhotos: true),
-      loadingBuilder: (
-        BuildContext context,
-        Widget child,
-        ImageChunkEvent? progress,
-      ) =>
-          progress == null
+      loadingBuilder:
+          (BuildContext context, Widget child, ImageChunkEvent? progress) =>
+              progress == null
               ? child
               : const _GalleryPlaceholder(hasPhotos: true, showSpinner: true),
       excludeFromSemantics: true,
@@ -171,7 +168,10 @@ class _PageIndicators extends StatelessWidget {
 /// No emoji and no illustration — the same rule the card's placeholder follows.
 /// A calm surface with an icon and a short label is the honest failure.
 class _GalleryPlaceholder extends StatelessWidget {
-  const _GalleryPlaceholder({required this.hasPhotos, this.showSpinner = false});
+  const _GalleryPlaceholder({
+    required this.hasPhotos,
+    this.showSpinner = false,
+  });
 
   /// Whether photos exist but cannot be displayed, as opposed to there being
   /// none at all. Changes the label so the two are not conflated.

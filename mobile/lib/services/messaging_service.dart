@@ -53,7 +53,7 @@ class MessagingService {
   }) {
     return _client.get<List<Message>>(
       MessagingEndpoints.thread(counterpartId),
-           query: <String, dynamic>{
+      query: <String, dynamic>{
         'listing_id': ?listingId,
         'page': page,
         'per_page': ?perPage,
@@ -78,7 +78,7 @@ class MessagingService {
   }) {
     return _client.post<Message>(
       MessagingEndpoints.send,
-            body: <String, dynamic>{
+      body: <String, dynamic>{
         'receiver_id': receiverId,
         'listing_id': ?listingId,
         'body': body,
@@ -90,15 +90,10 @@ class MessagingService {
   /// `POST /conversations/{counterpartId}/read` — mark the thread read.
   ///
   /// Returns the number of messages flipped from unread to read.
-  Future<int> markThreadRead({
-    required int counterpartId,
-    int? listingId,
-  }) {
+  Future<int> markThreadRead({required int counterpartId, int? listingId}) {
     return _client.post<int>(
       MessagingEndpoints.markRead(counterpartId),
-            body: <String, dynamic>{
-        'listing_id': ?listingId,
-      },
+      body: <String, dynamic>{'listing_id': ?listingId},
       parse: (Object? data) {
         final Map<String, dynamic> map = _asMap(data);
         return map['updated'] is int ? map['updated'] as int : 0;

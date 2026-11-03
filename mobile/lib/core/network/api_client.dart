@@ -82,10 +82,7 @@ class ApiClient {
   /// token, the timeout, and the translation of failures into [ApiException]
   /// (including clearing a dead token on `401`). A `2xx` returns the decoded
   /// body as-is; the caller is responsible for reading its shape.
-  Future<Object?> getRawJson(
-    String path, {
-    Map<String, dynamic>? query,
-  }) async {
+  Future<Object?> getRawJson(String path, {Map<String, dynamic>? query}) async {
     final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
 
     final Map<String, String> headers = <String, String>{
@@ -160,10 +157,7 @@ class ApiClient {
   /// handler even on a route whose success path is a stream — so the same
   /// [ApiException] surface applies, and a caller can distinguish "no document"
   /// (`notFound`) from "could not fetch" without inspecting a status code.
-  Future<Uint8List> getBytes(
-    String path, {
-    Map<String, dynamic>? query,
-  }) async {
+  Future<Uint8List> getBytes(String path, {Map<String, dynamic>? query}) async {
     final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
 
     final Map<String, String> headers = <String, String>{

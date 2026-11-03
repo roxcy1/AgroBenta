@@ -28,10 +28,7 @@ void main() {
       } else if (configured) {
         expect(AppConfig.apiBaseUrl, isNotEmpty);
       } else {
-        expect(
-          () => AppConfig.apiBaseUrl,
-          throwsA(isA<StateError>()),
-        );
+        expect(() => AppConfig.apiBaseUrl, throwsA(isA<StateError>()));
       }
     });
 
@@ -284,10 +281,7 @@ void main() {
         query: <String, dynamic>{'status': 'active', 'search': null},
       );
 
-      expect(
-        url,
-        '${'http://localhost:8001/api'}/listings?status=active',
-      );
+      expect(url, '${'http://localhost:8001/api'}/listings?status=active');
       expect(url, isNot(contains('search')));
     });
 

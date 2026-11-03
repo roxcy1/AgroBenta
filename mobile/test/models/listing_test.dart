@@ -241,7 +241,9 @@ void main() {
         ),
       );
 
-      expect(listing.photos, <String>['https://cdn.example.test/photos/front.jpg']);
+      expect(listing.photos, <String>[
+        'https://cdn.example.test/photos/front.jpg',
+      ]);
       expect(listing.hasLoadablePhoto, isTrue);
     });
   });
@@ -344,7 +346,10 @@ void main() {
 
     test('treats unparseable input as unchanged', () {
       expect(
-        Listing.resolvePhotoUrl('not a url', apiOrigin: 'http://localhost:8001'),
+        Listing.resolvePhotoUrl(
+          'not a url',
+          apiOrigin: 'http://localhost:8001',
+        ),
         'not a url',
       );
     });

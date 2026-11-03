@@ -146,22 +146,19 @@ void main() {
     expect(recorded, hasLength(2));
   });
 
-  test(
-    'a listing that became unavailable between list and detail renders as unavailable',
-    () async {
-      // The scenario the detail endpoint exists for: the buyer tapped a card, and
-      // by the time the detail request landed the listing was gone. The screen
-      // must not fall back to the list copy it was given.
-      final ListingDetailController controller = build(
-        (_) async => listingNotFoundResponse(),
-      );
+  test('a listing that became unavailable between list and detail renders as unavailable', () async {
+    // The scenario the detail endpoint exists for: the buyer tapped a card, and
+    // by the time the detail request landed the listing was gone. The screen
+    // must not fall back to the list copy it was given.
+    final ListingDetailController controller = build(
+      (_) async => listingNotFoundResponse(),
+    );
 
-      await controller.load();
+    await controller.load();
 
-      expect(controller.state.status, ListingDetailStatus.unavailable);
-      expect(controller.state.listing, isNull);
-    },
-  );
+    expect(controller.state.status, ListingDetailStatus.unavailable);
+    expect(controller.state.listing, isNull);
+  });
 
   test('does not publish after dispose', () async {
     final Completer<http.Response> completer = Completer<http.Response>();

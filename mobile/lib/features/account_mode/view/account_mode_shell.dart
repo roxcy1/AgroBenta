@@ -86,8 +86,9 @@ class _AccountModeShellState extends State<AccountModeShell>
 
     if (!_catalogRequested) {
       _catalogRequested = true;
-      final LivestockTypesController catalog =
-          LivestockTypesScope.readOf(context);
+      final LivestockTypesController catalog = LivestockTypesScope.readOf(
+        context,
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           catalog.ensureLoaded();

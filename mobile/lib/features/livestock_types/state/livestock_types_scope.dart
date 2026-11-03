@@ -22,24 +22,24 @@ class LivestockTypesScope extends InheritedWidget {
 
   /// The controller, registering [context] as a dependency.
   static LivestockTypesController of(BuildContext context) {
-    final LivestockTypesScope? scope =
-        context.dependOnInheritedWidgetOfExactType<LivestockTypesScope>();
+    final LivestockTypesScope? scope = context
+        .dependOnInheritedWidgetOfExactType<LivestockTypesScope>();
     assert(scope != null, 'No LivestockTypesScope found in context.');
     return scope!.controller;
   }
 
   /// The controller, **without** registering a dependency. For `initState`.
   static LivestockTypesController readOf(BuildContext context) {
-    final LivestockTypesScope? scope =
-        context.getInheritedWidgetOfExactType<LivestockTypesScope>();
+    final LivestockTypesScope? scope = context
+        .getInheritedWidgetOfExactType<LivestockTypesScope>();
     assert(scope != null, 'No LivestockTypesScope found in context.');
     return scope!.controller;
   }
 
   /// The display label for [raw], or a safe fallback when no scope is present.
   static String labelOf(BuildContext context, String raw) {
-    final LivestockTypesScope? scope =
-        context.dependOnInheritedWidgetOfExactType<LivestockTypesScope>();
+    final LivestockTypesScope? scope = context
+        .dependOnInheritedWidgetOfExactType<LivestockTypesScope>();
     if (scope == null) {
       return LivestockType.titleCase(raw);
     }

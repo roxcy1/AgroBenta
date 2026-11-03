@@ -945,7 +945,7 @@ void main() {
 
           expect(uploaded, isTrue);
           // The body carries raw PNG bytes, which are not valid UTF-8.
-        final String body = latin1.decode(uploads.single.request.bodyBytes);
+          final String body = latin1.decode(uploads.single.request.bodyBytes);
           final int c = body.indexOf('filename="c.png"');
           final int a = body.indexOf('filename="a.png"');
           final int b = body.indexOf('filename="b.png"');
@@ -958,21 +958,24 @@ void main() {
   });
 
   group('lifecycle rules', () {
-    test('the draft list is immutable, so a repeat save sends the same body', () {
-      // A draft is a value. If it were mutable, a body could be built from fields
-      // that have since changed on screen.
-      const SellerListingDraft first = SellerListingDraft(
-        livestockType: 'cattle',
-        quantity: '4',
-      );
-      final SellerListingDraft second = SellerListingDraft(
-        livestockType: 'goat',
-        quantity: '9',
-      );
+    test(
+      'the draft list is immutable, so a repeat save sends the same body',
+      () {
+        // A draft is a value. If it were mutable, a body could be built from fields
+        // that have since changed on screen.
+        const SellerListingDraft first = SellerListingDraft(
+          livestockType: 'cattle',
+          quantity: '4',
+        );
+        final SellerListingDraft second = SellerListingDraft(
+          livestockType: 'goat',
+          quantity: '9',
+        );
 
-      expect(first.toRequestBody()['livestock_type'], 'cattle');
-      expect(second.toRequestBody()['livestock_type'], 'goat');
-    });
+        expect(first.toRequestBody()['livestock_type'], 'cattle');
+        expect(second.toRequestBody()['livestock_type'], 'goat');
+      },
+    );
   });
 }
 

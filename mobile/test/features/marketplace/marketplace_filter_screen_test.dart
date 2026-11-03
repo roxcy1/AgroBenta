@@ -37,21 +37,21 @@ void main() {
     final LivestockTypeRepository catalogRepository = LivestockTypeRepository(
       LivestockTypeService(
         ApiClient(
-            tokenStorage: FakeTokenStore('test-token'),
-            httpClient: MockClient(
-              (_) async => http.Response(
-                jsonEncode({
-                  'data': [
-                    {'value': 'cattle', 'label': 'Cattle'},
-                    {'value': 'carabao', 'label': 'Carabao'},
-                    {'value': 'goat', 'label': 'Goat'},
-                    {'value': 'swine', 'label': 'Swine'},
-                  ],
-                }),
-                200,
-                headers: const {'content-type': 'application/json'},
-              ),
+          tokenStorage: FakeTokenStore('test-token'),
+          httpClient: MockClient(
+            (_) async => http.Response(
+              jsonEncode({
+                'data': [
+                  {'value': 'cattle', 'label': 'Cattle'},
+                  {'value': 'carabao', 'label': 'Carabao'},
+                  {'value': 'goat', 'label': 'Goat'},
+                  {'value': 'swine', 'label': 'Swine'},
+                ],
+              }),
+              200,
+              headers: const {'content-type': 'application/json'},
             ),
+          ),
         ),
       ),
     );
@@ -75,20 +75,20 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.light(),
           home: Builder(
-          builder: (BuildContext context) => Scaffold(
-            body: Center(
-              child: ElevatedButton(
-                onPressed: () async {
-                  result.value = await showMarketplaceFilterScreen(
-                    context: context,
-                    filters: initial,
-                  );
-                  result.returned = true;
-                },
-                child: const Text('Open filters'),
+            builder: (BuildContext context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result.value = await showMarketplaceFilterScreen(
+                      context: context,
+                      filters: initial,
+                    );
+                    result.returned = true;
+                  },
+                  child: const Text('Open filters'),
+                ),
               ),
             ),
-          ),
           ),
         ),
       ),
@@ -162,10 +162,7 @@ void main() {
     ) async {
       await open(tester);
 
-      expect(
-        find.textContaining('cannot filter by condition'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('cannot filter by condition'), findsOneWidget);
       expect(
         find.textContaining('cannot filter by health status'),
         findsOneWidget,

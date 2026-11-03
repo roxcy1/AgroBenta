@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\CurrentUserController;
 use App\Http\Controllers\Api\Inquiry\InquiryController as MobileInquiryController;
 use App\Http\Controllers\Api\LivestockTypeController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
+use App\Http\Controllers\Api\Marketplace\PopularLivestockController;
 use App\Http\Controllers\Api\Messaging\ConversationController;
 use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
@@ -65,6 +66,10 @@ Route::prefix('auth')->group(function (): void {
 Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
     Route::get('/listings', [MarketplaceListingController::class, 'index']);
     Route::get('/listings/{listing}', [MarketplaceListingController::class, 'show']);
+    // Buyer Home ranking: completed sales in the last 30 days, canonical
+    // categories only. Declared under its own prefix so it can never be
+    // shadowed by `/listings/{listing}`.
+    Route::get('/marketplace/popular-livestock', [PopularLivestockController::class, 'index']);
 });
 
 // Seller verification, for the caller's own account. `/me` is declared before

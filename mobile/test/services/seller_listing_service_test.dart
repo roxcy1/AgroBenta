@@ -60,23 +60,24 @@ void main() {
 
   group('writableBody allow-list', () {
     test('keeps every contract field and drops nothing else', () {
-      final Map<String, dynamic> body =
-          SellerListingService.writableBody(<String, dynamic>{
-            'livestock_type': 'cattle',
-            'breed': 'Holstein',
-            'age_value': 18,
-            'age_unit': 'month',
-            'gender': 'female',
-            'weight_value': '320.5',
-            'weight_unit': 'kg',
-            'quantity': 4,
-            'asking_price': '42500',
-            'location': 'Mabalacat, Pampanga',
-            'health_status': 'Healthy',
-            'vaccination': 'Vaccinated',
-            'short_description': 'Ready for breeding.',
-            'additional_notes': 'Weekend delivery.',
-          });
+      final Map<String, dynamic> body = SellerListingService.writableBody(
+        <String, dynamic>{
+          'livestock_type': 'cattle',
+          'breed': 'Holstein',
+          'age_value': 18,
+          'age_unit': 'month',
+          'gender': 'female',
+          'weight_value': '320.5',
+          'weight_unit': 'kg',
+          'quantity': 4,
+          'asking_price': '42500',
+          'location': 'Mabalacat, Pampanga',
+          'health_status': 'Healthy',
+          'vaccination': 'Vaccinated',
+          'short_description': 'Ready for breeding.',
+          'additional_notes': 'Weekend delivery.',
+        },
+      );
 
       expect(body, hasLength(14));
       expect(body['gender'], 'female');

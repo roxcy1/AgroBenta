@@ -68,9 +68,7 @@ class SellerVerificationDocumentCard extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Expanded(
-                  child: Text(title, style: theme.textTheme.titleSmall),
-                ),
+                Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
                 const _RequiredChip(),
               ],
             ),
@@ -120,9 +118,8 @@ class _RequiredChip extends StatelessWidget {
       ),
       child: Text(
         'Required',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: AppColors.textSecondary,
-        ),
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: AppColors.textSecondary),
       ),
     );
   }
@@ -148,11 +145,12 @@ class _Preview extends StatelessWidget {
         color: AppColors.background,
         child: switch (document.status) {
           VerificationDocumentStatus.uploading => const _UploadingOverlay(),
-          _ => file == null
-              ? (document.isUploaded
-                    ? const _UploadedPlaceholder()
-                    : const _EmptyPlaceholder())
-              : _FilePreview(file: file),
+          _ =>
+            file == null
+                ? (document.isUploaded
+                      ? const _UploadedPlaceholder()
+                      : const _EmptyPlaceholder())
+                : _FilePreview(file: file),
         },
       ),
     );
@@ -176,9 +174,8 @@ class _EmptyPlaceholder extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'No image selected',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -199,9 +196,8 @@ class _UploadedPlaceholder extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Uploaded',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.success,
-            ),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: AppColors.success),
           ),
         ],
       ),
@@ -224,9 +220,8 @@ class _FilePreview extends StatelessWidget {
     return Image.file(
       File(file.path),
       fit: BoxFit.contain,
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? _) =>
-              const _EmptyPlaceholder(),
+      errorBuilder: (BuildContext context, Object error, StackTrace? _) =>
+          const _EmptyPlaceholder(),
       excludeFromSemantics: true,
     );
   }
@@ -257,7 +252,10 @@ class _StatusLine extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
 
     final (String label, Color color) = switch (document.status) {
-      VerificationDocumentStatus.empty => ('Not selected', AppColors.textSecondary),
+      VerificationDocumentStatus.empty => (
+        'Not selected',
+        AppColors.textSecondary,
+      ),
       VerificationDocumentStatus.selected => (
         'Selected — not yet uploaded',
         AppColors.textSecondary,
@@ -270,10 +268,7 @@ class _StatusLine extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: theme.textTheme.labelMedium?.copyWith(color: color),
-        ),
+        Text(label, style: theme.textTheme.labelMedium?.copyWith(color: color)),
         if (document.status == VerificationDocumentStatus.failed &&
             document.error != null) ...<Widget>[
           const SizedBox(height: AppSpacing.xxs),

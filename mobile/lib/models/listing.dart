@@ -123,6 +123,7 @@ class Listing {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.completedSales = 0,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
@@ -144,12 +145,13 @@ class Listing {
       shortDescription: readString(json, 'short_description'),
       additionalNotes: readNullableString(json, 'additional_notes'),
       photos: readStringList(json, 'photos')
-          .map((String url) => Listing.resolvePhotoUrl(
-                url,
-                apiOrigin: AppConfig.apiOrigin,
-              ))
+          .map(
+            (String url) =>
+                Listing.resolvePhotoUrl(url, apiOrigin: AppConfig.apiOrigin),
+          )
           .toList(growable: false),
       status: ListingStatus.fromValue(readString(json, 'status')),
+      completedSales: readNullableInt(json, 'completed_sales') ?? 0,
       createdAt: readNullableDateTime(json, 'created_at'),
       updatedAt: readNullableDateTime(json, 'updated_at'),
     );
@@ -221,6 +223,10 @@ class Listing {
   final List<String> photos;
 
   final ListingStatus status;
+
+  /// Completed transactions for this listing, from the marketplace API.
+  /// `0` is a real answer: no completed sale yet.
+  final int completedSales;
 
   final DateTime? createdAt;
 
@@ -358,7 +364,9 @@ class Listing {
     // This covers '/storage/...' and 'storage/...'. A string containing
     // whitespace is not a valid path or URL (e.g. 'not a url') and is
     // returned unchanged rather than resolved into a bogus address.
-    if (!uri.hasScheme && uri.host.isEmpty && !trimmed.contains(RegExp(r'\s'))) {
+    if (!uri.hasScheme &&
+        uri.host.isEmpty &&
+        !trimmed.contains(RegExp(r'\s'))) {
       final String path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
       return '$apiOrigin$path';
     }

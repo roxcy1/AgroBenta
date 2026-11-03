@@ -111,7 +111,10 @@ class HomeCategories extends StatelessWidget {
                   return Row(
                     children: <Widget>[
                       const Expanded(child: Text('Could not load categories.')),
-                      TextButton(onPressed: controller.retry, child: const Text('Retry')),
+                      TextButton(
+                        onPressed: controller.retry,
+                        child: const Text('Retry'),
+                      ),
                     ],
                   );
                 }
@@ -122,25 +125,26 @@ class HomeCategories extends StatelessWidget {
                   .toList(growable: false);
               return LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints constraints) {
-              const double spacing = AppSpacing.sm;
-              final int columns = (constraints.maxWidth / 116)
-                  .floor()
-                  .clamp(3, 5);
-              final double tileWidth =
-                  (constraints.maxWidth - (columns - 1) * spacing) / columns;
+                  const double spacing = AppSpacing.sm;
+                  final int columns = (constraints.maxWidth / 116)
+                      .floor()
+                      .clamp(3, 5);
+                  final double tileWidth =
+                      (constraints.maxWidth - (columns - 1) * spacing) /
+                      columns;
 
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: <Widget>[
-                  for (final HomeCategory category in categories)
-                    _CategoryTile(
-                      category: category,
-                      width: tileWidth,
-                      onTap: () => onSelect(category),
-                    ),
-                ],
-              );
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: <Widget>[
+                      for (final HomeCategory category in categories)
+                        _CategoryTile(
+                          category: category,
+                          width: tileWidth,
+                          onTap: () => onSelect(category),
+                        ),
+                    ],
+                  );
                 },
               );
             },

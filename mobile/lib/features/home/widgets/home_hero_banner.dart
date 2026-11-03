@@ -34,7 +34,9 @@ class HomeHeroBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.xl),
           child: Stack(
             children: <Widget>[
-              const Positioned.fill(child: CustomPaint(painter: RollingHillsPainter())),
+              const Positioned.fill(
+                child: CustomPaint(painter: RollingHillsPainter()),
+              ),
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
@@ -53,7 +55,7 @@ class HomeHeroBanner extends StatelessWidget {
                       constraints: const BoxConstraints(maxWidth: 320),
                       child: Text(
                         'Connect with trusted sellers and grow your '
-                            'opportunities.',
+                        'opportunities.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: AppColors.primaryDark,
                         ),

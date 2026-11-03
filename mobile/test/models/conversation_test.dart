@@ -5,27 +5,30 @@ import '../support/messaging_fakes.dart';
 
 void main() {
   group('Conversation.fromJson', () {
-    test('reads roles, listing count and previews from ConversationResource', () {
-      final Conversation conversation = Conversation.fromJson(
-        conversationJson(
-          roles: const <String>['buyer'],
-          listingCount: 2,
-          latestOffer: conversationOfferJson(
-            status: 'pending',
-            proposedAmount: '47500.00',
+    test(
+      'reads roles, listing count and previews from ConversationResource',
+      () {
+        final Conversation conversation = Conversation.fromJson(
+          conversationJson(
+            roles: const <String>['buyer'],
+            listingCount: 2,
+            latestOffer: conversationOfferJson(
+              status: 'pending',
+              proposedAmount: '47500.00',
+            ),
+            eligibleInquiry: eligibleInquiryJson(id: 55, listingId: 12),
           ),
-          eligibleInquiry: eligibleInquiryJson(id: 55, listingId: 12),
-        ),
-      );
+        );
 
-      expect(conversation.roles, <String>['buyer']);
-      expect(conversation.listingCount, 2);
-      expect(conversation.latestOffer?.status.value, 'pending');
-      expect(conversation.latestOffer?.proposedAmount, '47500.00');
-      expect(conversation.latestOffer?.isPending, isTrue);
-      expect(conversation.eligibleInquiry?.id, 55);
-      expect(conversation.eligibleInquiry?.listingId, 12);
-    });
+        expect(conversation.roles, <String>['buyer']);
+        expect(conversation.listingCount, 2);
+        expect(conversation.latestOffer?.status.value, 'pending');
+        expect(conversation.latestOffer?.proposedAmount, '47500.00');
+        expect(conversation.latestOffer?.isPending, isTrue);
+        expect(conversation.eligibleInquiry?.id, 55);
+        expect(conversation.eligibleInquiry?.listingId, 12);
+      },
+    );
 
     test('missing preview fields stay absent rather than throwing', () {
       final Map<String, dynamic> json = conversationJson()
@@ -55,7 +58,8 @@ void main() {
     });
   });
 
-  group('matchesMode', () {    Conversation conversationWith(List<String> roles) =>
+  group('matchesMode', () {
+    Conversation conversationWith(List<String> roles) =>
         Conversation.fromJson(conversationJson(roles: roles));
 
     test('buyer-side only appears in Buyer Mode', () {

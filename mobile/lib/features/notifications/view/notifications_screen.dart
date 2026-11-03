@@ -104,24 +104,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
               Expanded(
                 child: switch (state.status) {
-                  NotificationsStatus.initial ||
-                  NotificationsStatus.loading => const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  NotificationsStatus.initial || NotificationsStatus.loading =>
+                    const Center(child: CircularProgressIndicator()),
                   NotificationsStatus.failed => _ErrorState(
                     message: state.errorMessage ?? 'Something went wrong.',
                     onRetry: _controller.refresh,
                   ),
-                  _ => state.isEmpty
-                      ? const _EmptyState()
-                      : RefreshIndicator(
-                          onRefresh: _controller.refresh,
-                          child: _NotificationList(
-                            state: state,
-                            scrollController: _scrollController,
-                            onTap: _onTap,
+                  _ =>
+                    state.isEmpty
+                        ? const _EmptyState()
+                        : RefreshIndicator(
+                            onRefresh: _controller.refresh,
+                            child: _NotificationList(
+                              state: state,
+                              scrollController: _scrollController,
+                              onTap: _onTap,
+                            ),
                           ),
-                        ),
                 },
               ),
             ],
@@ -215,10 +214,7 @@ class _EmptyState extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'No notifications',
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  Text('No notifications', style: theme.textTheme.titleMedium),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Updates about your listings, inquiries, and account will appear here.',

@@ -27,8 +27,9 @@ class LivestockTypeService {
     }
 
     final Map<String, dynamic> map = body.cast<String, dynamic>();
-    return readObjectList(map, 'data')
-        .map(LivestockType.fromJson)
-        .toList(growable: false);
+    return readObjectList(
+      map,
+      'data',
+    ).map(LivestockType.fromJson).toList(growable: false);
   }
 }

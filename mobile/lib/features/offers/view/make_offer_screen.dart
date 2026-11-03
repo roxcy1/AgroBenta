@@ -127,7 +127,11 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
     if (preferred == null) {
       return _tomorrow;
     }
-    final DateTime day = DateTime(preferred.year, preferred.month, preferred.day);
+    final DateTime day = DateTime(
+      preferred.year,
+      preferred.month,
+      preferred.day,
+    );
     return day.isBefore(_tomorrow) ? _tomorrow : day;
   }
 
@@ -227,8 +231,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
         widget.listingTitle ?? 'Listing no longer available';
     final String? askingPrice = widget.askingPrice == null
         ? null
-        : AppFormatters.formatMoney(widget.askingPrice!) ??
-              widget.askingPrice;
+        : AppFormatters.formatMoney(widget.askingPrice!) ?? widget.askingPrice;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Make an Offer')),
@@ -315,7 +318,9 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                 const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<InquiryPaymentMethod>(
                   initialValue: _paymentMethod,
-                  decoration: const InputDecoration(labelText: 'Payment method'),
+                  decoration: const InputDecoration(
+                    labelText: 'Payment method',
+                  ),
                   items: InquiryPaymentMethod.values
                       .map(
                         (InquiryPaymentMethod method) =>
@@ -358,7 +363,8 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                   maxLines: 3,
                   decoration: const InputDecoration(
                     labelText: 'Note (optional)',
-                    hintText: 'Anything the buyer should know about this offer.',
+                    hintText:
+                        'Anything the buyer should know about this offer.',
                   ),
                 ),
                 if (state.errorMessage != null &&

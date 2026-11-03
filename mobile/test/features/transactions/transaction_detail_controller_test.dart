@@ -22,7 +22,8 @@ void main() {
   ({
     TransactionDetailController controller,
     List<TransactionDetailState> states,
-  }) build(
+  })
+  build(
     Future<http.Response> Function(RecordedRequest request) handler, {
     int transactionId = 1,
   }) {
@@ -102,7 +103,10 @@ void main() {
       await controller.load();
 
       expect(controller.state.status, TransactionDetailStatus.failed);
-      expect(controller.state.errorMessage, 'Something went wrong on the server.');
+      expect(
+        controller.state.errorMessage,
+        'Something went wrong on the server.',
+      );
       expect(controller.state.transaction, isNull);
     });
 
@@ -162,7 +166,11 @@ void main() {
       final RecordedRequest post = recorded.last;
       expect(post.method, 'POST');
       expect(post.apiPath, '/transactions/1/cancel');
-      expect(post.query, isEmpty, reason: 'the cancel body allow-list is empty');
+      expect(
+        post.query,
+        isEmpty,
+        reason: 'the cancel body allow-list is empty',
+      );
     });
 
     test('offers no cancel for a transaction that is not pending', () async {
@@ -216,25 +224,31 @@ void main() {
       );
     });
 
-    test('keeps the record and surfaces the message when cancel fails', () async {
-      final (:controller, :states) = build((RecordedRequest request) async {
-        if (request.method == 'POST') {
-          return transactionServerErrorResponse();
-        }
-        return transactionDetailResponse(
-          transaction: transactionJson(id: 1, status: 'pending'),
+    test(
+      'keeps the record and surfaces the message when cancel fails',
+      () async {
+        final (:controller, :states) = build((RecordedRequest request) async {
+          if (request.method == 'POST') {
+            return transactionServerErrorResponse();
+          }
+          return transactionDetailResponse(
+            transaction: transactionJson(id: 1, status: 'pending'),
+          );
+        });
+        await controller.load();
+
+        final bool cancelled = await controller.cancel();
+
+        expect(cancelled, isFalse);
+        expect(controller.state.status, TransactionDetailStatus.ready);
+        expect(controller.state.transaction!.status, TransactionStatus.pending);
+        expect(
+          controller.state.cancelErrorMessage,
+          'Something went wrong on the server.',
         );
-      });
-      await controller.load();
-
-      final bool cancelled = await controller.cancel();
-
-      expect(cancelled, isFalse);
-      expect(controller.state.status, TransactionDetailStatus.ready);
-      expect(controller.state.transaction!.status, TransactionStatus.pending);
-      expect(controller.state.cancelErrorMessage, 'Something went wrong on the server.');
-      expect(controller.state.canCancel, isTrue);
-    });
+        expect(controller.state.canCancel, isTrue);
+      },
+    );
 
     test('clearCancelError drops the notice and nothing else', () async {
       final (:controller, :states) = build((RecordedRequest request) async {

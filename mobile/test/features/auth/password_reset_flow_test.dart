@@ -21,10 +21,8 @@ void main() {
   http.Response json(Object body, int status) =>
       http.Response(jsonEncode(body), status);
 
-  http.Response ok() => json(<String, Object>{
-    'success': true,
-    'message': 'Done.',
-  }, 200);
+  http.Response ok() =>
+      json(<String, Object>{'success': true, 'message': 'Done.'}, 200);
 
   void flowTest(String description, WidgetTesterCallback callback) {
     testWidgets(
@@ -130,7 +128,8 @@ void main() {
     ) async {
       await pumpGate(
         tester,
-        (_) async => json(<String, String>{'message': 'Too Many Attempts.'}, 429),
+        (_) async =>
+            json(<String, String>{'message': 'Too Many Attempts.'}, 429),
       );
 
       await openForgotPassword(tester);

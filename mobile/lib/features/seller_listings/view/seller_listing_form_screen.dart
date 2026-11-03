@@ -218,7 +218,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
 
   String? _selectedLivestockType(List<LivestockType> types) {
     final String? value = _livestockType;
-    if (value == null || !types.any((LivestockType type) => type.value == value)) {
+    if (value == null ||
+        !types.any((LivestockType type) => type.value == value)) {
       return null;
     }
 
@@ -520,7 +521,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               builder: (BuildContext context, Widget? child) {
                 final LivestockTypesState catalogState = _catalog.state;
                 if (catalogState.isReady) {
-                  final String? selected = _selectedLivestockType(catalogState.types);
+                  final String? selected = _selectedLivestockType(
+                    catalogState.types,
+                  );
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -540,13 +543,15 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                         validator: validateLivestockType,
                         serverErrors: state.validationErrors['livestock_type'],
                       ),
-                      if (_livestockType != null && selected == null) ...<Widget>[
+                      if (_livestockType != null &&
+                          selected == null) ...<Widget>[
                         const SizedBox(height: AppSpacing.xs),
                         Text(
                           'This listing has an unsupported legacy type. Choose a supported type before saving.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                         ),
                       ],
                     ],
@@ -558,7 +563,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        catalogState.errorMessage ?? 'Could not load livestock types.',
+                        catalogState.errorMessage ??
+                            'Could not load livestock types.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.error,
                         ),

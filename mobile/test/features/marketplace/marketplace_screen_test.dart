@@ -67,6 +67,88 @@ void main() {
       expect(find.text('Mabalacat, Pampanga'), findsNWidgets(2));
     });
 
+    testWidgets('a card shows completed sales and the placeholder rating', (
+      WidgetTester tester,
+    ) async {
+      await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 12, completedSales: 2),
+          ],
+        ),
+      );
+
+      expect(find.text('2 completed sales'), findsOneWidget);
+      expect(find.text('4.8 · 24 reviews'), findsOneWidget);
+      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+    });
+
+    testWidgets('a listing with no completed sales says zero', (
+      WidgetTester tester,
+    ) async {
+      await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(
+          listings: <Map<String, dynamic>>[listingJson(completedSales: 0)],
+        ),
+      );
+
+      expect(find.text('0 completed sales'), findsOneWidget);
+    });
+
+    testWidgets('lays listings out in a two-column grid', (
+      WidgetTester tester,
+    ) async {
+      await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 12),
+            listingJson(id: 11),
+            listingJson(id: 10),
+          ],
+        ),
+      );
+
+      final SliverGrid grid = tester.widget<SliverGrid>(
+        find.byType(SliverGrid),
+      );
+      final SliverGridDelegateWithFixedCrossAxisCount delegate =
+          grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+      expect(delegate.crossAxisCount, 2);
+
+      final Offset first = tester.getTopLeft(find.byType(ListingCard).at(0));
+      final Offset second = tester.getTopLeft(find.byType(ListingCard).at(1));
+      final Offset third = tester.getTopLeft(find.byType(ListingCard).at(2));
+
+      expect(first.dy, second.dy, reason: 'first two share a row');
+      expect(first.dx, isNot(second.dx), reason: 'and sit side by side');
+      expect(third.dy, greaterThan(first.dy), reason: 'the third wraps');
+    });
+
+    testWidgets('the grid card fits a narrow phone width', (
+      WidgetTester tester,
+    ) async {
+      await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(
+          listings: <Map<String, dynamic>>[listingJson(id: 12)],
+        ),
+      );
+
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ListingCard), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('shows a placeholder for a listing with no loadable photo', (
       WidgetTester tester,
     ) async {
@@ -172,7 +254,11 @@ void main() {
     /// card leaves less empty scroll extent, so the pull needs enough distance
     /// and velocity to arm the indicator reliably.
     Future<void> pullToRefresh(WidgetTester tester) async {
-      await tester.fling(find.byType(ListView), const Offset(0, 600), 1200);
+      await tester.fling(
+        find.byType(CustomScrollView),
+        const Offset(0, 600),
+        1200,
+      );
       await settleMarketplace(tester, frames: 12);
     }
 
@@ -298,6 +384,161 @@ void main() {
       await settleMarketplace(tester, frames: 12);
 
       expect(find.byIcon(Icons.close), findsOneWidget);
+    });
+
+    testWidgets('the clear button empties the query and reloads once', (
+      WidgetTester tester,
+    ) async {
+      final MarketplaceHarness harness = await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(),
+      );
+
+      await tester.enterText(find.byType(TextField), 'cat');
+      await settleMarketplace(tester, frames: 12);
+
+      final int afterSearch = harness.recorded.length;
+      expect(afterSearch, greaterThan(1));
+
+      await tester.tap(find.byIcon(Icons.close));
+      await settleMarketplace(tester, frames: 12);
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        isEmpty,
+        reason: 'the field clears immediately',
+      );
+      expect(
+        harness.recorded.length,
+        afterSearch + 1,
+        reason: 'one request for the cleared query, and no debounce repeat',
+      );
+      expect(harness.recorded.last.query.containsKey('search'), isFalse);
+    });
+  });
+
+  group('browse categories', () {
+    testWidgets('starts on All and applies an exact livestock_type filter', (
+      WidgetTester tester,
+    ) async {
+      final MarketplaceHarness harness = await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(),
+      );
+
+      ChoiceChip chip(String value) => tester.widget<ChoiceChip>(
+        find.byKey(ValueKey<String>('browse-category-$value')),
+      );
+
+      expect(chip('all').selected, isTrue);
+      expect(find.text('Category:'), findsNothing);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-swine')),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      expect(harness.recorded.last.query['livestock_type'], 'swine');
+      expect(chip('swine').selected, isTrue);
+      expect(chip('all').selected, isFalse);
+      expect(find.text('Category: Swine'), findsOneWidget);
+    });
+
+    testWidgets('reflects a category applied from Home or the Filter screen', (
+      WidgetTester tester,
+    ) async {
+      final MarketplaceHarness harness = await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(),
+      );
+
+      await harness.controller.applyFilters(
+        const ListingFilters(livestockType: 'carabao'),
+      );
+      await tester.pumpAndSettle();
+
+      final ChoiceChip carabao = tester.widget<ChoiceChip>(
+        find.byKey(const ValueKey<String>('browse-category-carabao')),
+      );
+      expect(carabao.selected, isTrue);
+      expect(find.text('Category: Carabao'), findsOneWidget);
+    });
+
+    testWidgets('the indicator removes only the category', (
+      WidgetTester tester,
+    ) async {
+      final MarketplaceHarness harness = await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-goat')),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('active-category-filter')),
+          matching: find.byIcon(Icons.close),
+        ),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      expect(
+        harness.recorded.last.query.containsKey('livestock_type'),
+        isFalse,
+      );
+      expect(find.textContaining('Category: '), findsNothing);
+      final ChoiceChip all = tester.widget<ChoiceChip>(
+        find.byKey(const ValueKey<String>('browse-category-all')),
+      );
+      expect(all.selected, isTrue);
+    });
+
+    testWidgets('the search X clears the search and every active filter', (
+      WidgetTester tester,
+    ) async {
+      final MarketplaceHarness harness = await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(),
+      );
+
+      await tester.enterText(find.byType(TextField), 'angus');
+      await settleMarketplace(tester, frames: 12);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-cattle')),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      final int beforeClear = harness.recorded.length;
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(TextField),
+          matching: find.byIcon(Icons.close),
+        ),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        isEmpty,
+      );
+      expect(harness.recorded.length, beforeClear + 1);
+      final Map<String, String> query = harness.recorded.last.query;
+      expect(query.containsKey('search'), isFalse);
+      expect(query.containsKey('livestock_type'), isFalse);
+      expect(find.textContaining('Category: '), findsNothing);
+      final ChoiceChip all = tester.widget<ChoiceChip>(
+        find.byKey(const ValueKey<String>('browse-category-all')),
+      );
+      expect(all.selected, isTrue);
     });
   });
 

@@ -55,7 +55,9 @@ class NoticeBanner extends StatelessWidget {
                   Icon(icon, size: 20, color: accent),
                   const SizedBox(width: AppSpacing.xs),
                 ],
-                Expanded(child: Text(message, style: theme.textTheme.bodySmall)),
+                Expanded(
+                  child: Text(message, style: theme.textTheme.bodySmall),
+                ),
               ],
             )
           : Column(

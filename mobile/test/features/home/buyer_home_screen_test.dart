@@ -6,6 +6,7 @@ import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
 import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
 import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
+import 'package:agrobenta_mobile/features/home/widgets/popular_livestock_section.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
@@ -78,6 +79,9 @@ void main() {
           // too, exactly as the marketplace's own navigation tests arrange.
           if (request.apiPath.startsWith('/listings/')) {
             return listingDetailResponse();
+          }
+          if (request.apiPath == '/marketplace/popular-livestock') {
+            return popularLivestockResponse();
           }
           return marketplaceListResponse();
         }, recorded: recorded);
@@ -295,6 +299,95 @@ void main() {
       expect(faIcon(FontAwesomeIcons.paw), findsOneWidget);
       expect(faIcon(FontAwesomeIcons.bacon), findsOneWidget);
       expect(faIcon(FontAwesomeIcons.hippo), findsOneWidget);
+    });
+  });
+
+  group('popular livestock', () {
+    testWidgets('renders completed-sale rankings and opens Browse filtered', (
+      WidgetTester tester,
+    ) async {
+      final List<RecordedRequest> recorded = <RecordedRequest>[];
+      bool followed = false;
+
+      await pumpSignedIn(
+        tester,
+        recorded: recorded,
+        onBrowseMarketplace: () => followed = true,
+        onMarketplace: (RecordedRequest request) async {
+          if (request.apiPath == '/marketplace/popular-livestock') {
+            return popularLivestockResponse(
+              categories: <Map<String, dynamic>>[
+                popularCategoryJson(
+                  livestockType: 'Cattle',
+                  completedSales: 40,
+                ),
+                popularCategoryJson(livestockType: 'Goat', completedSales: 30),
+              ],
+            );
+          }
+          if (request.apiPath.startsWith('/listings/')) {
+            return listingDetailResponse();
+          }
+          return marketplaceListResponse();
+        },
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Popular Livestock'),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('40 completed sales'), findsOneWidget);
+      expect(find.text('30 completed sales'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(PopularLivestockSection),
+          matching: find.text('Cattle'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(followed, isTrue);
+      expect(
+        recorded.where(
+          (RecordedRequest request) =>
+              request.apiPath == '/listings' &&
+              request.query['livestock_type'] == 'cattle',
+        ),
+        isNotEmpty,
+      );
+    });
+
+    testWidgets('shows the honest empty copy without completed sales', (
+      WidgetTester tester,
+    ) async {
+      await pumpSignedIn(
+        tester,
+        onMarketplace: (RecordedRequest request) async {
+          if (request.apiPath == '/marketplace/popular-livestock') {
+            return popularLivestockResponse();
+          }
+          return marketplaceListResponse();
+        },
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Popular Livestock'),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'No completed sales yet. Popular livestock categories will appear '
+          'here once purchases are completed.',
+        ),
+        findsOneWidget,
+      );
     });
   });
 
