@@ -1,5 +1,6 @@
 import '../core/config/app_config.dart';
 import '../core/utils/json_utils.dart';
+import 'livestock_type.dart';
 
 /// A listing's publication status, as stored in `listings.status`.
 ///
@@ -274,11 +275,13 @@ class Listing {
   }
 
   /// A buyer-facing title for the listing: the breed when there is one,
-  /// otherwise the species.
+  /// otherwise a readable livestock-type label.
   ///
   /// Falls back rather than rendering an empty heading, because `breed` is a
-  /// non-null column but may legitimately be an empty string.
-  String get title => breed.trim().isEmpty ? livestockType : breed;
+  /// non-null column but may legitimately be an empty string. The raw API
+  /// value remains available through [livestockType]; this is display-only.
+  String get title =>
+      breed.trim().isEmpty ? LivestockType.titleCase(livestockType) : breed;
 
   /// Whether a photo path can be handed to `Image.network` as-is.
   ///

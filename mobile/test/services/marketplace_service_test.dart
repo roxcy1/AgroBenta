@@ -293,7 +293,7 @@ void main() {
       final Listing listing = await service.detail(12);
 
       expect(listing.seller.name, 'Rizal Farms');
-      expect(listing.livestockType, 'Cattle');
+      expect(listing.livestockType, 'cattle');
       expect(listing.askingPrice, '42500.00');
       expect(listing.photos, isEmpty);
     });

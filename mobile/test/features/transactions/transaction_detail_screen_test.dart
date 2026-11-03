@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
 import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
@@ -18,6 +20,7 @@ import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
 import '../../support/messaging_fakes.dart';
+import '../../support/livestock_type_fakes.dart';
 import '../../support/offer_fakes.dart';
 import '../../support/transaction_fakes.dart';
 
@@ -77,6 +80,12 @@ void main() {
       tokenStore,
       (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
     );
+    final catalogRepository = buildLivestockTypeRepository(tokenStore);
+    final LivestockTypesController catalogController = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalogController.dispose);
+    await catalogController.ensureLoaded();
 
     tester.view.physicalSize = const Size(800, 2200);
     tester.view.devicePixelRatio = 1.0;
@@ -92,9 +101,13 @@ void main() {
             repository: offerRepository,
             child: TransactionScope(
               repository: repository,
-              child: MaterialApp(
-                theme: AppTheme.light(),
-                home: TransactionDetailScreen(transactionId: transactionId),
+              child: LivestockTypesScope(
+                repository: catalogRepository,
+                controller: catalogController,
+                child: MaterialApp(
+                  theme: AppTheme.light(),
+                  home: TransactionDetailScreen(transactionId: transactionId),
+                ),
               ),
             ),
           ),

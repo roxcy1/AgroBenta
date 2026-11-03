@@ -12,7 +12,7 @@ void main() {
       final Listing listing = Listing.fromJson(listingJson());
 
       expect(listing.id, 12);
-      expect(listing.livestockType, 'Cattle');
+      expect(listing.livestockType, 'cattle');
       expect(listing.breed, 'Holstein');
       expect(listing.quantity, 4);
       expect(listing.location, 'Mabalacat, Pampanga');
