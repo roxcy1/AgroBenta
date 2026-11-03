@@ -93,9 +93,8 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
-    final bool signedIn = await AuthScope.of(
-      context,
-    ).signIn(email: _email.text.trim(), password: _password.text);
+    final bool signedIn = await AuthScope.of(context)
+        .signIn(email: _email.text.trim(), password: _password.text);
 
     if (!signedIn && mounted) {
       _password.clear();
@@ -110,9 +109,10 @@ class _SignInScreenState extends State<SignInScreen> {
     // The hero scales with the text scale so an enlarged brand block can never
     // overflow a fixed-height decoration, and is capped so it cannot swallow
     // the screen on a short device.
-    final double textScale = MediaQuery.textScalerOf(
-      context,
-    ).scale(1).clamp(1.0, 1.8).toDouble();
+    final double textScale = MediaQuery.textScalerOf(context)
+        .scale(1)
+        .clamp(1.0, 1.8)
+        .toDouble();
     final double heroHeight =
         (MediaQuery.sizeOf(context).height * 0.30 * textScale)
             .clamp(200.0, 300.0)
@@ -158,9 +158,7 @@ class _SignInScreenState extends State<SignInScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),

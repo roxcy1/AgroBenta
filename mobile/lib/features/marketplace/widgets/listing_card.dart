@@ -5,6 +5,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
 import 'listing_photo.dart';
+import 'listing_social_proof.dart';
 
 /// One listing in the marketplace list.
 ///
@@ -48,7 +49,7 @@ class ListingCard extends StatelessWidget {
               child: ListingPhoto(listing: listing),
             ),
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.all(AppSpacing.sm),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -85,10 +86,9 @@ class ListingCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: AppSpacing.xs),
-                  _MetaRow(
-                    icon: Icons.place_outlined,
-                    text: listing.location,
-                  ),
+                  ListingSocialProof(completedSales: listing.completedSales),
+                  const SizedBox(height: AppSpacing.xs),
+                  _MetaRow(icon: Icons.place_outlined, text: listing.location),
                   if (listing.weightLabel != null ||
                       listing.quantity > 0) ...<Widget>[
                     const SizedBox(height: AppSpacing.xxs),

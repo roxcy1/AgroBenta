@@ -275,7 +275,7 @@ Exactly four. These match the manuscript ERD. **[MS p.94]**
 | Full name | yes | Prefilled from the account. |
 | Phone number | yes | |
 | Address | yes | Within the locale (§1). |
-| Farm / business name | **no** — shown as optional in the prototype | The current backend requires `business_name`; see §13, MS-05. |
+| Farm / business name | **no** — shown as optional in the prototype | Project decision, 2026-11-03 (§13, MS-05). |
 | Business description | no | Existing field. |
 | `id_document_ref` | no | Existing free-text reference field. Not shown in the prototype. |
 
@@ -287,8 +287,11 @@ Exactly four. These match the manuscript ERD. **[MS p.94]**
 | **Proof of Address** | yes | e.g. utility bill, barangay certificate. |
 | **Farm photos** | no | Photos of the seller's livestock or farm area. |
 
-The manuscript does **not** include a selfie. The current implementation
-collects an ID document and a selfie; see §13, MS-05.
+The manuscript does **not** include a selfie. The current implementation still
+requires one as well as the three documents above; see §13, MS-05.
+
+An application holds at most ten farm photos. This is an implementation limit,
+matching listing photos; the manuscript says only "several".
 
 **Handling of documents [SEC]:**
 
@@ -866,7 +869,7 @@ for the manuscript's author.
 | **MS-02** | **Reactivation:** may a sold or inactive listing be put back on sale ("Reactivate Listing", Figure 23)? |
 | **MS-03** | **Categories:** the prototype shows "Others", "Pig" and a "Native Chicken" sample, and omits carabao. Are only cattle, carabao, goats and swine allowed? |
 | **MS-04** | **Diagrams:** will the class diagrams (Payment, Conversation, JWT, `role: seller`, `archived`) be redrawn to match the ERD and the text? |
-| **MS-05** | **Verification documents:** confirm Valid ID + Proof of Address + Farm Photos (optional). Should the selfie the current app asks for be removed? Is the farm/business name optional? |
+| **MS-05** | **Verification documents:** Should the selfie the current app asks for be removed? ~~Confirm Valid ID + Proof of Address + Farm Photos (optional).~~ Implemented as in Figure 19. ~~Is the farm/business name optional?~~ Yes (project decision, 2026-11-03; see §3.3). |
 | **MS-06** | **Editing an application:** may a pending application be edited ("Edit Application", Figure 19), given that resubmission creates a new record? |
 | **MS-07** | **Document retention:** who may view IDs, and when are they deleted (for example after rejection)? |
 | **MS-08** | **Listing title:** the prototype requires a title; the ERD has none. Add a title field, or derive it (e.g. type + breed)? |
@@ -931,4 +934,5 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-10-24 | Aligned to the capstone manuscript, confirmed by the project manager as the final document. Allowed the Seller Mode / Buyer Mode view switch (§2.7); added sign-in features (§2.8); replaced "no identity document upload" with private supporting documents (§3.3); limited livestock categories to cattle, carabao, goats and swine (§4.1); added "seller marks as sold" (§4.4); set the price suggestion to an external AI API, visible to buyers as a reference (§5); set the transaction flow to seller-accepts / buyer-confirms-receipt (§6.4); added inquiries separate from messages (§8.2); added analytics scope (§9.4); rewrote out-of-scope (§11) and open items (§13). Conflicts inside the manuscript recorded as MS-01 to MS-17. |
 | 2026-10-27 | Adopted project-owner decisions DEC-01 to DEC-03: unit-aware maximum age (25 years / 300 months / 9,125 days), at most two decimal places for weight and asking price, and the photo minimum at submission with an approval-time guard for legacy listings (§4.4, §4.5, §4.7, §13.4). Added the `[DEC-nn]` marker because the manuscript was unavailable; the rules must be re-checked against it. MS-08 (listing title) remains open. |
 | 2026-11-03 | Part of MS-10 decided: password recovery uses a six-digit email code (§2.8). The manuscript does not specify the method. The email service remains open. |
+| 2026-11-03 | Part of MS-05 decided: the farm/business name is optional, and Proof of Address and Farm photos are implemented (§3.3, Figure 19). Whether to remove the selfie remains open, and MS-07 is unchanged. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

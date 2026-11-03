@@ -23,16 +23,16 @@ class NotificationsScope extends InheritedWidget {
 
   /// The controller, registering [context] as a dependency.
   static NotificationsController of(BuildContext context) {
-    final NotificationsScope? scope =
-        context.dependOnInheritedWidgetOfExactType<NotificationsScope>();
+    final NotificationsScope? scope = context
+        .dependOnInheritedWidgetOfExactType<NotificationsScope>();
     assert(scope != null, 'No NotificationsScope found in context.');
     return scope!.controller;
   }
 
   /// The controller, **without** registering a dependency. For `initState`.
   static NotificationsController readOf(BuildContext context) {
-    final NotificationsScope? scope =
-        context.getInheritedWidgetOfExactType<NotificationsScope>();
+    final NotificationsScope? scope = context
+        .getInheritedWidgetOfExactType<NotificationsScope>();
     assert(scope != null, 'No NotificationsScope found in context.');
     return scope!.controller;
   }

@@ -143,8 +143,9 @@ class SellerListingService {
   Future<Listing> markSold(int id) {
     return _apiClient.post<Listing>(
       SellerListingEndpoints.markSold(id),
-      parse: (Object? data) =>
-          Listing.fromJson(_asObject(data, 'POST /seller/listings/$id/mark-sold')),
+      parse: (Object? data) => Listing.fromJson(
+        _asObject(data, 'POST /seller/listings/$id/mark-sold'),
+      ),
     );
   }
 
@@ -255,8 +256,9 @@ class SellerListingService {
     return _apiClient.postMultipart<Listing>(
       path: SellerListingEndpoints.photos(listingId),
       files: parts,
-      parse: (Object? data) =>
-          Listing.fromJson(_asObject(data, 'POST /seller/listings/$listingId/photos')),
+      parse: (Object? data) => Listing.fromJson(
+        _asObject(data, 'POST /seller/listings/$listingId/photos'),
+      ),
     );
   }
 
@@ -278,15 +280,13 @@ class SellerListingService {
   /// Throws [ApiException]:
   ///  * `notFound` on a `404` — the named photo is not on the listing.
   ///  * `conflict` on a `409` — the listing is not `draft` or `active`.
-  Future<Listing> removePhoto({
-    required int listingId,
-    required String photo,
-  }) {
+  Future<Listing> removePhoto({required int listingId, required String photo}) {
     return _apiClient.delete<Listing>(
       SellerListingEndpoints.deletePhoto(listingId),
       query: <String, dynamic>{'photo': photo},
-      parse: (Object? data) =>
-          Listing.fromJson(_asObject(data, 'DELETE /seller/listings/$listingId/photos')),
+      parse: (Object? data) => Listing.fromJson(
+        _asObject(data, 'DELETE /seller/listings/$listingId/photos'),
+      ),
     );
   }
 }

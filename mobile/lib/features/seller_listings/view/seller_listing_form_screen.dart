@@ -5,6 +5,10 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
+import '../../../models/livestock_type.dart';
+import '../../livestock_types/state/livestock_types_controller.dart';
+import '../../livestock_types/state/livestock_types_scope.dart';
+import '../../livestock_types/state/livestock_types_state.dart';
 import '../state/listing_photo_item.dart';
 import '../state/seller_listing_controller.dart';
 import '../state/seller_listing_draft.dart';
@@ -68,7 +72,6 @@ class SellerListingFormScreen extends StatefulWidget {
 }
 
 class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
-  final TextEditingController _livestockType = TextEditingController();
   final TextEditingController _breed = TextEditingController();
   final TextEditingController _ageValue = TextEditingController();
   final TextEditingController _weightValue = TextEditingController();
@@ -80,9 +83,12 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   final TextEditingController _shortDescription = TextEditingController();
   final TextEditingController _additionalNotes = TextEditingController();
 
+  String? _livestockType;
   String? _ageUnit;
   String? _gender;
   String? _weightUnit;
+
+  late final LivestockTypesController _catalog;
 
   int _step = 0;
 
@@ -139,11 +145,14 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   void initState() {
     super.initState();
     _controller = SellerListingScope.readOf(context);
+    _catalog = LivestockTypesScope.readOf(context);
 
     final Listing? listing = widget.listing;
     if (listing != null) {
       final SellerListingDraft draft = SellerListingDraft.fromListing(listing);
-      _livestockType.text = draft.livestockType;
+      _livestockType = draft.livestockType.trim().isEmpty
+          ? null
+          : draft.livestockType;
       _breed.text = draft.breed;
       _ageValue.text = draft.ageValue;
       _ageUnit = draft.ageUnit;
@@ -167,6 +176,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     // throws "setState() or markNeedsBuild() called during build".
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _catalog.ensureLoaded();
       _controller.startPhotoComposer(
         widget.listing?.id,
         widget.listing?.photos ?? const <String>[],
@@ -176,7 +186,6 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
 
   @override
   void dispose() {
-    _livestockType.dispose();
     _breed.dispose();
     _ageValue.dispose();
     _weightValue.dispose();
@@ -191,7 +200,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   }
 
   SellerListingDraft _buildDraft() => SellerListingDraft(
-    livestockType: _livestockType.text,
+    livestockType: _livestockType ?? '',
     breed: _breed.text,
     ageValue: _ageValue.text,
     ageUnit: _ageUnit,
@@ -206,6 +215,16 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     shortDescription: _shortDescription.text,
     additionalNotes: _additionalNotes.text,
   );
+
+  String? _selectedLivestockType(List<LivestockType> types) {
+    final String? value = _livestockType;
+    if (value == null ||
+        !types.any((LivestockType type) => type.value == value)) {
+      return null;
+    }
+
+    return value;
+  }
 
   /// Whether [step] has at least one client-side error.
   bool _stepHasErrors(int step) =>
@@ -231,7 +250,11 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     switch (step) {
       case 0:
         return <String?>[
-          validateLivestockType(_livestockType.text),
+          validateLivestockType(
+            _catalog.state.isReady
+                ? _selectedLivestockType(_catalog.state.types)
+                : null,
+          ),
           validateBreed(_breed.text),
           validateAgeValue(_ageValue.text, unit: _ageUnit),
           validateAgeUnit(_ageUnit, hasValue: _ageValue.text.trim().isNotEmpty),
@@ -270,6 +293,14 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   }
 
   Future<void> _save() async {
+    if (!_catalog.state.isReady) {
+      setState(() => _step = 0);
+      if (_catalog.state.hasFailed) {
+        _catalog.retry();
+      }
+      return;
+    }
+
     final int? invalidStep = _firstInvalidStep();
     if (invalidStep != null) {
       setState(() => _step = invalidStep);
@@ -485,13 +516,85 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
         SectionCard(
           title: 'What is being sold',
           children: <Widget>[
-            _TextField(
-              controller: _livestockType,
-              label: 'Type of livestock',
-              hint: 'e.g. Cattle, Goat, Poultry',
-              helper: 'Required. As specific as you like.',
-              validator: validateLivestockType,
-              serverErrors: state.validationErrors['livestock_type'],
+            ListenableBuilder(
+              listenable: _catalog,
+              builder: (BuildContext context, Widget? child) {
+                final LivestockTypesState catalogState = _catalog.state;
+                if (catalogState.isReady) {
+                  final String? selected = _selectedLivestockType(
+                    catalogState.types,
+                  );
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _Dropdown<String>(
+                        label: 'Type of livestock',
+                        value: selected,
+                        items: catalogState.types
+                            .map(
+                              (LivestockType type) => DropdownMenuItem<String>(
+                                value: type.value,
+                                child: Text(type.label),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (String? value) =>
+                            setState(() => _livestockType = value),
+                        validator: validateLivestockType,
+                        serverErrors: state.validationErrors['livestock_type'],
+                      ),
+                      if (_livestockType != null &&
+                          selected == null) ...<Widget>[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'This listing has an unsupported legacy type. Choose a supported type before saving.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                        ),
+                      ],
+                    ],
+                  );
+                }
+
+                if (catalogState.hasFailed) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        catalogState.errorMessage ??
+                            'Could not load livestock types.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _catalog.retry,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  );
+                }
+
+                return const InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Type of livestock',
+                    border: OutlineInputBorder(),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: AppSpacing.sm),
+                      Text('Loading livestock types...'),
+                    ],
+                  ),
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.md),
             _TextField(
@@ -729,7 +832,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
         SectionCard(
           title: 'Summary',
           children: <Widget>[
-            _ReviewRow(label: 'Type', value: _livestockType.text),
+            _ReviewRow(label: 'Type', value: _livestockType ?? '—'),
             if (_breed.text.isNotEmpty)
               _ReviewRow(label: 'Breed', value: _breed.text),
             if (_ageValue.text.isNotEmpty && _ageUnit != null)

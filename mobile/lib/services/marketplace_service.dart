@@ -3,6 +3,7 @@ import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
 import '../models/listing.dart';
 import '../models/marketplace_page.dart';
+import '../models/popular_livestock_category.dart';
 
 /// The buyer marketplace API surface.
 ///
@@ -83,6 +84,27 @@ class MarketplaceService {
       MarketplaceEndpoints.detail(id),
       parse: (Object? data) =>
           Listing.fromJson(_asObject(data, 'GET /listings/$id')),
+    );
+  }
+
+  /// `GET /marketplace/popular-livestock` — completed-sales ranking by category.
+  ///
+  /// An empty list is a normal answer: no completed sales exist in the window.
+  Future<List<PopularLivestockCategory>> popularLivestock() {
+    return _apiClient.get<List<PopularLivestockCategory>>(
+      MarketplaceEndpoints.popularLivestock,
+      parse: (Object? data) {
+        final Map<String, dynamic> map = _asObject(
+          data,
+          'GET ${MarketplaceEndpoints.popularLivestock}',
+        );
+        final List<dynamic> raw =
+            (map['categories'] as List<dynamic>?) ?? const <dynamic>[];
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map(PopularLivestockCategory.fromJson)
+            .toList(growable: false);
+      },
     );
   }
 

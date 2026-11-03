@@ -50,16 +50,13 @@ class SubmitSellerVerificationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'business_name' => ['required', 'string', 'max:255'],
+            'business_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_location' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_description' => ['sometimes', 'nullable', 'string', 'max:2000'],
 
-            // A reference, never a document. There is no upload endpoint, no
-            // storage disk and no URL scheme (functional documentation §3.3), so
-            // this field is a string the seller supplies — a document number, a
-            // reference code, whatever their process uses. No multipart upload
-            // is accepted and no `file` rule appears here on purpose: accepting
-            // one would imply a storage path this phase may not create.
+            // A free-text reference, not a document. The documents themselves
+            // are uploaded through `POST /seller-verification/documents`, and
+            // no `file` rule appears here on purpose.
             'id_document_ref' => ['sometimes', 'nullable', 'string', 'max:255'],
 
             // Server-owned. A client that sends one is told no, not ignored.

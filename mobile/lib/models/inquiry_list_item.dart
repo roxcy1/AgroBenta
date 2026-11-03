@@ -85,7 +85,9 @@ class InquiryListItem {
     return InquiryListItem(
       id: readInt(json, 'id'),
       role: readString(json, 'role'),
-      listing: listing == null ? null : InquiryListItemListing.fromJson(listing),
+      listing: listing == null
+          ? null
+          : InquiryListItemListing.fromJson(listing),
       counterpart: counterpart == null
           ? null
           : InquiryCounterpart(

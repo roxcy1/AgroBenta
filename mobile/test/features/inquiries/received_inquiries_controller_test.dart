@@ -122,7 +122,10 @@ void main() {
       await controller.loadInitial();
 
       expect(controller.state.status, ReceivedInquiriesStatus.failed);
-      expect(controller.state.errorMessage, 'Something went wrong on the server.');
+      expect(
+        controller.state.errorMessage,
+        'Something went wrong on the server.',
+      );
       expect(controller.state.inquiries, isEmpty);
     });
 
@@ -199,7 +202,10 @@ void main() {
 
       expect(controller.state.status, ReceivedInquiriesStatus.ready);
       expect(controller.state.inquiries, hasLength(1));
-      expect(controller.state.loadMoreErrorMessage, 'Something went wrong on the server.');
+      expect(
+        controller.state.loadMoreErrorMessage,
+        'Something went wrong on the server.',
+      );
     });
   });
 

@@ -160,9 +160,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           // The seller-side action only exists in Seller Mode; the server has
           // already decided which inquiry is eligible, so the chat never
           // guesses one.
-          offerInquiry: widget.sellerMode
-              ? conversation.eligibleInquiry
-              : null,
+          offerInquiry: widget.sellerMode ? conversation.eligibleInquiry : null,
           counterpartRole: conversation.counterpartRole,
         ),
       ),
@@ -182,11 +180,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Messages')),
       body: ListenableBuilder(
-        listenable: Listenable.merge(<Listenable?>[
-          _controller,
-          _inquiries,
-          _transactions,
-        ].whereType<Listenable>().toList(growable: false)),
+        listenable: Listenable.merge(
+          <Listenable?>[
+            _controller,
+            _inquiries,
+            _transactions,
+          ].whereType<Listenable>().toList(growable: false),
+        ),
         builder: (BuildContext context, Widget? child) {
           final ConversationsState state = _controller.state;
 
@@ -209,10 +209,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 onChanged: _controller.setSearch,
                 onClear: _clearSearch,
               ),
-              _FilterRow(
-                filter: state.filter,
-                onSelected: _selectFilter,
-              ),
+              _FilterRow(filter: state.filter, onSelected: _selectFilter),
               Expanded(
                 child: switch (state.filter) {
                   InboxFilter.all => _conversationArea(state, currentUserId),
@@ -250,16 +247,18 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     }
 
     final String needle = query.trim().toLowerCase();
-    final List<InquiryListItem> items = tab.items.where((
-      InquiryListItem item,
-    ) {
-      if (needle.isEmpty) {
-        return true;
-      }
-      return (item.listing?.title.toLowerCase().contains(needle) ?? false) ||
-          (item.counterpart?.name.toLowerCase().contains(needle) ?? false) ||
-          item.message.toLowerCase().contains(needle);
-    }).toList(growable: false);
+    final List<InquiryListItem> items = tab.items
+        .where((InquiryListItem item) {
+          if (needle.isEmpty) {
+            return true;
+          }
+          return (item.listing?.title.toLowerCase().contains(needle) ??
+                  false) ||
+              (item.counterpart?.name.toLowerCase().contains(needle) ??
+                  false) ||
+              item.message.toLowerCase().contains(needle);
+        })
+        .toList(growable: false);
 
     if (items.isEmpty) {
       return const _TabEmpty(
@@ -315,18 +314,18 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     }
 
     final String needle = query.trim().toLowerCase();
-    final List<Transaction> items = tab.transactions.where((
-      Transaction transaction,
-    ) {
-      if (needle.isEmpty) {
-        return true;
-      }
-      final String listing =
-          '${transaction.listing.livestockType} ${transaction.listing.breed}'
-              .toLowerCase();
-      return listing.contains(needle) ||
-          transaction.counterparty.name.toLowerCase().contains(needle);
-    }).toList(growable: false);
+    final List<Transaction> items = tab.transactions
+        .where((Transaction transaction) {
+          if (needle.isEmpty) {
+            return true;
+          }
+          final String listing =
+              '${transaction.listing.livestockType} ${transaction.listing.breed}'
+                  .toLowerCase();
+          return listing.contains(needle) ||
+              transaction.counterparty.name.toLowerCase().contains(needle);
+        })
+        .toList(growable: false);
 
     if (items.isEmpty) {
       return const _TabEmpty(
@@ -390,7 +389,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       return;
     }
 
-    final ConversationEligibleInquiry? offer = widget.sellerMode &&
+    final ConversationEligibleInquiry? offer =
+        widget.sellerMode &&
             !item.isBuyer &&
             item.canMakeOffer &&
             item.listing != null

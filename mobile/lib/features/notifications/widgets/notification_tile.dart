@@ -49,8 +49,9 @@ class NotificationTile extends StatelessWidget {
                         child: Text(
                           notification.title,
                           style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight:
-                                unread ? FontWeight.w600 : FontWeight.w500,
+                            fontWeight: unread
+                                ? FontWeight.w600
+                                : FontWeight.w500,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

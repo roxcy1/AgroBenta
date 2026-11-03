@@ -32,8 +32,11 @@ void main() {
 
   group('create()', () {
     test('posts to the inquiry endpoint with the bearer token', () async {
-      await service.create(listingId: 12, message: 'Still available?',
-          collectionDateOption: InquiryCollectionDateOption.specificDate);
+      await service.create(
+        listingId: 12,
+        message: 'Still available?',
+        collectionDateOption: InquiryCollectionDateOption.specificDate,
+      );
 
       expect(recorded, hasLength(1));
       expect(recorded.single.method, 'POST');
@@ -199,13 +202,13 @@ void main() {
         ),
       );
 
-        await expectLater(
-          service.create(
-            listingId: 12,
-            message: 'x' * 501,
-            collectionDateOption: InquiryCollectionDateOption.specificDate,
-            purchaseInterest: true,
-          ),
+      await expectLater(
+        service.create(
+          listingId: 12,
+          message: 'x' * 501,
+          collectionDateOption: InquiryCollectionDateOption.specificDate,
+          purchaseInterest: true,
+        ),
         throwsA(
           isA<ApiException>()
               .having(
@@ -230,8 +233,12 @@ void main() {
       );
 
       await expectLater(
-        service.create(listingId: 12, message: 'Hello', purchaseInterest: true,
-            collectionDateOption: InquiryCollectionDateOption.specificDate),
+        service.create(
+          listingId: 12,
+          message: 'Hello',
+          purchaseInterest: true,
+          collectionDateOption: InquiryCollectionDateOption.specificDate,
+        ),
         throwsA(
           isA<ApiException>()
               .having((ApiException e) => e.kind, 'kind', ApiErrorKind.conflict)
@@ -248,8 +255,12 @@ void main() {
       service = build((_) async => inquiryNotFoundResponse());
 
       await expectLater(
-        service.create(listingId: 99, message: 'Hello', purchaseInterest: true,
-            collectionDateOption: InquiryCollectionDateOption.specificDate),
+        service.create(
+          listingId: 99,
+          message: 'Hello',
+          purchaseInterest: true,
+          collectionDateOption: InquiryCollectionDateOption.specificDate,
+        ),
         throwsA(
           isA<ApiException>().having(
             (ApiException e) => e.kind,

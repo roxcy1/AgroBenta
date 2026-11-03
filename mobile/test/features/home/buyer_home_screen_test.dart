@@ -4,6 +4,9 @@ import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
+import 'package:agrobenta_mobile/features/home/widgets/popular_livestock_section.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
@@ -12,7 +15,9 @@ import 'package:agrobenta_mobile/features/notifications/state/notifications_scop
 import 'package:agrobenta_mobile/features/seller_listings/view/seller_listings_screen.dart';
 import 'package:agrobenta_mobile/models/user.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
+import 'package:agrobenta_mobile/repositories/livestock_type_repository.dart';
 import 'package:agrobenta_mobile/repositories/notification_repository.dart';
+import 'package:agrobenta_mobile/services/livestock_type_service.dart';
 import 'package:agrobenta_mobile/services/notification_service.dart';
 import 'package:agrobenta_mobile/widgets/temporary_logo.dart';
 import 'package:flutter/material.dart';
@@ -65,40 +70,72 @@ void main() {
     );
     addTearDown(controller.dispose);
 
-    final MarketplaceRepository marketplaceRepository = buildMarketplaceRepository(
-      tokenStore,
-      (RecordedRequest request) async {
-        if (onMarketplace != null) {
-          return onMarketplace(request);
-        }
-        // The listing-detail route this screen pushes must get a valid answer
-        // too, exactly as the marketplace's own navigation tests arrange.
-        if (request.apiPath.startsWith('/listings/')) {
-          return listingDetailResponse();
-        }
-        return marketplaceListResponse();
-      },
-      recorded: recorded,
-    );
+    final MarketplaceRepository marketplaceRepository =
+        buildMarketplaceRepository(tokenStore, (RecordedRequest request) async {
+          if (onMarketplace != null) {
+            return onMarketplace(request);
+          }
+          // The listing-detail route this screen pushes must get a valid answer
+          // too, exactly as the marketplace's own navigation tests arrange.
+          if (request.apiPath.startsWith('/listings/')) {
+            return listingDetailResponse();
+          }
+          if (request.apiPath == '/marketplace/popular-livestock') {
+            return popularLivestockResponse();
+          }
+          return marketplaceListResponse();
+        }, recorded: recorded);
     final MarketplaceController marketplaceController = MarketplaceController(
       marketplaceRepository,
     );
     addTearDown(marketplaceController.dispose);
 
-    final NotificationRepository notificationRepository = NotificationRepository(
-      NotificationService(
+    final LivestockTypeRepository catalogRepository = LivestockTypeRepository(
+      LivestockTypeService(
         ApiClient(
           tokenStorage: tokenStore,
           httpClient: MockClient(
             (_) async => http.Response(
-              jsonEncode(successEnvelope(data: <String, dynamic>{'count': 0})),
+              jsonEncode(<String, Object>{
+                'data': <Map<String, String>>[
+                  <String, String>{'value': 'cattle', 'label': 'Cattle'},
+                  <String, String>{'value': 'carabao', 'label': 'Carabao'},
+                  <String, String>{'value': 'goat', 'label': 'Goat'},
+                  <String, String>{'value': 'swine', 'label': 'Swine'},
+                ],
+              }),
               200,
-              headers: <String, String>{'content-type': 'application/json'},
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
             ),
           ),
         ),
       ),
     );
+    final LivestockTypesController catalogController = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalogController.dispose);
+    await catalogController.ensureLoaded();
+
+    final NotificationRepository notificationRepository =
+        NotificationRepository(
+          NotificationService(
+            ApiClient(
+              tokenStorage: tokenStore,
+              httpClient: MockClient(
+                (_) async => http.Response(
+                  jsonEncode(
+                    successEnvelope(data: <String, dynamic>{'count': 0}),
+                  ),
+                  200,
+                  headers: <String, String>{'content-type': 'application/json'},
+                ),
+              ),
+            ),
+          ),
+        );
     final NotificationsController notificationsController =
         NotificationsController(notificationRepository);
     addTearDown(notificationsController.dispose);
@@ -118,13 +155,17 @@ void main() {
           child: MarketplaceScope(
             repository: marketplaceRepository,
             controller: marketplaceController,
-            child: NotificationsScope(
-              repository: notificationRepository,
-              controller: notificationsController,
-              child: MaterialApp(
-                home: BuyerHomeScreen(
-                  onBrowseMarketplace: onBrowseMarketplace,
-                  onOpenProfile: onOpenProfile,
+            child: LivestockTypesScope(
+              repository: catalogRepository,
+              controller: catalogController,
+              child: NotificationsScope(
+                repository: notificationRepository,
+                controller: notificationsController,
+                child: MaterialApp(
+                  home: BuyerHomeScreen(
+                    onBrowseMarketplace: onBrowseMarketplace,
+                    onOpenProfile: onOpenProfile,
+                  ),
                 ),
               ),
             ),
@@ -135,9 +176,7 @@ void main() {
     await settleAuth(tester, frames: 12);
   }
 
-  testWidgets('greets the user', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('greets the user', (WidgetTester tester) async {
     await pumpSignedIn(tester);
 
     expect(find.text('Hello, Ana Reyes!'), findsOneWidget);
@@ -197,10 +236,7 @@ void main() {
 
       // The rest of the screen stays usable; only the section reports.
       expect(find.text('Hello, Ana Reyes!'), findsOneWidget);
-      expect(
-        find.widgetWithText(TextButton, 'Try again'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(TextButton, 'Try again'), findsOneWidget);
     });
 
     testWidgets('a tapped listing opens its detail screen', (
@@ -234,38 +270,124 @@ void main() {
 
       expect(followedToMarketplace, isTrue);
       expect(
-        recorded
-            .where(
-              (RecordedRequest request) =>
-                  request.apiPath == '/listings' &&
-                  request.query['livestock_type'] == 'Cattle',
-            ),
-          isNotEmpty,
+        recorded.where(
+          (RecordedRequest request) =>
+              request.apiPath == '/listings' &&
+              request.query['livestock_type'] == 'cattle',
+        ),
+        isNotEmpty,
         reason:
             'a category tap must reuse the marketplace exact-match filter, '
             'not invent a query',
       );
     });
 
-    testWidgets('the grid carries exactly the five designed categories', (
+    testWidgets('the grid carries the four supported catalog categories', (
       WidgetTester tester,
     ) async {
       await pumpSignedIn(tester);
 
       for (final String label in <String>[
         'Cattle',
-        'Goats',
-        'Pigs',
-        'Poultry',
-        'Sheep',
+        'Carabao',
+        'Goat',
+        'Swine',
       ]) {
         expect(find.text(label), findsWidgets, reason: 'missing $label');
       }
       expect(faIcon(FontAwesomeIcons.cow), findsOneWidget);
       expect(faIcon(FontAwesomeIcons.paw), findsOneWidget);
       expect(faIcon(FontAwesomeIcons.bacon), findsOneWidget);
-      expect(faIcon(FontAwesomeIcons.kiwiBird), findsOneWidget);
-      expect(faIcon(FontAwesomeIcons.feather), findsOneWidget);
+      expect(faIcon(FontAwesomeIcons.hippo), findsOneWidget);
+    });
+  });
+
+  group('popular livestock', () {
+    testWidgets('renders completed-sale rankings and opens Browse filtered', (
+      WidgetTester tester,
+    ) async {
+      final List<RecordedRequest> recorded = <RecordedRequest>[];
+      bool followed = false;
+
+      await pumpSignedIn(
+        tester,
+        recorded: recorded,
+        onBrowseMarketplace: () => followed = true,
+        onMarketplace: (RecordedRequest request) async {
+          if (request.apiPath == '/marketplace/popular-livestock') {
+            return popularLivestockResponse(
+              categories: <Map<String, dynamic>>[
+                popularCategoryJson(
+                  livestockType: 'Cattle',
+                  completedSales: 40,
+                ),
+                popularCategoryJson(livestockType: 'Goat', completedSales: 30),
+              ],
+            );
+          }
+          if (request.apiPath.startsWith('/listings/')) {
+            return listingDetailResponse();
+          }
+          return marketplaceListResponse();
+        },
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Popular Livestock'),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('40 completed sales'), findsOneWidget);
+      expect(find.text('30 completed sales'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(PopularLivestockSection),
+          matching: find.text('Cattle'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(followed, isTrue);
+      expect(
+        recorded.where(
+          (RecordedRequest request) =>
+              request.apiPath == '/listings' &&
+              request.query['livestock_type'] == 'cattle',
+        ),
+        isNotEmpty,
+      );
+    });
+
+    testWidgets('shows the honest empty copy without completed sales', (
+      WidgetTester tester,
+    ) async {
+      await pumpSignedIn(
+        tester,
+        onMarketplace: (RecordedRequest request) async {
+          if (request.apiPath == '/marketplace/popular-livestock') {
+            return popularLivestockResponse();
+          }
+          return marketplaceListResponse();
+        },
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Popular Livestock'),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'No completed sales yet. Popular livestock categories will appear '
+          'here once purchases are completed.',
+        ),
+        findsOneWidget,
+      );
     });
   });
 
@@ -289,13 +411,12 @@ void main() {
 
       expect(followedToMarketplace, isTrue);
       expect(
-        recorded
-            .where(
-              (RecordedRequest request) =>
-                  request.apiPath == '/listings' &&
-                  request.query['search'] == 'holstein',
-            ),
-          isNotEmpty,
+        recorded.where(
+          (RecordedRequest request) =>
+              request.apiPath == '/listings' &&
+              request.query['search'] == 'holstein',
+        ),
+        isNotEmpty,
         reason: 'the typed query must reach GET /listings as ?search=',
       );
     });
@@ -315,9 +436,7 @@ void main() {
       await tester.tap(find.byTooltip('Clear search'));
       await settleAuth(tester);
 
-      final TextField field = tester.widget<TextField>(
-        find.byType(TextField),
-      );
+      final TextField field = tester.widget<TextField>(find.byType(TextField));
       expect(field.controller!.text, isEmpty);
       expect(find.byTooltip('Clear search'), findsNothing);
     });
@@ -412,29 +531,33 @@ void main() {
     );
     addTearDown(controller.dispose);
 
-    final MarketplaceRepository marketplaceRepository = buildMarketplaceRepository(
-      tokenStore,
-      (_) async => marketplaceListResponse(),
-    );
+    final MarketplaceRepository marketplaceRepository =
+        buildMarketplaceRepository(
+          tokenStore,
+          (_) async => marketplaceListResponse(),
+        );
     final MarketplaceController marketplaceController = MarketplaceController(
       marketplaceRepository,
     );
     addTearDown(marketplaceController.dispose);
 
-    final NotificationRepository notificationRepository = NotificationRepository(
-      NotificationService(
-        ApiClient(
-          tokenStorage: tokenStore,
-          httpClient: MockClient(
-            (_) async => http.Response(
-              jsonEncode(successEnvelope(data: <String, dynamic>{'count': 0})),
-              200,
-              headers: <String, String>{'content-type': 'application/json'},
+    final NotificationRepository notificationRepository =
+        NotificationRepository(
+          NotificationService(
+            ApiClient(
+              tokenStorage: tokenStore,
+              httpClient: MockClient(
+                (_) async => http.Response(
+                  jsonEncode(
+                    successEnvelope(data: <String, dynamic>{'count': 0}),
+                  ),
+                  200,
+                  headers: <String, String>{'content-type': 'application/json'},
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        );
     final NotificationsController notificationsController =
         NotificationsController(notificationRepository);
     addTearDown(notificationsController.dispose);

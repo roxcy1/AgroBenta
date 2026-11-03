@@ -12,7 +12,7 @@ void main() {
       final Listing listing = Listing.fromJson(listingJson());
 
       expect(listing.id, 12);
-      expect(listing.livestockType, 'Cattle');
+      expect(listing.livestockType, 'cattle');
       expect(listing.breed, 'Holstein');
       expect(listing.quantity, 4);
       expect(listing.location, 'Mabalacat, Pampanga');
@@ -241,7 +241,9 @@ void main() {
         ),
       );
 
-      expect(listing.photos, <String>['https://cdn.example.test/photos/front.jpg']);
+      expect(listing.photos, <String>[
+        'https://cdn.example.test/photos/front.jpg',
+      ]);
       expect(listing.hasLoadablePhoto, isTrue);
     });
   });
@@ -344,7 +346,10 @@ void main() {
 
     test('treats unparseable input as unchanged', () {
       expect(
-        Listing.resolvePhotoUrl('not a url', apiOrigin: 'http://localhost:8001'),
+        Listing.resolvePhotoUrl(
+          'not a url',
+          apiOrigin: 'http://localhost:8001',
+        ),
         'not a url',
       );
     });

@@ -3,6 +3,9 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../models/livestock_type.dart';
+import '../../livestock_types/state/livestock_types_scope.dart';
+import '../../livestock_types/state/livestock_types_state.dart';
 
 /// One buyer-facing browse category: a stable id, a label, an icon, and the
 /// `livestock_type` filter value a tap applies.
@@ -47,44 +50,18 @@ class HomeCategory {
   /// of it and cannot be assigned to an `IconData` field.
   final FaIconData icon;
 
-  /// The five categories the approved Home design names.
-  ///
-  /// Icons are the closest glyph Font Awesome **Free** provides: it has a cow
-  /// and a bird, but no goat, pig or sheep — those are FA Pro. The stand-ins
-  /// (`paw` for goats, `bacon` for pigs, `feather` for sheep/wool) are
-  /// reported as visual compromises, not as an approved icon mapping.
-  static const List<HomeCategory> values = <HomeCategory>[
-    HomeCategory(
-      id: 'cattle',
-      label: 'Cattle',
-      livestockType: 'Cattle',
-      icon: FontAwesomeIcons.cow,
-    ),
-    HomeCategory(
-      id: 'goats',
-      label: 'Goats',
-      livestockType: 'Goats',
-      icon: FontAwesomeIcons.paw,
-    ),
-    HomeCategory(
-      id: 'pigs',
-      label: 'Pigs',
-      livestockType: 'Pigs',
-      icon: FontAwesomeIcons.bacon,
-    ),
-    HomeCategory(
-      id: 'poultry',
-      label: 'Poultry',
-      livestockType: 'Poultry',
-      icon: FontAwesomeIcons.kiwiBird,
-    ),
-    HomeCategory(
-      id: 'sheep',
-      label: 'Sheep',
-      livestockType: 'Sheep',
-      icon: FontAwesomeIcons.feather,
-    ),
-  ];
+  factory HomeCategory.fromCatalog(LivestockType type) => HomeCategory(
+    id: type.value,
+    label: type.label,
+    livestockType: type.value,
+    icon: switch (type.value) {
+      'cattle' => FontAwesomeIcons.cow,
+      'carabao' => FontAwesomeIcons.hippo,
+      'goat' => FontAwesomeIcons.paw,
+      'swine' => FontAwesomeIcons.bacon,
+      _ => FontAwesomeIcons.paw,
+    },
+  );
 }
 
 /// "Browse by Category": a heading and a responsive grid of pale-green tiles.
@@ -105,6 +82,7 @@ class HomeCategories extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final controller = LivestockTypesScope.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenGutter),
@@ -124,26 +102,50 @@ class HomeCategories extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              const double spacing = AppSpacing.sm;
-              final int columns = (constraints.maxWidth / 116)
-                  .floor()
-                  .clamp(3, 5);
-              final double tileWidth =
-                  (constraints.maxWidth - (columns - 1) * spacing) / columns;
+          ListenableBuilder(
+            listenable: controller,
+            builder: (BuildContext context, Widget? child) {
+              final LivestockTypesState catalog = controller.state;
+              if (!catalog.isReady) {
+                if (catalog.hasFailed) {
+                  return Row(
+                    children: <Widget>[
+                      const Expanded(child: Text('Could not load categories.')),
+                      TextButton(
+                        onPressed: controller.retry,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  );
+                }
+                return const Center(child: CircularProgressIndicator());
+              }
+              final List<HomeCategory> categories = catalog.types
+                  .map(HomeCategory.fromCatalog)
+                  .toList(growable: false);
+              return LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  const double spacing = AppSpacing.sm;
+                  final int columns = (constraints.maxWidth / 116)
+                      .floor()
+                      .clamp(3, 5);
+                  final double tileWidth =
+                      (constraints.maxWidth - (columns - 1) * spacing) /
+                      columns;
 
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: <Widget>[
-                  for (final HomeCategory category in HomeCategory.values)
-                    _CategoryTile(
-                      category: category,
-                      width: tileWidth,
-                      onTap: () => onSelect(category),
-                    ),
-                ],
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: <Widget>[
+                      for (final HomeCategory category in categories)
+                        _CategoryTile(
+                          category: category,
+                          width: tileWidth,
+                          onTap: () => onSelect(category),
+                        ),
+                    ],
+                  );
+                },
               );
             },
           ),

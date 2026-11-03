@@ -108,7 +108,7 @@ Map<String, dynamic> inquiryBuyerJson({
 /// narrow shape `MobileTransactionResource` echoes.
 Map<String, dynamic> inquiryListingJson({
   Object? id = 12,
-  String livestockType = 'Cattle',
+  String livestockType = 'cattle',
   String breed = 'Holstein',
 }) {
   return <String, dynamic>{

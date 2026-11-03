@@ -686,8 +686,7 @@ void main() {
     ) async {
       await pumpInbox(
         tester,
-        handler: (_) async =>
-            conversationsResponse(conversations: threads()),
+        handler: (_) async => conversationsResponse(conversations: threads()),
       );
 
       expect(find.text('Buyer Thread'), findsOneWidget);
@@ -706,8 +705,7 @@ void main() {
       await pumpInbox(
         tester,
         sellerMode: true,
-        handler: (_) async =>
-            conversationsResponse(conversations: threads()),
+        handler: (_) async => conversationsResponse(conversations: threads()),
       );
 
       expect(find.text('Seller Thread'), findsOneWidget);
@@ -869,10 +867,7 @@ void main() {
       // The header opens the compact public-profile panel.
       await tester.tap(find.text('Rizal Farms').first);
       await settle(tester);
-      expect(
-        find.textContaining('Only the profile details'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Only the profile details'), findsOneWidget);
     });
 
     testWidgets('Buyer Mode never offers the seller action', (

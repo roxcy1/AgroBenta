@@ -16,7 +16,7 @@ export interface VerificationReviewer {
 export interface SellerVerification {
   id: number;
   seller: VerificationSeller;
-  business_name: string;
+  business_name: string | null;
   business_location: string | null;
   business_description: string | null;
   id_document_ref: string | null;

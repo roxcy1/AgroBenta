@@ -17,6 +17,10 @@ const List<String> kVerificationDocumentAllowedExtensions = <String>[
 /// The maximum upload size the server accepts, in bytes (`max:5120` KB).
 const int kVerificationDocumentMaxBytes = 5 * 1024 * 1024;
 
+/// The most farm photos an application can hold. Mirrors the server's
+/// `SellerVerificationDocumentService::MAX_FARM_PHOTOS`.
+const int kMaxVerificationFarmPhotos = 10;
+
 /// Whether [file] is a type the server accepts, judged by its extension.
 bool isAllowedVerificationDocument(XFile file) {
   final String name = file.name.toLowerCase();
@@ -24,7 +28,9 @@ bool isAllowedVerificationDocument(XFile file) {
   if (dot < 0) {
     return false;
   }
-  return kVerificationDocumentAllowedExtensions.contains(name.substring(dot + 1));
+  return kVerificationDocumentAllowedExtensions.contains(
+    name.substring(dot + 1),
+  );
 }
 
 /// Picks one image for a document card using the platform picker.

@@ -378,9 +378,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (!mounted) {
                   return;
                 }
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(sendError)));
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(sendError)));
                 _controller.clearSendError();
               });
             }
@@ -392,9 +391,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (!mounted) {
                   return;
                 }
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(offerError)));
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(offerError)));
                 _offers.clearActionError();
               });
             }
