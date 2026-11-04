@@ -76,10 +76,12 @@ class SellerVerificationDocumentsTest extends TestCase
     }
 
     #[Test]
-    public function seller_verifications_schema_has_the_document_path_columns(): void
+    public function seller_verifications_schema_has_contact_snapshots_and_document_path_columns(): void
     {
         $this->assertTrue(
             Schema::hasColumns('seller_verifications', [
+                'phone',
+                'address',
                 'id_document_path',
                 'selfie_path',
             ]),
@@ -137,7 +139,10 @@ class SellerVerificationDocumentsTest extends TestCase
     private function submit(User $user, array $body = []): TestResponse
     {
         return $this->withToken($this->mobileToken($user))
-            ->postJson('/api/seller-verification', $body);
+            ->postJson('/api/seller-verification', array_merge([
+                'phone' => '09171234567',
+                'address' => 'Trinidad, Bohol',
+            ], $body));
     }
 
     /**
@@ -149,6 +154,8 @@ class SellerVerificationDocumentsTest extends TestCase
     ): SellerVerification {
         return SellerVerification::create(array_merge([
             'user_id' => $user->id,
+            'phone' => '09171234567',
+            'address' => 'Trinidad, Bohol',
             'business_name' => 'Reyes Livestock',
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm.',
@@ -381,8 +388,7 @@ class SellerVerificationDocumentsTest extends TestCase
     #[Test]
     public function submission_is_refused_when_no_documents_are_staged(): void
     {
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', [
+        $this->submit($this->buyer, [
                 'business_name' => 'Reyes Livestock',
             ])
             ->assertUnprocessable()
@@ -398,8 +404,7 @@ class SellerVerificationDocumentsTest extends TestCase
     {
         $this->upload($this->buyer, DocType::IdDocument)->assertCreated();
 
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', [
+        $this->submit($this->buyer, [
                 'business_name' => 'Reyes Livestock',
             ])
             ->assertUnprocessable()
@@ -417,8 +422,7 @@ class SellerVerificationDocumentsTest extends TestCase
         // an upload.
         $this->createVerification($this->buyer);
 
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', [
+        $this->submit($this->buyer, [
                 'business_name' => 'Reyes Livestock',
             ])
             ->assertStatus(409);
@@ -429,8 +433,7 @@ class SellerVerificationDocumentsTest extends TestCase
     {
         $this->stageBoth($this->buyer);
 
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', [
+        $this->submit($this->buyer, [
                 'business_name' => 'Reyes Livestock',
             ])
             ->assertCreated()
@@ -474,8 +477,7 @@ class SellerVerificationDocumentsTest extends TestCase
                 ->andThrow(new RuntimeException('Audit write failed.'));
         });
 
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', [
+        $this->submit($this->buyer, [
                 'business_name' => 'Reyes Livestock',
             ])
             ->assertStatus(500);
@@ -510,15 +512,13 @@ class SellerVerificationDocumentsTest extends TestCase
 
         // The old record's files belong to the old record; the new one starts
         // from nothing.
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', ['business_name' => 'Retry Farm'])
+        $this->submit($this->buyer, ['business_name' => 'Retry Farm'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['id_document', 'selfie', 'proof_of_address']);
 
         $this->stageBoth($this->buyer);
 
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', ['business_name' => 'Retry Farm'])
+        $this->submit($this->buyer, ['business_name' => 'Retry Farm'])
             ->assertCreated();
     }
 
@@ -531,8 +531,7 @@ class SellerVerificationDocumentsTest extends TestCase
     {
         $this->stageBoth($this->buyer);
 
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', [
+        $this->submit($this->buyer, [
                 'business_name' => 'Reyes Livestock',
             ])
             ->assertCreated();
@@ -564,8 +563,7 @@ class SellerVerificationDocumentsTest extends TestCase
     public function another_account_cannot_stream_your_documents(): void
     {
         $this->stageBoth($this->buyer);
-        $this->withToken($this->mobileToken($this->buyer))
-            ->postJson('/api/seller-verification', ['business_name' => 'Reyes Livestock'])
+        $this->submit($this->buyer, ['business_name' => 'Reyes Livestock'])
             ->assertCreated();
 
         // No id in the path: the record is resolved from the token, so a

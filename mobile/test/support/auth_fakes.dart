@@ -50,6 +50,10 @@ Map<String, dynamic> userJson({
   Object? emailVerifiedAt,
   Object? createdAt = '2026-09-25T08:15:00.000000Z',
   Object? updatedAt = '2026-09-25T08:15:00.000000Z',
+  Object? phone,
+  Object? location,
+  Object? avatarUrl,
+  Object? bio,
 }) {
   return <String, dynamic>{
     'id': id,
@@ -60,6 +64,10 @@ Map<String, dynamic> userJson({
     'email_verified_at': emailVerifiedAt,
     'created_at': createdAt,
     'updated_at': updatedAt,
+    'phone': phone,
+    'location': location,
+    'avatar_url': avatarUrl,
+    'bio': bio,
   };
 }
 

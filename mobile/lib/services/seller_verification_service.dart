@@ -78,6 +78,8 @@ class SellerVerificationService {
   ///  * [ApiErrorKind.validation] on a `422`, carrying per-field messages.
   ///  * [ApiErrorKind.rateLimited] on a `429`; the route is throttled to 5/min.
   Future<SellerVerification> submit({
+    required String phone,
+    required String address,
     String? businessName,
     String? businessLocation,
     String? businessDescription,
@@ -86,6 +88,8 @@ class SellerVerificationService {
     return _apiClient.post<SellerVerification>(
       SellerVerificationEndpoints.submit,
       body: <String, dynamic>{
+        'phone': phone.trim(),
+        'address': address.trim(),
         // Explicit allow-list, in the order the contract lists them. Anything a
         // form adds later has to be named here to be sent.
         if (_present(businessName)) 'business_name': businessName!.trim(),

@@ -53,6 +53,8 @@ class SellerVerificationController extends Controller
             $verification = $this->verifications->submit(
                 $request->user(),
                 $request->safe()->only([
+                    'phone',
+                    'address',
                     'business_name',
                     'business_location',
                     'business_description',

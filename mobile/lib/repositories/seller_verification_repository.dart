@@ -44,12 +44,16 @@ class SellerVerificationRepository {
   /// meaning of their own, and rewriting them here would be a second place for
   /// wording to drift. The controller branches on [ApiErrorKind] instead.
   Future<SellerVerification> submit({
+    required String phone,
+    required String address,
     String? businessName,
     String? businessLocation,
     String? businessDescription,
     String? idDocumentRef,
   }) {
     return _service.submit(
+      phone: phone,
+      address: address,
       businessName: businessName,
       businessLocation: businessLocation,
       businessDescription: businessDescription,

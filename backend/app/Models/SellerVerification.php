@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 #[Fillable([
-    'user_id', 'business_name', 'business_location', 'business_description',
+    'user_id', 'phone', 'address', 'business_name', 'business_location', 'business_description',
     'id_document_ref', 'id_document_path', 'selfie_path', 'proof_of_address_path',
     'farm_photo_paths', 'status', 'admin_note', 'reviewed_by', 'reviewed_at',
     'submitted_at',

@@ -50,6 +50,8 @@ class SubmitSellerVerificationRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'phone' => ['required', 'string', 'max:32'],
+            'address' => ['required', 'string', 'max:191'],
             'business_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_location' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_description' => ['sometimes', 'nullable', 'string', 'max:2000'],
@@ -85,6 +87,8 @@ class SubmitSellerVerificationRequest extends FormRequest
     public function attributes(): array
     {
         return [
+            'phone' => 'phone number',
+            'address' => 'address',
             'business_name' => 'business name',
             'business_location' => 'business location',
             'business_description' => 'business description',

@@ -178,6 +178,8 @@ export default function VerificationDetailsDialog({
           rows: [
             ['Name', orDash(verification.seller?.name)],
             ['Email', orDash(verification.seller?.email)],
+            ['Phone number', orDash(verification.phone)],
+            ['Address', orDash(verification.address)],
             ['Seller ID', orDash(verification.seller?.id)],
           ],
         },
