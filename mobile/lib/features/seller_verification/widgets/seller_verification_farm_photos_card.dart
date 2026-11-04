@@ -94,6 +94,10 @@ class _PhotoRow extends StatelessWidget {
     final (String label, Color color) = switch (photo.status) {
       VerificationDocumentStatus.uploading => ('Working…', AppColors.primary),
       VerificationDocumentStatus.uploaded => ('Uploaded', AppColors.success),
+      VerificationDocumentStatus.needsUpload => (
+        'Upload required',
+        AppColors.error,
+      ),
       VerificationDocumentStatus.failed => ('Upload failed', AppColors.error),
       _ => ('Not uploaded', AppColors.textSecondary),
     };

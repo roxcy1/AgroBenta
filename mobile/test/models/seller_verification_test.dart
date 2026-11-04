@@ -59,6 +59,8 @@ void main() {
       );
 
       expect(verification.id, 9);
+      expect(verification.phone, '09171234567');
+      expect(verification.address, 'Trinidad, Bohol');
       expect(verification.businessName, 'Santos Cattle Co.');
       expect(verification.businessLocation, 'Mabalacat, Pampanga');
       expect(
@@ -80,6 +82,8 @@ void main() {
     test('tolerates every optional field being null', () {
       final SellerVerification verification = SellerVerification.fromJson(
         sellerVerificationJson(
+          phone: null,
+          address: null,
           businessLocation: null,
           businessDescription: null,
           idDocumentRef: null,
@@ -90,6 +94,8 @@ void main() {
       );
 
       expect(verification.businessLocation, isNull);
+      expect(verification.phone, isNull);
+      expect(verification.address, isNull);
       expect(verification.businessDescription, isNull);
       expect(verification.idDocumentRef, isNull);
       expect(verification.adminNote, isNull);

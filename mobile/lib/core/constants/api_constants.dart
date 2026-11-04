@@ -161,6 +161,8 @@ abstract final class SellerVerificationEndpoints {
   /// reader does not have to open the Form Request to know what a submission may
   /// contain.
   static const List<String> writableFields = <String>[
+    'phone',
+    'address',
     'business_name',
     'business_location',
     'business_description',

@@ -157,6 +157,8 @@ class SellerVerificationController extends ChangeNotifier {
   /// On success the screen moves to the pending state. `seller_capability` is
   /// untouched — see the class documentation.
   Future<bool> submit({
+    required String phone,
+    required String address,
     String? businessName,
     String? businessLocation,
     String? businessDescription,
@@ -177,6 +179,8 @@ class SellerVerificationController extends ChangeNotifier {
 
     try {
       final SellerVerification verification = await _repository.submit(
+        phone: phone,
+        address: address,
         businessName: businessName,
         businessLocation: businessLocation,
         businessDescription: businessDescription,

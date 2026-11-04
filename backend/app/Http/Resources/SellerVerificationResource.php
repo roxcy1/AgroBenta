@@ -21,6 +21,8 @@ class SellerVerificationResource extends JsonResource
                 'name' => $this->seller->name,
                 'email' => $this->seller->email,
             ],
+            'phone' => $this->phone,
+            'address' => $this->address,
             'business_name' => $this->business_name,
             'business_location' => $this->business_location,
             'business_description' => $this->business_description,

@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../auth/state/auth_controller.dart';
+import '../../auth/state/auth_scope.dart';
 import '../../../models/seller_verification.dart';
+import '../../../models/user.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
 import '../state/seller_verification_controller.dart';
@@ -35,12 +40,10 @@ import 'seller_verification_views.dart';
 ///
 /// ## Only supported fields
 ///
-/// The form submits `business_name`, `business_location` and
-/// `business_description` — the allow-listed fields
-/// `SubmitSellerVerificationRequest` accepts. Full name is shown read-only from
-/// the account ([accountName]) because it comes from `/auth/me`, not the
-/// application. Phone number is not collected: there is no column. All three
-/// are optional. The evidence documents are uploaded through
+/// The form submits required phone and address snapshots alongside the optional
+/// `business_name`, `business_location` and `business_description` fields. Full
+/// name is shown read-only from the account ([accountName]) because it comes
+/// from `/auth/me`, not the application. The evidence documents are uploaded through
 /// `/seller-verification/documents` before submission, because the submit
 /// endpoint refuses an application whose required documents are missing (a
 /// `422`). The app
@@ -95,12 +98,20 @@ class _SellerVerificationFormScreenState
   ];
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _phone = TextEditingController();
+  final TextEditingController _address = TextEditingController();
   final TextEditingController _businessName = TextEditingController();
   final TextEditingController _businessLocation = TextEditingController();
   final TextEditingController _businessDescription = TextEditingController();
 
   late final SellerVerificationController _controller;
   late final SellerVerificationDocumentsController _documents;
+  AuthController? _authController;
+  int? _authenticatedUserId;
+  bool _authIdentityInitialized = false;
+  bool _phonePrefilled = false;
+  bool _addressPrefilled = false;
+  SellerVerification? _previousVerification;
 
   /// Zero-based index of the step being shown.
   int _step = 0;
@@ -108,6 +119,63 @@ class _SellerVerificationFormScreenState
   /// The field errors currently on screen, so a repeat of the same server error
   /// does not re-validate for nothing.
   Map<String, List<String>> _displayedErrors = const <String, List<String>>{};
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final AuthController? authController = AuthScope.maybeOf(context);
+    if (!identical(authController, _authController)) {
+      _authController?.removeListener(_handleAuthChanged);
+      _authController = authController;
+      _authController?.addListener(_handleAuthChanged);
+    }
+    _syncAuthenticatedUser();
+    _prefillContactFields();
+  }
+
+  void _handleAuthChanged() => _syncAuthenticatedUser();
+
+  void _syncAuthenticatedUser() {
+    final AuthController? authController = _authController;
+    final int? userId = authController?.state.isSignedIn == true
+        ? authController?.state.user?.id
+        : null;
+
+    if (!_authIdentityInitialized) {
+      _authenticatedUserId = userId;
+      _authIdentityInitialized = true;
+      return;
+    }
+
+    if (userId != _authenticatedUserId) {
+      _authenticatedUserId = userId;
+      _documents.resetForAccountChange();
+      _previousVerification = null;
+      _businessName.clear();
+      _businessLocation.clear();
+      _businessDescription.clear();
+      _phone.text = authController?.state.user?.phone ?? '';
+      _address.text = authController?.state.user?.location ?? '';
+      _phonePrefilled = true;
+      _addressPrefilled = true;
+    }
+  }
+
+  void _prefillContactFields() {
+    final User? user = _authController?.state.user;
+    if (user == null) {
+      return;
+    }
+
+    if (!_phonePrefilled) {
+      _phone.text = _previousVerification?.phone ?? user.phone ?? '';
+      _phonePrefilled = true;
+    }
+    if (!_addressPrefilled) {
+      _address.text = _previousVerification?.address ?? user.location ?? '';
+      _addressPrefilled = true;
+    }
+  }
 
   @override
   void initState() {
@@ -120,6 +188,7 @@ class _SellerVerificationFormScreenState
     );
 
     final SellerVerification? previous = _controller.state.verification;
+    _previousVerification = previous;
 
     // A resubmission starts from what was rejected, so the seller corrects the
     // fields that were the problem instead of retyping them. These are the
@@ -129,11 +198,19 @@ class _SellerVerificationFormScreenState
       _businessName.text = previous.businessName ?? '';
       _businessLocation.text = previous.businessLocation ?? '';
       _businessDescription.text = previous.businessDescription ?? '';
+      if (previous.phone != null) {
+        _phone.text = previous.phone!;
+        _phonePrefilled = true;
+      }
+      if (previous.address != null) {
+        _address.text = previous.address!;
+        _addressPrefilled = true;
+      }
     }
 
-    // Seed the document slots from the record so a resubmission shows which
-    // documents the server still holds. On a first application this is a no-op.
-    _documents.seedFrom(previous);
+    // Historical documents remain previewable but are not staged for a new
+    // resubmission; the controller seeds them as requiring a fresh upload.
+    unawaited(_documents.seedFrom(previous));
   }
 
   /// A `TextFormField` runs its validator when its value changes and when
@@ -157,9 +234,12 @@ class _SellerVerificationFormScreenState
 
   @override
   void dispose() {
+    _authController?.removeListener(_handleAuthChanged);
     _businessName.dispose();
     _businessLocation.dispose();
     _businessDescription.dispose();
+    _phone.dispose();
+    _address.dispose();
     _documents.dispose();
     super.dispose();
   }
@@ -202,6 +282,8 @@ class _SellerVerificationFormScreenState
 
   Future<void> _submit() async {
     final bool created = await _controller.submit(
+      phone: _phone.text.trim(),
+      address: _address.text.trim(),
       businessName: _businessName.text,
       businessLocation: _businessLocation.text,
       businessDescription: _businessDescription.text,
@@ -228,14 +310,33 @@ class _SellerVerificationFormScreenState
     // A `422` names fields that live on the first step, so return there and
     // reset the error cache so the field validators run once the fields mount.
     if (_controller.state.validationErrors.isNotEmpty) {
+      final Set<VerificationDocumentType> documentsNeedingUpload = _controller
+          .state
+          .validationErrors
+          .keys
+          .map(
+            (String key) => VerificationDocumentType.values.where(
+              (VerificationDocumentType type) => type.value == key,
+            ),
+          )
+          .expand((Iterable<VerificationDocumentType> matches) => matches)
+          .where(
+            (VerificationDocumentType type) =>
+                type != VerificationDocumentType.farmPhoto,
+          )
+          .toSet();
+      if (documentsNeedingUpload.isNotEmpty) {
+        _documents.markDocumentsForReupload(documentsNeedingUpload);
+      }
       setState(() {
         // Document field errors belong on the Documents step; business field
         // errors on Basic Information.
-        _step = _controller.state.validationErrors.keys.any(
-          (String key) => VerificationDocumentType.values.any(
-            (VerificationDocumentType type) => type.value == key,
-          ),
-        )
+        _step =
+            _controller.state.validationErrors.keys.any(
+              (String key) => VerificationDocumentType.values.any(
+                (VerificationDocumentType type) => type.value == key,
+              ),
+            )
             ? 1
             : 0;
         _displayedErrors = const <String, List<String>>{};
@@ -306,6 +407,8 @@ class _SellerVerificationFormScreenState
 
   List<Widget> _basicInformation(bool isSubmitting) {
     final ThemeData theme = Theme.of(context);
+    final String? accountName =
+        widget.accountName ?? _authController?.state.user?.name;
 
     return <Widget>[
       Text('Basic Information', style: theme.textTheme.titleLarge),
@@ -324,9 +427,9 @@ class _SellerVerificationFormScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            if (widget.accountName != null) ...<Widget>[
+            if (accountName != null) ...<Widget>[
               TextFormField(
-                initialValue: widget.accountName,
+                initialValue: accountName,
                 readOnly: true,
                 decoration: const InputDecoration(
                   labelText: 'Full name',
@@ -336,6 +439,37 @@ class _SellerVerificationFormScreenState
               ),
               const SizedBox(height: AppSpacing.md),
             ],
+            TextFormField(
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              maxLength: kSellerVerificationPhoneMax,
+              enabled: !isSubmitting,
+              decoration: const InputDecoration(
+                labelText: 'Phone number',
+                helperText: 'Required for seller verification.',
+              ),
+              validator: (String? value) =>
+                  validateVerificationPhone(value) ??
+                  _controller.state.errorFor('phone'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _address,
+              keyboardType: TextInputType.streetAddress,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              maxLength: kSellerVerificationAddressMax,
+              enabled: !isSubmitting,
+              decoration: const InputDecoration(
+                labelText: 'Address',
+                helperText: 'Required. Your residential or barangay address.',
+              ),
+              validator: (String? value) =>
+                  validateVerificationAddress(value) ??
+                  _controller.state.errorFor('address'),
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _businessName,
               textCapitalization: TextCapitalization.words,
@@ -427,6 +561,8 @@ class _SellerVerificationFormScreenState
         onPick: () => _pick(VerificationDocumentType.idDocument),
         onRemove: () => _documents.remove(VerificationDocumentType.idDocument),
         onRetry: () => _documents.retry(VerificationDocumentType.idDocument),
+        onRetryPreview: () =>
+            _documents.loadPreview(VerificationDocumentType.idDocument),
       ),
       const SizedBox(height: AppSpacing.md),
       SellerVerificationDocumentCard(
@@ -445,6 +581,8 @@ class _SellerVerificationFormScreenState
             _documents.remove(VerificationDocumentType.proofOfAddress),
         onRetry: () =>
             _documents.retry(VerificationDocumentType.proofOfAddress),
+        onRetryPreview: () =>
+            _documents.loadPreview(VerificationDocumentType.proofOfAddress),
       ),
       const SizedBox(height: AppSpacing.md),
       SellerVerificationDocumentCard(
@@ -461,6 +599,8 @@ class _SellerVerificationFormScreenState
         onPick: () => _pick(VerificationDocumentType.selfie),
         onRemove: () => _documents.remove(VerificationDocumentType.selfie),
         onRetry: () => _documents.retry(VerificationDocumentType.selfie),
+        onRetryPreview: () =>
+            _documents.loadPreview(VerificationDocumentType.selfie),
       ),
       const SizedBox(height: AppSpacing.md),
       SellerVerificationFarmPhotosCard(
@@ -509,6 +649,8 @@ class _SellerVerificationFormScreenState
     SellerVerificationDocumentsState documents,
   ) {
     final ThemeData theme = Theme.of(context);
+    final String? accountName =
+        widget.accountName ?? _authController?.state.user?.name;
     final String businessName = _businessName.text.trim();
     final String location = _businessLocation.text.trim();
     final String description = _businessDescription.text.trim();
@@ -527,8 +669,20 @@ class _SellerVerificationFormScreenState
       SectionCard(
         title: 'Basic Information',
         children: <Widget>[
-          if (widget.accountName != null)
-            DetailRow(label: 'Full name', value: widget.accountName!),
+          if (accountName != null)
+            DetailRow(label: 'Full name', value: accountName),
+          DetailRow(
+            label: 'Phone number',
+            value: _phone.text.trim().isEmpty
+                ? 'Not provided'
+                : _phone.text.trim(),
+          ),
+          DetailRow(
+            label: 'Address',
+            value: _address.text.trim().isEmpty
+                ? 'Not provided'
+                : _address.text.trim(),
+          ),
           DetailRow(
             label: 'Business name',
             value: businessName.isEmpty ? 'Not provided' : businessName,

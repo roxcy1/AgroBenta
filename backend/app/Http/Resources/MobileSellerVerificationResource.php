@@ -19,8 +19,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * What is included, and why each is safe:
  *
- *  - `id`, and the four business fields the client itself just submitted. The
- *    client is echoing its own input back.
+ *  - `id`, the applicant's phone/address snapshots, and the business fields
+ *    supplied for this verification. They are the caller's own submitted data.
  *  - `status`, so the app can render pending, rejected, or approved.
  *  - `has_id_document`, `has_selfie` and `has_proof_of_address`, so the app can
  *    show which documents are on file without being handed their private paths,
@@ -54,6 +54,8 @@ class MobileSellerVerificationResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'phone' => $this->phone,
+            'address' => $this->address,
             'business_name' => $this->business_name,
             'business_location' => $this->business_location,
             'business_description' => $this->business_description,

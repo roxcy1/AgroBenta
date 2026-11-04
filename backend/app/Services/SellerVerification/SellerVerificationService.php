@@ -55,7 +55,7 @@ class SellerVerificationService
      * seller is refused earlier, by the request class, with `403` — that is a
      * different situation (nothing to submit) from a duplicate.
      *
-     * @param  array{business_name?: string|null, business_location?: string|null, business_description?: string|null, id_document_ref?: string|null}  $input
+     * @param  array{phone: string, address: string, business_name?: string|null, business_location?: string|null, business_description?: string|null, id_document_ref?: string|null}  $input
      *
      * @throws DomainException when the user already has an open verification.
      */
@@ -93,6 +93,8 @@ class SellerVerificationService
                 // (functional documentation §2.6).
                 $verification = SellerVerification::create([
                     'user_id' => $locked->id,
+                    'phone' => $input['phone'],
+                    'address' => $input['address'],
                     'business_name' => $input['business_name'] ?? null,
                     'business_location' => $input['business_location'] ?? null,
                     'business_description' => $input['business_description'] ?? null,

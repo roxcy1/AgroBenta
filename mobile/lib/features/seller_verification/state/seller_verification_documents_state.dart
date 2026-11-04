@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:image_picker/image_picker.dart';
 
 import '../../../models/seller_verification.dart';
@@ -22,7 +24,22 @@ enum VerificationDocumentStatus {
   /// The server confirmed and stored it.
   uploaded,
 
+  /// Submission confirmed that this file is no longer staged on the server.
+  needsUpload,
+
   /// The upload was refused or failed; retryable.
+  failed,
+}
+
+/// Retrieval state for a previously-uploaded document preview.
+///
+/// This is deliberately separate from [VerificationDocumentStatus]: a preview
+/// download failure does not change whether the server has the document.
+enum VerificationDocumentPreviewStatus {
+  idle,
+  loading,
+  loaded,
+  missing,
   failed,
 }
 
@@ -39,6 +56,11 @@ class VerificationDocument {
     this.progress,
     this.error,
     this.photoId,
+    this.previewStatus = VerificationDocumentPreviewStatus.idle,
+    this.previewBytes,
+    this.previewError,
+    this.previewRetryable = false,
+    this.hasPreviousRecordDocument = false,
   });
 
   /// Which document this slot holds.
@@ -58,6 +80,24 @@ class VerificationDocument {
   /// A displayable failure while [status] is [failed].
   final String? error;
 
+  /// Bytes fetched through the authenticated document endpoint.
+  final Uint8List? previewBytes;
+
+  /// State of the optional authenticated preview retrieval.
+  final VerificationDocumentPreviewStatus previewStatus;
+
+  /// Safe-to-display retrieval error, when [previewStatus] is [failed].
+  final String? previewError;
+
+  /// Whether a failed preview retrieval can be retried with the current session.
+  final bool previewRetryable;
+
+  /// Whether the previous verification record contains this document.
+  ///
+  /// A historical file can be previewed during resubmission, but it is not
+  /// staged for the new verification and therefore cannot satisfy submission.
+  final bool hasPreviousRecordDocument;
+
   /// Whether the server has confirmed this document is stored.
   bool get isUploaded => status == VerificationDocumentStatus.uploaded;
 
@@ -72,9 +112,16 @@ class VerificationDocument {
     XFile? file,
     double? progress,
     String? error,
+    VerificationDocumentPreviewStatus? previewStatus,
+    Uint8List? previewBytes,
+    String? previewError,
+    bool? previewRetryable,
+    bool? hasPreviousRecordDocument,
     bool clearFile = false,
     bool clearError = false,
     bool clearProgress = false,
+    bool clearPreviewBytes = false,
+    bool clearPreviewError = false,
   }) {
     return VerificationDocument(
       type: type,
@@ -83,6 +130,16 @@ class VerificationDocument {
       progress: clearProgress ? null : (progress ?? this.progress),
       error: clearError ? null : (error ?? this.error),
       photoId: photoId,
+      previewStatus: previewStatus ?? this.previewStatus,
+      previewBytes: clearPreviewBytes
+          ? null
+          : (previewBytes ?? this.previewBytes),
+      previewError: clearPreviewError
+          ? null
+          : (previewError ?? this.previewError),
+      previewRetryable: previewRetryable ?? this.previewRetryable,
+      hasPreviousRecordDocument:
+          hasPreviousRecordDocument ?? this.hasPreviousRecordDocument,
     );
   }
 
@@ -182,12 +239,11 @@ class SellerVerificationDocumentsState {
     ),
   };
 
-  /// Seeds the required slots as already uploaded, from a record that reports the
-  /// documents are on file with no locally-picked file.
+  /// Seeds the required slots from a previous verification record.
   ///
-  /// Used when opening a resubmission, so the flow knows which files the server
-  /// already holds. There is no local file to preview in this state — the bytes
-  /// live behind the authenticated fetch endpoint.
+  /// Historical files are previewable but are not staged for the new record.
+  /// Thus a present previous file is marked `needsUpload`, with its historical
+  /// existence kept separately for authenticated preview retrieval.
   static SellerVerificationDocumentsState fromRecord(
     SellerVerification verification,
   ) {
@@ -195,8 +251,9 @@ class SellerVerificationDocumentsState {
         VerificationDocument(
           type: type,
           status: present
-              ? VerificationDocumentStatus.uploaded
+              ? VerificationDocumentStatus.needsUpload
               : VerificationDocumentStatus.empty,
+          hasPreviousRecordDocument: present,
         );
 
     return SellerVerificationDocumentsState(

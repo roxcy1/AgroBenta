@@ -22,6 +22,8 @@ import 'auth_fakes.dart';
 /// `seller_verification_test.dart` asserts the model rejects them if they appear.
 Map<String, dynamic> sellerVerificationJson({
   Object? id = 4,
+  Object? phone = '09171234567',
+  Object? address = 'Trinidad, Bohol',
   String? businessName = 'Rizal Farms',
   Object? businessLocation = 'Mabalacat, Pampanga',
   Object? businessDescription = 'Family-run cattle farm, trading since 2011.',
@@ -37,6 +39,8 @@ Map<String, dynamic> sellerVerificationJson({
 }) {
   return <String, dynamic>{
     'id': id,
+    'phone': phone,
+    'address': address,
     'business_name': businessName,
     'business_location': businessLocation,
     'business_description': businessDescription,
@@ -144,11 +148,12 @@ http.Response sellerVerificationForbiddenResponse({
 
 /// A `422` with per-field errors, as `SubmitSellerVerificationRequest` produces.
 http.Response sellerVerificationValidationResponse({
+  String message = 'The given data was invalid.',
   Map<String, Object> errors = const <String, Object>{
     'business_name': <String>['The business name is required.'],
   },
 }) => http.Response(
-  jsonEncode(validationErrorBody(errors: errors)),
+  jsonEncode(validationErrorBody(message: message, errors: errors)),
   422,
   headers: <String, String>{'content-type': 'application/json'},
 );
