@@ -10,7 +10,9 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'user_id', 'phone', 'address', 'business_name', 'business_location', 'business_description',
-    'id_document_ref', 'id_document_path', 'selfie_path', 'proof_of_address_path',
+    'id_document_ref', 'government_id_type', 'government_id_description',
+    'has_no_back_image', 'id_document_path', 'id_document_front_path',
+    'id_document_back_path', 'selfie_path', 'proof_of_address_path',
     'farm_photo_paths', 'status', 'admin_note', 'reviewed_by', 'reviewed_at',
     'submitted_at',
 ])]
@@ -26,6 +28,7 @@ class SellerVerification extends Model
         return [
             'status' => Status::class,
             'farm_photo_paths' => 'array',
+            'has_no_back_image' => 'boolean',
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
         ];

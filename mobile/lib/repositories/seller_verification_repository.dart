@@ -50,6 +50,9 @@ class SellerVerificationRepository {
     String? businessLocation,
     String? businessDescription,
     String? idDocumentRef,
+    String governmentIdType = 'philippine_national_id',
+    String? governmentIdDescription,
+    bool hasNoBackImage = false,
   }) {
     return _service.submit(
       phone: phone,
@@ -58,6 +61,9 @@ class SellerVerificationRepository {
       businessLocation: businessLocation,
       businessDescription: businessDescription,
       idDocumentRef: idDocumentRef,
+      governmentIdType: governmentIdType,
+      governmentIdDescription: governmentIdDescription,
+      hasNoBackImage: hasNoBackImage,
     );
   }
 

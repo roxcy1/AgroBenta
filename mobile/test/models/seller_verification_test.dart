@@ -68,6 +68,13 @@ void main() {
         'Family-run cattle farm, trading since 2011.',
       );
       expect(verification.idDocumentRef, 'PHL-ID-88213');
+      expect(
+        verification.governmentIdType,
+        GovernmentIdType.philippineNationalId,
+      );
+      expect(verification.hasNoBackImage, isFalse);
+      expect(verification.hasIdDocumentFront, isTrue);
+      expect(verification.hasIdDocumentBack, isFalse);
       expect(verification.status, SellerVerificationStatus.rejected);
       expect(
         verification.adminNote,
@@ -77,6 +84,20 @@ void main() {
       expect(verification.reviewedAt, isNotNull);
       expect(verification.isRejected, isTrue);
       expect(verification.canResubmit, isTrue);
+    });
+
+    test('parses the Others description and one-sided declaration', () {
+      final SellerVerification verification = SellerVerification.fromJson(
+        sellerVerificationJson(
+          governmentIdType: 'others',
+          governmentIdDescription: 'Barangay ID',
+          hasNoBackImage: true,
+        ),
+      );
+
+      expect(verification.governmentIdType, GovernmentIdType.others);
+      expect(verification.governmentIdDescription, 'Barangay ID');
+      expect(verification.hasNoBackImage, isTrue);
     });
 
     test('tolerates every optional field being null', () {

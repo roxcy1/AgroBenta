@@ -22,6 +22,11 @@ export interface SellerVerification {
   business_location: string | null;
   business_description: string | null;
   id_document_ref: string | null;
+  government_id_type: string | null;
+  government_id_description: string | null;
+  has_no_back_image: boolean | null;
+  has_id_document_front: boolean;
+  has_id_document_back: boolean;
   status: 'submitted' | 'pending_review' | 'approved' | 'rejected';
   admin_note: string | null;
   submitted_at: string | null;

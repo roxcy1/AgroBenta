@@ -82,6 +82,8 @@ class MobileSellerVerificationTest extends TestCase
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm.',
             'id_document_ref' => 'ID-1234567',
+            'government_id_type' => 'philippine_national_id',
+            'has_no_back_image' => false,
             'status' => SellerVerificationStatus::Submitted,
             'admin_note' => null,
             'reviewed_by' => null,
@@ -102,6 +104,8 @@ class MobileSellerVerificationTest extends TestCase
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm since 1998.',
             'id_document_ref' => 'ID-1234567',
+            'government_id_type' => 'philippine_national_id',
+            'has_no_back_image' => false,
         ], $overrides);
     }
 
@@ -132,6 +136,13 @@ class MobileSellerVerificationTest extends TestCase
                 ])
                 ->assertCreated();
         }
+
+        $this->withToken($token)
+            ->post('/api/seller-verification/documents', [
+                'type' => SellerVerificationDocumentType::IdDocumentBack->value,
+                'document' => UploadedFile::fake()->image('id-back.png', 10, 10),
+            ])
+            ->assertCreated();
     }
 
     // -------------------------------------------------------------------
@@ -205,6 +216,8 @@ class MobileSellerVerificationTest extends TestCase
                 'phone' => '09171234567',
                 'address' => 'Trinidad, Bohol',
                 'business_name' => 'Only a name',
+                'government_id_type' => 'philippine_national_id',
+                'has_no_back_image' => false,
             ])
             ->assertCreated()
             ->assertJsonPath('data.business_name', 'Only a name')
@@ -223,6 +236,8 @@ class MobileSellerVerificationTest extends TestCase
                 'phone' => '09171234567',
                 'address' => 'Trinidad, Bohol',
                 'business_location' => 'Mabalacat, Pampanga',
+                'government_id_type' => 'philippine_national_id',
+                'has_no_back_image' => false,
             ])
             ->assertCreated()
             ->assertJsonPath('data.business_name', null);

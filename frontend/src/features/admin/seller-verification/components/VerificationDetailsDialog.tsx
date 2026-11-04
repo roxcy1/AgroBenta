@@ -8,6 +8,10 @@ import {
 } from '../api/useSellerVerifications';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime } from '../../../../lib/format';
+import {
+  applicantDeclaredNoBackImage,
+  governmentIdTypeLabel,
+} from './verificationDetails';
 
 interface VerificationDetailsDialogProps {
   verificationId: number;
@@ -192,18 +196,36 @@ export default function VerificationDetailsDialog({
           ],
         },
         {
-          title: 'Identity document',
-          rows: [['Reference', orDash(verification.id_document_ref)]],
+          title: 'Government ID information',
+          rows: [
+            ['ID type', governmentIdTypeLabel(verification.government_id_type)],
+            ...(verification.government_id_type === 'others'
+              ? [['Specify Government ID', orDash(verification.government_id_description)] as [string, ReactNode]]
+              : []),
+            ['Reference', orDash(verification.id_document_ref)],
+          ],
         },
         {
-          title: 'Government-issued ID',
+          title: 'Government ID images',
           content: (
             <dl className="lv-detail-list">
               <DocumentViewer
-                fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document')}
-                label="Government-issued ID"
-                present={verification.has_id_document}
+                fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_front')}
+                label="Government ID — Front"
+                present={verification.has_id_document_front || verification.has_id_document}
               />
+              {applicantDeclaredNoBackImage(verification) ? (
+                <div className="lv-detail-item">
+                  <dt className="lv-detail-label">Government ID — Back</dt>
+                  <dd className="lv-detail-value">Applicant declared no back image</dd>
+                </div>
+              ) : (
+                <DocumentViewer
+                  fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_back')}
+                  label="Government ID — Back"
+                  present={verification.has_id_document_back}
+                />
+              )}
             </dl>
           ),
         },

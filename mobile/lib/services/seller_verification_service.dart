@@ -84,6 +84,9 @@ class SellerVerificationService {
     String? businessLocation,
     String? businessDescription,
     String? idDocumentRef,
+    String governmentIdType = 'philippine_national_id',
+    String? governmentIdDescription,
+    bool hasNoBackImage = false,
   }) {
     return _apiClient.post<SellerVerification>(
       SellerVerificationEndpoints.submit,
@@ -98,6 +101,10 @@ class SellerVerificationService {
         if (_present(businessDescription))
           'business_description': businessDescription!.trim(),
         if (_present(idDocumentRef)) 'id_document_ref': idDocumentRef!.trim(),
+        'government_id_type': governmentIdType,
+        if (_present(governmentIdDescription))
+          'government_id_description': governmentIdDescription!.trim(),
+        'has_no_back_image': hasNoBackImage,
       },
       parse: (Object? data) => SellerVerification.fromJson(
         _asObject(data, 'POST /seller-verification'),
