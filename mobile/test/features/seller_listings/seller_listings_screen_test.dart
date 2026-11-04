@@ -106,6 +106,61 @@ void main() {
     expect(find.byType(SellerListingFormScreen), findsOneWidget);
   });
 
+  testWidgets('offers All, Drafts, Pending, Active, Sold and Inactive filters', (
+    WidgetTester tester,
+  ) async {
+    final harness = await SellerListingsHarness.pump(
+      tester,
+      handler: (_) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[listingJson(id: 1, status: 'active')],
+      ),
+    );
+
+    for (final String label in <String>[
+      'All',
+      'Drafts',
+      'Pending review',
+      'Active',
+      'Sold',
+      'Inactive',
+    ]) {
+      expect(find.text(label), findsWidgets, reason: 'missing $label chip');
+    }
+
+    await tester.tap(find.text('Inactive'));
+    await tester.pumpAndSettle();
+    expect(harness.recorded.last.query['status'], 'inactive');
+
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+    expect(harness.recorded.last.query.containsKey('status'), isFalse);
+  });
+
+  testWidgets('compact actions fit a narrow screen without overflow', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (_) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(id: 1, status: 'active'),
+          listingJson(id: 2, status: 'pending'),
+          listingJson(id: 3, status: 'sold'),
+        ],
+        total: 3,
+      ),
+    );
+
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Mark sold'), findsOneWidget);
+    expect(find.text('View'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tapping a card opens its detail', (WidgetTester tester) async {
     await SellerListingsHarness.pump(
       tester,
@@ -138,7 +193,7 @@ void main() {
 
     expect(find.text(listingPhotoRequirementMessage), findsOneWidget);
     final TextButton submit = tester.widget<TextButton>(
-      find.widgetWithText(TextButton, 'Submit for review'),
+      find.widgetWithText(TextButton, 'Submit'),
     );
     expect(submit.onPressed, isNull);
   });
@@ -163,7 +218,7 @@ void main() {
 
     expect(find.text(listingPhotoRequirementMessage), findsNothing);
     final TextButton submit = tester.widget<TextButton>(
-      find.widgetWithText(TextButton, 'Submit for review'),
+      find.widgetWithText(TextButton, 'Submit'),
     );
     expect(submit.onPressed, isNotNull);
   });
@@ -204,7 +259,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Mark as sold'), findsOneWidget);
+    expect(find.text('Mark sold'), findsOneWidget);
   });
 
   testWidgets('a pending listing does not offer Mark as sold', (
@@ -220,7 +275,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Mark as sold'), findsNothing);
+    expect(find.text('Mark sold'), findsNothing);
   });
 
   testWidgets('confirming Mark as sold shows sold status', (
@@ -243,7 +298,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.text('Mark as sold'));
+    await tester.tap(find.text('Mark sold'));
     await sellerListingsSettle(tester);
 
     // Confirmation dialog appears.

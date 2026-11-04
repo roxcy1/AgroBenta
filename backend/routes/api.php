@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
 use App\Http\Controllers\Api\Offer\OfferController;
 use App\Http\Controllers\Api\Profile\ProfileController;
+use App\Http\Controllers\Api\SellerActivity\SellerActivityController;
 use App\Http\Controllers\Api\SellerDashboard\SellerDashboardController;
 use App\Http\Controllers\Api\SellerInquiry\SellerInquiryController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
@@ -158,6 +159,15 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
     ->prefix('seller/dashboard')
     ->group(function (): void {
         Route::get('/', [SellerDashboardController::class, 'show']);
+    });
+
+// The seller's recent activity: allow-listed, genuinely recorded events from
+// the existing `activities` audit table. Ownership is applied in the repository
+// from the token; `limit` is the only accepted parameter.
+Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
+    ->prefix('seller/activities')
+    ->group(function (): void {
+        Route::get('/', [SellerActivityController::class, 'index']);
     });
 
 // Transactions — the caller's own transactions as buyer or seller.

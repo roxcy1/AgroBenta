@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../models/inquiry.dart';
 import '../../../models/received_inquiry.dart';
 import '../../../widgets/paged_list_state_views.dart';
+import '../../auth/state/auth_scope.dart';
+import '../../messaging/view/chat_screen.dart';
 import '../../offers/view/make_offer_screen.dart';
+import '../../../models/conversation.dart';
+import '../../../models/message.dart';
 import '../state/inquiry_scope.dart';
 import '../state/received_inquiries_controller.dart';
 import '../state/received_inquiries_state.dart';
@@ -85,6 +90,58 @@ class _ReceivedInquiriesScreenState extends State<ReceivedInquiriesScreen> {
       return null;
     }
     return () => _openMakeOffer(inquiry);
+  }
+
+  /// Opens the existing buyer–seller conversation.
+  ///
+  /// Conversations are derived from the message pair, so this never creates a
+  /// second thread: tapping the action opens whatever history the two users
+  /// already share (an empty thread when they have not written yet, where the
+  /// composer starts the conversation through the existing send path).
+  /// `listing_id` is deliberately not passed: the thread is the pair, and
+  /// filtering it by one listing would hide the rest of the history.
+  Future<void> _openConversation(ReceivedInquiry inquiry) async {
+    final InquiryBuyer? buyer = inquiry.buyer;
+    if (buyer == null) {
+      return;
+    }
+
+    final int currentUserId = AuthScope.of(context).state.user?.id ?? 0;
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ChatScreen(
+          counterpart: ChatUser(
+            id: buyer.id,
+            name: buyer.name,
+            avatarUrl: null,
+          ),
+          currentUserId: currentUserId,
+          counterpartRole: 'Buyer',
+          offerInquiry: _eligibleOffer(inquiry),
+        ),
+      ),
+    );
+  }
+
+  /// The in-chat offer action, when the server says this inquiry is eligible
+  /// and the listing projection needed to prefill the form is present.
+  ConversationEligibleInquiry? _eligibleOffer(ReceivedInquiry inquiry) {
+    final InquiryListing? listing = inquiry.listing;
+    if (!inquiry.canMakeOffer || listing == null) {
+      return null;
+    }
+
+    return ConversationEligibleInquiry(
+      id: inquiry.id,
+      listingId: listing.id,
+      listingTitle: listing.title,
+      askingPrice: listing.askingPrice,
+      photoUrl: listing.photoUrl,
+      paymentMethod: inquiry.paymentMethod,
+      collectionMethod: inquiry.collectionMethod,
+      preferredSchedule: inquiry.preferredSchedule,
+    );
   }
 
   @override
@@ -186,6 +243,9 @@ class _ReceivedInquiriesScreenState extends State<ReceivedInquiriesScreen> {
                               ReceivedInquiryCard(
                                 inquiry: inquiry,
                                 onMakeOffer: _makeOfferAction(inquiry),
+                                onOpenConversation: inquiry.buyer == null
+                                    ? null
+                                    : () => _openConversation(inquiry),
                               ),
                             ],
                           );
@@ -193,6 +253,9 @@ class _ReceivedInquiriesScreenState extends State<ReceivedInquiriesScreen> {
                         return ReceivedInquiryCard(
                           inquiry: inquiry,
                           onMakeOffer: _makeOfferAction(inquiry),
+                          onOpenConversation: inquiry.buyer == null
+                              ? null
+                              : () => _openConversation(inquiry),
                         );
                       },
                     ),

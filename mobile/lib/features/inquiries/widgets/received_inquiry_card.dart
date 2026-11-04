@@ -21,15 +21,18 @@ class ReceivedInquiryCard extends StatelessWidget {
   const ReceivedInquiryCard({
     required this.inquiry,
     this.onMakeOffer,
+    this.onOpenConversation,
     super.key,
   });
 
   final ReceivedInquiry inquiry;
 
-  /// Opens the make-offer form for this inquiry. `null` when the buyer or
-  /// listing projection is missing, because an offer without them cannot be
-  /// created truthfully.
+  /// Opens the make-offer form; `null` hides the action.
   final VoidCallback? onMakeOffer;
+
+  /// Opens the existing buyer–seller chat. `null` hides the action (no buyer
+  /// projection, so the counterpart is unknown).
+  final VoidCallback? onOpenConversation;
 
   @override
   Widget build(BuildContext context) {
@@ -146,15 +149,26 @@ class ReceivedInquiryCard extends StatelessWidget {
                 Text(deliveryFee, style: theme.textTheme.bodySmall),
               ],
             ],
-            if (onMakeOffer != null) ...<Widget>[
+            if (onMakeOffer != null || onOpenConversation != null) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: onMakeOffer,
-                  icon: const Icon(Icons.local_offer_outlined, size: 18),
-                  label: const Text('Make an offer'),
-                ),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xxs,
+                children: <Widget>[
+                  if (onOpenConversation != null)
+                    OutlinedButton.icon(
+                      onPressed: onOpenConversation,
+                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      label: const Text('Open conversation'),
+                    ),
+                  if (onMakeOffer != null)
+                    FilledButton.icon(
+                      onPressed: onMakeOffer,
+                      icon: const Icon(Icons.local_offer_outlined, size: 18),
+                      label: const Text('Make an offer'),
+                    ),
+                ],
               ),
             ],
           ],

@@ -147,6 +147,7 @@ class SellerListingCard extends StatelessWidget {
           _ActionBar(
             listing: listing,
             busy: busy,
+            onView: onTap,
             onSubmit: onSubmit,
             onMarkSold: onMarkSold,
             onEdit: onEdit,
@@ -184,6 +185,7 @@ class _ActionBar extends StatelessWidget {
   const _ActionBar({
     required this.listing,
     required this.busy,
+    required this.onView,
     required this.onSubmit,
     required this.onMarkSold,
     required this.onEdit,
@@ -192,6 +194,7 @@ class _ActionBar extends StatelessWidget {
 
   final Listing listing;
   final bool busy;
+  final VoidCallback onView;
   final VoidCallback onSubmit;
   final VoidCallback onMarkSold;
   final VoidCallback onEdit;
@@ -200,129 +203,126 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    // The list card offers actions per status:
-    //   draft -> Edit + Submit for review
-    //   active -> Edit + Mark as sold
-    //   inactive -> Delete
-    // pending / sold have no client-side action at all; see the no-action branch.
     final bool canSubmit = SellerListingController.canSubmit(listing);
     final bool canMarkSold = SellerListingController.canMarkSold(listing);
-    final bool canDelete = listing.status == ListingStatus.inactive;
     final bool hasPhotos = SellerListingController.hasSubmissionPhotos(listing);
 
-    if (!canSubmit && !canMarkSold && !canDelete) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.sm,
-          AppSpacing.sm,
-          AppSpacing.sm,
-          AppSpacing.md,
-        ),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.border)),
-        ),
-        child: Text(
-          listingStatusExplanation(listing.status),
-          style: theme.textTheme.bodySmall,
-        ),
-      );
-    }
-
-    Widget actionWidget = const SizedBox.shrink();
+    final List<Widget> actions = <Widget>[];
     switch (listing.status) {
       case ListingStatus.draft:
-        // A draft is unfinished work: the seller may keep editing it or send
-        // it for review. They are separate buttons rather than one flow
-        // because editing stays a draft while submitting leaves it.
-        actionWidget = busy
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                  child: SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  if (!hasPhotos) ...<Widget>[
-                    const Padding(
-                      padding: EdgeInsets.only(top: AppSpacing.sm),
-                      child: ListingPhotoRequirementNotice(),
-                    ),
-                    const SizedBox(height: AppSpacing.xxs),
-                  ],
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: TextButton.icon(
-                          onPressed: onEdit,
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                          label: const Text('Edit'),
-                        ),
-                      ),
-                      Expanded(
-                        child: TextButton.icon(
-                          onPressed: hasPhotos ? onSubmit : null,
-                          icon: const Icon(Icons.send_outlined, size: 18),
-                          label: const Text('Submit for review'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
+        actions.add(_compactAction(
+          icon: Icons.edit_outlined,
+          label: 'Edit',
+          onPressed: onEdit,
+        ));
+        actions.add(_compactAction(
+          icon: Icons.send_outlined,
+          label: 'Submit',
+          onPressed: hasPhotos ? onSubmit : null,
+        ));
         break;
       case ListingStatus.active:
-        actionWidget = busy
-            ? const SizedBox.shrink()
-            : Row(
-                children: <Widget>[
-                  Expanded(
-                    child: TextButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text('Edit'),
-                    ),
-                  ),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onMarkSold,
-                      icon: const Icon(Icons.done_outline, size: 18),
-                      label: const Text('Mark as sold'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.sold,
-                      ),
-                    ),
-                  ),
-                ],
-              );
+        actions.add(_compactAction(
+          icon: Icons.edit_outlined,
+          label: 'Edit',
+          onPressed: onEdit,
+        ));
+        actions.add(_compactAction(
+          icon: Icons.done_outline,
+          label: 'Mark sold',
+          onPressed: canMarkSold ? onMarkSold : null,
+          color: AppColors.sold,
+        ));
+        break;
+      case ListingStatus.pending:
+      case ListingStatus.sold:
+        actions.add(_compactAction(
+          icon: Icons.visibility_outlined,
+          label: 'View',
+          onPressed: onView,
+        ));
         break;
       case ListingStatus.inactive:
-        actionWidget = busy
-            ? const SizedBox.shrink()
-            : TextButton.icon(
-                onPressed: onDelete,
-                style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Delete'),
-              );
-        break;
-      default:
-        // pending / sold: no action — the early return above already displayed a
-        // reason. Included to keep the switch exhaustive.
+        actions.add(_compactAction(
+          icon: Icons.delete_outline,
+          label: 'Delete',
+          onPressed: onDelete,
+          color: AppColors.error,
+        ));
         break;
     }
+
+    final bool showExplanation = !canSubmit && !canMarkSold &&
+        listing.status != ListingStatus.inactive;
 
     return Container(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      child: actionWidget,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        AppSpacing.xxs,
+        AppSpacing.sm,
+        AppSpacing.xxs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (listing.status == ListingStatus.draft && !hasPhotos)
+            const Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.xxs),
+              child: ListingPhotoRequirementNotice(),
+            ),
+          if (showExplanation)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
+              child: Text(
+                listingStatusExplanation(listing.status),
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          if (busy)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (actions.isNotEmpty)
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.xxs,
+              runSpacing: AppSpacing.xxs,
+              children: actions,
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// A compact, right-aligned action: icon plus a short label, with a 44dp
+  /// minimum height so the touch target stays usable in the dense card footer.
+  Widget _compactAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    Color? color,
+  }) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: color,
+        minimumSize: const Size(0, 44),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+        visualDensity: VisualDensity.compact,
+      ),
+      icon: Icon(icon, size: 18),
+      label: Text(label),
     );
   }
 }

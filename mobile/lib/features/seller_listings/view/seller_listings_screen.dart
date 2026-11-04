@@ -268,9 +268,12 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                 ),
               ],
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _controller.refresh,
-                  child: switch (state.status) {
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    child: RefreshIndicator(
+                      onRefresh: _controller.refresh,
+                      child: switch (state.status) {
                     SellerListingStatus.initial ||
                     SellerListingStatus.loading =>
                       const SellerListingsSkeleton(),
@@ -312,6 +315,8 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                       onDelete: _confirmDelete,
                     ),
                   },
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -456,11 +461,13 @@ class _StatusFilterBar extends StatelessWidget {
   final ListingStatus? selected;
   final ValueChanged<ListingStatus?> onSelected;
 
-  static const List<ListingStatus> _filters = <ListingStatus>[
-    ListingStatus.active,
-    ListingStatus.pending,
-    ListingStatus.sold,
+  static const List<ListingStatus?> _filters = <ListingStatus?>[
+    null,
     ListingStatus.draft,
+    ListingStatus.pending,
+    ListingStatus.active,
+    ListingStatus.sold,
+    ListingStatus.inactive,
   ];
 
   @override
@@ -476,9 +483,11 @@ class _StatusFilterBar extends StatelessWidget {
         separatorBuilder: (BuildContext context, int index) =>
             const SizedBox(width: AppSpacing.xs),
         itemBuilder: (BuildContext context, int index) {
-          final ListingStatus status = _filters[index];
+          final ListingStatus? status = _filters[index];
           final bool isSelected = status == selected;
-          final String label = status == ListingStatus.draft
+          final String label = status == null
+              ? 'All'
+              : status == ListingStatus.draft
               ? 'Drafts'
               : listingStatusLabel(status);
 

@@ -1,6 +1,13 @@
+import 'dart:convert';
+
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
+import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
+import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/view/received_inquiries_screen.dart';
+import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
+import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
+import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
 import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
 import 'package:agrobenta_mobile/features/offers/view/make_offer_screen.dart';
 import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
@@ -10,6 +17,7 @@ import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
 import '../../support/inquiry_fakes.dart';
+import '../../support/messaging_fakes.dart';
 import '../../support/offer_fakes.dart';
 
 void main() {
@@ -233,5 +241,113 @@ void main() {
       findsWidgets,
       reason: 'the offer form names the inquiry buyer',
     );
+  });
+
+  testWidgets('Open Conversation opens the pair chat without creating a thread', (
+    WidgetTester tester,
+  ) async {
+    final InquiryRepository repository = buildInquiryRepository(
+      tokenStore,
+      (_) async => sellerInquiryListResponse(
+        inquiries: <Map<String, dynamic>>[
+          sellerInquiryJson(buyer: inquiryBuyerJson(id: 9, name: 'Maria Santos')),
+        ],
+      ),
+      recorded: recorded,
+    );
+    final offerRepository = buildOfferRepository(
+      tokenStore,
+      (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
+      recorded: recorded,
+    );
+    final messagingRepository = buildMessagingRepository(
+      tokenStore,
+      (RecordedRequest request) async {
+        if (request.method == 'GET' && request.apiPath.endsWith('/messages')) {
+          return messageThreadResponse();
+        }
+        return threadReadResponse();
+      },
+      recorded: recorded,
+    );
+    final ConversationsController conversationsController =
+        ConversationsController(messagingRepository);
+    addTearDown(conversationsController.dispose);
+
+    final AuthController authController = AuthController(
+      buildAuthRepository(
+        tokenStore,
+        (_) async => http.Response(
+          jsonEncode(successEnvelope(data: userJson(id: 3))),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        ),
+      ),
+    );
+    addTearDown(authController.dispose);
+    tokenStore.token = 'stored-token';
+    await authController.restoreSession();
+
+    tester.view.physicalSize = const Size(800, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      InquiryScope(
+        repository: repository,
+        child: OfferScope(
+          repository: offerRepository,
+          child: MessagingScope(
+            repository: messagingRepository,
+            conversationsController: conversationsController,
+            child: AuthScope(
+              controller: authController,
+              child: MaterialApp(
+                theme: AppTheme.light(),
+                home: const ReceivedInquiriesScreen(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+
+    await tester.ensureVisible(find.text('Open conversation'));
+    await tester.pump();
+    await tester.tap(find.text('Open conversation'));
+    await settle(tester);
+
+    expect(find.byType(ChatScreen), findsOneWidget);
+    expect(find.text('Maria Santos'), findsWidgets);
+    expect(
+      recorded.where(
+        (RecordedRequest r) =>
+            r.method == 'GET' && r.apiPath == '/conversations/9/messages',
+      ),
+      hasLength(1),
+      reason: 'the existing buyer–seller thread is loaded by pair id',
+    );
+    expect(
+      recorded.where((RecordedRequest r) => r.apiPath == '/messages'),
+      isEmpty,
+      reason: 'opening a conversation must not send or create a message',
+    );
+  });
+
+  testWidgets('an inquiry without a buyer projection hides the chat action', (
+    WidgetTester tester,
+  ) async {
+    final Map<String, dynamic> inquiry = sellerInquiryJson();
+    inquiry['buyer'] = null;
+
+    await pumpScreen(
+      tester,
+      (_) async => sellerInquiryListResponse(
+        inquiries: <Map<String, dynamic>>[inquiry],
+      ),
+    );
+
+    expect(find.text('Open conversation'), findsNothing);
   });
 }
