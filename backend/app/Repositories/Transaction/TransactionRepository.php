@@ -71,6 +71,9 @@ class TransactionRepository
         return [
             'total' => $total,
             'pending' => (int) ($counts[TransactionStatus::Pending->value] ?? 0),
+            // Genuinely completed only; the dashboard's "Completed Sales" tile
+            // reads this and never derives a completion from any other state.
+            'completed' => (int) ($counts[TransactionStatus::Completed->value] ?? 0),
         ];
     }
 

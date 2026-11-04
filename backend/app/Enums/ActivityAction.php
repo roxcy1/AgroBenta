@@ -67,6 +67,7 @@ enum ActivityAction: string
             self::SellerVerificationRejected => 'Seller verification rejected',
             self::TransactionCreated => 'Transaction created',
             self::TransactionCancelled => 'Transaction cancelled',
+            self::InquiryCreated => 'Inquiry created',
             self::InquiryStatusUpdated => 'Inquiry status updated',
             self::InquiryDeleted => 'Inquiry deleted',
             self::OfferCreated => 'Offer created',

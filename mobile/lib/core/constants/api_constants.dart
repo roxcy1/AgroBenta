@@ -598,6 +598,18 @@ abstract final class SellerDashboardEndpoints {
   static const String summary = '/seller/dashboard';
 }
 
+abstract final class SellerActivityEndpoints {
+  /// `GET` - the seller's recent activity feed, newest first. 200, plain
+  /// envelope. Query allow-list is `limit` (1–20); ownership is the token.
+  static const String list = '/seller/activities';
+
+  /// Default number of events requested.
+  static const int defaultLimit = 5;
+
+  /// Default page size for the All Activities screen.
+  static const int defaultPageSize = 15;
+}
+
 /// Purchase-offer endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` under

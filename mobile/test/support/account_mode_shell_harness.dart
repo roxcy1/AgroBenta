@@ -19,6 +19,7 @@ import 'package:agrobenta_mobile/features/notifications/state/notifications_cont
 import 'package:agrobenta_mobile/features/notifications/state/notifications_scope.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_controller.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_scope.dart';
+import 'package:agrobenta_mobile/features/seller_dashboard/state/seller_activity_scope.dart';
 import 'package:agrobenta_mobile/features/seller_dashboard/state/seller_dashboard_scope.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_controller.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_scope.dart';
@@ -115,6 +116,8 @@ class AccountModeShellHarness {
           return sellerInquiryListResponse();
         case '/seller/dashboard':
           return sellerDashboardResponse();
+        case '/seller/activities':
+          return sellerActivityResponse();
         case '/listings':
           return marketplaceListResponse(
             listings: <Map<String, dynamic>>[],
@@ -207,6 +210,12 @@ class AccountModeShellHarness {
       recorded: recorded,
     );
 
+    final sellerActivityRepository = buildSellerActivityRepository(
+      tokenStore,
+      transport,
+      recorded: recorded,
+    );
+
     final InquiryRepository inquiryRepository = InquiryRepository(
       InquiryService(
         ApiClient(
@@ -247,10 +256,13 @@ class AccountModeShellHarness {
                           repository: inquiryRepository,
                           child: SellerDashboardScope(
                             repository: sellerDashboardRepository,
-                            child: NeverSubmittedVerificationScope(
-                              child: MaterialApp(
-                                theme: AppTheme.light(),
-                                home: const AccountModeShell(),
+                            child: SellerActivityScope(
+                              repository: sellerActivityRepository,
+                              child: NeverSubmittedVerificationScope(
+                                child: MaterialApp(
+                                  theme: AppTheme.light(),
+                                  home: const AccountModeShell(),
+                                ),
                               ),
                             ),
                           ),

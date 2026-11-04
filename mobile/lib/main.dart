@@ -21,6 +21,7 @@ import 'features/messaging/state/messaging_scope.dart';
 import 'features/offers/state/offer_scope.dart';
 import 'features/profile/state/profile_controller.dart';
 import 'features/profile/state/profile_scope.dart';
+import 'features/seller_dashboard/state/seller_activity_scope.dart';
 import 'features/seller_dashboard/state/seller_dashboard_scope.dart';
 import 'features/seller_listings/state/seller_listing_controller.dart';
 import 'features/seller_listings/state/seller_listing_scope.dart';
@@ -34,6 +35,7 @@ import 'repositories/marketplace_repository.dart';
 import 'repositories/messaging_repository.dart';
 import 'repositories/offer_repository.dart';
 import 'repositories/profile_repository.dart';
+import 'repositories/seller_activity_repository.dart';
 import 'repositories/seller_dashboard_repository.dart';
 import 'repositories/seller_listing_repository.dart';
 import 'repositories/seller_verification_repository.dart';
@@ -45,6 +47,7 @@ import 'services/marketplace_service.dart';
 import 'services/messaging_service.dart';
 import 'services/offer_service.dart';
 import 'services/profile_service.dart';
+import 'services/seller_activity_service.dart';
 import 'services/seller_dashboard_service.dart';
 import 'services/seller_listing_service.dart';
 import 'services/seller_verification_service.dart';
@@ -107,6 +110,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final SellerListingController _sellerListingController;
   late final SellerDashboardService _sellerDashboardService;
   late final SellerDashboardRepository _sellerDashboardRepository;
+  late final SellerActivityService _sellerActivityService;
+  late final SellerActivityRepository _sellerActivityRepository;
   late final ProfileService _profileService;
   late final ProfileRepository _profileRepository;
   late final ProfileController _profileController;
@@ -176,6 +181,10 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _sellerDashboardService = SellerDashboardService(_apiClient);
     _sellerDashboardRepository = SellerDashboardRepository(
       _sellerDashboardService,
+    );
+    _sellerActivityService = SellerActivityService(_apiClient);
+    _sellerActivityRepository = SellerActivityRepository(
+      _sellerActivityService,
     );
 
     // Profile. Session-scoped like the others so the profile loaded once is not
@@ -328,12 +337,15 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                             // is long-lived.
                             child: SellerDashboardScope(
                               repository: _sellerDashboardRepository,
-                              child: MaterialApp(
-                                title: 'AgroBenta',
-                                debugShowCheckedModeBanner: false,
-                                theme: AppTheme.light(),
-                                home: AuthGate(
-                                  authenticatedView: _buildAccountModeShell,
+                              child: SellerActivityScope(
+                                repository: _sellerActivityRepository,
+                                child: MaterialApp(
+                                  title: 'AgroBenta',
+                                  debugShowCheckedModeBanner: false,
+                                  theme: AppTheme.light(),
+                                  home: AuthGate(
+                                    authenticatedView: _buildAccountModeShell,
+                                  ),
                                 ),
                               ),
                             ),

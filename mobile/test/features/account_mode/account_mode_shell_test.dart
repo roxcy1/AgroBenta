@@ -82,12 +82,11 @@ void main() {
     harness.select(AccountMode.seller);
     await settleAccountModeShell(tester);
 
-    expect(find.text('Total listings across every status'), findsOneWidget);
-    expect(find.text('6'), findsOneWidget);
-    expect(find.text('Awaiting review'), findsOneWidget);
-    expect(find.text('3 inquiries'), findsOneWidget);
-    expect(find.text('4 recorded transactions'), findsOneWidget);
-    expect(find.text('2 pending transactions.'), findsOneWidget);
+    expect(find.text('Active Listings'), findsOneWidget);
+    expect(find.text('Inquiries'), findsOneWidget);
+    expect(find.text('Ongoing Transactions'), findsOneWidget);
+    expect(find.text('Completed Sales'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
     expect(
       harness.recorded
           .where((RecordedRequest r) => r.apiPath == '/seller/dashboard')
@@ -106,7 +105,9 @@ void main() {
     harness.select(AccountMode.seller);
     await settleAccountModeShell(tester);
 
-    await tester.tap(find.text('Manage listings'));
+    await tester.ensureVisible(find.text('Active Listings'));
+    await tester.pump();
+    await tester.tap(find.text('Active Listings'));
     await tester.pump();
 
     final IndexedStack stack = tester.widget<IndexedStack>(
@@ -124,9 +125,9 @@ void main() {
     harness.select(AccountMode.seller);
     await settleAccountModeShell(tester);
 
-    await tester.ensureVisible(find.text('View transactions'));
+    await tester.ensureVisible(find.text('Ongoing Transactions'));
     await tester.pump();
-    await tester.tap(find.text('View transactions'));
+    await tester.tap(find.text('Ongoing Transactions'));
     await tester.pump();
 
     final IndexedStack stack = tester.widget<IndexedStack>(
@@ -155,7 +156,7 @@ void main() {
     expect(
       harness.recorded
           .where((RecordedRequest r) => r.apiPath == '/seller/inquiries')
-          .single
+          .last
           .query,
       <String, String>{'page': '1', 'per_page': '15'},
     );
