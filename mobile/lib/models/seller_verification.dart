@@ -100,6 +100,8 @@ enum VerificationDocumentType {
 class SellerVerification {
   const SellerVerification({
     required this.id,
+    required this.phone,
+    required this.address,
     required this.businessName,
     required this.businessLocation,
     required this.businessDescription,
@@ -136,6 +138,8 @@ class SellerVerification {
 
     return SellerVerification(
       id: readInt(json, 'id'),
+      phone: readNullableString(json, 'phone'),
+      address: readNullableString(json, 'address'),
       businessName: readNullableString(json, 'business_name'),
       businessLocation: readNullableString(json, 'business_location'),
       businessDescription: readNullableString(json, 'business_description'),
@@ -153,6 +157,14 @@ class SellerVerification {
 
   /// `seller_verifications.id`.
   final int id;
+
+  /// Contact phone snapshot supplied with this verification. Nullable on
+  /// legacy records created before the snapshot fields were introduced.
+  final String? phone;
+
+  /// Applicant address snapshot supplied with this verification. Nullable on
+  /// legacy records created before the snapshot fields were introduced.
+  final String? address;
 
   /// The farm or business name. Optional, so `null` when it was left blank.
   final String? businessName;

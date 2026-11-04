@@ -38,6 +38,8 @@ class SellerVerificationTest extends TestCase
 
         return SellerVerification::create(array_merge([
             'user_id' => $seller->id,
+            'phone' => '09171234567',
+            'address' => 'Trinidad, Bohol',
             'business_name' => 'Test Livestock Farm',
             'business_location' => 'Bukidnon',
             'business_description' => 'A test livestock farm',
@@ -53,6 +55,8 @@ class SellerVerificationTest extends TestCase
     {
         return SellerVerification::create(array_merge([
             'user_id' => $seller->id,
+            'phone' => '09171234567',
+            'address' => 'Trinidad, Bohol',
             'business_name' => 'Test Livestock Farm',
             'business_location' => 'Bukidnon',
             'business_description' => 'A test livestock farm',
@@ -107,6 +111,8 @@ class SellerVerificationTest extends TestCase
                     '*' => [
                         'id',
                         'seller',
+                        'phone',
+                        'address',
                         'business_name',
                         'business_location',
                         'business_description',
@@ -194,6 +200,21 @@ class SellerVerificationTest extends TestCase
 
         $nullable->assertStatus(200);
         $nullable->assertJsonPath('data.id_document_ref', null);
+    }
+
+    public function test_phone_and_address_snapshots_are_exposed_to_admin_review(): void
+    {
+        $verification = $this->createVerification([
+            'phone' => '09987654321',
+            'address' => 'Poblacion, Trinidad, Bohol',
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/seller-verifications/{$verification->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('data.phone', '09987654321')
+            ->assertJsonPath('data.address', 'Poblacion, Trinidad, Bohol');
     }
 
     public function test_filter_by_status(): void

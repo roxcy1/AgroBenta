@@ -76,6 +76,8 @@ class MobileSellerVerificationTest extends TestCase
     {
         return SellerVerification::create(array_merge([
             'user_id' => $user->id,
+            'phone' => '09171234567',
+            'address' => 'Trinidad, Bohol',
             'business_name' => 'Reyes Livestock',
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm.',
@@ -94,6 +96,8 @@ class MobileSellerVerificationTest extends TestCase
     private function payload(array $overrides = []): array
     {
         return array_merge([
+            'phone' => '09171234567',
+            'address' => 'Trinidad, Bohol',
             'business_name' => 'Reyes Livestock',
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm since 1998.',
@@ -145,6 +149,8 @@ class MobileSellerVerificationTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', SellerVerificationStatus::Submitted->value)
+            ->assertJsonPath('data.phone', '09171234567')
+            ->assertJsonPath('data.address', 'Trinidad, Bohol')
             ->assertJsonPath('data.business_name', 'Reyes Livestock')
             ->assertJsonPath('data.business_location', 'Mabalacat, Pampanga')
             ->assertJsonPath('data.business_description', 'Family cattle farm since 1998.')
@@ -156,7 +162,21 @@ class MobileSellerVerificationTest extends TestCase
         $this->assertDatabaseHas('seller_verifications', [
             'user_id' => $this->buyer->id,
             'status' => SellerVerificationStatus::Submitted->value,
+            'phone' => '09171234567',
+            'address' => 'Trinidad, Bohol',
         ]);
+
+        // The submitted record preserves the applicant's values even if their
+        // editable profile is changed after the application is filed.
+        $this->buyer->update([
+            'phone' => '09990000000',
+            'location' => 'A different profile location',
+        ]);
+        $this->withToken($this->mobileToken($this->buyer))
+            ->getJson('/api/seller-verification/me')
+            ->assertOk()
+            ->assertJsonPath('data.phone', '09171234567')
+            ->assertJsonPath('data.address', 'Trinidad, Bohol');
     }
 
     #[Test]
@@ -182,6 +202,8 @@ class MobileSellerVerificationTest extends TestCase
 
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', [
+                'phone' => '09171234567',
+                'address' => 'Trinidad, Bohol',
                 'business_name' => 'Only a name',
             ])
             ->assertCreated()
@@ -198,6 +220,8 @@ class MobileSellerVerificationTest extends TestCase
 
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', [
+                'phone' => '09171234567',
+                'address' => 'Trinidad, Bohol',
                 'business_location' => 'Mabalacat, Pampanga',
             ])
             ->assertCreated()
@@ -209,6 +233,8 @@ class MobileSellerVerificationTest extends TestCase
     {
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', $this->payload([
+                'phone' => str_repeat('1', 33),
+                'address' => str_repeat('a', 192),
                 'business_name' => str_repeat('a', 256),
                 'business_location' => str_repeat('b', 256),
                 'business_description' => str_repeat('c', 2001),
@@ -216,6 +242,8 @@ class MobileSellerVerificationTest extends TestCase
             ]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors([
+                'phone',
+                'address',
                 'business_name',
                 'business_location',
                 'business_description',
@@ -238,6 +266,40 @@ class MobileSellerVerificationTest extends TestCase
             ->assertJsonValidationErrors('user_id');
 
         $this->assertDatabaseCount('seller_verifications', 0);
+    }
+
+    #[Test]
+    public function phone_and_address_are_required_for_a_new_verification_snapshot(): void
+    {
+        $this->withToken($this->mobileToken($this->buyer))
+            ->postJson('/api/seller-verification', [
+                'business_name' => 'Reyes Livestock',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone', 'address']);
+
+        $this->assertDatabaseCount('seller_verifications', 0);
+    }
+
+    #[Test]
+    public function legacy_verification_records_keep_nullable_contact_snapshots(): void
+    {
+        $verification = $this->createVerification($this->buyer, [
+            'phone' => null,
+            'address' => null,
+        ]);
+
+        $this->withToken($this->mobileToken($this->buyer))
+            ->getJson('/api/seller-verification/me')
+            ->assertOk()
+            ->assertJsonPath('data.phone', null)
+            ->assertJsonPath('data.address', null);
+
+        $this->assertDatabaseHas('seller_verifications', [
+            'id' => $verification->id,
+            'phone' => null,
+            'address' => null,
+        ]);
     }
 
     #[Test]

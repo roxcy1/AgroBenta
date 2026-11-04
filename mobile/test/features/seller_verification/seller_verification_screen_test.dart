@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_form_screen.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_screen.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_submitted_screen.dart';
+import 'package:agrobenta_mobile/widgets/local_image_preview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -16,21 +17,36 @@ void main() {
 
   setUp(() => tokenStore = FakeTokenStore('1|mobile-token'));
 
-  /// Taps a filled button, scrolling it into view first.
-  ///
-  /// The default 800x600 test fold is shorter than the form, so a button below
-  /// the last field would be tapped at an offset outside the render tree and the
-  /// tap would silently miss.
+  /// Taps a filled button after its scroll-to-visible animation completes.
   Future<void> tapFilled(WidgetTester tester, String label) async {
     final Finder target = find.widgetWithText(FilledButton, label);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
     await tester.ensureVisible(target);
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+    // There is no in-flight request before this tap, so settling here only waits
+    // for the scroll animation; request spinners are handled by the bounded helper.
+    await tester.pumpAndSettle();
     await tester.tap(target);
     await settleSellerVerification(tester);
   }
 
-  /// Advances the wizard from Basic Information to Review.
-  Future<void> tapNext(WidgetTester tester) => tapFilled(tester, 'Next');
+  /// Advances one step, supplying the required contact snapshots in this shared
+  /// form-flow helper when no auth profile values were provided by a test.
+  Future<void> tapNext(WidgetTester tester) async {
+    for (final (String label, String value) in <(String, String)>[
+      ('Phone number', '09171234567'),
+      ('Address', 'Trinidad, Bohol'),
+    ]) {
+      final Finder field = find.widgetWithText(TextFormField, label);
+      if (field.evaluate().isNotEmpty &&
+          (tester.widget<TextFormField>(field).controller?.text.isEmpty ??
+              true)) {
+        await tester.enterText(field, value);
+      }
+    }
+    await tapFilled(tester, 'Next');
+  }
 
   group('status screen', () {
     testWidgets('introduces the flow when nothing has been submitted', (
@@ -172,7 +188,7 @@ void main() {
 
   group('form', () {
     testWidgets(
-      'asks only for the supported fields, never lead with unsupported ones',
+      'shows required applicant snapshots and optional business fields',
       (WidgetTester tester) async {
         await SellerVerificationHarness.pump(
           tester,
@@ -184,18 +200,38 @@ void main() {
 
         expect(find.byType(SellerVerificationFormScreen), findsOneWidget);
 
-        // Full name is read-only account data, plus the three writable contract
-        // fields. The reference's Phone Number is not sent and not shown, and the
-        // ID document reference is gone with the Documents step.
-        expect(find.byType(TextFormField), findsNWidgets(4));
+        // Full name is read-only account data. Phone and address are required
+        // application snapshots; business fields remain optional.
+        expect(find.byType(TextFormField), findsNWidgets(6));
         expect(find.text('Full name'), findsOneWidget);
+        expect(find.text('Phone number'), findsOneWidget);
+        expect(find.text('Address'), findsOneWidget);
         expect(find.text('Business name'), findsOneWidget);
         expect(find.text('Business location'), findsOneWidget);
         expect(find.text('Business description'), findsOneWidget);
-        expect(find.text('Phone Number'), findsNothing);
         expect(find.text('ID document reference'), findsNothing);
       },
     );
+
+    testWidgets('requires a phone number and address before continuing', (
+      WidgetTester tester,
+    ) async {
+      await SellerVerificationHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => sellerVerificationNotFoundResponse(),
+      );
+      await openSellerVerificationForm(tester, resubmission: false);
+
+      final Finder next = find.widgetWithText(FilledButton, 'Next');
+      await scrollSellerVerificationIntoView(tester, next);
+      await tester.tap(next);
+      await settleSellerVerification(tester);
+
+      expect(find.text('Phone number is required.'), findsOneWidget);
+      expect(find.text('Address is required.'), findsOneWidget);
+      expect(find.text('Upload Required Documents'), findsNothing);
+    });
 
     testWidgets('collects the Figure 19 documents on the Documents step', (
       WidgetTester tester,
@@ -270,8 +306,7 @@ void main() {
       );
 
       final Finder back = find.widgetWithText(OutlinedButton, 'Back');
-      await tester.ensureVisible(back);
-      await tester.pump(const Duration(milliseconds: 50));
+      await scrollSellerVerificationIntoView(tester, back);
       await tester.tap(back);
       await settleSellerVerification(tester);
 
@@ -336,6 +371,93 @@ void main() {
       expect(find.byType(SellerVerificationScreen), findsOneWidget);
       expect(find.text('Under review'), findsOneWidget);
     });
+
+    testWidgets(
+      're-stages local documents after the server reports they are missing',
+      (WidgetTester tester) async {
+        int submissions = 0;
+        final SellerVerificationHarness
+        harness = await SellerVerificationHarness.pump(
+          tester,
+          tokenStore: tokenStore,
+          pickImage: fakeVerificationPicker,
+          handler: (RecordedRequest request) async {
+            if (request.method == 'POST' &&
+                request.apiPath == '/seller-verification/documents') {
+              return sellerVerificationDocumentUploadedResponse();
+            }
+            if (request.method == 'POST' &&
+                request.apiPath == '/seller-verification') {
+              submissions++;
+              if (submissions == 1) {
+                return sellerVerificationValidationResponse(
+                  message: 'Upload all required documents before submitting.',
+                  errors: <String, Object>{
+                    'id_document': <String>[
+                      'Upload a clear photo of your government-issued ID.',
+                    ],
+                    'proof_of_address': <String>[
+                      'Upload your proof of address.',
+                    ],
+                    'selfie': <String>['Upload a selfie holding the same ID.'],
+                  },
+                );
+              }
+              return sellerVerificationCreatedResponse(
+                verification: sellerVerificationJson(status: 'submitted'),
+              );
+            }
+            return sellerVerificationNotFoundResponse();
+          },
+        );
+
+        await openSellerVerificationForm(tester, resubmission: false);
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Business name'),
+          'Rizal Farms',
+        );
+        await tapNext(tester);
+        await uploadBothDocuments(tester);
+        await tapNext(tester);
+        await tapFilled(tester, 'Submit Application');
+
+        expect(find.text('Upload Required Documents'), findsOneWidget);
+        expect(find.text('Upload required'), findsNWidgets(3));
+        expect(find.text('Upload again'), findsNWidgets(3));
+        FilledButton next = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Next'),
+        );
+        expect(next.onPressed, isNull);
+
+        for (int index = 0; index < 3; index++) {
+          final Finder retry = find
+              .widgetWithText(FilledButton, 'Upload again')
+              .first;
+          await scrollSellerVerificationIntoView(tester, retry);
+          await tester.tap(retry);
+          await settleSellerVerification(tester);
+        }
+
+        next = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Next'),
+        );
+        expect(next.onPressed, isNotNull);
+        await tapNext(tester);
+        await tapFilled(tester, 'Submit Application');
+
+        expect(submissions, 2);
+        expect(find.byType(SellerVerificationSubmittedScreen), findsOneWidget);
+        expect(
+          harness.recorded.where(
+            (RecordedRequest request) =>
+                request.method == 'POST' &&
+                request.apiPath == '/seller-verification/documents',
+          ),
+          hasLength(6),
+          reason: 'the three documents must be staged again after a 422',
+        );
+      },
+    );
 
     testWidgets('shows a 422 on the field it belongs to', (
       WidgetTester tester,
@@ -460,8 +582,7 @@ void main() {
         FilledButton,
         'Submit Application',
       );
-      await tester.ensureVisible(submit);
-      await tester.pump(const Duration(milliseconds: 50));
+      await scrollSellerVerificationIntoView(tester, submit);
       await tester.tap(submit);
       // One frame: enough to start the request, nowhere near enough to finish it.
       await tester.pump(const Duration(milliseconds: 10));
@@ -493,6 +614,8 @@ void main() {
         handler: (_) async => sellerVerificationResponse(
           verification: sellerVerificationJson(
             status: 'rejected',
+            phone: '09123456789',
+            address: 'Barangay Poblacion, Trinidad, Bohol',
             businessName: 'Santos Cattle Co.',
             businessLocation: 'Mabalacat, Pampanga',
             adminNote: 'Name does not match the reference.',
@@ -508,6 +631,24 @@ void main() {
       expect(
         find.widgetWithText(TextFormField, 'Mabalacat, Pampanga'),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Phone number'),
+            )
+            .controller!
+            .text,
+        '09123456789',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Address'),
+            )
+            .controller!
+            .text,
+        'Barangay Poblacion, Trinidad, Bohol',
       );
     });
   });
@@ -603,30 +744,29 @@ void main() {
       expect(next.onPressed, isNotNull);
     });
 
-    testWidgets(
-      'offers a retry when an upload fails, and never fakes success',
-      (WidgetTester tester) async {
-        await openDocumentsStep(
-          tester,
-          handler: (RecordedRequest request) async =>
-              request.apiPath == '/seller-verification/documents'
-              ? throw http.ClientException('connection refused')
-              : sellerVerificationNotFoundResponse(),
-        );
+    testWidgets('offers a retry when an upload fails, and never fakes success', (
+      WidgetTester tester,
+    ) async {
+      await openDocumentsStep(
+        tester,
+        handler: (RecordedRequest request) async =>
+            request.apiPath == '/seller-verification/documents'
+            ? throw http.ClientException('connection refused')
+            : sellerVerificationNotFoundResponse(),
+      );
 
-        await tapDocumentPick(tester, 'Valid Government-Issued ID');
+      await tapDocumentPick(tester, 'Valid Government-Issued ID');
 
-        // The failure is stated; the slot is not shown as uploaded, and Next stays
-        // disabled because the server never confirmed the document.
-        expect(find.text('Upload failed'), findsOneWidget);
-        expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
-        expect(find.text('Uploaded'), findsNothing);
-        final FilledButton next = tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, 'Next'),
-        );
-        expect(next.onPressed, isNull);
-      },
-    );
+      // The failure is stated; the slot is not shown as uploaded, and Next stays
+      // disabled because the server never confirmed the document.
+      expect(find.text('Upload failed'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
+      expect(find.text('Uploaded'), findsNothing);
+      final FilledButton next = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Next'),
+      );
+      expect(next.onPressed, isNull);
+    });
 
     testWidgets('a cancelled picker changes nothing', (
       WidgetTester tester,
@@ -678,8 +818,7 @@ void main() {
 
       Future<void> addPhoto() async {
         final Finder add = find.text('Add Photo');
-        await tester.ensureVisible(add);
-        await tester.pump(const Duration(milliseconds: 50));
+        await scrollSellerVerificationIntoView(tester, add);
         await tester.tap(add);
         await settleSellerVerification(tester);
       }
@@ -719,8 +858,7 @@ void main() {
       );
 
       final Finder add = find.text('Add Photo');
-      await tester.ensureVisible(add);
-      await tester.pump(const Duration(milliseconds: 50));
+      await scrollSellerVerificationIntoView(tester, add);
       await tester.tap(add);
       await settleSellerVerification(tester);
 
@@ -753,19 +891,24 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: true);
 
-      // The record already holds the ID, so the Documents step reports it as
-      // uploaded even though no local file was picked in this session, and the
-      // selfie is still required.
+      // The rejected record's files remain available as historical previews,
+      // but none are staged for this new application. Both prior documents must
+      // be uploaded again; the missing selfie still needs to be selected too.
       await tapNext(tester);
 
-      // Scoped to the form: the rejected status screen behind it also renders an
-      // "Uploaded" line for the documents the server holds.
       expect(
         find.descendant(
           of: find.byType(SellerVerificationFormScreen),
-          matching: find.text('Uploaded'),
+          matching: find.byType(LocalImagePreview),
         ),
-        findsWidgets,
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(SellerVerificationFormScreen),
+          matching: find.text('Upload required'),
+        ),
+        findsNWidgets(2),
       );
       expect(
         find.descendant(
@@ -774,6 +917,10 @@ void main() {
         ),
         findsOneWidget,
       );
+      final FilledButton next = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Next'),
+      );
+      expect(next.onPressed, isNull);
     });
   });
 }

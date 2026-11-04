@@ -212,6 +212,22 @@ Future<void> settleSellerVerification(
   }
 }
 
+/// Scrolls [target] into view using the scrollable that actually contains it.
+Future<void> scrollSellerVerificationIntoView(
+  WidgetTester tester,
+  Finder target,
+) async {
+  final Finder scrollable = find
+      .ancestor(of: target, matching: find.byType(Scrollable))
+      .first;
+  await tester.scrollUntilVisible(
+    target,
+    120,
+    scrollable: scrollable,
+  );
+  await tester.pump(const Duration(milliseconds: 50));
+}
+
 /// A tiny in-memory PNG an [XFile] can read, for picker injection in tests.
 /// The bytes are a valid 1x1 PNG so `Image.file`/`Image.memory` would render if
 /// ever asked to; the tests exercise the flow, not the pixels.
@@ -313,8 +329,7 @@ Future<void> tapDocumentPick(WidgetTester tester, String cardTitle) async {
     of: card,
     matching: find.widgetWithText(FilledButton, 'Take Photo'),
   );
-  await tester.ensureVisible(button);
-  await tester.pump(const Duration(milliseconds: 50));
+  await scrollSellerVerificationIntoView(tester, button);
   await tester.tap(button);
   await settleSellerVerification(tester);
 }
