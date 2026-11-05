@@ -224,7 +224,9 @@ does not send.
   unencrypted storage for a bearer credential.
 * The Admin Web keeps its token in `localStorage`. Do not copy that. It is
   acceptable for a browser tab; it is not acceptable on a user's phone.
-* A `401` clears the stored token in `ApiClient`. Treat
+* A `401` clears the stored token in `ApiClient` only if it is still the token
+  used by that request; a delayed response from an old session must not clear a
+  newly authenticated user's token. Treat
   `ApiException.requiresReauthentication` as the signal to return to the
   sign-in flow. Do not retry a request with a revoked token.
 * Sanctum tokens currently have **no expiry** and there is no refresh flow.
@@ -281,7 +283,9 @@ capability is: submit verification → admin approves → the server sets the fi
   switch (manuscript Figure 20; functional documentation §2.7) is a **view**
   switch only: Seller Mode is offered only when the server reports
   `seller_capability = seller`, switching sends no request that changes `role`
-  or `seller_capability`, and the selected mode is cleared on logout.
+  or `seller_capability`, and the last selected mode is persisted separately
+  for each authenticated user ID. The preference is retained on logout but is
+  restored only for that same user and only while Seller Mode remains allowed.
 * Do not let the client decide what a seller may do. The server decides; the
   client renders the consequence.
 

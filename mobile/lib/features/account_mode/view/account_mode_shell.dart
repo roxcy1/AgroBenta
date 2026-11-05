@@ -96,7 +96,14 @@ class _AccountModeShellState extends State<AccountModeShell>
       });
     }
 
-    final AccountMode mode = AccountModeScope.of(context).mode;
+    final AccountModeController controller = AccountModeScope.of(context);
+    // Do not briefly mount BuyerShell while a saved Seller Mode preference is
+    // being read. The first visible shell should already match this account.
+    if (controller.isRestoringPreference) {
+      return;
+    }
+
+    final AccountMode mode = controller.mode;
     if (_target == null) {
       _target = _shown = mode;
       return;
@@ -163,6 +170,9 @@ class _AccountModeShellState extends State<AccountModeShell>
   @override
   Widget build(BuildContext context) {
     final AccountModeController controller = AccountModeScope.of(context);
+    if (controller.isRestoringPreference) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final bool showSeller =
         _shown == AccountMode.seller && controller.canUseSellerMode;
 

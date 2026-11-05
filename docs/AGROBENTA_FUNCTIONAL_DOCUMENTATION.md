@@ -215,8 +215,11 @@ Rules:
    own purchases.
 5. A verified seller remains able to buy. Buyer Mode is available to every
    account.
-6. The selected mode is a per-user preference. It must be cleared on logout so
-   a different account never inherits it.
+6. The selected mode is a per-user preference, stored under the authenticated
+   user's stable ID and restored after that same user signs in. It is retained
+   across logout; another account must never inherit it. Seller Mode is restored
+   only while the server reports seller capability, otherwise the app falls
+   back to Buyer Mode.
 
 ### 2.8 Sign-in and account features **[MS p.5, p.13; MS-P Figures 4–5]**
 
@@ -966,5 +969,6 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-10-27 | Adopted project-owner decisions DEC-01 to DEC-03: unit-aware maximum age (25 years / 300 months / 9,125 days), at most two decimal places for weight and asking price, and the photo minimum at submission with an approval-time guard for legacy listings (§4.4, §4.5, §4.7, §13.4). Added the `[DEC-nn]` marker because the manuscript was unavailable; the rules must be re-checked against it. MS-08 (listing title) remains open. |
 | 2026-11-03 | Part of MS-10 decided: password recovery uses a six-digit email code (§2.8). The manuscript does not specify the method. The email service remains open. |
 | 2026-11-03 | Part of MS-05 decided: the farm/business name is optional, and Proof of Address and Farm photos are implemented (§3.3, Figure 19). Whether to remove the selfie remains open, and MS-07 is unchanged. |
+| 2026-11-05 | **[DEC-05]** Per-user Account Mode preference is retained across logout and restored for the same authenticated user. This replaces the earlier logout-clear behavior in §2.7 rule 6; preferences are keyed by user ID and permission-checked on restoration. |
 | 2026-11-04 | **[DEC-04]** Government ID type selection and two-sided image capture, including the applicant's explicit no-back declaration, were specified by the project owner. This does not change the existing selfie, Proof of Address, privacy, review, or resubmission rules (§3.3). |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

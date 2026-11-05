@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/config/app_config.dart';
@@ -300,6 +301,80 @@ void main() {
         containsAll(<String>['/auth/me', '/auth/logout']),
       );
     });
+
+    test(
+      'a pending old-user refresh cannot replace a later signed-in user',
+      () async {
+        tokenStore.token = 'user-a-token';
+        final Completer<http.Response> oldRefresh = Completer<http.Response>();
+        int meCalls = 0;
+        final AuthController controller = controllerFor((
+          RecordedRequest request,
+        ) async {
+          if (request.apiPath == '/auth/me') {
+            meCalls++;
+            if (meCalls == 1) {
+              return http.Response(
+                jsonEncode(
+                  successEnvelope(data: userJson(id: 7, name: 'Ana Reyes')),
+                ),
+                200,
+              );
+            }
+            return oldRefresh.future;
+          }
+          if (request.apiPath == '/auth/logout') {
+            return http.Response(
+              jsonEncode(successEnvelope(message: 'Logged out.')),
+              200,
+            );
+          }
+          if (request.apiPath == '/auth/login') {
+            final Map<String, dynamic> user = userJson(
+              id: 8,
+              name: 'Ben Cruz',
+              email: 'ben@example.test',
+            );
+            return http.Response(
+              jsonEncode(
+                successEnvelope(
+                  data: authSessionJson(token: 'user-b-token', user: user),
+                ),
+              ),
+              200,
+            );
+          }
+          return http.Response('{}', 404);
+        });
+
+        await controller.restoreSession();
+        final Future<bool> staleRefresh = controller.refreshUser();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(await controller.signOut(), isTrue);
+        expect(
+          await controller.signIn(
+            email: 'ben@example.test',
+            password: 'correct horse',
+          ),
+          isTrue,
+        );
+
+        oldRefresh.complete(
+          http.Response(
+            jsonEncode(
+              successEnvelope(data: userJson(id: 7, name: 'Ana Reyes')),
+            ),
+            200,
+          ),
+        );
+
+        expect(await staleRefresh, isFalse);
+        expect(controller.state.user?.id, 8);
+        expect(controller.state.user?.name, 'Ben Cruz');
+        expect(tokenStore.token, 'user-b-token');
+      },
+    );
 
     test('a failed sign-out keeps the session and shows why', () async {
       tokenStore.token = 'stored-token';

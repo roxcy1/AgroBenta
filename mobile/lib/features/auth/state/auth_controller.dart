@@ -22,6 +22,11 @@ class AuthController extends ChangeNotifier {
   AuthState _state = const AuthState.initial();
   AuthState get state => _state;
 
+  /// Invalidates authentication reads and writes started by an earlier
+  /// session. A response belongs to the session that launched it, not simply
+  /// to whichever user happens to be signed in when it completes.
+  int _sessionGeneration = 0;
+
   /// Checks for a stored session and, if there is one, loads the current user.
   ///
   /// Called once when the app starts. A missing or revoked token lands on
@@ -29,6 +34,7 @@ class AuthController extends ChangeNotifier {
   /// [AuthStatus.restoreFailed] so the user is offered a retry instead of
   /// being silently signed out.
   Future<void> restoreSession() async {
+    final int generation = _sessionGeneration;
     // The first call usually starts from `restoring` already. Re-announcing
     // that would notify listeners for no change — and when the first call comes
     // from `didChangeDependencies`, a synchronous notification would land
@@ -39,12 +45,18 @@ class AuthController extends ChangeNotifier {
 
     try {
       final User? user = await _repository.restoreSession();
+      if (generation != _sessionGeneration) {
+        return;
+      }
       _set(
         user == null
             ? const AuthState(status: AuthStatus.signedOut)
             : AuthState(status: AuthStatus.signedIn, user: user),
       );
     } on ApiException catch (error) {
+      if (generation != _sessionGeneration) {
+        return;
+      }
       _set(
         _state.copyWith(
           status: AuthStatus.restoreFailed,
@@ -105,11 +117,25 @@ class AuthController extends ChangeNotifier {
       return false;
     }
 
+    final int generation = _sessionGeneration;
+    final int requestingUserId = _state.user!.id;
+
     try {
       final User user = await _repository.refreshUser();
+      if (generation != _sessionGeneration ||
+          !_state.isSignedIn ||
+          _state.user?.id != requestingUserId ||
+          user.id != requestingUserId) {
+        return false;
+      }
       _set(AuthState(status: AuthStatus.signedIn, user: user));
       return true;
     } on ApiException catch (error) {
+      if (generation != _sessionGeneration ||
+          !_state.isSignedIn ||
+          _state.user?.id != requestingUserId) {
+        return false;
+      }
       if (error.requiresReauthentication) {
         _set(const AuthState(status: AuthStatus.signedOut));
       }
@@ -125,17 +151,27 @@ class AuthController extends ChangeNotifier {
   /// token in place returns `false` with the error in [state], so the user can
   /// retry rather than being left in a half-signed-out state.
   Future<bool> signOut() async {
-    if (_state.isSigningOut) {
+    if (_state.isSigningOut || !_state.isSignedIn) {
       return false;
     }
+
+    // Invalidate account refreshes immediately, before waiting for the revoke
+    // request. None may republish the outgoing user's identity after logout.
+    final int generation = ++_sessionGeneration;
 
     _set(_state.copyWith(isSigningOut: true, clearError: true));
 
     try {
       await _repository.logout();
+      if (generation != _sessionGeneration) {
+        return false;
+      }
       _set(const AuthState(status: AuthStatus.signedOut));
       return true;
     } on ApiException catch (error) {
+      if (generation != _sessionGeneration) {
+        return false;
+      }
       _set(_state.copyWith(isSigningOut: false, errorMessage: error.message));
       return false;
     }
@@ -150,7 +186,11 @@ class AuthController extends ChangeNotifier {
   /// already exercise, and the alternative is being stuck on a retry screen
   /// with no way out.
   Future<void> forgetLocalSession() async {
+    final int generation = ++_sessionGeneration;
     await _repository.forgetLocalSession();
+    if (generation != _sessionGeneration) {
+      return;
+    }
     _set(const AuthState(status: AuthStatus.signedOut));
   }
 
@@ -199,9 +239,11 @@ class AuthController extends ChangeNotifier {
   /// Runs an authenticated request, mapping success to a signed-in state and
   /// failure to a form-level error.
   Future<bool> _submit(Future<User> Function() action) async {
-    if (_state.isSubmitting) {
+    if (_state.isSubmitting || _state.isSigningOut) {
       return false;
     }
+
+    final int generation = ++_sessionGeneration;
 
     _set(
       _state.copyWith(
@@ -213,9 +255,15 @@ class AuthController extends ChangeNotifier {
 
     try {
       final User user = await action();
+      if (generation != _sessionGeneration) {
+        return false;
+      }
       _set(AuthState(status: AuthStatus.signedIn, user: user));
       return true;
     } on ApiException catch (error) {
+      if (generation != _sessionGeneration) {
+        return false;
+      }
       // A failed sign-in or registration means, unambiguously, that this
       // device is not authenticated. The state is rebuilt rather than copied so
       // no stale user survives it.
@@ -228,6 +276,9 @@ class AuthController extends ChangeNotifier {
       );
       return false;
     } on Object {
+      if (generation != _sessionGeneration) {
+        return false;
+      }
       // An unexpected error must not crash the app or leave the button
       // spinning. There is no meaningful detail to show, so say so plainly.
       _set(
