@@ -3,6 +3,7 @@
 namespace App\Services\SellerVerification;
 
 use App\Enums\ActivityAction;
+use App\Enums\SellerVerificationDocumentType;
 use App\Enums\SellerVerificationStatus;
 use App\Models\SellerVerification;
 use App\Models\User;
@@ -40,6 +41,8 @@ class SellerVerificationService
      */
     public const string DOCUMENTS_MISSING = 'seller_verification.documents_missing';
 
+    public const string BACK_IMAGE_CONTRADICTION = 'seller_verification.back_image_contradiction';
+
     public function __construct(
         private readonly SellerVerificationRepository $verifications,
         private readonly SellerVerificationDocumentService $documents,
@@ -55,7 +58,7 @@ class SellerVerificationService
      * seller is refused earlier, by the request class, with `403` — that is a
      * different situation (nothing to submit) from a duplicate.
      *
-     * @param  array{phone: string, address: string, business_name?: string|null, business_location?: string|null, business_description?: string|null, id_document_ref?: string|null}  $input
+     * @param  array{phone: string, address: string, business_name?: string|null, business_location?: string|null, business_description?: string|null, id_document_ref?: string|null, government_id_type: string, government_id_description?: string|null, has_no_back_image: bool}  $input
      *
      * @throws DomainException when the user already has an open verification.
      */
@@ -82,7 +85,11 @@ class SellerVerificationService
                 // The required documents are mandatory. Checking inside the transaction,
                 // after the user row is locked, means two submissions racing cannot
                 // both consume the same staged files.
-                if ($this->documents->missingStaged($locked) !== []) {
+                if ($input['has_no_back_image'] && $this->documents->hasStaged($locked, SellerVerificationDocumentType::IdDocumentBack)) {
+                    throw new DomainException(self::BACK_IMAGE_CONTRADICTION);
+                }
+
+                if ($this->documents->missingStaged($locked, $input['has_no_back_image']) !== []) {
                     throw new DomainException(self::DOCUMENTS_MISSING);
                 }
 
@@ -99,6 +106,11 @@ class SellerVerificationService
                     'business_location' => $input['business_location'] ?? null,
                     'business_description' => $input['business_description'] ?? null,
                     'id_document_ref' => $input['id_document_ref'] ?? null,
+                    'government_id_type' => $input['government_id_type'],
+                    'government_id_description' => $input['government_id_type'] === 'others'
+                        ? ($input['government_id_description'] ?? null)
+                        : null,
+                    'has_no_back_image' => $input['has_no_back_image'],
                     'status' => SellerVerificationStatus::Submitted,
                     'admin_note' => null,
                     'reviewed_by' => null,

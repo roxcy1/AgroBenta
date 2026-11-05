@@ -167,6 +167,9 @@ abstract final class SellerVerificationEndpoints {
     'business_location',
     'business_description',
     'id_document_ref',
+    'government_id_type',
+    'government_id_description',
+    'has_no_back_image',
   ];
 }
 

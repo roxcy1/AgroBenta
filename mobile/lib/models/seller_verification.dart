@@ -56,6 +56,29 @@ enum SellerVerificationStatus {
   }
 }
 
+enum GovernmentIdType {
+  philippineNationalId(
+    'philippine_national_id',
+    'Philippine National ID (PhilID / ePhilID)',
+  ),
+  driversLicense('drivers_license', "Driver's License (LTO)"),
+  philHealthId('philhealth_id', 'PhilHealth ID'),
+  votersId('voters_id', "Voter's ID"),
+  postalId('postal_id', 'Postal ID'),
+  others('others', 'Others');
+
+  const GovernmentIdType(this.value, this.label);
+  final String value;
+  final String label;
+
+  static GovernmentIdType? fromNullableValue(String? value) {
+    for (final GovernmentIdType type in values) {
+      if (type.value == value) return type;
+    }
+    return null;
+  }
+}
+
 /// Which evidence document an upload or fetch refers to.
 ///
 /// Mirrors `backend/app/Enums/SellerVerificationDocumentType.php`. The wire
@@ -64,6 +87,8 @@ enum SellerVerificationStatus {
 enum VerificationDocumentType {
   /// A photo of a government-issued identity document.
   idDocument('id_document'),
+  idDocumentFront('id_document_front'),
+  idDocumentBack('id_document_back'),
 
   /// A selfie of the applicant holding the same identity document.
   selfie('selfie'),
@@ -106,10 +131,15 @@ class SellerVerification {
     required this.businessLocation,
     required this.businessDescription,
     required this.idDocumentRef,
+    this.governmentIdType,
+    this.governmentIdDescription,
+    this.hasNoBackImage,
     required this.status,
     required this.adminNote,
     required this.submittedAt,
     required this.reviewedAt,
+    this.hasIdDocumentFront = false,
+    this.hasIdDocumentBack = false,
     this.hasIdDocument = false,
     this.hasSelfie = false,
     this.hasProofOfAddress = false,
@@ -144,11 +174,25 @@ class SellerVerification {
       businessLocation: readNullableString(json, 'business_location'),
       businessDescription: readNullableString(json, 'business_description'),
       idDocumentRef: readNullableString(json, 'id_document_ref'),
+      governmentIdType: GovernmentIdType.fromNullableValue(
+        readNullableString(json, 'government_id_type'),
+      ),
+      governmentIdDescription: readNullableString(
+        json,
+        'government_id_description',
+      ),
+      hasNoBackImage: json['has_no_back_image'] is bool
+          ? json['has_no_back_image'] as bool
+          : null,
       status: SellerVerificationStatus.fromValue(readString(json, 'status')),
       adminNote: readNullableString(json, 'admin_note'),
       submittedAt: readNullableDateTime(json, 'submitted_at'),
       reviewedAt: readNullableDateTime(json, 'reviewed_at'),
       hasIdDocument: _readBool(json, 'has_id_document'),
+      hasIdDocumentFront:
+          json['has_id_document_front'] == true ||
+          _readBool(json, 'has_id_document'),
+      hasIdDocumentBack: json['has_id_document_back'] == true,
       hasSelfie: _readBool(json, 'has_selfie'),
       hasProofOfAddress: _readBool(json, 'has_proof_of_address'),
       farmPhotoIds: _readStringList(json, 'farm_photo_ids'),
@@ -179,6 +223,10 @@ class SellerVerification {
   /// never present a file picker for this field.
   final String? idDocumentRef;
 
+  final GovernmentIdType? governmentIdType;
+  final String? governmentIdDescription;
+  final bool? hasNoBackImage;
+
   final SellerVerificationStatus status;
 
   /// Why an administrator approved or rejected this, when they said.
@@ -200,6 +248,8 @@ class SellerVerification {
   /// when the key is absent, so the model keeps working against an older resource
   /// that predates the documents migration.
   final bool hasIdDocument;
+  final bool hasIdDocumentFront;
+  final bool hasIdDocumentBack;
 
   /// Whether a selfie has been uploaded for this application.
   final bool hasSelfie;

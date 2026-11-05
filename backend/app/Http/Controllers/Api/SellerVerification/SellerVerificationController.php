@@ -59,6 +59,9 @@ class SellerVerificationController extends Controller
                     'business_location',
                     'business_description',
                     'id_document_ref',
+                    'government_id_type',
+                    'government_id_description',
+                    'has_no_back_image',
                 ]),
             );
         } catch (DomainException $exception) {
@@ -72,8 +75,19 @@ class SellerVerificationController extends Controller
 
             if ($exception->getMessage() === SellerVerificationService::DOCUMENTS_MISSING) {
                 return $this->missingDocumentsResponse(
-                    $this->documents->missingStaged($request->user()),
+                    $this->documents->missingStaged(
+                        $request->user(),
+                        $request->boolean('has_no_back_image'),
+                    ),
                 );
+            }
+
+            if ($exception->getMessage() === SellerVerificationService::BACK_IMAGE_CONTRADICTION) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Remove the staged back image or choose to upload the back image.',
+                    'errors' => ['has_no_back_image' => ['A back image is staged for this application.']],
+                ], 422);
             }
 
             throw $exception;

@@ -202,6 +202,23 @@ class SellerVerificationTest extends TestCase
         $nullable->assertJsonPath('data.id_document_ref', null);
     }
 
+    public function test_admin_resource_includes_id_snapshot_and_side_declaration(): void
+    {
+        $verification = $this->createVerification([
+            'government_id_type' => 'others',
+            'government_id_description' => 'Barangay ID',
+            'has_no_back_image' => true,
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/seller-verifications/{$verification->id}")
+            ->assertOk()
+            ->assertJsonPath('data.government_id_type', 'others')
+            ->assertJsonPath('data.government_id_description', 'Barangay ID')
+            ->assertJsonPath('data.has_no_back_image', true)
+            ->assertJsonPath('data.has_id_document_back', false);
+    }
+
     public function test_phone_and_address_snapshots_are_exposed_to_admin_review(): void
     {
         $verification = $this->createVerification([
