@@ -30,10 +30,12 @@ typedef _Upload = Future<void> Function(XFile file);
 typedef _Fetch = Future<Uint8List?> Function(VerificationDocumentType type);
 
 class _DocumentRepository extends SellerVerificationRepository {
-  _DocumentRepository(this.upload, {this.fetch}) : super(_unusedRepository());
+  _DocumentRepository(this.upload, {this.fetch, this.delete})
+    : super(_unusedRepository());
 
   final _Upload upload;
   final _Fetch? fetch;
+  final Future<void> Function(VerificationDocumentType type)? delete;
 
   static SellerVerificationService _unusedRepository() {
     final ApiClient client = ApiClient(
@@ -55,10 +57,15 @@ class _DocumentRepository extends SellerVerificationRepository {
   @override
   Future<Uint8List?> fetchDocument(VerificationDocumentType type) =>
       fetch?.call(type) ?? Future<Uint8List?>.value(null);
+
+  @override
+  Future<void> deleteDocument(VerificationDocumentType type) =>
+      delete?.call(type) ?? Future<void>.value();
 }
 
 void main() {
-  final VerificationDocumentType type = VerificationDocumentType.idDocument;
+  final VerificationDocumentType type =
+      VerificationDocumentType.idDocumentFront;
 
   XFile image(String name) => XFile.fromData(
     kFakeVerificationImageBytes,
@@ -80,6 +87,45 @@ void main() {
   );
 
   group('document upload state', () {
+    test(
+      'requires an explicit back choice and clears a staged back safely',
+      () async {
+        final List<VerificationDocumentType> deleted =
+            <VerificationDocumentType>[];
+        final SellerVerificationDocumentsController controller =
+            SellerVerificationDocumentsController(
+              _DocumentRepository(
+                (_) async {},
+                delete: (VerificationDocumentType type) async {
+                  deleted.add(type);
+                },
+              ),
+            );
+        addTearDown(controller.dispose);
+
+        expect(controller.state.hasNoBackImage, isNull);
+        expect(controller.state.allRequiredUploaded, isFalse);
+        await controller.pickAndUpload(
+          type: VerificationDocumentType.idDocumentBack,
+          file: image('back.png'),
+        );
+        await controller.chooseBackImage(hasNoBackImage: true);
+
+        expect(deleted, <VerificationDocumentType>[
+          VerificationDocumentType.idDocumentBack,
+        ]);
+        expect(
+          controller.state.idDocumentBack.status,
+          VerificationDocumentStatus.empty,
+        );
+        expect(controller.state.hasNoBackImage, isTrue);
+
+        await controller.chooseBackImage(hasNoBackImage: false);
+        expect(controller.state.hasNoBackImage, isFalse);
+        expect(controller.state.allRequiredUploaded, isFalse);
+      },
+    );
+
     test('retains the selected file after a successful upload', () async {
       final XFile selected = image('selected.png');
       final SellerVerificationDocumentsController controller =
@@ -180,7 +226,7 @@ void main() {
         expect(
           requests.map((RecordedRequest request) => request.apiPath),
           containsAll(<String>[
-            '/seller-verification/documents/id_document',
+            '/seller-verification/documents/id_document_front',
             '/seller-verification/documents/proof_of_address',
             '/seller-verification/documents/selfie',
           ]),

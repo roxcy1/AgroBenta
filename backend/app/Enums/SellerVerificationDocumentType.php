@@ -18,6 +18,8 @@ namespace App\Enums;
 enum SellerVerificationDocumentType: string
 {
     case IdDocument = 'id_document';
+    case IdDocumentFront = 'id_document_front';
+    case IdDocumentBack = 'id_document_back';
     case Selfie = 'selfie';
     case ProofOfAddress = 'proof_of_address';
     case FarmPhoto = 'farm_photo';
@@ -30,6 +32,8 @@ enum SellerVerificationDocumentType: string
     {
         return match ($this) {
             self::IdDocument => 'id_document_path',
+            self::IdDocumentFront => 'id_document_front_path',
+            self::IdDocumentBack => 'id_document_back_path',
             self::Selfie => 'selfie_path',
             self::ProofOfAddress => 'proof_of_address_path',
             self::FarmPhoto => 'farm_photo_paths',
@@ -50,7 +54,11 @@ enum SellerVerificationDocumentType: string
      */
     public function isRequired(): bool
     {
-        return $this !== self::FarmPhoto;
+        return in_array($this, [
+            self::IdDocumentFront,
+            self::Selfie,
+            self::ProofOfAddress,
+        ], true);
     }
 
     /**
@@ -60,6 +68,8 @@ enum SellerVerificationDocumentType: string
     {
         return match ($this) {
             self::IdDocument => 'Upload a clear photo of your government-issued ID.',
+            self::IdDocumentFront => 'Upload the front of your government-issued ID.',
+            self::IdDocumentBack => 'Upload the back of your government-issued ID.',
             self::Selfie => 'Upload a selfie holding the same ID.',
             self::ProofOfAddress => 'Upload your proof of address.',
             self::FarmPhoto => 'Upload a farm photo.',

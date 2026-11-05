@@ -60,10 +60,15 @@ class MobileSellerVerificationResource extends JsonResource
             'business_location' => $this->business_location,
             'business_description' => $this->business_description,
             'id_document_ref' => $this->id_document_ref,
+            'government_id_type' => $this->government_id_type,
+            'government_id_description' => $this->government_id_description,
+            'has_no_back_image' => $this->has_no_back_image,
             // Existence, never the path or a URL: the file is on private
             // storage and is read back only through the authenticated
             // document endpoint.
-            'has_id_document' => filled($this->id_document_path),
+            'has_id_document' => filled($this->id_document_front_path) || filled($this->id_document_path),
+            'has_id_document_front' => filled($this->id_document_front_path) || filled($this->id_document_path),
+            'has_id_document_back' => filled($this->id_document_back_path),
             'has_selfie' => filled($this->selfie_path),
             'has_proof_of_address' => filled($this->proof_of_address_path),
             'farm_photo_ids' => $this->resource->farmPhotoIds(),

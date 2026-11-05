@@ -220,11 +220,7 @@ Future<void> scrollSellerVerificationIntoView(
   final Finder scrollable = find
       .ancestor(of: target, matching: find.byType(Scrollable))
       .first;
-  await tester.scrollUntilVisible(
-    target,
-    120,
-    scrollable: scrollable,
-  );
+  await tester.scrollUntilVisible(target, 120, scrollable: scrollable);
   await tester.pump(const Duration(milliseconds: 50));
 }
 
@@ -327,7 +323,14 @@ Future<void> tapDocumentPick(WidgetTester tester, String cardTitle) async {
   );
   final Finder button = find.descendant(
     of: card,
-    matching: find.widgetWithText(FilledButton, 'Take Photo'),
+    matching: find.widgetWithText(
+      FilledButton,
+      cardTitle == 'Government ID — Front'
+          ? 'Upload Front ID Image'
+          : cardTitle == 'Government ID — Back'
+          ? 'Upload Back ID Image'
+          : 'Take Photo',
+    ),
   );
   await scrollSellerVerificationIntoView(tester, button);
   await tester.tap(button);
@@ -336,7 +339,14 @@ Future<void> tapDocumentPick(WidgetTester tester, String cardTitle) async {
 
 /// Advances through the Documents step by uploading the required images.
 Future<void> uploadBothDocuments(WidgetTester tester) async {
-  await tapDocumentPick(tester, 'Valid Government-Issued ID');
+  await tapDocumentPick(tester, 'Government ID — Front');
+  final Finder noBack = find.widgetWithText(
+    OutlinedButton,
+    'My ID Has No Back Image',
+  );
+  await scrollSellerVerificationIntoView(tester, noBack);
+  await tester.tap(noBack);
+  await settleSellerVerification(tester);
   await tapDocumentPick(tester, 'Proof of Address');
   await tapDocumentPick(tester, 'Selfie Holding Your ID');
 }

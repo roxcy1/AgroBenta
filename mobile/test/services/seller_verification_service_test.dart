@@ -94,6 +94,8 @@ void main() {
         'business_location',
         'business_description',
         'id_document_ref',
+        'government_id_type',
+        'has_no_back_image',
       });
     });
 
@@ -117,6 +119,8 @@ void main() {
           'phone': '09171234567',
           'address': 'Trinidad, Bohol',
           'business_name': 'Rizal Farms',
+          'government_id_type': 'philippine_national_id',
+          'has_no_back_image': false,
         });
       },
     );

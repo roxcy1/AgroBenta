@@ -291,6 +291,17 @@ Exactly four. These match the manuscript ERD. **[MS p.94]**
 | **Proof of Address** | yes | e.g. utility bill, barangay certificate. |
 | **Farm photos** | no | Photos of the seller's livestock or farm area. |
 
+**Government ID capture [DEC-04, project-owner request 2026-11-04]:** the
+applicant selects one of `philippine_national_id`, `drivers_license`,
+`philhealth_id`, `voters_id`, `postal_id`, or `others`. The labels shown in the
+application are Philippine National ID (PhilID / ePhilID), Driver's License
+(LTO), PhilHealth ID, Voter's ID, Postal ID, and Others. `others` requires a
+description. The front image is always required. The applicant must explicitly
+choose to upload a back image or declare that their ID has no back image; the
+declaration is stored with that verification. It is never inferred from a
+missing upload. Both images, when supplied, remain private verification
+documents.
+
 The manuscript does **not** include a selfie. The current implementation still
 requires one as well as the three documents above; see §13, MS-05.
 
@@ -959,4 +970,5 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-03 | Part of MS-10 decided: password recovery uses a six-digit email code (§2.8). The manuscript does not specify the method. The email service remains open. |
 | 2026-11-03 | Part of MS-05 decided: the farm/business name is optional, and Proof of Address and Farm photos are implemented (§3.3, Figure 19). Whether to remove the selfie remains open, and MS-07 is unchanged. |
 | 2026-11-05 | **[DEC-05]** Per-user Account Mode preference is retained across logout and restored for the same authenticated user. This replaces the earlier logout-clear behavior in §2.7 rule 6; preferences are keyed by user ID and permission-checked on restoration. |
+| 2026-11-04 | **[DEC-04]** Government ID type selection and two-sided image capture, including the applicant's explicit no-back declaration, were specified by the project owner. This does not change the existing selfie, Proof of Address, privacy, review, or resubmission rules (§3.3). |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

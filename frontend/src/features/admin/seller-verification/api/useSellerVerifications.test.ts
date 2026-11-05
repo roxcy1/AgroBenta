@@ -79,6 +79,17 @@ describe('fetchVerificationDocument', () => {
     );
   });
 
+  it('fetches the ID front and back using private authenticated document routes', async () => {
+    getSpy.mockResolvedValue({ data: new Blob() } as unknown as AxiosResponse);
+    await fetchVerificationDocument(5, 'id_document_front');
+    await fetchVerificationDocument(5, 'id_document_back');
+
+    expect(getSpy.mock.calls.map((call) => call[0])).toEqual([
+      '/admin/seller-verifications/5/documents/id_document_front',
+      '/admin/seller-verifications/5/documents/id_document_back',
+    ]);
+  });
+
   it('fetches a farm photo by its id, as a blob', async () => {
     getSpy.mockResolvedValue({ data: new Blob() } as unknown as AxiosResponse);
 

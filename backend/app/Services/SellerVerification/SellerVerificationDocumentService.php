@@ -153,13 +153,19 @@ class SellerVerificationDocumentService
      *
      * @return list<SellerVerificationDocumentType>
      */
-    public function missingStaged(User $user): array
+    public function missingStaged(User $user, ?bool $hasNoBackImage = null): array
     {
-        return array_values(array_filter(
+        $missing = array_values(array_filter(
             SellerVerificationDocumentType::cases(),
             fn (SellerVerificationDocumentType $type): bool => $type->isRequired()
                 && ! $this->hasStaged($user, $type),
         ));
+
+        if ($hasNoBackImage === false && ! $this->hasStaged($user, SellerVerificationDocumentType::IdDocumentBack)) {
+            $missing[] = SellerVerificationDocumentType::IdDocumentBack;
+        }
+
+        return $missing;
     }
 
     /**
@@ -189,7 +195,7 @@ class SellerVerificationDocumentService
         }
 
         foreach (SellerVerificationDocumentType::cases() as $type) {
-            if (! $type->isRequired()) {
+            if (! $type->isRequired() && ! $this->hasStaged($user, $type)) {
                 continue;
             }
 
@@ -237,6 +243,12 @@ class SellerVerificationDocumentService
         SellerVerificationDocumentType $type,
     ): ?string {
         $path = $verification->getAttribute($type->column());
+
+        // Records created before two-sided uploads used `id_document_path`.
+        // It can be shown as the historical front, but never as a back image.
+        if ($type === SellerVerificationDocumentType::IdDocumentFront && ! filled($path)) {
+            $path = $verification->id_document_path;
+        }
 
         return is_string($path) && $path !== '' ? $path : null;
     }
