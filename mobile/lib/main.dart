@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:http/http.dart' as http;
 
 import 'core/network/api_client.dart';
+import 'core/storage/account_mode_preference_store.dart';
 import 'core/storage/token_store.dart';
 import 'core/storage/token_storage.dart';
 import 'core/theme/app_theme.dart';
@@ -78,7 +80,12 @@ Future<void> main() async {
 }
 
 class AgroBentaApp extends StatefulWidget {
-  const AgroBentaApp({this.tokenStore, super.key});
+  const AgroBentaApp({
+    this.tokenStore,
+    this.accountModePreferenceStore,
+    this.httpClient,
+    super.key,
+  });
 
   /// Overrides the secure token store.
   ///
@@ -87,6 +94,12 @@ class AgroBentaApp extends StatefulWidget {
   /// that does not exist in a unit test, so an app-level test injects a fake
   /// instead of standing up the Android Keystore.
   final TokenStore? tokenStore;
+
+  /// Overrides per-account mode persistence for tests.
+  final AccountModePreferenceStore? accountModePreferenceStore;
+
+  /// Overrides the shared transport for composition-root regression tests.
+  final http.Client? httpClient;
 
   @override
   State<AgroBentaApp> createState() => _AgroBentaAppState();
@@ -99,30 +112,31 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final AuthRepository _authRepository;
   late final AuthController _authController;
   late final AccountModeController _accountModeController;
+  late final AccountModePreferenceStore _accountModePreferenceStore;
   late final MarketplaceService _marketplaceService;
   late final MarketplaceRepository _marketplaceRepository;
-  late final MarketplaceController _marketplaceController;
+  late MarketplaceController _marketplaceController;
   late final SellerVerificationService _sellerVerificationService;
   late final SellerVerificationRepository _sellerVerificationRepository;
-  late final SellerVerificationController _sellerVerificationController;
+  late SellerVerificationController _sellerVerificationController;
   late final SellerListingService _sellerListingService;
   late final SellerListingRepository _sellerListingRepository;
-  late final SellerListingController _sellerListingController;
+  late SellerListingController _sellerListingController;
   late final SellerDashboardService _sellerDashboardService;
   late final SellerDashboardRepository _sellerDashboardRepository;
   late final SellerActivityService _sellerActivityService;
   late final SellerActivityRepository _sellerActivityRepository;
   late final ProfileService _profileService;
   late final ProfileRepository _profileRepository;
-  late final ProfileController _profileController;
+  late ProfileController _profileController;
   late final TransactionService _transactionService;
   late final TransactionRepository _transactionRepository;
   late final MessagingService _messagingService;
   late final MessagingRepository _messagingRepository;
-  late final ConversationsController _conversationsController;
+  late ConversationsController _conversationsController;
   late final NotificationService _notificationService;
   late final NotificationRepository _notificationRepository;
-  late final NotificationsController _notificationsController;
+  late NotificationsController _notificationsController;
   late final InquiryService _inquiryService;
   late final InquiryRepository _inquiryRepository;
   late final OfferService _offerService;
@@ -130,6 +144,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final LivestockTypeService _livestockTypeService;
   late final LivestockTypeRepository _livestockTypeRepository;
   late final LivestockTypesController _livestockTypesController;
+  int? _sessionUserId;
+  bool _sessionControllersCreated = false;
 
   @override
   void initState() {
@@ -138,6 +154,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _tokenStore = widget.tokenStore ?? TokenStorage();
     _apiClient = ApiClient(
       tokenStorage: _tokenStore,
+      httpClient: widget.httpClient,
       // A 403 may mean seller rights were removed after sign-in, so the account
       // is re-read from the server; the controller then drops Seller Mode.
       onForbidden: () => _accountModeController.recheckSellerCapability(),
@@ -145,24 +162,21 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _authService = AuthService(_apiClient);
     _authRepository = AuthRepository(_authService, _tokenStore);
     _authController = AuthController(_authRepository);
-    _accountModeController = AccountModeController(_authController);
+    _accountModePreferenceStore =
+        widget.accountModePreferenceStore ?? SecureAccountModePreferenceStore();
+    _accountModeController = AccountModeController(
+      _authController,
+      preferenceStore: _accountModePreferenceStore,
+    );
 
     // Shares the one `ApiClient`, so there is a single place that knows about
     // the base URL, the bearer token and the auth-failure side effects.
     _marketplaceService = MarketplaceService(_apiClient);
     _marketplaceRepository = MarketplaceRepository(_marketplaceService);
-    _marketplaceController = MarketplaceController(_marketplaceRepository);
 
     _sellerVerificationService = SellerVerificationService(_apiClient);
     _sellerVerificationRepository = SellerVerificationRepository(
       _sellerVerificationService,
-    );
-    _sellerVerificationController = SellerVerificationController(
-      _sellerVerificationRepository,
-      // Approval moves `seller_capability` on the account, so the session's user
-      // is re-read from `/auth/me` when a verification comes back approved. The
-      // capability is server-owned: this is the app asking, not deciding.
-      onCapabilityMayHaveChanged: _authController.refreshUser,
     );
 
     // Built for every account, not only for sellers. The scope is unconditional
@@ -171,9 +185,6 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // `403` for a non-seller. Nothing here decides who is allowed to sell.
     _sellerListingService = SellerListingService(_apiClient);
     _sellerListingRepository = SellerListingRepository(_sellerListingService);
-    _sellerListingController = SellerListingController(
-      _sellerListingRepository,
-    );
 
     // The seller dashboard is read-only and per-screen: Seller Home creates
     // its own controller and disposes it with the tab. Only the repository is
@@ -193,7 +204,6 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // reach it.
     _profileService = ProfileService(_apiClient);
     _profileRepository = ProfileRepository(_profileService);
-    _profileController = ProfileController(_profileRepository);
 
     // Transactions. No session-scoped controller: each tab owns one, because
     // each tab is an independent filtered query. The repository is shared so
@@ -207,7 +217,6 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // inside the chat screen itself.
     _messagingService = MessagingService(_apiClient);
     _messagingRepository = MessagingRepository(_messagingService);
-    _conversationsController = ConversationsController(_messagingRepository);
 
     // Notifications. Session-scoped like the Conversations controller so the
     // bell icon's unread badge on the Home AppBar and the Notifications screen
@@ -216,7 +225,6 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // an account that never opens the bell never pays for a request.
     _notificationService = NotificationService(_apiClient);
     _notificationRepository = NotificationRepository(_notificationService);
-    _notificationsController = NotificationsController(_notificationRepository);
 
     // Inquiries. No session-scoped controller: the inquire screen owns its
     // own (a one-shot form, disposed with its route), so only the repository
@@ -239,12 +247,62 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _livestockTypesController = LivestockTypesController(
       _livestockTypeRepository,
     );
+
+    // These controllers hold responses scoped to the bearer token. Recreate
+    // them when the authenticated identity changes so their caches, loading
+    // guards, and generations cannot cross account boundaries. Screen-owned
+    // controllers are disposed with the authenticated shell itself.
+    _createSessionControllers();
+    _authController.addListener(_handleAuthSessionChanged);
+  }
+
+  void _handleAuthSessionChanged() {
+    final int? userId = _authController.state.isSignedIn
+        ? _authController.state.user?.id
+        : null;
+    if (userId == _sessionUserId) {
+      return;
+    }
+
+    _sessionUserId = userId;
+    _createSessionControllers(replaceExisting: true);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _createSessionControllers({bool replaceExisting = false}) {
+    if (replaceExisting && _sessionControllersCreated) {
+      _marketplaceController.dispose();
+      _sellerVerificationController.dispose();
+      _sellerListingController.dispose();
+      _profileController.dispose();
+      _conversationsController.dispose();
+      _notificationsController.dispose();
+    }
+
+    _marketplaceController = MarketplaceController(_marketplaceRepository);
+    _sellerVerificationController = SellerVerificationController(
+      _sellerVerificationRepository,
+      // Approval moves `seller_capability` on the account, so the session's user
+      // is re-read from `/auth/me` when a verification comes back approved. The
+      // capability is server-owned: this is the app asking, not deciding.
+      onCapabilityMayHaveChanged: _authController.refreshUser,
+    );
+    _sellerListingController = SellerListingController(
+      _sellerListingRepository,
+    );
+    _profileController = ProfileController(_profileRepository);
+    _conversationsController = ConversationsController(_messagingRepository);
+    _notificationsController = NotificationsController(_notificationRepository);
+    _sessionControllersCreated = true;
   }
 
   @override
   void dispose() {
     // The controllers own no transport of their own, and the client they were
     // built on is closed here — the one place that created it.
+    _authController.removeListener(_handleAuthSessionChanged);
     _accountModeController.dispose();
     _authController.dispose();
     _marketplaceController.dispose();

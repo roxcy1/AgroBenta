@@ -20,7 +20,7 @@ import 'api_exception.dart';
 ///  * enforce a request timeout;
 ///  * unwrap the `{ success, message, data }` envelope;
 ///  * translate transport and HTTP failures into [ApiException];
-///  * clear the stored token on 401.
+///  * clear the stored token on 401 only when it is still the token that failed.
 ///
 /// It knows nothing about any particular endpoint or feature. Endpoint paths
 /// live with the feature that calls them.
@@ -90,10 +90,12 @@ class ApiClient {
     };
 
     final String? token = await _tokenStorage.read();
-    final bool authenticated = token != null && token.isNotEmpty;
-    if (authenticated) {
+    final String? requestToken = token != null && token.isNotEmpty
+        ? token
+        : null;
+    if (requestToken != null) {
       headers[ApiConstants.authorizationHeader] =
-          '${ApiConstants.bearerPrefix} $token';
+          '${ApiConstants.bearerPrefix} $requestToken';
     }
 
     final http.Request request = http.Request('GET', uri)
@@ -139,7 +141,7 @@ class ApiClient {
     throw await _toApiException(
       response,
       decodeFailed ? null : decoded,
-      authenticated: authenticated,
+      requestToken: requestToken,
     );
   }
 
@@ -165,10 +167,12 @@ class ApiClient {
     };
 
     final String? token = await _tokenStorage.read();
-    final bool authenticated = token != null && token.isNotEmpty;
-    if (authenticated) {
+    final String? requestToken = token != null && token.isNotEmpty
+        ? token
+        : null;
+    if (requestToken != null) {
       headers[ApiConstants.authorizationHeader] =
-          '${ApiConstants.bearerPrefix} $token';
+          '${ApiConstants.bearerPrefix} $requestToken';
     }
 
     final http.Request request = http.Request('GET', uri)
@@ -211,7 +215,7 @@ class ApiClient {
     throw await _toApiException(
       response,
       decodeFailed ? null : decoded,
-      authenticated: authenticated,
+      requestToken: requestToken,
     );
   }
 
@@ -314,10 +318,12 @@ class ApiClient {
     // legitimate (a login request, for instance), so a missing token is not an
     // error here — the server decides.
     final String? token = await _tokenStorage.read();
-    final bool authenticated = token != null && token.isNotEmpty;
-    if (authenticated) {
+    final String? requestToken = token != null && token.isNotEmpty
+        ? token
+        : null;
+    if (requestToken != null) {
       headers[ApiConstants.authorizationHeader] =
-          '${ApiConstants.bearerPrefix} $token';
+          '${ApiConstants.bearerPrefix} $requestToken';
     }
 
     final http.Request request = http.Request(method, uri)
@@ -329,7 +335,7 @@ class ApiClient {
 
     return _dispatch<T>(
       request: request,
-      authenticated: authenticated,
+      requestToken: requestToken,
       parse: parse,
     );
   }
@@ -342,7 +348,7 @@ class ApiClient {
   /// place.
   Future<T> _dispatch<T>({
     required http.BaseRequest request,
-    required bool authenticated,
+    required String? requestToken,
     required T Function(Object? data) parse,
   }) async {
     http.StreamedResponse streamed;
@@ -417,7 +423,7 @@ class ApiClient {
     throw await _toApiException(
       response,
       decodeFailed ? null : decoded,
-      authenticated: authenticated,
+      requestToken: requestToken,
     );
   }
 
@@ -444,10 +450,12 @@ class ApiClient {
     };
 
     final String? token = await _tokenStorage.read();
-    final bool authenticated = token != null && token.isNotEmpty;
-    if (authenticated) {
+    final String? requestToken = token != null && token.isNotEmpty
+        ? token
+        : null;
+    if (requestToken != null) {
       headers[ApiConstants.authorizationHeader] =
-          '${ApiConstants.bearerPrefix} $token';
+          '${ApiConstants.bearerPrefix} $requestToken';
     }
 
     final http.MultipartRequest request = http.MultipartRequest('POST', uri)
@@ -461,7 +469,7 @@ class ApiClient {
 
     return _dispatch<T>(
       request: request,
-      authenticated: authenticated,
+      requestToken: requestToken,
       parse: parse,
     );
   }
@@ -519,17 +527,14 @@ class ApiClient {
   Future<ApiException> _toApiException(
     http.Response response,
     Object? decoded, {
-    required bool authenticated,
+    required String? requestToken,
   }) async {
-    // A revoked or expired token must never be retried, so a `401` clears
-    // storage and the rest of the app observes a signed-out state.
-    //
-    // Clearing is unconditional. `ApiClient` attaches the stored token to every
-    // request it makes, so a `401` either means that token is dead or the
-    // submitted credentials were rejected — and a token worth keeping survives
-    // neither case, so there is nothing to be gained by conditioning it.
+    // Only clear the credential this request actually used. A delayed 401 from
+    // an old account must not erase a token written after that request started.
     if (response.statusCode == 401) {
-      await _tokenStorage.clear();
+      if (requestToken != null) {
+        await _tokenStorage.clearIfCurrent(requestToken);
+      }
       return ApiException(
         kind: ApiErrorKind.unauthorized,
         message:
@@ -537,7 +542,7 @@ class ApiClient {
             // Distinguish the two cases for the user: a token that stopped
             // working versus a password that was simply wrong. Laravel
             // normally supplies the message, so this is the fallback.
-            (authenticated
+            (requestToken != null
                 ? 'Your session has ended. Please sign in again.'
                 : 'The email or password is incorrect.'),
         statusCode: 401,

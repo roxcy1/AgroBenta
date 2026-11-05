@@ -2,11 +2,24 @@ import 'dart:convert';
 
 import 'package:agrobenta_mobile/features/account_mode/state/account_mode.dart';
 import 'package:agrobenta_mobile/features/account_mode/state/account_mode_controller.dart';
+import 'package:agrobenta_mobile/features/account_mode/state/account_mode_preference_store.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
+
+class _MemoryAccountModeStore implements AccountModePreferenceStore {
+  final Map<int, String> values = <int, String>{};
+
+  @override
+  Future<String?> read(int userId) async => values[userId];
+
+  @override
+  Future<void> write(int userId, String mode) async {
+    values[userId] = mode;
+  }
+}
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -30,11 +43,26 @@ void main() {
           200,
         );
       }
+      if (request.apiPath == '/auth/login') {
+        return http.Response(
+          jsonEncode(
+            successEnvelope(
+              data: authSessionJson(
+                token: 'token-${currentUser['id']}',
+                user: currentUser,
+              ),
+            ),
+          ),
+          200,
+        );
+      }
       return http.Response(jsonEncode(successEnvelope(data: currentUser)), 200);
     };
   }
 
-  Future<(AuthController, AccountModeController)> restoredSession() async {
+  Future<(AuthController, AccountModeController)> restoredSession({
+    AccountModePreferenceStore? preferenceStore,
+  }) async {
     final AuthController authController = AuthController(
       buildAuthRepository(tokenStore, authHandler()),
     );
@@ -44,10 +72,17 @@ void main() {
 
     final AccountModeController accountModeController = AccountModeController(
       authController,
+      preferenceStore: preferenceStore,
     );
     addTearDown(accountModeController.dispose);
 
     return (authController, accountModeController);
+  }
+
+  Future<void> finishModeRestore(AccountModeController controller) async {
+    for (int i = 0; i < 10 && controller.isRestoringPreference; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
   }
 
   test('starts in Buyer Mode for a verified seller', () async {
@@ -104,23 +139,27 @@ void main() {
     expect(controller.canUseSellerMode, isFalse);
   });
 
-  test('changing accounts clears Seller Mode', () async {
-    currentUser = userJson(id: 7, sellerCapability: 'seller');
-    final (AuthController auth, AccountModeController controller) =
-        await restoredSession();
-    controller.select(AccountMode.seller);
+  test(
+    'logging in as a different account clears the previous live mode',
+    () async {
+      currentUser = userJson(id: 7, sellerCapability: 'seller');
+      final (AuthController auth, AccountModeController controller) =
+          await restoredSession();
+      controller.select(AccountMode.seller);
 
-    currentUser = userJson(
-      id: 8,
-      name: 'Ben Cruz',
-      email: 'ben@example.test',
-      sellerCapability: 'seller',
-    );
-    await auth.refreshUser();
+      await auth.signOut();
+      currentUser = userJson(
+        id: 8,
+        name: 'Ben Cruz',
+        email: 'ben@example.test',
+        sellerCapability: 'seller',
+      );
+      await auth.signIn(email: 'ben@example.test', password: 'correct horse');
 
-    expect(controller.mode, AccountMode.buyer);
-    expect(controller.canUseSellerMode, isTrue);
-  });
+      expect(controller.mode, AccountMode.buyer);
+      expect(controller.canUseSellerMode, isTrue);
+    },
+  );
 
   test('requestSellerMode switches a verified seller to Seller Mode', () async {
     currentUser = userJson(sellerCapability: 'seller');
@@ -187,6 +226,120 @@ void main() {
 
       expect(controller.mode, AccountMode.buyer);
       expect(controller.canUseSellerMode, isTrue);
+    },
+  );
+
+  test(
+    'restores Buyer/Seller Mode independently for each authenticated user',
+    () async {
+      final _MemoryAccountModeStore preferences = _MemoryAccountModeStore()
+        ..values[7] = AccountMode.seller.name
+        ..values[8] = AccountMode.buyer.name;
+      currentUser = userJson(id: 7, sellerCapability: 'seller');
+      final (AuthController auth, AccountModeController controller) =
+          await restoredSession(preferenceStore: preferences);
+      await finishModeRestore(controller);
+      expect(controller.mode, AccountMode.seller);
+
+      await auth.signOut();
+      expect(controller.mode, AccountMode.buyer);
+      expect(preferences.values[7], AccountMode.seller.name);
+
+      currentUser = userJson(
+        id: 8,
+        name: 'Ben Cruz',
+        email: 'ben@example.test',
+        sellerCapability: 'seller',
+      );
+      await auth.signIn(email: 'ben@example.test', password: 'password');
+      await finishModeRestore(controller);
+      expect(controller.mode, AccountMode.buyer);
+      expect(controller.canUseSellerMode, isTrue);
+      expect(preferences.values[7], AccountMode.seller.name);
+      expect(preferences.values[8], AccountMode.buyer.name);
+
+      await auth.signOut();
+      currentUser = userJson(id: 7, sellerCapability: 'seller');
+      await auth.signIn(email: 'ana@example.test', password: 'password');
+      await finishModeRestore(controller);
+      expect(controller.mode, AccountMode.seller);
+    },
+  );
+
+  test('persists only an authorized, successfully selected mode', () async {
+    final _MemoryAccountModeStore preferences = _MemoryAccountModeStore();
+    currentUser = userJson(id: 7, sellerCapability: 'buyer');
+    final (AuthController auth, AccountModeController controller) =
+        await restoredSession(preferenceStore: preferences);
+    await finishModeRestore(controller);
+
+    controller.select(AccountMode.seller);
+    expect(controller.mode, AccountMode.buyer);
+    expect(preferences.values, isEmpty);
+
+    currentUser = userJson(id: 7, sellerCapability: 'seller');
+    await auth.refreshUser();
+    await controller.requestSellerMode();
+    for (int i = 0; i < 10 && preferences.values[7] == null; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(controller.mode, AccountMode.seller);
+    expect(preferences.values[7], AccountMode.seller.name);
+  });
+
+  test('a user without a saved preference defaults to Buyer Mode', () async {
+    final _MemoryAccountModeStore preferences = _MemoryAccountModeStore();
+    currentUser = userJson(id: 7, sellerCapability: 'seller');
+    final (_, AccountModeController controller) = await restoredSession(
+      preferenceStore: preferences,
+    );
+    await finishModeRestore(controller);
+
+    expect(controller.mode, AccountMode.buyer);
+    expect(preferences.values, isEmpty);
+  });
+
+  test(
+    'a selected mode is restored by a newly created session controller',
+    () async {
+      final _MemoryAccountModeStore preferences = _MemoryAccountModeStore();
+      currentUser = userJson(id: 7, sellerCapability: 'seller');
+      final (AuthController auth, AccountModeController controller) =
+          await restoredSession(preferenceStore: preferences);
+      await finishModeRestore(controller);
+
+      await controller.requestSellerMode();
+      for (int i = 0; i < 10 && preferences.values[7] == null; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(preferences.values[7], AccountMode.seller.name);
+      await auth.signOut();
+
+      // A new AuthController/AccountModeController pair models a process restart.
+      tokenStore.token = 'restored-user-a-token';
+      final (_, AccountModeController restartedController) =
+          await restoredSession(preferenceStore: preferences);
+      await finishModeRestore(restartedController);
+
+      expect(restartedController.mode, AccountMode.seller);
+    },
+  );
+
+  test(
+    'saved Seller Mode falls back to Buyer when capability is gone',
+    () async {
+      final _MemoryAccountModeStore preferences = _MemoryAccountModeStore()
+        ..values[7] = AccountMode.seller.name;
+      currentUser = userJson(id: 7, sellerCapability: 'buyer');
+
+      final (_, AccountModeController controller) = await restoredSession(
+        preferenceStore: preferences,
+      );
+      await finishModeRestore(controller);
+
+      expect(controller.mode, AccountMode.buyer);
+      expect(controller.canUseSellerMode, isFalse);
     },
   );
 }

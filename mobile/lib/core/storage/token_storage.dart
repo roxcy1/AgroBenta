@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../constants/api_constants.dart';
@@ -42,14 +44,43 @@ class TokenStorage implements TokenStore {
           );
 
   final FlutterSecureStorage _storage;
+  Future<void> _writeQueue = Future<void>.value();
 
   @override
   Future<String?> read() => _storage.read(key: ApiConstants.tokenStorageKey);
 
   @override
-  Future<void> write(String token) =>
-      _storage.write(key: ApiConstants.tokenStorageKey, value: token);
+  Future<void> write(String token) => _serialize<void>(
+    () => _storage.write(key: ApiConstants.tokenStorageKey, value: token),
+  );
 
   @override
-  Future<void> clear() => _storage.delete(key: ApiConstants.tokenStorageKey);
+  Future<void> clear() => _serialize<void>(
+    () => _storage.delete(key: ApiConstants.tokenStorageKey),
+  );
+
+  @override
+  Future<bool> clearIfCurrent(String expectedToken) =>
+      _serialize<bool>(() async {
+        final String? current = await _storage.read(
+          key: ApiConstants.tokenStorageKey,
+        );
+        if (current != expectedToken) return false;
+        await _storage.delete(key: ApiConstants.tokenStorageKey);
+        return true;
+      });
+
+  /// Serializes credential mutations so a compare-and-clear cannot race a
+  /// token write for a newly authenticated account.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final Completer<T> result = Completer<T>();
+    _writeQueue = _writeQueue.then((_) async {
+      try {
+        result.complete(await operation());
+      } on Object catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    });
+    return result.future;
+  }
 }
