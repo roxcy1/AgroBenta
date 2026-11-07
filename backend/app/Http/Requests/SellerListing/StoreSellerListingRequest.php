@@ -63,12 +63,27 @@ class StoreSellerListingRequest extends FormRequest
             }
 
             $type = LivestockType::tryFrom((string) $this->input('livestock_type'));
-            if ($type !== null && ! $type->hasBreed($breed)) {
+            if ($type !== null &&
+                ! $type->hasBreed($breed) &&
+                ! $this->isAllowedLegacyBreed($breed, $type)) {
                 $validator->errors()->add(
                     'breed',
                     'Choose a breed from the selected livestock type.',
                 );
             }
         }];
+    }
+
+    /**
+     * Override point for requests that may hold a historical breed.
+     *
+     * Listings created before the breed catalog existed may keep a free-text
+     * breed name that is not in their type's list. Creation never holds one —
+     * every *new* value must come from the catalog — so this defaults to
+     * `false` and only [UpdateSellerListingRequest] relaxes it.
+     */
+    protected function isAllowedLegacyBreed(string $breed, LivestockType $type): bool
+    {
+        return false;
     }
 }

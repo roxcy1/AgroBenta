@@ -740,6 +740,41 @@ class MobileSellerListingTest extends TestCase
     }
 
     #[Test]
+    public function an_unedited_legacy_free_text_breed_is_allowed_once_its_type_is_re_sent(): void
+    {
+        // The mobile edit form always sends the listing's type together with
+        // its breed, so this is the exact shape of an unrelated save of a
+        // listing whose breed predates the catalog. It is exercised while the
+        // type check is live, not by sending `breed` alone.
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'livestock_type' => 'cattle',
+                'breed' => 'Angus',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.breed', 'Angus')
+            ->assertJsonPath('data.livestock_type', 'cattle');
+    }
+
+    #[Test]
+    public function a_breed_that_was_not_stored_must_come_from_the_catalog(): void
+    {
+        // Same request shape, but a value that was never stored: the
+        // unchanged-legacy exemption must not become a free pass.
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'livestock_type' => 'cattle',
+                'breed' => 'Hereford',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('breed');
+    }
+
+    #[Test]
     public function an_edit_rejects_an_unsupported_livestock_type(): void
     {
         $listing = $this->createListing($this->seller, ['status' => ListingStatus::Draft]);

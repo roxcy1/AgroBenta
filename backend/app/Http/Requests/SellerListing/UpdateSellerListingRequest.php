@@ -131,8 +131,7 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
             // Existing free-text breeds predate the catalog. Allow the exact
             // stored value only while its livestock type is unchanged; a new or
             // changed catalog value must belong to the selected type.
-            if (! $livestockTypeChanged &&
-                $breed === trim((string) $listing->breed)) {
+            if ($this->isAllowedLegacyBreed($breed, $type)) {
                 return;
             }
 
@@ -141,6 +140,25 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
                 'Choose a breed from the selected livestock type.',
             );
         });
+    }
+
+    /**
+     * Let a legacy listing re-send its exact stored breed while its type is
+     * unchanged. This is the single definition of the exemption: the create
+     * request's `after()` check (inherited, because the edit form always sends
+     * `livestock_type` together with `breed`) and the pairing review in
+     * `withValidator()` above both consult it.
+     */
+    protected function isAllowedLegacyBreed(string $breed, LivestockType $type): bool
+    {
+        $listing = $this->currentListing();
+
+        if ($listing === null) {
+            return false;
+        }
+
+        return $breed === trim((string) $listing->breed) &&
+            $type->value === (string) $listing->livestock_type;
     }
 
     private function currentListing(): ?Listing
