@@ -105,6 +105,8 @@ class _SellerVerificationFormScreenState
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _governmentIdFormKey = GlobalKey<FormState>();
   final TextEditingController _phone = TextEditingController();
+  final TextEditingController _businessName = TextEditingController();
+  final TextEditingController _businessLocation = TextEditingController();
   final TextEditingController _businessDescription = TextEditingController();
   final TextEditingController _governmentIdDescription =
       TextEditingController();
@@ -161,6 +163,8 @@ class _SellerVerificationFormScreenState
       _authenticatedUserId = userId;
       _documents.resetForAccountChange();
       _previousVerification = null;
+      _businessName.clear();
+      _businessLocation.clear();
       _businessDescription.clear();
       _governmentIdDescription.clear();
       _governmentIdType = null;
@@ -245,6 +249,8 @@ class _SellerVerificationFormScreenState
     // server's own values from the record already on screen — no local copy of
     // the application is kept anywhere.
     if (widget.isResubmission && previous != null) {
+      _businessName.text = previous.businessName ?? '';
+      _businessLocation.text = previous.businessLocation ?? '';
       _businessDescription.text = previous.businessDescription ?? '';
       _governmentIdType = previous.governmentIdType;
       _governmentIdDescription.text = previous.governmentIdDescription ?? '';
@@ -290,6 +296,8 @@ class _SellerVerificationFormScreenState
   @override
   void dispose() {
     _authController?.removeListener(_handleAuthChanged);
+    _businessName.dispose();
+    _businessLocation.dispose();
     _businessDescription.dispose();
     _governmentIdDescription.dispose();
     _phone.dispose();
@@ -357,6 +365,8 @@ class _SellerVerificationFormScreenState
                   province: catalog.province,
                 ) ??
                 ''),
+      businessName: _businessName.text,
+      businessLocation: _businessLocation.text,
       businessDescription: _businessDescription.text,
       governmentIdType: _governmentIdType?.value ?? '',
       governmentIdDescription: _governmentIdType == GovernmentIdType.others
@@ -550,6 +560,36 @@ class _SellerVerificationFormScreenState
               enabled: !isSubmitting,
               externalError: _controller.state.errorFor('address'),
               onChanged: _handleLocationChanged,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _businessName,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              maxLength: kSellerVerificationShortFieldMax,
+              enabled: !isSubmitting,
+              decoration: const InputDecoration(
+                labelText: 'Business name',
+                helperText: 'Optional. Your farm or business name.',
+              ),
+              validator: (String? value) =>
+                  validateBusinessName(value) ??
+                  _controller.state.errorFor('business_name'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _businessLocation,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              maxLength: kSellerVerificationShortFieldMax,
+              enabled: !isSubmitting,
+              decoration: const InputDecoration(
+                labelText: 'Business location',
+                helperText: 'Optional. Town, city or province.',
+              ),
+              validator: (String? value) =>
+                  validateBusinessLocation(value) ??
+                  _controller.state.errorFor('business_location'),
             ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
@@ -819,6 +859,8 @@ class _SellerVerificationFormScreenState
     final String? accountName =
         widget.accountName ?? _authController?.state.user?.name;
     final String description = _businessDescription.text.trim();
+    final String businessName = _businessName.text.trim();
+    final String location = _businessLocation.text.trim();
     final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
     final String address = catalog == null
         ? (_legacyAddress ?? 'Not provided')
@@ -852,6 +894,14 @@ class _SellerVerificationFormScreenState
                 : _phone.text.trim(),
           ),
           DetailRow(label: 'Address', value: address),
+          DetailRow(
+            label: 'Business name',
+            value: businessName.isEmpty ? 'Not provided' : businessName,
+          ),
+          DetailRow(
+            label: 'Business location',
+            value: location.isEmpty ? 'Not provided' : location,
+          ),
           DetailRow(
             label: 'Business description',
             value: description.isEmpty ? 'Not provided' : description,

@@ -234,9 +234,10 @@ void main() {
 
         expect(find.byType(SellerVerificationFormScreen), findsOneWidget);
 
-        // Full name is read-only account data. The app now captures the address
-        // through the shared selector rather than a free-text field.
-        expect(find.byType(TextFormField), findsNWidgets(4));
+        // Full name is read-only account data. The address is captured through
+        // the shared selector, and the optional business snapshot fields are
+        // collected on this step as well.
+        expect(find.byType(TextFormField), findsNWidgets(6));
         expect(
           find.byType(DropdownButtonFormField<GovernmentIdType>),
           findsNothing,
@@ -248,8 +249,8 @@ void main() {
         expect(find.text('Municipality'), findsOneWidget);
         expect(find.text('Barangay'), findsOneWidget);
         expect(find.text('Street / Purok (optional)'), findsOneWidget);
-        expect(find.text('Business name'), findsNothing);
-        expect(find.text('Business location'), findsNothing);
+        expect(find.text('Business name'), findsOneWidget);
+        expect(find.text('Business location'), findsOneWidget);
         expect(find.text('Business description'), findsOneWidget);
         expect(find.text('ID document reference'), findsNothing);
       },
@@ -462,8 +463,8 @@ void main() {
       await tapNext(tester);
 
       expect(find.text('Review Your Information'), findsOneWidget);
-      expect(find.text('Business name'), findsNothing);
-      expect(find.text('Business location'), findsNothing);
+      expect(find.text('Business name'), findsOneWidget);
+      expect(find.text('Business location'), findsOneWidget);
       expect(
         find.widgetWithText(FilledButton, 'Submit Application'),
         findsOneWidget,
@@ -782,8 +783,26 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: true);
 
-      expect(find.text('Business name'), findsNothing);
-      expect(find.text('Business location'), findsNothing);
+      expect(find.text('Business name'), findsOneWidget);
+      expect(find.text('Business location'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Business name'),
+            )
+            .controller!
+            .text,
+        'Santos Cattle Co.',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Business location'),
+            )
+            .controller!
+            .text,
+        'Mabalacat, Pampanga',
+      );
       expect(
         tester
             .widget<TextFormField>(
