@@ -50,8 +50,13 @@ class SellerVerificationDocumentsController extends ChangeNotifier {
         SellerVerificationDocumentsState.fromRecord(verification);
     _set(seeded);
 
+    final List<VerificationDocument> historicalDocuments =
+        <VerificationDocument>[
+          ...seeded.all,
+          if (verification.hasIdDocumentBack) seeded.idDocumentBack,
+        ];
     await Future.wait<void>(
-      seeded.all
+      historicalDocuments
           .where(
             (VerificationDocument document) =>
                 document.hasPreviousRecordDocument,
@@ -270,6 +275,87 @@ class SellerVerificationDocumentsController extends ChangeNotifier {
       return;
     }
     await pickAndUpload(type: type, file: file);
+  }
+
+  /// Records an explicit back-image choice. A no-back declaration is published
+  /// only after any staged back image has been removed successfully.
+  Future<bool> chooseBackImage({required bool hasNoBackImage}) async {
+    if (_disposed || _state.idDocumentBack.isUploading) return false;
+    if (!hasNoBackImage) {
+      _set(_state.copyWith(hasNoBackImage: false));
+      return true;
+    }
+
+    final VerificationDocument current = _state.idDocumentBack;
+    final int generation = _nextGeneration(
+      VerificationDocumentType.idDocumentBack,
+    );
+    if (current.hasFile && !current.isUploading) {
+      _set(
+        _state.copyWith(
+          idDocumentBack: current.copyWith(
+            status: VerificationDocumentStatus.uploading,
+            clearError: true,
+            clearProgress: true,
+          ),
+        ),
+      );
+      try {
+        await _repository.deleteDocument(
+          VerificationDocumentType.idDocumentBack,
+        );
+      } on ApiException catch (error) {
+        if (!_isCurrentRequest(
+          VerificationDocumentType.idDocumentBack,
+          generation,
+        )) {
+          return false;
+        }
+        if (error.kind != ApiErrorKind.notFound) {
+          _set(
+            _state.copyWith(
+              idDocumentBack: current.copyWith(
+                status: VerificationDocumentStatus.failed,
+                error: 'Could not remove the back image. Please retry.',
+              ),
+            ),
+          );
+          return false;
+        }
+      } on Object {
+        if (!_isCurrentRequest(
+          VerificationDocumentType.idDocumentBack,
+          generation,
+        )) {
+          return false;
+        }
+        _set(
+          _state.copyWith(
+            idDocumentBack: current.copyWith(
+              status: VerificationDocumentStatus.failed,
+              error: 'Could not remove the back image. Please retry.',
+            ),
+          ),
+        );
+        return false;
+      }
+    }
+
+    if (!_isCurrentRequest(
+      VerificationDocumentType.idDocumentBack,
+      generation,
+    )) {
+      return false;
+    }
+    _set(
+      _state.copyWith(
+        idDocumentBack: const VerificationDocument(
+          type: VerificationDocumentType.idDocumentBack,
+        ),
+        hasNoBackImage: true,
+      ),
+    );
+    return true;
   }
 
   /// Reflects document-specific 422 errors from the submission endpoint.

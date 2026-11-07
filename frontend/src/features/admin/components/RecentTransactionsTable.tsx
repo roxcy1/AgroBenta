@@ -1,12 +1,14 @@
 import type { DashboardRecentTransaction } from '../api/useDashboard';
 import { formatCurrency, formatDate } from './dashboardFormat';
 import { StatusBadge } from './StatusBadge';
+import { livestockTypeLabel, useLivestockTypes } from '../livestock/api/useLivestockTypes';
 
 interface RecentTransactionsTableProps {
   transactions: DashboardRecentTransaction[];
 }
 
 export function RecentTransactionsTable({ transactions }: RecentTransactionsTableProps) {
+  const { data: livestockTypes } = useLivestockTypes();
   if (transactions.length === 0) {
     return (
       <div className="dashboard-empty-state">
@@ -37,7 +39,7 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
               <td className="lv-seller-cell">{transaction.seller?.name ?? '—'}</td>
               <td>
                 {transaction.listing
-                  ? `${transaction.listing.livestock_type} / ${transaction.listing.breed}`
+                  ? `${livestockTypeLabel(transaction.listing.livestock_type, livestockTypes)} / ${transaction.listing.breed}`
                   : '—'}
               </td>
               <td className="lv-price-cell">{formatCurrency(transaction.total_amount)}</td>

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\SellerVerification;
 
+use App\Enums\GovernmentIdType;
 use App\Enums\SellerCapability;
 use App\Enums\SellerVerificationDocumentType as DocType;
 use App\Enums\SellerVerificationStatus;
@@ -83,6 +84,11 @@ class SellerVerificationDocumentsTest extends TestCase
                 'phone',
                 'address',
                 'id_document_path',
+                'id_document_front_path',
+                'id_document_back_path',
+                'government_id_type',
+                'government_id_description',
+                'has_no_back_image',
                 'selfie_path',
             ]),
             'Document paths must have columns before submission can persist them.',
@@ -123,6 +129,7 @@ class SellerVerificationDocumentsTest extends TestCase
         foreach ($this->requiredTypes() as $type) {
             $this->upload($user, $type)->assertCreated();
         }
+        $this->upload($user, DocType::IdDocumentBack)->assertCreated();
     }
 
     /**
@@ -141,7 +148,9 @@ class SellerVerificationDocumentsTest extends TestCase
         return $this->withToken($this->mobileToken($user))
             ->postJson('/api/seller-verification', array_merge([
                 'phone' => '09171234567',
-                'address' => 'Trinidad, Bohol',
+                'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
+                'government_id_type' => 'philippine_national_id',
+                'has_no_back_image' => false,
             ], $body));
     }
 
@@ -155,7 +164,7 @@ class SellerVerificationDocumentsTest extends TestCase
         return SellerVerification::create(array_merge([
             'user_id' => $user->id,
             'phone' => '09171234567',
-            'address' => 'Trinidad, Bohol',
+            'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
             'business_name' => 'Reyes Livestock',
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm.',
@@ -389,11 +398,11 @@ class SellerVerificationDocumentsTest extends TestCase
     public function submission_is_refused_when_no_documents_are_staged(): void
     {
         $this->submit($this->buyer, [
-                'business_name' => 'Reyes Livestock',
-            ])
+            'business_name' => 'Reyes Livestock',
+        ])
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Upload all required documents before submitting.')
-            ->assertJsonValidationErrors(['id_document', 'selfie', 'proof_of_address'])
+            ->assertJsonValidationErrors(['id_document_front', 'id_document_back', 'selfie', 'proof_of_address'])
             ->assertJsonMissingValidationErrors('farm_photo');
 
         $this->assertDatabaseCount('seller_verifications', 0);
@@ -402,14 +411,14 @@ class SellerVerificationDocumentsTest extends TestCase
     #[Test]
     public function submission_is_refused_when_only_the_id_was_staged(): void
     {
-        $this->upload($this->buyer, DocType::IdDocument)->assertCreated();
+        $this->upload($this->buyer, DocType::IdDocumentFront)->assertCreated();
 
         $this->submit($this->buyer, [
-                'business_name' => 'Reyes Livestock',
-            ])
+            'business_name' => 'Reyes Livestock',
+        ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('selfie')
-            ->assertJsonMissingValidationErrors('id_document');
+            ->assertJsonValidationErrors(['id_document_back', 'selfie', 'proof_of_address'])
+            ->assertJsonMissingValidationErrors('id_document_front');
 
         $this->assertDatabaseCount('seller_verifications', 0);
     }
@@ -423,8 +432,8 @@ class SellerVerificationDocumentsTest extends TestCase
         $this->createVerification($this->buyer);
 
         $this->submit($this->buyer, [
-                'business_name' => 'Reyes Livestock',
-            ])
+            'business_name' => 'Reyes Livestock',
+        ])
             ->assertStatus(409);
     }
 
@@ -434,8 +443,8 @@ class SellerVerificationDocumentsTest extends TestCase
         $this->stageBoth($this->buyer);
 
         $this->submit($this->buyer, [
-                'business_name' => 'Reyes Livestock',
-            ])
+            'business_name' => 'Reyes Livestock',
+        ])
             ->assertCreated()
             ->assertJsonPath('data.has_id_document', true)
             ->assertJsonPath('data.has_selfie', true);
@@ -446,13 +455,15 @@ class SellerVerificationDocumentsTest extends TestCase
 
         $disk = Storage::disk(SellerVerificationDocumentService::DISK);
 
-        $this->assertNotNull($verification->id_document_path);
+        $this->assertNotNull($verification->id_document_front_path);
+        $this->assertNotNull($verification->id_document_back_path);
         $this->assertNotNull($verification->selfie_path);
         $this->assertStringStartsWith(
             "verifications/{$verification->id}/",
-            $verification->id_document_path,
+            $verification->id_document_front_path,
         );
-        $this->assertTrue($disk->exists($verification->id_document_path));
+        $this->assertTrue($disk->exists($verification->id_document_front_path));
+        $this->assertTrue($disk->exists($verification->id_document_back_path));
         $this->assertTrue($disk->exists($verification->selfie_path));
 
         $this->assertSame(
@@ -462,8 +473,88 @@ class SellerVerificationDocumentsTest extends TestCase
         );
 
         // Never a URL in the record.
-        $this->assertStringNotContainsString('http', $verification->id_document_path);
+        $this->assertStringNotContainsString('http', $verification->id_document_front_path);
         $this->assertStringNotContainsString('http', $verification->selfie_path);
+        $this->assertSame('philippine_national_id', $verification->government_id_type);
+        $this->assertFalse($verification->has_no_back_image);
+    }
+
+    #[Test]
+    public function a_front_only_id_requires_an_explicit_no_back_declaration(): void
+    {
+        foreach ([DocType::IdDocumentFront, DocType::Selfie, DocType::ProofOfAddress] as $type) {
+            $this->upload($this->buyer, $type)->assertCreated();
+        }
+
+        $this->submit($this->buyer, ['has_no_back_image' => true])
+            ->assertCreated()
+            ->assertJsonPath('data.has_id_document_front', true)
+            ->assertJsonPath('data.has_id_document_back', false)
+            ->assertJsonPath('data.has_no_back_image', true);
+
+        $verification = SellerVerification::query()->where('user_id', $this->buyer->id)->firstOrFail();
+        $this->assertNull($verification->id_document_back_path);
+    }
+
+    #[Test]
+    public function no_back_declaration_is_rejected_when_a_back_image_is_staged(): void
+    {
+        $this->stageBoth($this->buyer);
+
+        $this->submit($this->buyer, ['has_no_back_image' => true])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('has_no_back_image');
+    }
+
+    #[Test]
+    public function missing_back_image_without_declaration_is_rejected(): void
+    {
+        foreach ([DocType::IdDocumentFront, DocType::Selfie, DocType::ProofOfAddress] as $type) {
+            $this->upload($this->buyer, $type)->assertCreated();
+        }
+
+        $this->submit($this->buyer, ['has_no_back_image' => false])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('id_document_back');
+    }
+
+    #[Test]
+    public function every_supported_government_id_type_is_accepted_and_snapshotted(): void
+    {
+        foreach (GovernmentIdType::cases() as $index => $type) {
+            $applicant = User::factory()->create([
+                'role' => UserRole::User,
+                'seller_capability' => SellerCapability::Buyer,
+            ]);
+            $this->stageBoth($applicant);
+            $body = ['government_id_type' => $type->value];
+            if ($type === GovernmentIdType::Others) {
+                $body['government_id_description'] = 'Barangay ID';
+            }
+
+            $this->submit($applicant, $body)->assertCreated()
+                ->assertJsonPath('data.government_id_type', $type->value);
+            $verification = SellerVerification::query()->where('user_id', $applicant->id)->firstOrFail();
+            $this->assertSame($type->value, $verification->government_id_type);
+            $this->assertSame($type === GovernmentIdType::Others ? 'Barangay ID' : null, $verification->government_id_description);
+        }
+    }
+
+    #[Test]
+    public function government_id_type_and_others_description_are_required(): void
+    {
+        $this->stageBoth($this->buyer);
+        $this->submit($this->buyer, ['government_id_type' => null])
+            ->assertUnprocessable()->assertJsonValidationErrors('government_id_type');
+
+        $this->submit($this->buyer, [
+            'government_id_type' => 'others',
+            'government_id_description' => null,
+        ])->assertUnprocessable()->assertJsonValidationErrors('government_id_description');
+
+        $this->submit($this->buyer, [
+            'government_id_type' => 'passport',
+        ])->assertUnprocessable()->assertJsonValidationErrors('government_id_type');
     }
 
     #[Test]
@@ -478,8 +569,8 @@ class SellerVerificationDocumentsTest extends TestCase
         });
 
         $this->submit($this->buyer, [
-                'business_name' => 'Reyes Livestock',
-            ])
+            'business_name' => 'Reyes Livestock',
+        ])
             ->assertStatus(500);
 
         $this->assertDatabaseCount('seller_verifications', 0);
@@ -514,7 +605,7 @@ class SellerVerificationDocumentsTest extends TestCase
         // from nothing.
         $this->submit($this->buyer, ['business_name' => 'Retry Farm'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['id_document', 'selfie', 'proof_of_address']);
+            ->assertJsonValidationErrors(['id_document_front', 'id_document_back', 'selfie', 'proof_of_address']);
 
         $this->stageBoth($this->buyer);
 
@@ -532,13 +623,13 @@ class SellerVerificationDocumentsTest extends TestCase
         $this->stageBoth($this->buyer);
 
         $this->submit($this->buyer, [
-                'business_name' => 'Reyes Livestock',
-            ])
+            'business_name' => 'Reyes Livestock',
+        ])
             ->assertCreated();
 
         $response = $this
             ->withToken($this->mobileToken($this->buyer))
-            ->get('/api/seller-verification/documents/id_document');
+            ->get('/api/seller-verification/documents/id_document_front');
 
         $response->assertOk();
 
@@ -554,7 +645,7 @@ class SellerVerificationDocumentsTest extends TestCase
         $this->assertNotEmpty($response->streamedContent());
         $this->assertSame(
             Storage::disk(SellerVerificationDocumentService::DISK)
-                ->get($verification->id_document_path),
+                ->get($verification->id_document_front_path),
             $response->streamedContent(),
         );
     }
@@ -569,7 +660,7 @@ class SellerVerificationDocumentsTest extends TestCase
         // No id in the path: the record is resolved from the token, so a
         // second account simply has no record and gets 404.
         $this->withToken($this->mobileToken($this->otherBuyer))
-            ->get('/api/seller-verification/documents/id_document')
+            ->get('/api/seller-verification/documents/id_document_front')
             ->assertNotFound();
     }
 
@@ -598,7 +689,7 @@ class SellerVerificationDocumentsTest extends TestCase
         $this->createVerification($this->buyer);
 
         $this->withToken($this->mobileToken($this->buyer))
-            ->get('/api/seller-verification/documents/id_document')
+            ->get('/api/seller-verification/documents/id_document_front')
             ->assertNotFound();
     }
 
@@ -621,6 +712,43 @@ class SellerVerificationDocumentsTest extends TestCase
             'no-store',
             $response->headers->get('Cache-Control', ''),
         );
+    }
+
+    #[Test]
+    public function an_administrator_streams_the_correct_id_front_and_back_images(): void
+    {
+        $verification = $this->createVerification($this->buyer);
+        $frontPath = $this->putDocument($verification, DocType::IdDocumentFront);
+        $backPath = $this->putDocument($verification, DocType::IdDocumentBack);
+        $disk = Storage::disk(SellerVerificationDocumentService::DISK);
+
+        foreach ([
+            'id_document_front' => $frontPath,
+            'id_document_back' => $backPath,
+        ] as $type => $path) {
+            $response = $this->withToken($this->adminToken())
+                ->get("/api/admin/seller-verifications/{$verification->id}/documents/{$type}")
+                ->assertOk();
+
+            $this->assertSame($disk->get($path), $response->streamedContent());
+        }
+    }
+
+    #[Test]
+    public function a_legacy_single_id_is_available_as_front_only(): void
+    {
+        $verification = $this->createVerification($this->buyer);
+        $legacyPath = $this->putDocument($verification, DocType::IdDocument);
+        $disk = Storage::disk(SellerVerificationDocumentService::DISK);
+
+        $front = $this->withToken($this->adminToken())
+            ->get("/api/admin/seller-verifications/{$verification->id}/documents/id_document_front")
+            ->assertOk();
+        $this->assertSame($disk->get($legacyPath), $front->streamedContent());
+
+        $this->withToken($this->adminToken())
+            ->get("/api/admin/seller-verifications/{$verification->id}/documents/id_document_back")
+            ->assertNotFound();
     }
 
     #[Test]
@@ -666,6 +794,7 @@ class SellerVerificationDocumentsTest extends TestCase
             $this->assertArrayNotHasKey('id_document_path', $payload);
             $this->assertArrayNotHasKey('selfie_path', $payload);
             $this->assertTrue($payload['has_id_document']);
+            $this->assertTrue($payload['has_id_document_front']);
             $this->assertTrue($payload['has_selfie']);
             $this->assertStringNotContainsString(
                 'verifications/',
@@ -681,13 +810,13 @@ class SellerVerificationDocumentsTest extends TestCase
     #[Test]
     public function submission_is_refused_without_proof_of_address(): void
     {
-        $this->upload($this->buyer, DocType::IdDocument)->assertCreated();
+        $this->upload($this->buyer, DocType::IdDocumentFront)->assertCreated();
         $this->upload($this->buyer, DocType::Selfie)->assertCreated();
 
         $this->submit($this->buyer)
             ->assertUnprocessable()
             ->assertJsonValidationErrors('proof_of_address')
-            ->assertJsonMissingValidationErrors(['id_document', 'selfie']);
+            ->assertJsonMissingValidationErrors(['id_document_front', 'selfie']);
     }
 
     #[Test]

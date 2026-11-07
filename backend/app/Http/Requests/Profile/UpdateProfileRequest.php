@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Profile;
 
+use App\Rules\TrinidadLocationAddressRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -43,7 +44,13 @@ class UpdateProfileRequest extends FormRequest
                 Rule::unique('users', 'email')->ignore($user->id),
             ],
             'phone' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'location' => ['sometimes', 'nullable', 'string', 'max:191'],
+            'location' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:191',
+                new TrinidadLocationAddressRule($user->location),
+            ],
             'avatar_url' => ['sometimes', 'nullable', 'url', 'max:2048'],
             'bio' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ];

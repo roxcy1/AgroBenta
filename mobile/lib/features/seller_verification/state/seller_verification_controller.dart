@@ -163,6 +163,9 @@ class SellerVerificationController extends ChangeNotifier {
     String? businessLocation,
     String? businessDescription,
     String? idDocumentRef,
+    String governmentIdType = 'philippine_national_id',
+    String? governmentIdDescription,
+    bool hasNoBackImage = false,
   }) async {
     if (_state.isBusy) {
       return false;
@@ -185,6 +188,9 @@ class SellerVerificationController extends ChangeNotifier {
         businessLocation: businessLocation,
         businessDescription: businessDescription,
         idDocumentRef: idDocumentRef,
+        governmentIdType: governmentIdType,
+        governmentIdDescription: governmentIdDescription,
+        hasNoBackImage: hasNoBackImage,
       );
 
       if (_disposed) {

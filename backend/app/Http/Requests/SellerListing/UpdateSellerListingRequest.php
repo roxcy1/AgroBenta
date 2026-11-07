@@ -4,6 +4,7 @@ namespace App\Http\Requests\SellerListing;
 
 use App\Enums\LivestockType;
 use App\Models\Listing;
+use App\Rules\TrinidadLocationAddressRule;
 use Illuminate\Validation\Validator;
 
 /**
@@ -21,6 +22,10 @@ use Illuminate\Validation\Validator;
  */
 class UpdateSellerListingRequest extends StoreSellerListingRequest
 {
+    private bool $listingResolved = false;
+
+    private ?Listing $resolvedListing = null;
+
     /**
      * @return array<string, list<mixed>>
      */
@@ -66,6 +71,13 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
         return $rules;
     }
 
+    protected function locationAddressRule(): TrinidadLocationAddressRule
+    {
+        return new TrinidadLocationAddressRule(
+            $this->currentListing()?->location,
+        );
+    }
+
     /**
      * Require a supported replacement when editing a historical listing.
      *
@@ -78,28 +90,84 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            $listing = Listing::query()->find($this->route('listing'));
+            $listing = $this->currentListing();
 
-            if ($listing === null || $this->has('livestock_type')) {
+            if ($listing === null) {
                 return;
             }
 
-            if (LivestockType::tryFrom((string) $listing->livestock_type) !== null) {
-                return;
-            }
-
-            $labels = array_map(
-                static fn (LivestockType $type): string => $type->label(),
-                LivestockType::cases(),
+            $hasLivestockType = $this->exists('livestock_type');
+            $livestockType = (string) $this->input(
+                'livestock_type',
+                $listing->livestock_type,
             );
+            $livestockTypeChanged = $livestockType !== (string) $listing->livestock_type;
+
+            if (! $hasLivestockType &&
+                LivestockType::tryFrom((string) $listing->livestock_type) === null) {
+                $validator->errors()->add(
+                    'livestock_type',
+                    'This listing uses an unsupported livestock type. Choose Carabao, Cattle, Goat, Swine, or Chicken before saving.',
+                );
+            }
+
+            // A type change with no new breed clears the old breed in the
+            // service. No pairing error is needed for that intentional reset.
+            $breedWasSent = $this->exists('breed');
+            $breed = trim((string) ($this->input('breed') ?? ''));
+            if ($livestockTypeChanged && (! $breedWasSent || $breed === '')) {
+                return;
+            }
+
+            if (! $breedWasSent || $breed === '') {
+                return;
+            }
+
+            $type = LivestockType::tryFrom($livestockType);
+            if ($type === null || $type->hasBreed($breed)) {
+                return;
+            }
+
+            // Existing free-text breeds predate the catalog. Allow the exact
+            // stored value only while its livestock type is unchanged; a new or
+            // changed catalog value must belong to the selected type.
+            if ($this->isAllowedLegacyBreed($breed, $type)) {
+                return;
+            }
 
             $validator->errors()->add(
-                'livestock_type',
-                sprintf(
-                    'This listing uses an unsupported livestock type. Choose %s before saving.',
-                    implode(', ', $labels),
-                ),
+                'breed',
+                'Choose a breed from the selected livestock type.',
             );
         });
+    }
+
+    /**
+     * Let a legacy listing re-send its exact stored breed while its type is
+     * unchanged. This is the single definition of the exemption: the create
+     * request's `after()` check (inherited, because the edit form always sends
+     * `livestock_type` together with `breed`) and the pairing review in
+     * `withValidator()` above both consult it.
+     */
+    protected function isAllowedLegacyBreed(string $breed, LivestockType $type): bool
+    {
+        $listing = $this->currentListing();
+
+        if ($listing === null) {
+            return false;
+        }
+
+        return $breed === trim((string) $listing->breed) &&
+            $type->value === (string) $listing->livestock_type;
+    }
+
+    private function currentListing(): ?Listing
+    {
+        if (! $this->listingResolved) {
+            $this->resolvedListing = Listing::query()->find($this->route('listing'));
+            $this->listingResolved = true;
+        }
+
+        return $this->resolvedListing;
     }
 }

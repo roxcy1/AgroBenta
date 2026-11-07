@@ -63,7 +63,7 @@ class MarketplaceListingRepository
     public const POPULAR_WINDOW_DAYS = 30;
 
     /**
-     * The only livestock categories the buyer surface ranks, lowercased for
+     * The approved livestock categories the buyer surface ranks, lowercased for
      * comparison. `listings.livestock_type` is free text; anything else is not
      * a category this feature can present, so it is excluded rather than
      * guessed at.

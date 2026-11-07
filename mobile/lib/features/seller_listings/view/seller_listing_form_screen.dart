@@ -5,12 +5,16 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
+import '../../../features/profile/state/profile_scope.dart';
 import '../../../models/ai_price_estimate.dart';
 import '../../../models/listing.dart';
 import '../../../models/livestock_type.dart';
+import '../../../models/trinidad_location.dart';
 import '../../livestock_types/state/livestock_types_controller.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
 import '../../livestock_types/state/livestock_types_state.dart';
+import '../../trinidad_location/state/trinidad_location_controller.dart';
+import '../../trinidad_location/state/trinidad_location_scope.dart';
 import '../state/listing_photo_item.dart';
 import '../state/seller_listing_controller.dart';
 import '../state/seller_listing_draft.dart';
@@ -22,6 +26,7 @@ import 'seller_listing_views.dart';
 import 'seller_listing_validators.dart';
 import '../../../widgets/notice_banner.dart';
 import '../../../widgets/section_card.dart';
+import '../../../widgets/trinidad_location_selector.dart';
 
 /// Which Stepper step shows each server-validated field.
 ///
@@ -80,7 +85,6 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   final TextEditingController _weightValue = TextEditingController();
   final TextEditingController _quantity = TextEditingController();
   final TextEditingController _askingPrice = TextEditingController();
-  final TextEditingController _location = TextEditingController();
   final TextEditingController _healthStatus = TextEditingController();
   final TextEditingController _vaccination = TextEditingController();
   final TextEditingController _shortDescription = TextEditingController();
@@ -90,8 +94,15 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   String? _ageUnit;
   String? _gender;
   String? _weightUnit;
+  bool _clearBreed = false;
 
   late final LivestockTypesController _catalog;
+  late final TrinidadLocationController _locationCatalog;
+  TrinidadLocation? _selectedLocation;
+  String? _legacyLocation;
+  String? _pendingLocation;
+  String _initialLocation = '';
+  bool _locationWasTouched = false;
 
   int _step = 0;
 
@@ -159,10 +170,13 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     super.initState();
     _controller = SellerListingScope.readOf(context);
     _catalog = LivestockTypesScope.readOf(context);
+    _locationCatalog = TrinidadLocationScope.readOf(context);
 
     final Listing? listing = widget.listing;
     if (listing != null) {
       final SellerListingDraft draft = SellerListingDraft.fromListing(listing);
+      _initialLocation = draft.location;
+      _queueInitialLocation(draft.location);
       _livestockType = draft.livestockType.trim().isEmpty
           ? null
           : draft.livestockType;
@@ -174,19 +188,30 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       _weightUnit = draft.weightUnit;
       _quantity.text = draft.quantity;
       _askingPrice.text = draft.askingPrice;
-      _location.text = draft.location;
       _healthStatus.text = draft.healthStatus;
       _vaccination.text = draft.vaccination;
       _shortDescription.text = draft.shortDescription;
       _additionalNotes.text = draft.additionalNotes;
+    } else {
+      // Prefill only from an already-loaded profile snapshot. The selector
+      // remains editable, and creating a listing never starts a separate
+      // profile request.
+      final String? profileLocation = ProfileScope.maybeReadOf(
+        context,
+      )?.state.user?.location;
+      if (profileLocation != null && profileLocation.trim().isNotEmpty) {
+        _initialLocation = profileLocation;
+        _queueInitialLocation(profileLocation);
+      }
     }
 
-    // These three fields are free text and are model inputs. Listening here
-    // clears a suggestion as soon as the seller edits one, without adding a
-    // second onChanged parameter to the shared text-field widget.
+    // These three fields are model inputs. Listening here clears a suggestion
+    // as soon as the seller edits one, without adding a second onChanged
+    // parameter to the shared text-field widget.
     _breed.addListener(_onSuggestionInputChanged);
     _ageValue.addListener(_onSuggestionInputChanged);
     _weightValue.addListener(_onSuggestionInputChanged);
+    _locationCatalog.addListener(_handleLocationCatalogChanged);
 
     // Seed the photo composer from the server-served URLs when editing, or
     // leave it empty for a new draft. Photos upload once the listing exists.
@@ -200,6 +225,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       // never appear beside this form's values.
       _controller.clearPriceSuggestion();
       _catalog.ensureLoaded();
+      _locationCatalog.ensureLoaded();
       _controller.startPhotoComposer(
         widget.listing?.id,
         widget.listing?.photos ?? const <String>[],
@@ -207,17 +233,78 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     });
   }
 
+  void _queueInitialLocation(String raw) {
+    _pendingLocation = raw.trim();
+    _restoreQueuedLocation();
+  }
+
+  void _restoreQueuedLocation() {
+    final String? raw = _pendingLocation;
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final TrinidadLocation? parsed = catalog?.parseAddress(raw);
+    _selectedLocation = parsed;
+    _legacyLocation = raw != null && raw.isNotEmpty && parsed == null
+        ? raw
+        : null;
+  }
+
+  void _handleLocationCatalogChanged() {
+    if (_pendingLocation != null && _locationCatalog.state.isReady && mounted) {
+      setState(_restoreQueuedLocation);
+    }
+  }
+
+  void _handleLocationChanged(TrinidadLocation? value) {
+    setState(() {
+      _selectedLocation = value;
+      _legacyLocation = null;
+      _pendingLocation = null;
+      _locationWasTouched = true;
+    });
+  }
+
+  String _locationForSave() {
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final String? formatted = catalog == null
+        ? null
+        : _selectedLocation?.formattedAddress(
+            municipality: catalog.municipality,
+            province: catalog.province,
+          );
+    if (formatted != null) return formatted;
+    if (_isEditing && !_locationWasTouched) return _initialLocation;
+    return '';
+  }
+
+  String? _validateLocation() {
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final String? formatted = catalog == null
+        ? null
+        : _selectedLocation?.formattedAddress(
+            municipality: catalog.municipality,
+            province: catalog.province,
+          );
+    if (formatted != null) return validateListingLocation(formatted);
+
+    // Unmapped historical values may be preserved during an unrelated edit,
+    // but an explicit location edit needs a barangay selection.
+    if (_isEditing && !_locationWasTouched && _initialLocation.isNotEmpty) {
+      return validateListingLocation(_initialLocation);
+    }
+    return 'Select a barangay.';
+  }
+
   @override
   void dispose() {
     _breed.removeListener(_onSuggestionInputChanged);
     _ageValue.removeListener(_onSuggestionInputChanged);
     _weightValue.removeListener(_onSuggestionInputChanged);
+    _locationCatalog.removeListener(_handleLocationCatalogChanged);
     _breed.dispose();
     _ageValue.dispose();
     _weightValue.dispose();
     _quantity.dispose();
     _askingPrice.dispose();
-    _location.dispose();
     _healthStatus.dispose();
     _vaccination.dispose();
     _shortDescription.dispose();
@@ -227,7 +314,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
 
   SellerListingDraft _buildDraft() => SellerListingDraft(
     livestockType: _livestockType ?? '',
-    breed: _breedForSubmission(_catalog.state.types),
+    breed: _breed.text,
+    clearBreed: _clearBreed,
     ageValue: _ageValue.text,
     ageUnit: _ageUnit,
     gender: _gender,
@@ -235,7 +323,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     weightUnit: _weightUnit,
     quantity: _quantity.text,
     askingPrice: _askingPrice.text,
-    location: _location.text,
+    location: _locationForSave(),
     healthStatus: _healthStatus.text,
     vaccination: _vaccination.text,
     shortDescription: _shortDescription.text,
@@ -259,42 +347,38 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   String? _selectedLivestockType(List<LivestockType> types) =>
       _selectedType(types)?.value;
 
-  /// Chicken is the first category with a controlled breed list.
-  ///
-  /// The other categories keep their existing free-text breed field so this
-  /// change does not alter how their listings are entered.
-  bool _usesBreedDropdown(LivestockType? type) =>
-      type?.value == 'chicken' && (type?.breeds.isNotEmpty ?? false);
-
-  String? _selectedBreed(LivestockType type) {
-    if (!_usesBreedDropdown(type)) {
-      return null;
-    }
-    return LivestockType.matchBreed(_breed.text, type.breeds);
-  }
-
-  /// The breed value to send for the selected category.
-  ///
-  /// For a controlled list, an unrecognized value left over from a type change
-  /// or a legacy listing is omitted rather than submitted while the dropdown
-  /// shows no selection.
-  String _breedForSubmission(List<LivestockType> types) {
-    final LivestockType? type = _selectedType(types);
-    if (type != null && _usesBreedDropdown(type)) {
-      return LivestockType.matchBreed(_breed.text, type.breeds) ?? '';
-    }
-    return _breed.text;
-  }
-
-  String _breedReviewLabel(List<LivestockType> types) {
-    final LivestockType? type = _selectedType(types);
-    if (type != null && _usesBreedDropdown(type)) {
-      final String? breed = LivestockType.matchBreed(_breed.text, type.breeds);
-      if (breed != null) {
-        return LivestockType.breedLabel(breed);
+  void _selectLivestockType(String? value, List<LivestockType> types) {
+    LivestockType? type;
+    for (final LivestockType item in types) {
+      if (item.value == value) {
+        type = item;
+        break;
       }
     }
-    return _breed.text;
+
+    setState(() {
+      _livestockType = value;
+      if (type == null ||
+          (_breed.text.isNotEmpty && !type.breeds.contains(_breed.text))) {
+        _breed.clear();
+        _clearBreed = false;
+      }
+    });
+    _onSuggestionInputChanged();
+  }
+
+  List<String> _breedOptions(LivestockType type) {
+    final List<String> breeds = List<String>.of(type.breeds);
+    final Listing? original = widget.listing;
+    if (original != null &&
+        _livestockType == original.livestockType &&
+        _breed.text == original.breed &&
+        _breed.text.isNotEmpty &&
+        !breeds.contains(_breed.text)) {
+      // Historical breeds remain editable without being silently rewritten.
+      breeds.add(_breed.text);
+    }
+    return breeds;
   }
 
   /// Whether [step] has at least one client-side error.
@@ -339,7 +423,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
         return <String?>[
           validateQuantity(_quantity.text),
           validateAskingPrice(_askingPrice.text),
-          validateListingLocation(_location.text),
+          _validateLocation(),
           validateOptionalShortText(_healthStatus.text),
           validateOptionalShortText(_vaccination.text),
           validateOptionalShortText(_shortDescription.text),
@@ -524,8 +608,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     if (type == null) {
       return 'Choose the type of livestock before requesting a price.';
     }
-    if (_breedForSubmission(_catalog.state.types).trim().isEmpty) {
-      return 'Choose or enter a supported breed before requesting a price.';
+    if (_breed.text.trim().isEmpty) {
+      return 'Choose a supported breed before requesting a price.';
     }
     if (_gender == null) {
       return 'Select the animal sex before requesting a price.';
@@ -614,19 +698,40 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                     if (_step == 2) {
                       return Padding(
                         padding: const EdgeInsets.only(top: AppSpacing.md),
-                        child: FilledButton(
-                          onPressed: busy ? null : _save,
-                          child: busy
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  _isEditing ? 'Save changes' : 'Save as draft',
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: FilledButton.icon(
+                                key: const ValueKey<String>(
+                                  'listing-review-back',
                                 ),
+                                onPressed: _submitting
+                                    ? null
+                                    : () => setState(() => _step = 1),
+                                icon: const Icon(Icons.arrow_back),
+                                label: const Text('Back'),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: busy ? null : _save,
+                                child: busy
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        _isEditing
+                                            ? 'Save changes'
+                                            : 'Save as draft',
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
                       );
                     }
@@ -728,23 +833,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                               ),
                             )
                             .toList(growable: false),
-                        onChanged: (String? value) {
-                          final LivestockType? type = value == null
-                              ? null
-                              : _typeForValue(catalogState.types, value);
-                          setState(() {
-                            _livestockType = value;
-                            if (_usesBreedDropdown(type) &&
-                                LivestockType.matchBreed(
-                                      _breed.text,
-                                      type!.breeds,
-                                    ) ==
-                                    null) {
-                              _breed.clear();
-                            }
-                          });
-                          _onSuggestionInputChanged();
-                        },
+                        onChanged: (String? value) =>
+                            _selectLivestockType(value, catalogState.types),
                         validator: validateLivestockType,
                         serverErrors: state.validationErrors['livestock_type'],
                       ),
@@ -805,33 +895,46 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             ListenableBuilder(
               listenable: _catalog,
               builder: (BuildContext context, Widget? child) {
-                final LivestockType? type = _catalog.state.isReady
-                    ? _selectedType(_catalog.state.types)
-                    : null;
-                if (!_usesBreedDropdown(type)) {
-                  return _TextField(
-                    controller: _breed,
-                    label: 'Breed',
-                    hint: 'e.g. Brahman',
-                    helper: 'Optional. Used as the listing title.',
-                    validator: validateBreed,
-                    serverErrors: state.validationErrors['breed'],
-                  );
+                final LivestockTypesState catalogState = _catalog.state;
+                LivestockType? type;
+                for (final LivestockType item in catalogState.types) {
+                  if (item.value == _livestockType) {
+                    type = item;
+                    break;
+                  }
                 }
+                final List<String> breeds = type == null
+                    ? const <String>[]
+                    : _breedOptions(type);
 
                 return _Dropdown<String>(
-                  label: 'Breed',
-                  value: _selectedBreed(type!),
-                  items: type.breeds
-                      .map(
-                        (String breed) => DropdownMenuItem<String>(
-                          value: breed,
-                          child: Text(LivestockType.breedLabel(breed)),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (String? value) =>
-                      setState(() => _breed.text = value ?? ''),
+                  key: ValueKey<String>(
+                    'listing-breed-${type?.value ?? 'none'}',
+                  ),
+                  label: 'Breed (optional)',
+                  value: breeds.contains(_breed.text) ? _breed.text : '',
+                  items: <DropdownMenuItem<String>>[
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('No breed selected'),
+                    ),
+                    ...breeds.map(
+                      (String breed) => DropdownMenuItem<String>(
+                        value: breed,
+                        child: Text(breed),
+                      ),
+                    ),
+                  ],
+                  onChanged: type == null
+                      ? null
+                      : (String? value) => setState(() {
+                          _clearBreed =
+                              _isEditing &&
+                              _breed.text.isNotEmpty &&
+                              (value == null || value.isEmpty);
+                          _breed.text = value ?? '';
+                        }),
+                  validator: validateBreed,
                   serverErrors: state.validationErrors['breed'],
                 );
               },
@@ -1023,13 +1126,18 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               ],
             ],
             const SizedBox(height: AppSpacing.md),
-            _TextField(
-              controller: _location,
-              label: 'Location',
-              hint: 'e.g. Mabalacat, Pampanga',
-              helper: 'Required. Where the livestock is.',
-              validator: validateListingLocation,
-              serverErrors: state.validationErrors['location'],
+            TrinidadLocationSelector(
+              value: _selectedLocation,
+              legacyAddress: _legacyLocation,
+              maxFormattedLength: TrinidadLocation.listingLocationMax,
+              isRequired:
+                  !_isEditing ||
+                  _locationWasTouched ||
+                  _selectedLocation != null ||
+                  _initialLocation.isEmpty,
+              enabled: !_submitting && !state.isActioning,
+              externalError: state.validationErrors['location']?.first,
+              onChanged: _handleLocationChanged,
             ),
           ],
         ),
@@ -1108,12 +1216,14 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
         SectionCard(
           title: 'Summary',
           children: <Widget>[
-            _ReviewRow(label: 'Type', value: _livestockType ?? '—'),
+            _ReviewRow(
+              label: 'Type',
+              value: _livestockType == null
+                  ? '—'
+                  : _catalog.state.labelFor(_livestockType!),
+            ),
             if (_breed.text.isNotEmpty)
-              _ReviewRow(
-                label: 'Breed',
-                value: _breedReviewLabel(_catalog.state.types),
-              ),
+              _ReviewRow(label: 'Breed', value: _breed.text),
             if (_ageValue.text.isNotEmpty && _ageUnit != null)
               _ReviewRow(label: 'Age', value: '${_ageValue.text} ${_ageUnit!}'),
             if (_gender != null) _ReviewRow(label: 'Gender', value: _gender!),
@@ -1124,7 +1234,12 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               ),
             _ReviewRow(label: 'Quantity', value: _quantity.text),
             _ReviewRow(label: 'Asking price', value: '₱ ${_askingPrice.text}'),
-            _ReviewRow(label: 'Location', value: _location.text),
+            _ReviewRow(
+              label: 'Location',
+              value: _locationForSave().trim().isEmpty
+                  ? '—'
+                  : _locationForSave(),
+            ),
             if (_healthStatus.text.isNotEmpty)
               _ReviewRow(label: 'Health', value: _healthStatus.text),
             if (_vaccination.text.isNotEmpty)
@@ -1478,6 +1593,7 @@ class _TextField extends StatelessWidget {
 /// every other field here.
 class _Dropdown<T> extends StatelessWidget {
   const _Dropdown({
+    super.key,
     required this.label,
     required this.value,
     required this.items,

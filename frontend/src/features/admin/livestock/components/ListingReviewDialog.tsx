@@ -10,9 +10,12 @@ import ListingPhotos from './ListingPhotos';
 import type { ModerationOption } from './listingModeration';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime, formatPeso } from '../../../../lib/format';
+import { livestockTypeLabel } from '../api/useLivestockTypes';
+import type { LivestockTypeOption } from '../api/useLivestockTypes';
 
 interface ListingReviewDialogProps {
   listing: Listing;
+  livestockTypes: LivestockTypeOption[];
   option: ModerationOption;
   onClose: () => void;
 }
@@ -29,6 +32,7 @@ interface ListingReviewDialogProps {
  */
 export default function ListingReviewDialog({
   listing,
+  livestockTypes,
   option,
   onClose,
 }: ListingReviewDialogProps) {
@@ -72,7 +76,7 @@ export default function ListingReviewDialog({
 
   const rows: Array<[string, string | null]> = [
     ['Seller', `${listing.seller.name} (${listing.seller.email})`],
-    ['Type', listing.livestock_type],
+    ['Type', livestockTypeLabel(listing.livestock_type, livestockTypes)],
     ['Breed', listing.breed],
     ['Age', listing.age_value !== null ? `${listing.age_value} ${listing.age_unit ?? ''}`.trim() : null],
     ['Gender', listing.gender],

@@ -85,7 +85,7 @@ class SellerListingPhotoTest extends TestCase
             'weight_unit' => 'kg',
             'quantity' => 1,
             'asking_price' => 50000.00,
-            'location' => 'Bukidnon',
+            'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
             'health_status' => 'healthy',
             'vaccination' => 'up_to_date',
             'short_description' => 'Healthy Angus bull',
@@ -346,7 +346,7 @@ class SellerListingPhotoTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings', [
                 'livestock_type' => 'cattle',
-                'location' => 'Bukidnon',
+                'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'asking_price' => 50000,
                 'quantity' => 1,
                 'photos' => array_fill(0, 11, 'photo.jpg'),
@@ -363,7 +363,7 @@ class SellerListingPhotoTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings', [
                 'livestock_type' => 'cattle',
-                'location' => 'Bukidnon',
+                'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'asking_price' => 50000,
                 'quantity' => 1,
                 'photos' => [],
@@ -376,7 +376,7 @@ class SellerListingPhotoTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings', [
                 'livestock_type' => 'cattle',
-                'location' => 'Bukidnon',
+                'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'asking_price' => 50000,
                 'quantity' => 1,
                 'photos' => ['photo.jpg'],
@@ -561,7 +561,7 @@ class SellerListingPhotoTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings', [
                 'livestock_type' => 'cattle',
-                'location' => 'Bukidnon',
+                'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'asking_price' => 50000,
                 'quantity' => 1,
                 'photos' => ['photo1.jpg', 'photo2.jpg'],

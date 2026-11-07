@@ -399,7 +399,7 @@ Happy trading!
 
 Category shortcuts
 
-[Cattle] [Swine] [Goat] [Carabao]
+[Cattle] [Swine] [Goat] [Carabao] [Chicken]
 
 Quality Livestock,
 Better Opportunities.
@@ -468,7 +468,7 @@ Browse Livestock
 
 [ Search livestock... ]
 
-[All] [Cattle] [Swine] [Goat] [Carabao]
+[All] [Cattle] [Swine] [Goat] [Carabao] [Chicken]
 
 Livestock cards
 ```

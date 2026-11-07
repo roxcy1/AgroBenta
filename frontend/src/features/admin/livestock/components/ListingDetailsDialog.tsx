@@ -4,9 +4,12 @@ import type { Listing } from '../api/useListings';
 import ListingPhotos from './ListingPhotos';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime, formatPeso } from '../../../../lib/format';
+import { livestockTypeLabel } from '../api/useLivestockTypes';
+import type { LivestockTypeOption } from '../api/useLivestockTypes';
 
 interface ListingDetailsDialogProps {
   listing: Listing;
+  livestockTypes: LivestockTypeOption[];
   onClose: () => void;
 }
 
@@ -21,7 +24,7 @@ function orDash(value: string | number | null | undefined): string {
   return String(value);
 }
 
-export default function ListingDetailsDialog({ listing, onClose }: ListingDetailsDialogProps) {
+export default function ListingDetailsDialog({ listing, livestockTypes, onClose }: ListingDetailsDialogProps) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose();
@@ -44,7 +47,7 @@ export default function ListingDetailsDialog({ listing, onClose }: ListingDetail
     {
       title: 'Livestock',
       rows: [
-        ['Type', orDash(listing.livestock_type)],
+        ['Type', orDash(livestockTypeLabel(listing.livestock_type, livestockTypes))],
         ['Breed', orDash(listing.breed)],
         [
           'Age',

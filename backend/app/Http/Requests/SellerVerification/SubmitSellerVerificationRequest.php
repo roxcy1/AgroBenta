@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\SellerVerification;
 
+use App\Enums\GovernmentIdType;
 use App\Enums\SellerCapability;
+use App\Rules\TrinidadLocationAddressRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -51,7 +54,7 @@ class SubmitSellerVerificationRequest extends FormRequest
     {
         return [
             'phone' => ['required', 'string', 'max:32'],
-            'address' => ['required', 'string', 'max:191'],
+            'address' => ['required', 'string', 'max:191', new TrinidadLocationAddressRule],
             'business_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_location' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_description' => ['sometimes', 'nullable', 'string', 'max:2000'],
@@ -60,6 +63,9 @@ class SubmitSellerVerificationRequest extends FormRequest
             // are uploaded through `POST /seller-verification/documents`, and
             // no `file` rule appears here on purpose.
             'id_document_ref' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'government_id_type' => ['required', Rule::enum(GovernmentIdType::class)],
+            'government_id_description' => ['nullable', 'string', 'max:255', 'required_if:government_id_type,others', 'prohibited_unless:government_id_type,others'],
+            'has_no_back_image' => ['required', 'boolean'],
 
             // Server-owned. A client that sends one is told no, not ignored.
             'user_id' => ['prohibited'],
@@ -74,6 +80,7 @@ class SubmitSellerVerificationRequest extends FormRequest
             // entirely, which is the exact bypass F-11 describes.
             'seller_capability' => ['prohibited'],
             'role' => ['prohibited'],
+            'id_document_path' => ['prohibited'],
         ];
     }
 
@@ -93,6 +100,9 @@ class SubmitSellerVerificationRequest extends FormRequest
             'business_location' => 'business location',
             'business_description' => 'business description',
             'id_document_ref' => 'ID document reference',
+            'government_id_type' => 'Government ID type',
+            'government_id_description' => 'Specify Government ID',
+            'has_no_back_image' => 'back image declaration',
         ];
     }
 
@@ -119,6 +129,7 @@ class SubmitSellerVerificationRequest extends FormRequest
                         'This account is already an approved seller.',
                     );
                 }
+
             },
         ];
     }

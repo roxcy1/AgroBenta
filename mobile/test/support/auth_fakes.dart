@@ -34,6 +34,13 @@ class FakeTokenStore implements TokenStore {
     token = null;
     clearCount++;
   }
+
+  @override
+  Future<bool> clearIfCurrent(String expectedToken) async {
+    if (token != expectedToken) return false;
+    await clear();
+    return true;
+  }
 }
 
 /// A `UserResource` payload exactly as the backend serialises one.

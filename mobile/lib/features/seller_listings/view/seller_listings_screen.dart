@@ -142,13 +142,36 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
           'change or resubmit it yourself.',
         ),
         actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Submit for review'),
+          Row(
+            children: <Widget>[
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: AppSizes.controlHeight + AppSpacing.xs,
+                  child: FilledButton(
+                    key: const ValueKey<String>('submit-for-review-confirm'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text(
+                      'Submit for review',
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: AppSizes.controlHeight + AppSpacing.xs,
+                  child: OutlinedButton(
+                    key: const ValueKey<String>('cancel-submit-for-review'),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

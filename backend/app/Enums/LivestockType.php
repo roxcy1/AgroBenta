@@ -19,8 +19,8 @@ enum LivestockType: string
     public function label(): string
     {
         return match ($this) {
-            self::Cattle => 'Cattle',
             self::Carabao => 'Carabao',
+            self::Cattle => 'Cattle',
             self::Goat => 'Goat',
             self::Swine => 'Swine',
             self::Chicken => 'Chicken',
@@ -28,14 +28,59 @@ enum LivestockType: string
     }
 
     /**
-     * The canonical breeds the price-suggestion provider accepts for this type.
+     * The approved breed names for this livestock category.
      *
-     * This mirrors `ml-service/features.py`. Keeping the vocabulary on the enum
-     * makes the catalog and the Laravel-side normalizer read from one place.
+     * These are the human-readable values exposed by
+     * `GET /livestock-types` and validated by seller listing requests.
      *
      * @return list<string>
      */
     public function breeds(): array
+    {
+        return match ($this) {
+            self::Carabao => [
+                'Philippine Native Carabao',
+                'Murrah',
+                'Native–Murrah Cross',
+            ],
+            self::Cattle => [
+                'Philippine Native Cattle',
+                'Brahman',
+                'Holstein Friesian',
+                'Brahman Cross',
+            ],
+            self::Goat => [
+                'Ubay/Boholano Native Goat',
+                'Boer',
+                'Anglo-Nubian',
+                'Saanen',
+            ],
+            self::Swine => [
+                'Native Pig',
+                'Landrace',
+                'Large White (Yorkshire)',
+                'Duroc',
+                'Duroc–Landrace Cross',
+            ],
+            self::Chicken => [
+                'Boholano Native Chicken',
+                'Broiler',
+                'Layer',
+                'Improved Native Chicken',
+            ],
+        };
+    }
+
+    /**
+     * The canonical breed slugs accepted by the price-suggestion provider.
+     *
+     * This mirrors `ml-service/features.py`. The public catalog uses readable
+     * names; the provider boundary uses these stable slugs so the model
+     * vocabulary does not change when display labels are polished.
+     *
+     * @return list<string>
+     */
+    public function canonicalBreeds(): array
     {
         return match ($this) {
             self::Cattle => [
@@ -71,12 +116,28 @@ enum LivestockType: string
         };
     }
 
+    public function hasBreed(string $breed): bool
+    {
+        return in_array(trim($breed), $this->breeds(), true);
+    }
+
+    public static function isCatalogBreed(string $breed): bool
+    {
+        foreach (self::cases() as $type) {
+            if ($type->hasBreed($breed)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * The client-facing catalog, in display order.
      *
-     * `breeds` is the controlled vocabulary the model accepts for the category.
-     * Clients may use it as a selector but are not required to; the listing
-     * `breed` column itself stays free text so historical rows remain readable.
+     * `breeds` is the category's approved breed names. Clients may use it as a
+     * selector, but historical rows remain readable even when they predate the
+     * catalog.
      *
      * @return list<array{value: string, label: string, breeds: list<string>}>
      */

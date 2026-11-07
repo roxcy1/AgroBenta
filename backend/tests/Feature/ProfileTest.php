@@ -61,12 +61,57 @@ class ProfileTest extends TestCase
     {
         $user = User::factory()->create(['name' => 'Juan Dela Cruz', 'phone' => null]);
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($user))
-            ->putJson('/api/profile', ['name' => 'Juan Updated', 'phone' => '09123456789', 'location' => 'Trinidad, Bohol'])
+            ->putJson('/api/profile', [
+                'name' => 'Juan Updated',
+                'phone' => '09123456789',
+                'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
+            ])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.name', 'Juan Updated');
         $user->refresh();
         $this->assertSame('Juan Updated', $user->name);
+        $this->assertSame(
+            'Purok 3, Barangay Poblacion, Trinidad, Bohol',
+            $user->location,
+        );
+    }
+
+    #[Test]
+    public function profile_location_must_use_a_supported_trinidad_barangay(): void
+    {
+        $user = User::factory()->create(['location' => null]);
+        $token = $this->mobileToken($user);
+
+        foreach ([
+            'Barangay Unknown, Trinidad, Bohol',
+            'Barangay Poblacion, Tagbilaran, Bohol',
+            'Barangay Poblacion, Trinidad, Cebu',
+        ] as $location) {
+            $this->withHeader('Authorization', 'Bearer '.$token)
+                ->putJson('/api/profile', ['location' => $location])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('location');
+        }
+
+        $this->assertNull($user->fresh()->location);
+    }
+
+    #[Test]
+    public function an_unchanged_legacy_profile_location_remains_editable(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Juan Dela Cruz',
+            'location' => 'Trinidad, Bohol',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($user))
+            ->putJson('/api/profile', [
+                'name' => 'Juan Updated',
+                'location' => 'Trinidad, Bohol',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.location', 'Trinidad, Bohol');
     }
 
     #[Test]

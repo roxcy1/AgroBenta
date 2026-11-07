@@ -25,7 +25,12 @@ export interface SellerVerification {
   business_location: string | null;
   business_description: string | null;
   id_document_ref: string | null;
+  government_id_type: string | null;
+  government_id_description: string | null;
+  has_no_back_image: boolean | null;
   has_id_document: boolean;
+  has_id_document_front: boolean;
+  has_id_document_back: boolean;
   has_selfie: boolean;
   has_proof_of_address: boolean;
   farm_photo_ids: string[];
@@ -45,7 +50,7 @@ export interface SellerVerification {
  * values the server reports through its `has_*` flags. Farm photos are several
  * files, so they are read by id with `fetchVerificationFarmPhoto`.
  */
-export type VerificationDocumentType = 'id_document' | 'selfie' | 'proof_of_address';
+export type VerificationDocumentType = 'id_document' | 'id_document_front' | 'id_document_back' | 'selfie' | 'proof_of_address';
 
 export interface VerificationsPagination {
   current_page: number;

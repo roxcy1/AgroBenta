@@ -4,6 +4,7 @@ namespace App\Services\SellerListing;
 
 use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
+use App\Enums\LivestockType;
 use App\Http\Requests\SellerListing\SellerListingRules;
 use App\Models\Listing;
 use App\Models\User;
@@ -146,6 +147,17 @@ class SellerListingService
     public function update(Listing $listing, array $attributes): Listing
     {
         $this->ensureStatusIs($listing, self::EDITABLE_STATUSES, 'Only a draft or an active listing can be edited.');
+
+        // The mobile form clears an incompatible breed when the seller changes
+        // livestock type. Empty optional values are otherwise omitted from PATCH
+        // bodies, so clear the persisted value here when the type changed.
+        if (array_key_exists('livestock_type', $attributes) &&
+            (string) $attributes['livestock_type'] !== (string) $listing->livestock_type &&
+            trim((string) ($attributes['breed'] ?? '')) === '') {
+            $attributes['breed'] = '';
+        } elseif (array_key_exists('breed', $attributes) && $attributes['breed'] === null) {
+            $attributes['breed'] = '';
+        }
 
         if (array_key_exists('photos', $attributes)) {
             $attributes['photos'] = $this->validatedPhotoFilenames($listing, $attributes['photos']);
@@ -513,6 +525,21 @@ class SellerListingService
 
         if ($validator->fails()) {
             throw ValidationException::withMessages($validator->errors()->toArray());
+        }
+
+        // Catalog breeds cannot be paired with a different catalog type. A
+        // non-catalog breed on an already stored listing is historical free text
+        // and remains readable/submittable; new create/edit selections are
+        // validated at their request boundary.
+        $livestockType = LivestockType::tryFrom((string) $listing->livestock_type);
+        $breed = trim((string) $listing->breed);
+        if ($livestockType !== null &&
+            $breed !== '' &&
+            LivestockType::isCatalogBreed($breed) &&
+            ! $livestockType->hasBreed($breed)) {
+            throw ValidationException::withMessages([
+                'breed' => ['The selected breed does not belong to this livestock type.'],
+            ]);
         }
 
         $this->ensureStatusIs(

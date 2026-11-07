@@ -26,56 +26,8 @@ class LivestockType {
   /// The display label, e.g. `Cattle`.
   final String label;
 
-  /// The canonical breed values the price-suggestion provider accepts.
-  ///
-  /// The backend supplies this per category. An older backend that does not send
-  /// the key yields an empty list, which keeps the catalog backward compatible.
+  /// Breeds currently offered for this category by the backend catalog.
   final List<String> breeds;
-
-  /// A readable label for a canonical breed value.
-  ///
-  /// The API stores values such as `boholano_native_chicken`; this turns them
-  /// into `Boholano Native Chicken` for display without inventing a second
-  /// vocabulary.
-  static String breedLabel(String value) {
-    final List<String> words = value
-        .trim()
-        .split(RegExp(r'[_\s]+'))
-        .where((String word) => word.isNotEmpty)
-        .toList(growable: false);
-    return words
-        .map(
-          (String word) =>
-              '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
-        )
-        .join(' ');
-  }
-
-  /// The canonical breed matching [raw], or `null` when it is not supported.
-  ///
-  /// Both the canonical slug and its display label are accepted, so a listing
-  /// saved as `Broiler` or `broiler` opens with the same dropdown selection.
-  static String? matchBreed(String raw, List<String> breeds) {
-    final String trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    final String slug = trimmed
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
-        .replaceAll(RegExp(r'^_+|_+$'), '');
-
-    for (final String breed in breeds) {
-      if (breed == slug || breed.toLowerCase() == trimmed.toLowerCase()) {
-        return breed;
-      }
-      if (breedLabel(breed).toLowerCase() == trimmed.toLowerCase()) {
-        return breed;
-      }
-    }
-    return null;
-  }
 
   /// The label for a raw stored value, given the catalog.
   ///
@@ -129,5 +81,5 @@ class LivestockType {
   }
 
   @override
-  String toString() => 'LivestockType($value, $label, breeds: $breeds)';
+  String toString() => 'LivestockType($value, $label, $breeds)';
 }

@@ -44,6 +44,7 @@ class _AuthGateState extends State<AuthGate> {
 
   bool _restoreStarted = false;
   bool _wasSignedIn = false;
+  int? _lastUserId;
   AuthController? _controller;
 
   @override
@@ -80,9 +81,29 @@ class _AuthGateState extends State<AuthGate> {
   void _handleAuthChanged() {
     final AuthState state = _controller!.state;
     final bool signedIn = state.isSignedIn;
+    final int? userId = signedIn ? state.user?.id : null;
+    final bool statusChanged = signedIn != _wasSignedIn;
+    final bool identityChanged =
+        _wasSignedIn && signedIn && userId != _lastUserId;
+    final bool sessionEnded = (_wasSignedIn && !signedIn) || identityChanged;
 
-    if (signedIn != _wasSignedIn) {
-      _wasSignedIn = signedIn;
+    _wasSignedIn = signedIn;
+    _lastUserId = userId;
+    if (sessionEnded) {
+      // Pushed detail/form routes are siblings of AuthGate in the Navigator.
+      // Pop them on logout or account replacement so Back cannot reveal a
+      // screen built under the previous user's session.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(
+            context,
+            rootNavigator: true,
+          ).popUntil((Route<dynamic> route) => route.isFirst);
+        }
+      });
+    }
+
+    if (statusChanged) {
       if (!signedIn) {
         if (_showRegistration || _showForgotPassword || _resetEmail != null) {
           _showSignIn();
@@ -90,6 +111,8 @@ class _AuthGateState extends State<AuthGate> {
       } else {
         _signInNotice = null;
       }
+    } else if (identityChanged) {
+      _signInNotice = null;
     }
   }
 
@@ -119,7 +142,12 @@ class _AuthGateState extends State<AuthGate> {
                 onForgotPassword: _goToForgotPassword,
                 notice: _signInNotice,
               ),
-      AuthStatus.signedIn => widget.authenticatedView(context),
+      AuthStatus.signedIn => KeyedSubtree(
+        // Rebuild the complete tab shell when an authenticated identity
+        // changes without an intervening signed-out frame.
+        key: ValueKey<int>(state.user!.id),
+        child: Builder(builder: widget.authenticatedView),
+      ),
     };
   }
 

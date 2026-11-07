@@ -2,9 +2,12 @@ import { useEffect } from 'react';
 import type { Transaction } from '../api/useTransactions';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime, formatPeso } from '../../../../lib/format';
+import { livestockTypeLabel } from '../../livestock/api/useLivestockTypes';
+import type { LivestockTypeOption } from '../../livestock/api/useLivestockTypes';
 
 interface TransactionDetailDialogProps {
   transaction: Transaction;
+  livestockTypes: LivestockTypeOption[];
   onClose: () => void;
 }
 
@@ -29,6 +32,7 @@ function contactLabel(name?: string | null, email?: string | null): string {
 
 export default function TransactionDetailDialog({
   transaction,
+  livestockTypes,
   onClose,
 }: TransactionDetailDialogProps) {
   useEffect(() => {
@@ -42,7 +46,7 @@ export default function TransactionDetailDialog({
   const rows: Array<[string, string]> = [
     ['Buyer', contactLabel(transaction.buyer?.name, transaction.buyer?.email)],
     ['Seller', contactLabel(transaction.seller?.name, transaction.seller?.email)],
-    ['Livestock type', orDash(transaction.listing?.livestock_type)],
+    ['Livestock type', orDash(livestockTypeLabel(transaction.listing?.livestock_type, livestockTypes))],
     ['Breed', orDash(transaction.listing?.breed)],
     ['Quantity', orDash(transaction.quantity)],
     ['Total amount', formatPeso(transaction.total_amount)],

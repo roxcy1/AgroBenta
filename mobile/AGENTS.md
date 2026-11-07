@@ -224,7 +224,9 @@ does not send.
   unencrypted storage for a bearer credential.
 * The Admin Web keeps its token in `localStorage`. Do not copy that. It is
   acceptable for a browser tab; it is not acceptable on a user's phone.
-* A `401` clears the stored token in `ApiClient`. Treat
+* A `401` clears the stored token in `ApiClient` only if it is still the token
+  used by that request; a delayed response from an old session must not clear a
+  newly authenticated user's token. Treat
   `ApiException.requiresReauthentication` as the signal to return to the
   sign-in flow. Do not retry a request with a revoked token.
 * Sanctum tokens currently have **no expiry** and there is no refresh flow.
@@ -281,7 +283,9 @@ capability is: submit verification → admin approves → the server sets the fi
   switch (manuscript Figure 20; functional documentation §2.7) is a **view**
   switch only: Seller Mode is offered only when the server reports
   `seller_capability = seller`, switching sends no request that changes `role`
-  or `seller_capability`, and the selected mode is cleared on logout.
+  or `seller_capability`, and the last selected mode is persisted separately
+  for each authenticated user ID. The preference is retained on logout but is
+  restored only for that same user and only while Seller Mode remains allowed.
 * Do not let the client decide what a seller may do. The server decides; the
   client renders the consequence.
 
@@ -889,7 +893,7 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-04 | Logout for non-admins | **CLOSED.** `POST /api/auth/logout` revokes the calling mobile token. | — |
 | GAP-05 | Marketplace browse (list/detail/filter/paginate) | **CLOSED.** `GET /api/listings` and `GET /api/listings/{listing}`, served by `Api/Marketplace/MarketplaceController` over `MobileListingResource` (seller narrowed to `id` + `name` by `MobileSellerResource`). `active`-only list; `404` for any non-visible listing. | — |
 | GAP-06 | Listing photo delivery | **CLOSED.** [D-10]: `listings.photos` stores **bare filenames** (the model mutator normalises URLs, relative paths and filenames to the filename) and `MobileListingResource` serves **absolute URLs** via the `listing-photos` disk — local by default under `storage/app/public/listings` (requires `php artisan storage:link`), S3 by env (`LISTING_PHOTOS_DRIVER`). Sellers manage photos with `POST /api/seller/listings/{id}/photos` (multipart `photos[]`, jpeg/png/webp only, ≤5 MB each, ≤10 per listing including existing → `422`) and `DELETE /api/seller/listings/{id}/photos` (`photo` = the served URL or filename, unknown → `404`); owner-scoped (`404` for another seller), buyer → `403`, editable only while `draft`/`active` (`409`). The app's absolute-URL check now receives real URLs; the client never synthesises a base URL. | Listing management |
-| GAP-07 | Seller verification submission | **CLOSED.** `POST /api/seller-verification` (`routes/api.php`) with `Api/SellerVerification/SellerVerificationController@store` and `SellerVerificationService`. Creates a `submitted` record; **grants no capability** — `seller_capability` is still written only by the admin approval endpoint. A second submission while one is `submitted`/`pending_review` is `409`; an approved seller is `403`; a rejected record may be resubmitted as a new row. `SubmitSellerVerificationRequest` allow-lists the four client fields, all optional, and rejects server-owned ones with `422`. Valid ID, Proof of Address and the selfie must be staged first through `POST /seller-verification/documents` (`type` is `id_document`, `proof_of_address`, `selfie` or `farm_photo`). Farm photos are optional, at most ten; the upload returns a `photo_id`, the record's `farm_photo_ids` lists them, and `GET`/`DELETE /seller-verification/documents/farm_photo/{id}` read a submitted photo or remove a staged one. Deliberately **unthrottled** — see D-09. | — |
+| GAP-07 | Seller verification submission | **CLOSED.** `POST /api/seller-verification` (`routes/api.php`) with `Api/SellerVerification/SellerVerificationController@store` and `SellerVerificationService`. Creates a `submitted` record; **grants no capability** — `seller_capability` is still written only by the admin approval endpoint. A second submission while one is `submitted`/`pending_review` is `409`; an approved seller is `403`; a rejected record may be resubmitted as a new row. The request requires a canonical `government_id_type` and explicit `has_no_back_image`; `government_id_description` is required only for `others`. The front, Proof of Address and selfie must be newly staged; the back must also be staged unless the applicant explicitly declares that their ID has no back. ID sides, Proof of Address and selfie use the private `seller-verification-documents` disk through `POST /seller-verification/documents` (`type` is `id_document_front`, `id_document_back`, `id_document` (legacy), `proof_of_address`, `selfie` or `farm_photo`). Farm photos are optional, at most ten; the upload returns a `photo_id`, the record's `farm_photo_ids` lists them, and `GET`/`DELETE /seller-verification/documents/farm_photo/{id}` read a submitted photo or remove a staged one. Legacy one-sided `id_document_path` records remain readable and are exposed as a front only. Deliberately **unthrottled** — see D-09. | — |
 | GAP-08 | Own verification status retrieval | **CLOSED.** `GET /api/seller-verification/me` with `MobileSellerVerificationController@me`, returning the caller's latest record by `submitted_at DESC, id DESC` through `MobileSellerVerificationResource` (omits `seller`, `reviewer`, `user_id`, timestamps). `404` when the caller has never applied, which the app reads as "not submitted" rather than as an error. No route takes an id, so one buyer cannot read another's record. | — |
 | GAP-09 | Seller listing CRUD, own listings only | **CLOSED.** Five routes in `routes/api.php` under `auth:sanctum` + `ability:mobile` + the `seller` capability gate, served by `Api/SellerListing/SellerListingController` → `SellerListingRequest`s → `SellerListingService` → `SellerListingRepository`, returned through `MobileListingResource`. `GET` lists the owner's own listings in all five statuses (`?status`, `?search`, paginated; scope always server-derived — a `seller_id` filter is `422`). `POST` creates a `draft`; a client-sent `status` or `seller_id` is `422`, never silently dropped. `POST /{id}/submit` moves `draft → pending` only, re-validating the stored listing (invalid → `422`, not queued); its body allow-list is empty, so *any* body field is `422`. `PATCH` edits `draft`/`active` only (D-24). `DELETE` removes `draft`/`inactive` only (D-12/D-25). Non-owner → `404`, buyer → `403`, and no seller path reaches `active` (D-02 rules 6–8). Tests: `backend/tests/Feature/SellerListing/MobileSellerListingTest.php`. | — |
 | GAP-10 | AI price suggestion | **CLOSED.** `POST /api/seller/listings/{listing}/price-suggestion` exists behind `auth:sanctum` + `ability:mobile` + `seller`, is owner-scoped and draft-only, accepts no body, never writes `asking_price` or a listing status, and persists `ok`/`warning` estimates. The mobile form saves the draft first, then consumes the endpoint; it displays `ok`, `warning`, `withheld`, `unavailable` and unexpected failures from the server's structured response, with no invented confidence or range. Tests: `backend/tests/Feature/SellerListing/PriceSuggestionTest.php`, plus the mobile service/controller/form suites. | — |
@@ -906,14 +910,12 @@ exist. Nothing missing here has been worked around in the app.
 
 Report these; do not decide them unilaterally.
 
-* **`livestock_type` categories.** The manuscript limits listings to
-  **cattle, carabao, goat and swine** (functional documentation §4.1), while the
-  backend enum and `/livestock-types` catalog now also accept **chicken** as an
-  explicit integration decision. The manuscript/functional-documentation
-  conflict remains tracked and must be resolved in those sources, not by editing
-  this client list. The catalog is backend-owned; do not hard-code a separate
-  category list. Chicken uses the canonical model breeds exposed by the catalog;
-  other categories keep the existing free-text breed field.
+* **`livestock_type` categories — resolved by DEC-06.** The supported values
+  are Cattle, Carabao, Goat, Swine and Chicken. The backend's authenticated
+  `/livestock-types` catalog provides labels and optional breed choices; use it
+  rather than duplicating the list in the app. Historical unsupported values
+  remain readable and must not be silently rewritten. The manuscript should be
+  updated to reflect the project decision (§4.1, MS-03).
 * **Currency and locale.** The Admin Web formats as `₱` / `en-PH`. The schema
   has no currency column. Assume PHP peso until told otherwise, and centralise
   the formatter so it is a one-line change.

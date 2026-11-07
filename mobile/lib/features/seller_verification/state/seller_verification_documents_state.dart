@@ -152,7 +152,10 @@ class VerificationDocument {
 class SellerVerificationDocumentsState {
   const SellerVerificationDocumentsState({
     this.idDocument = const VerificationDocument(
-      type: VerificationDocumentType.idDocument,
+      type: VerificationDocumentType.idDocumentFront,
+    ),
+    this.idDocumentBack = const VerificationDocument(
+      type: VerificationDocumentType.idDocumentBack,
     ),
     this.selfie = const VerificationDocument(
       type: VerificationDocumentType.selfie,
@@ -161,9 +164,12 @@ class SellerVerificationDocumentsState {
       type: VerificationDocumentType.proofOfAddress,
     ),
     this.farmPhotos = const <VerificationDocument>[],
+    this.hasNoBackImage,
   });
 
   final VerificationDocument idDocument;
+  final VerificationDocument idDocumentBack;
+  final bool? hasNoBackImage;
   final VerificationDocument selfie;
   final VerificationDocument proofOfAddress;
 
@@ -173,6 +179,8 @@ class SellerVerificationDocumentsState {
   /// The slot for one single-file document type.
   VerificationDocument forType(VerificationDocumentType type) => switch (type) {
     VerificationDocumentType.idDocument => idDocument,
+    VerificationDocumentType.idDocumentFront => idDocument,
+    VerificationDocumentType.idDocumentBack => idDocumentBack,
     VerificationDocumentType.selfie => selfie,
     VerificationDocumentType.proofOfAddress => proofOfAddress,
     VerificationDocumentType.farmPhoto => throw ArgumentError.value(
@@ -194,11 +202,16 @@ class SellerVerificationDocumentsState {
   /// This is what gates the step's `Next`: a locally-picked file is not enough,
   /// because the submission endpoint requires these files to be staged.
   bool get allRequiredUploaded =>
-      all.every((VerificationDocument document) => document.isUploaded);
+      idDocument.isUploaded &&
+      (hasNoBackImage == true ||
+          (hasNoBackImage == false && idDocumentBack.isUploaded)) &&
+      proofOfAddress.isUploaded &&
+      selfie.isUploaded;
 
   /// Whether any slot has a request in flight.
   bool get isBusy =>
       all.any((VerificationDocument document) => document.isUploading) ||
+      idDocumentBack.isUploading ||
       farmPhotos.any((VerificationDocument photo) => photo.isUploading);
 
   /// Whether another farm photo can be added now.
@@ -211,15 +224,22 @@ class SellerVerificationDocumentsState {
 
   SellerVerificationDocumentsState copyWith({
     VerificationDocument? idDocument,
+    VerificationDocument? idDocumentBack,
     VerificationDocument? selfie,
     VerificationDocument? proofOfAddress,
     List<VerificationDocument>? farmPhotos,
+    bool? hasNoBackImage,
+    bool clearBackImageChoice = false,
   }) {
     return SellerVerificationDocumentsState(
       idDocument: idDocument ?? this.idDocument,
+      idDocumentBack: idDocumentBack ?? this.idDocumentBack,
       selfie: selfie ?? this.selfie,
       proofOfAddress: proofOfAddress ?? this.proofOfAddress,
       farmPhotos: farmPhotos ?? this.farmPhotos,
+      hasNoBackImage: clearBackImageChoice
+          ? null
+          : (hasNoBackImage ?? this.hasNoBackImage),
     );
   }
 
@@ -227,7 +247,11 @@ class SellerVerificationDocumentsState {
   SellerVerificationDocumentsState withDocument(
     VerificationDocument document,
   ) => switch (document.type) {
-    VerificationDocumentType.idDocument => copyWith(idDocument: document),
+    VerificationDocumentType.idDocument ||
+    VerificationDocumentType.idDocumentFront => copyWith(idDocument: document),
+    VerificationDocumentType.idDocumentBack => copyWith(
+      idDocumentBack: document,
+    ),
     VerificationDocumentType.selfie => copyWith(selfie: document),
     VerificationDocumentType.proofOfAddress => copyWith(
       proofOfAddress: document,
@@ -258,8 +282,12 @@ class SellerVerificationDocumentsState {
 
     return SellerVerificationDocumentsState(
       idDocument: slot(
-        VerificationDocumentType.idDocument,
-        verification.hasIdDocument,
+        VerificationDocumentType.idDocumentFront,
+        verification.hasIdDocumentFront,
+      ),
+      idDocumentBack: slot(
+        VerificationDocumentType.idDocumentBack,
+        verification.hasIdDocumentBack,
       ),
       selfie: slot(VerificationDocumentType.selfie, verification.hasSelfie),
       proofOfAddress: slot(
@@ -271,7 +299,7 @@ class SellerVerificationDocumentsState {
 
   @override
   String toString() =>
-      'SellerVerificationDocumentsState(${idDocument.status.name}, '
+      'SellerVerificationDocumentsState(${idDocument.status.name}, ${idDocumentBack.status.name}, '
       '${selfie.status.name}, ${proofOfAddress.status.name}, '
       '${farmPhotos.length} farm photos)';
 }

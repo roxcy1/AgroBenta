@@ -18,18 +18,34 @@ void main() {
           return http.Response(
             jsonEncode({
               'data': [
-                {'value': 'cattle', 'label': 'Cattle'},
-                {'value': 'carabao', 'label': 'Carabao'},
-                {'value': 'goat', 'label': 'Goat'},
-                {'value': 'swine', 'label': 'Swine'},
+                {
+                  'value': 'cattle',
+                  'label': 'Cattle',
+                  'breeds': ['Philippine Native Cattle', 'Brahman'],
+                },
+                {
+                  'value': 'carabao',
+                  'label': 'Carabao',
+                  'breeds': ['Philippine Native Carabao', 'Murrah'],
+                },
+                {
+                  'value': 'goat',
+                  'label': 'Goat',
+                  'breeds': ['Boer'],
+                },
+                {
+                  'value': 'swine',
+                  'label': 'Swine',
+                  'breeds': ['Native Pig'],
+                },
                 {
                   'value': 'chicken',
                   'label': 'Chicken',
                   'breeds': [
-                    'boholano_native_chicken',
-                    'broiler',
-                    'improved_native_chicken',
-                    'layer',
+                    'Boholano Native Chicken',
+                    'Broiler',
+                    'Layer',
+                    'Improved Native Chicken',
                   ],
                 },
               ],
@@ -50,14 +66,12 @@ void main() {
       'swine',
       'chicken',
     ]);
-
-    final chicken = types.singleWhere((type) => type.value == 'chicken');
-    expect(chicken.breeds, [
-      'boholano_native_chicken',
-      'broiler',
-      'improved_native_chicken',
-      'layer',
+    expect(types.last.breeds, [
+      'Boholano Native Chicken',
+      'Broiler',
+      'Layer',
+      'Improved Native Chicken',
     ]);
-    expect(chicken.breeds.contains('duck'), isFalse);
+    expect(types.last.breeds.contains('duck'), isFalse);
   });
 }

@@ -18,18 +18,54 @@ LivestockTypeRepository buildLivestockTypeRepository(TokenStore tokenStore) {
           (_) async => http.Response(
             jsonEncode(<String, Object>{
               'data': <Map<String, Object>>[
-                <String, String>{'value': 'cattle', 'label': 'Cattle'},
-                <String, String>{'value': 'carabao', 'label': 'Carabao'},
-                <String, String>{'value': 'goat', 'label': 'Goat'},
-                <String, String>{'value': 'swine', 'label': 'Swine'},
+                <String, Object>{
+                  'value': 'cattle',
+                  'label': 'Cattle',
+                  'breeds': <String>[
+                    'Philippine Native Cattle',
+                    'Brahman',
+                    'Holstein Friesian',
+                    'Brahman Cross',
+                  ],
+                },
+                <String, Object>{
+                  'value': 'carabao',
+                  'label': 'Carabao',
+                  'breeds': <String>[
+                    'Philippine Native Carabao',
+                    'Murrah',
+                    'Native–Murrah Cross',
+                  ],
+                },
+                <String, Object>{
+                  'value': 'goat',
+                  'label': 'Goat',
+                  'breeds': <String>[
+                    'Ubay/Boholano Native Goat',
+                    'Boer',
+                    'Anglo-Nubian',
+                    'Saanen',
+                  ],
+                },
+                <String, Object>{
+                  'value': 'swine',
+                  'label': 'Swine',
+                  'breeds': <String>[
+                    'Native Pig',
+                    'Landrace',
+                    'Large White (Yorkshire)',
+                    'Duroc',
+                    'Duroc–Landrace Cross',
+                  ],
+                },
                 <String, Object>{
                   'value': 'chicken',
                   'label': 'Chicken',
                   'breeds': <String>[
-                    'boholano_native_chicken',
-                    'broiler',
-                    'improved_native_chicken',
-                    'layer',
+                    'Boholano Native Chicken',
+                    'Broiler',
+                    'Layer',
+                    'Improved Native Chicken',
                   ],
                 },
               ],

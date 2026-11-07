@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_form_screen.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_screen.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_submitted_screen.dart';
+import 'package:agrobenta_mobile/features/trinidad_location/state/trinidad_location_scope.dart';
+import 'package:agrobenta_mobile/models/seller_verification.dart';
 import 'package:agrobenta_mobile/widgets/local_image_preview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,11 +24,7 @@ void main() {
     final Finder target = find.widgetWithText(FilledButton, label);
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
-    await tester.ensureVisible(target);
-    await tester.pumpAndSettle();
-    // There is no in-flight request before this tap, so settling here only waits
-    // for the scroll animation; request spinners are handled by the bounded helper.
-    await tester.pumpAndSettle();
+    await scrollSellerVerificationIntoView(tester, target);
     await tester.tap(target);
     await settleSellerVerification(tester);
   }
@@ -34,9 +32,45 @@ void main() {
   /// Advances one step, supplying the required contact snapshots in this shared
   /// form-flow helper when no auth profile values were provided by a test.
   Future<void> tapNext(WidgetTester tester) async {
+    final Finder barangay = find.ancestor(
+      of: find.text('Barangay'),
+      matching: find.byType(DropdownButtonFormField<String>),
+    );
+    if (barangay.evaluate().isNotEmpty &&
+        tester.widget<DropdownButtonFormField<String>>(barangay).initialValue ==
+            null) {
+      expect(
+        TrinidadLocationScope.readOf(
+          tester.element(find.byType(SellerVerificationFormScreen)),
+        ).state.catalog?.barangays,
+        contains('Banlasan'),
+      );
+      await scrollSellerVerificationIntoView(tester, barangay);
+      await tester.tap(barangay);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Banlasan').last);
+      await tester.pumpAndSettle();
+    }
+
+    final Finder idType = find.byType(
+      DropdownButtonFormField<GovernmentIdType>,
+    );
+    if (idType.evaluate().isNotEmpty &&
+        tester
+                .widget<DropdownButtonFormField<GovernmentIdType>>(idType)
+                .initialValue ==
+            null) {
+      await tester.ensureVisible(idType);
+      await tester.pumpAndSettle();
+      await tester.tap(idType);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.text(GovernmentIdType.philippineNationalId.label).last,
+      );
+      await tester.pumpAndSettle();
+    }
     for (final (String label, String value) in <(String, String)>[
       ('Phone number', '09171234567'),
-      ('Address', 'Trinidad, Bohol'),
     ]) {
       final Finder field = find.widgetWithText(TextFormField, label);
       if (field.evaluate().isNotEmpty &&
@@ -188,7 +222,7 @@ void main() {
 
   group('form', () {
     testWidgets(
-      'shows required applicant snapshots and optional business fields',
+      'shows applicant snapshots and the shared Trinidad location selector',
       (WidgetTester tester) async {
         await SellerVerificationHarness.pump(
           tester,
@@ -200,12 +234,21 @@ void main() {
 
         expect(find.byType(SellerVerificationFormScreen), findsOneWidget);
 
-        // Full name is read-only account data. Phone and address are required
-        // application snapshots; business fields remain optional.
+        // Full name is read-only account data. The address is captured through
+        // the shared selector, and the optional business snapshot fields are
+        // collected on this step as well.
         expect(find.byType(TextFormField), findsNWidgets(6));
+        expect(
+          find.byType(DropdownButtonFormField<GovernmentIdType>),
+          findsNothing,
+        );
+        expect(find.text('Specify Government ID'), findsNothing);
         expect(find.text('Full name'), findsOneWidget);
         expect(find.text('Phone number'), findsOneWidget);
-        expect(find.text('Address'), findsOneWidget);
+        expect(find.text('Province'), findsOneWidget);
+        expect(find.text('Municipality'), findsOneWidget);
+        expect(find.text('Barangay'), findsOneWidget);
+        expect(find.text('Street / Purok (optional)'), findsOneWidget);
         expect(find.text('Business name'), findsOneWidget);
         expect(find.text('Business location'), findsOneWidget);
         expect(find.text('Business description'), findsOneWidget);
@@ -229,8 +272,8 @@ void main() {
       await settleSellerVerification(tester);
 
       expect(find.text('Phone number is required.'), findsOneWidget);
-      expect(find.text('Address is required.'), findsOneWidget);
-      expect(find.text('Upload Required Documents'), findsNothing);
+      expect(find.text('Select a barangay.'), findsOneWidget);
+      expect(find.text('Government ID Verification'), findsNothing);
     });
 
     testWidgets('collects the Figure 19 documents on the Documents step', (
@@ -244,15 +287,16 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
 
       // The Documents step is the only place the flow offers an upload, and it
       // asks for the two pieces of evidence the design requires separately.
-      expect(find.text('Valid Government-Issued ID'), findsOneWidget);
+      expect(find.text('Government ID — Front'), findsOneWidget);
+      expect(
+        find.byType(DropdownButtonFormField<GovernmentIdType>),
+        findsOneWidget,
+      );
+      expect(find.text('Upload Back ID Image'), findsNothing);
       expect(find.text('Proof of Address'), findsOneWidget);
       expect(find.text('Selfie Holding Your ID'), findsOneWidget);
       expect(find.text('Farm Photos'), findsOneWidget);
@@ -260,6 +304,130 @@ void main() {
       // The ID image is never offered as the selfie — they are distinct.
       expect(find.textContaining('cannot be reused'), findsOneWidget);
     });
+
+    testWidgets('requires a Government ID type before leaving Documents', (
+      WidgetTester tester,
+    ) async {
+      await SellerVerificationHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        pickImage: fakeVerificationPicker,
+        handler: (RecordedRequest request) async =>
+            request.method == 'POST' &&
+                request.apiPath == '/seller-verification/documents'
+            ? sellerVerificationDocumentUploadedResponse()
+            : sellerVerificationNotFoundResponse(),
+      );
+      await openSellerVerificationForm(tester, resubmission: false);
+      await tapNext(tester);
+      await uploadBothDocuments(tester);
+
+      final Finder next = find.widgetWithText(FilledButton, 'Next');
+      await scrollSellerVerificationIntoView(tester, next);
+      await tester.tap(next);
+      await settleSellerVerification(tester);
+
+      expect(find.text('Select a Government ID type.'), findsOneWidget);
+      expect(find.text('Government ID — Front'), findsOneWidget);
+    });
+
+    testWidgets('Others reveals a required Specify Government ID field', (
+      WidgetTester tester,
+    ) async {
+      await SellerVerificationHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => sellerVerificationNotFoundResponse(),
+      );
+      await openSellerVerificationForm(tester, resubmission: false);
+      await tapNext(tester);
+
+      final Finder dropdown = find.byType(
+        DropdownButtonFormField<GovernmentIdType>,
+      );
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(GovernmentIdType.others.label).last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.widgetWithText(TextFormField, 'Specify Government ID'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+      'back-image choices appear after front upload and can be switched',
+      (WidgetTester tester) async {
+        final List<VerificationDocumentType> pickedTypes =
+            <VerificationDocumentType>[];
+        final SellerVerificationHarness harness =
+            await SellerVerificationHarness.pump(
+              tester,
+              tokenStore: tokenStore,
+              pickImage: (VerificationDocumentType type) async {
+                pickedTypes.add(type);
+                return fakeVerificationPicker(type);
+              },
+              handler: (RecordedRequest request) async {
+                if (request.method == 'POST' &&
+                    request.apiPath == '/seller-verification/documents') {
+                  return sellerVerificationDocumentUploadedResponse();
+                }
+                if (request.method == 'DELETE') {
+                  return sellerVerificationDocumentDeletedResponse();
+                }
+                return sellerVerificationNotFoundResponse();
+              },
+            );
+        await openSellerVerificationForm(tester, resubmission: false);
+        await tapNext(tester);
+
+        expect(find.text('Upload Back ID Image'), findsNothing);
+        await tapDocumentPick(tester, 'Government ID — Front');
+        expect(pickedTypes, <VerificationDocumentType>[
+          VerificationDocumentType.idDocumentFront,
+        ]);
+        expect(find.text('Upload Back ID Image'), findsOneWidget);
+        expect(find.text('My ID Has No Back Image'), findsOneWidget);
+
+        final Finder uploadBack = find.widgetWithText(
+          OutlinedButton,
+          'Upload Back ID Image',
+        );
+        await scrollSellerVerificationIntoView(tester, uploadBack);
+        await tester.tap(uploadBack);
+        await settleSellerVerification(tester);
+        expect(pickedTypes, <VerificationDocumentType>[
+          VerificationDocumentType.idDocumentFront,
+          VerificationDocumentType.idDocumentBack,
+        ]);
+        expect(find.text('Government ID — Back'), findsOneWidget);
+        expect(find.byType(Image), findsNWidgets(2));
+
+        final Finder noBackChoice = find.widgetWithText(
+          OutlinedButton,
+          'My ID Has No Back Image',
+        );
+        await scrollSellerVerificationIntoView(tester, noBackChoice);
+        await tester.tap(noBackChoice);
+        await settleSellerVerification(tester);
+        expect(
+          find.text('You declared that your Government ID has no back image.'),
+          findsOneWidget,
+        );
+        expect(find.text('Government ID — Back'), findsNothing);
+        expect(
+          harness.recorded.any(
+            (RecordedRequest request) =>
+                request.method == 'DELETE' &&
+                request.apiPath ==
+                    '/seller-verification/documents/id_document_back',
+          ),
+          isTrue,
+        );
+      },
+    );
 
     testWidgets('a blank business name can still advance', (
       WidgetTester tester,
@@ -273,7 +441,7 @@ void main() {
 
       await tapNext(tester);
 
-      expect(find.text('Upload Required Documents'), findsOneWidget);
+      expect(find.text('Government ID Verification'), findsOneWidget);
     });
 
     testWidgets('reveals the review step and can go back', (
@@ -290,16 +458,13 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
 
       expect(find.text('Review Your Information'), findsOneWidget);
-      expect(find.text('Rizal Farms'), findsOneWidget);
+      expect(find.text('Business name'), findsOneWidget);
+      expect(find.text('Business location'), findsOneWidget);
       expect(
         find.widgetWithText(FilledButton, 'Submit Application'),
         findsOneWidget,
@@ -311,7 +476,7 @@ void main() {
       await settleSellerVerification(tester);
 
       // Back returns to the Documents step, whose two uploads are intact.
-      expect(find.text('Upload Required Documents'), findsOneWidget);
+      expect(find.text('Government ID Verification'), findsOneWidget);
       expect(find.text('Review Your Information'), findsNothing);
     });
 
@@ -336,10 +501,12 @@ void main() {
           );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
+      final Finder businessDescription = find.widgetWithText(
+        TextFormField,
+        'Business description',
       );
+      await scrollSellerVerificationIntoView(tester, businessDescription);
+      await tester.enterText(businessDescription, 'Cattle and goat farm.');
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
@@ -358,11 +525,15 @@ void main() {
                 r.method == 'POST' && r.apiPath == '/seller-verification',
           )
           .body;
-      expect(body, containsPair('business_name', 'Rizal Farms'));
+      expect(body.containsKey('business_name'), isFalse);
+      expect(body.containsKey('business_location'), isFalse);
+      expect(body['business_description'], 'Cattle and goat farm.');
       expect(body.containsKey('seller_capability'), isFalse);
       expect(body.containsKey('role'), isFalse);
       expect(body.containsKey('status'), isFalse);
       expect(body.containsKey('id_document_ref'), isFalse);
+      expect(body['government_id_type'], 'philippine_national_id');
+      expect(body['has_no_back_image'], isTrue);
 
       // "Back to Profile" returns to where the flow was entered.
       await tapFilled(tester, 'Back to Profile');
@@ -393,8 +564,8 @@ void main() {
                 return sellerVerificationValidationResponse(
                   message: 'Upload all required documents before submitting.',
                   errors: <String, Object>{
-                    'id_document': <String>[
-                      'Upload a clear photo of your government-issued ID.',
+                    'id_document_front': <String>[
+                      'Upload the front of your government-issued ID.',
                     ],
                     'proof_of_address': <String>[
                       'Upload your proof of address.',
@@ -412,16 +583,12 @@ void main() {
         );
 
         await openSellerVerificationForm(tester, resubmission: false);
-        await tester.enterText(
-          find.widgetWithText(TextFormField, 'Business name'),
-          'Rizal Farms',
-        );
         await tapNext(tester);
         await uploadBothDocuments(tester);
         await tapNext(tester);
         await tapFilled(tester, 'Submit Application');
 
-        expect(find.text('Upload Required Documents'), findsOneWidget);
+        expect(find.text('Government ID Verification'), findsOneWidget);
         expect(find.text('Upload required'), findsNWidgets(3));
         expect(find.text('Upload again'), findsNWidgets(3));
         FilledButton next = tester.widget<FilledButton>(
@@ -475,29 +642,29 @@ void main() {
           }
           return sellerVerificationValidationResponse(
             errors: <String, Object>{
-              'business_name': <String>['The business name field is required.'],
+              'address': <String>[
+                'Choose a barangay in Trinidad, Bohol and enter a valid location.',
+              ],
             },
           );
         },
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
       await tapFilled(tester, 'Submit Application');
 
       // Back on the field, with the server's message beside it.
-      expect(find.text('The business name field is required.'), findsOneWidget);
-      expect(find.text('Review Your Information'), findsNothing);
       expect(
-        find.widgetWithText(TextFormField, 'Business name'),
+        find.text(
+          'Choose a barangay in Trinidad, Bohol and enter a valid location.',
+        ),
         findsOneWidget,
       );
+      expect(find.text('Review Your Information'), findsNothing);
+      expect(find.text('Barangay'), findsOneWidget);
     });
 
     testWidgets('shows a 409 as information, not a failure', (
@@ -531,10 +698,6 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
@@ -571,10 +734,6 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
@@ -624,13 +783,34 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: true);
 
+      expect(find.text('Business name'), findsOneWidget);
+      expect(find.text('Business location'), findsOneWidget);
       expect(
-        find.widgetWithText(TextFormField, 'Santos Cattle Co.'),
-        findsOneWidget,
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Business name'),
+            )
+            .controller!
+            .text,
+        'Santos Cattle Co.',
       );
       expect(
-        find.widgetWithText(TextFormField, 'Mabalacat, Pampanga'),
-        findsOneWidget,
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Business location'),
+            )
+            .controller!
+            .text,
+        'Mabalacat, Pampanga',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Business description'),
+            )
+            .controller!
+            .text,
+        'Family-run cattle farm, trading since 2011.',
       );
       expect(
         tester
@@ -643,12 +823,14 @@ void main() {
       );
       expect(
         tester
-            .widget<TextFormField>(
-              find.widgetWithText(TextFormField, 'Address'),
+            .widget<DropdownButtonFormField<String>>(
+              find.ancestor(
+                of: find.text('Barangay'),
+                matching: find.byType(DropdownButtonFormField<String>),
+              ),
             )
-            .controller!
-            .text,
-        'Barangay Poblacion, Trinidad, Bohol',
+            .initialValue,
+        'Poblacion',
       );
     });
   });
@@ -667,10 +849,6 @@ void main() {
             handler: handler,
           );
       await openSellerVerificationForm(tester, resubmission: false);
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       return harness;
     }
@@ -730,7 +908,14 @@ void main() {
       );
 
       // Two of three is still not enough.
-      await tapDocumentPick(tester, 'Valid Government-Issued ID');
+      await tapDocumentPick(tester, 'Government ID — Front');
+      final Finder noBackChoice = find.widgetWithText(
+        OutlinedButton,
+        'My ID Has No Back Image',
+      );
+      await scrollSellerVerificationIntoView(tester, noBackChoice);
+      await tester.tap(noBackChoice);
+      await settleSellerVerification(tester);
       await tapDocumentPick(tester, 'Selfie Holding Your ID');
       next = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Next'),
@@ -755,7 +940,7 @@ void main() {
             : sellerVerificationNotFoundResponse(),
       );
 
-      await tapDocumentPick(tester, 'Valid Government-Issued ID');
+      await tapDocumentPick(tester, 'Government ID — Front');
 
       // The failure is stated; the slot is not shown as uploaded, and Next stays
       // disabled because the server never confirmed the document.
@@ -779,13 +964,9 @@ void main() {
             handler: (_) async => sellerVerificationNotFoundResponse(),
           );
       await openSellerVerificationForm(tester, resubmission: false);
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
 
-      await tapDocumentPick(tester, 'Valid Government-Issued ID');
+      await tapDocumentPick(tester, 'Government ID — Front');
 
       expect(
         harness.recorded.where(

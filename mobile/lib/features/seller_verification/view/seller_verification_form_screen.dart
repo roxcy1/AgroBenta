@@ -9,9 +9,14 @@ import '../../../core/theme/app_spacing.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../../models/seller_verification.dart';
+import '../../../models/trinidad_location.dart';
 import '../../../models/user.dart';
+import '../../../features/profile/state/profile_scope.dart';
+import '../../trinidad_location/state/trinidad_location_controller.dart';
+import '../../trinidad_location/state/trinidad_location_scope.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
+import '../../../widgets/trinidad_location_selector.dart';
 import '../state/seller_verification_controller.dart';
 import '../state/seller_verification_documents_controller.dart';
 import '../state/seller_verification_documents_state.dart';
@@ -98,20 +103,27 @@ class _SellerVerificationFormScreenState
   ];
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> _governmentIdFormKey = GlobalKey<FormState>();
   final TextEditingController _phone = TextEditingController();
-  final TextEditingController _address = TextEditingController();
   final TextEditingController _businessName = TextEditingController();
   final TextEditingController _businessLocation = TextEditingController();
   final TextEditingController _businessDescription = TextEditingController();
+  final TextEditingController _governmentIdDescription =
+      TextEditingController();
 
   late final SellerVerificationController _controller;
   late final SellerVerificationDocumentsController _documents;
+  late final TrinidadLocationController _locationCatalog;
   AuthController? _authController;
   int? _authenticatedUserId;
   bool _authIdentityInitialized = false;
   bool _phonePrefilled = false;
   bool _addressPrefilled = false;
+  String? _pendingAddress;
+  TrinidadLocation? _location;
+  String? _legacyAddress;
   SellerVerification? _previousVerification;
+  GovernmentIdType? _governmentIdType;
 
   /// Zero-based index of the step being shown.
   int _step = 0;
@@ -154,8 +166,13 @@ class _SellerVerificationFormScreenState
       _businessName.clear();
       _businessLocation.clear();
       _businessDescription.clear();
+      _governmentIdDescription.clear();
+      _governmentIdType = null;
       _phone.text = authController?.state.user?.phone ?? '';
-      _address.text = authController?.state.user?.location ?? '';
+      _queueAddress(
+        ProfileScope.maybeReadOf(context)?.state.user?.location ??
+            authController?.state.user?.location,
+      );
       _phonePrefilled = true;
       _addressPrefilled = true;
     }
@@ -172,9 +189,44 @@ class _SellerVerificationFormScreenState
       _phonePrefilled = true;
     }
     if (!_addressPrefilled) {
-      _address.text = _previousVerification?.address ?? user.location ?? '';
+      _queueAddress(
+        _previousVerification?.address ??
+            ProfileScope.maybeReadOf(context)?.state.user?.location ??
+            user.location,
+      );
       _addressPrefilled = true;
     }
+  }
+
+  void _queueAddress(String? rawAddress) {
+    _pendingAddress = rawAddress?.trim();
+    _restoreQueuedAddress();
+  }
+
+  void _restoreQueuedAddress() {
+    final String? rawAddress = _pendingAddress;
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final TrinidadLocation? parsed = catalog?.parseAddress(rawAddress);
+    _location = parsed;
+    _legacyAddress =
+        rawAddress != null && rawAddress.isNotEmpty && parsed == null
+        ? rawAddress
+        : null;
+  }
+
+  void _handleLocationCatalogChanged() {
+    if (_pendingAddress != null && _locationCatalog.state.isReady && mounted) {
+      setState(_restoreQueuedAddress);
+    }
+  }
+
+  void _handleLocationChanged(TrinidadLocation? value) {
+    setState(() {
+      _location = value;
+      _legacyAddress = null;
+      _pendingAddress = null;
+      _addressPrefilled = true;
+    });
   }
 
   @override
@@ -186,6 +238,8 @@ class _SellerVerificationFormScreenState
     _documents = SellerVerificationDocumentsController(
       SellerVerificationScope.repositoryOf(context),
     );
+    _locationCatalog = TrinidadLocationScope.readOf(context);
+    _locationCatalog.addListener(_handleLocationCatalogChanged);
 
     final SellerVerification? previous = _controller.state.verification;
     _previousVerification = previous;
@@ -198,15 +252,21 @@ class _SellerVerificationFormScreenState
       _businessName.text = previous.businessName ?? '';
       _businessLocation.text = previous.businessLocation ?? '';
       _businessDescription.text = previous.businessDescription ?? '';
+      _governmentIdType = previous.governmentIdType;
+      _governmentIdDescription.text = previous.governmentIdDescription ?? '';
       if (previous.phone != null) {
         _phone.text = previous.phone!;
         _phonePrefilled = true;
       }
       if (previous.address != null) {
-        _address.text = previous.address!;
+        _queueAddress(previous.address);
         _addressPrefilled = true;
       }
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _locationCatalog.ensureLoaded();
+    });
 
     // Historical documents remain previewable but are not staged for a new
     // resubmission; the controller seeds them as requiring a fresh upload.
@@ -228,6 +288,7 @@ class _SellerVerificationFormScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _formKey.currentState?.validate();
+        _governmentIdFormKey.currentState?.validate();
       }
     });
   }
@@ -238,20 +299,24 @@ class _SellerVerificationFormScreenState
     _businessName.dispose();
     _businessLocation.dispose();
     _businessDescription.dispose();
+    _governmentIdDescription.dispose();
     _phone.dispose();
-    _address.dispose();
     _documents.dispose();
+    _locationCatalog.removeListener(_handleLocationCatalogChanged);
     super.dispose();
   }
 
   void _goToDocuments() {
-    if (_formKey.currentState?.validate() ?? false) {
+    if (_locationCatalog.state.isReady &&
+        (_formKey.currentState?.validate() ?? false)) {
       setState(() => _step = 1);
     }
   }
 
   void _goToReview() {
-    if (_documents.state.allRequiredUploaded) {
+    final bool idInformationValid =
+        _governmentIdFormKey.currentState?.validate() ?? false;
+    if (idInformationValid && _documents.state.allRequiredUploaded) {
       setState(() => _step = 2);
     }
   }
@@ -280,13 +345,34 @@ class _SellerVerificationFormScreenState
     await _documents.addFarmPhoto(file);
   }
 
+  Future<void> _chooseAndPickBackImage() async {
+    final bool uploadSelected = await _documents.chooseBackImage(
+      hasNoBackImage: false,
+    );
+    if (uploadSelected && mounted) {
+      await _pick(VerificationDocumentType.idDocumentBack);
+    }
+  }
+
   Future<void> _submit() async {
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
     final bool created = await _controller.submit(
       phone: _phone.text.trim(),
-      address: _address.text.trim(),
+      address: catalog == null
+          ? ''
+          : (_location?.formattedAddress(
+                  municipality: catalog.municipality,
+                  province: catalog.province,
+                ) ??
+                ''),
       businessName: _businessName.text,
       businessLocation: _businessLocation.text,
       businessDescription: _businessDescription.text,
+      governmentIdType: _governmentIdType?.value ?? '',
+      governmentIdDescription: _governmentIdType == GovernmentIdType.others
+          ? _governmentIdDescription.text
+          : null,
+      hasNoBackImage: _documents.state.hasNoBackImage == true,
     );
 
     if (!mounted) {
@@ -307,8 +393,8 @@ class _SellerVerificationFormScreenState
       return;
     }
 
-    // A `422` names fields that live on the first step, so return there and
-    // reset the error cache so the field validators run once the fields mount.
+    // Return to the step containing the rejected fields, then validate after
+    // that step's form has mounted again.
     if (_controller.state.validationErrors.isNotEmpty) {
       final Set<VerificationDocumentType> documentsNeedingUpload = _controller
           .state
@@ -328,15 +414,23 @@ class _SellerVerificationFormScreenState
       if (documentsNeedingUpload.isNotEmpty) {
         _documents.markDocumentsForReupload(documentsNeedingUpload);
       }
+      final bool governmentIdError =
+          _controller.state.validationErrors.containsKey(
+            'government_id_type',
+          ) ||
+          _controller.state.validationErrors.containsKey(
+            'government_id_description',
+          );
       setState(() {
-        // Document field errors belong on the Documents step; business field
-        // errors on Basic Information.
+        // ID metadata and document errors belong on Documents; the contact and
+        // business snapshot fields belong on Basic Information.
         _step =
-            _controller.state.validationErrors.keys.any(
-              (String key) => VerificationDocumentType.values.any(
-                (VerificationDocumentType type) => type.value == key,
-              ),
-            )
+            governmentIdError ||
+                _controller.state.validationErrors.keys.any(
+                  (String key) => VerificationDocumentType.values.any(
+                    (VerificationDocumentType type) => type.value == key,
+                  ),
+                )
             ? 1
             : 0;
         _displayedErrors = const <String, List<String>>{};
@@ -350,7 +444,11 @@ class _SellerVerificationFormScreenState
       appBar: AppBar(title: const Text('Seller Application')),
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge(<Listenable>[_controller, _documents]),
+          listenable: Listenable.merge(<Listenable>[
+            _controller,
+            _documents,
+            _locationCatalog,
+          ]),
           builder: (BuildContext context, Widget? child) {
             final SellerVerificationState state = _controller.state;
             final SellerVerificationDocumentsState documents = _documents.state;
@@ -390,7 +488,7 @@ class _SellerVerificationFormScreenState
                         ],
                         ...switch (_step) {
                           0 => _basicInformation(isSubmitting),
-                          1 => _documentsStep(documents),
+                          1 => _documentsStep(documents, isSubmitting),
                           _ => _review(isSubmitting, documents),
                         },
                       ],
@@ -454,20 +552,14 @@ class _SellerVerificationFormScreenState
                   _controller.state.errorFor('phone'),
             ),
             const SizedBox(height: AppSpacing.md),
-            TextFormField(
-              controller: _address,
-              keyboardType: TextInputType.streetAddress,
-              textCapitalization: TextCapitalization.words,
-              textInputAction: TextInputAction.next,
-              maxLength: kSellerVerificationAddressMax,
+            TrinidadLocationSelector(
+              value: _location,
+              legacyAddress: _legacyAddress,
+              maxFormattedLength: kSellerVerificationAddressMax,
+              isRequired: true,
               enabled: !isSubmitting,
-              decoration: const InputDecoration(
-                labelText: 'Address',
-                helperText: 'Required. Your residential or barangay address.',
-              ),
-              validator: (String? value) =>
-                  validateVerificationAddress(value) ??
-                  _controller.state.errorFor('address'),
+              externalError: _controller.state.errorFor('address'),
+              onChanged: _handleLocationChanged,
             ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
@@ -532,12 +624,15 @@ class _SellerVerificationFormScreenState
     ];
   }
 
-  List<Widget> _documentsStep(SellerVerificationDocumentsState documents) {
+  List<Widget> _documentsStep(
+    SellerVerificationDocumentsState documents,
+    bool isSubmitting,
+  ) {
     final ThemeData theme = Theme.of(context);
     final bool allRequiredUploaded = documents.allRequiredUploaded;
 
     return <Widget>[
-      Text('Upload Required Documents', style: theme.textTheme.titleLarge),
+      Text('Government ID Verification', style: theme.textTheme.titleLarge),
       const SizedBox(height: AppSpacing.xs),
       Text(
         'Upload the required documents below. Each is uploaded as soon as you '
@@ -547,8 +642,65 @@ class _SellerVerificationFormScreenState
         ),
       ),
       const SizedBox(height: AppSpacing.lg),
+      Form(
+        key: _governmentIdFormKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            DropdownButtonFormField<GovernmentIdType>(
+              initialValue: _governmentIdType,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Government ID Type',
+                errorText: _controller.state.errorFor('government_id_type'),
+              ),
+              items: GovernmentIdType.values
+                  .map(
+                    (GovernmentIdType type) =>
+                        DropdownMenuItem<GovernmentIdType>(
+                          value: type,
+                          child: Text(
+                            type.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                  )
+                  .toList(growable: false),
+              onChanged: isSubmitting
+                  ? null
+                  : (GovernmentIdType? value) =>
+                        setState(() => _governmentIdType = value),
+              validator: (GovernmentIdType? value) => value == null
+                  ? 'Select a Government ID type.'
+                  : _controller.state.errorFor('government_id_type'),
+            ),
+            if (_governmentIdType == GovernmentIdType.others) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              TextFormField(
+                controller: _governmentIdDescription,
+                enabled: !isSubmitting,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: 'Specify Government ID',
+                  errorText: _controller.state.errorFor(
+                    'government_id_description',
+                  ),
+                ),
+                validator: (String? value) =>
+                    _governmentIdType == GovernmentIdType.others &&
+                        (value == null || value.trim().isEmpty)
+                    ? 'Specify your Government ID.'
+                    : _controller.state.errorFor('government_id_description'),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.md),
       SellerVerificationDocumentCard(
-        title: 'Valid Government-Issued ID',
+        title: 'Government ID — Front',
         instruction:
             'Upload a clear photo or scan of an accepted government-issued ID. '
             'The name and details must be readable.',
@@ -556,14 +708,69 @@ class _SellerVerificationFormScreenState
             'The entire ID must be visible, with readable text and no blur, '
             'glare or cropped edges.',
         document: documents.idDocument,
-        pickLabel: 'Take Photo',
+        pickLabel: 'Upload Front ID Image',
         changeLabel: 'Change',
-        onPick: () => _pick(VerificationDocumentType.idDocument),
-        onRemove: () => _documents.remove(VerificationDocumentType.idDocument),
-        onRetry: () => _documents.retry(VerificationDocumentType.idDocument),
+        onPick: () => _pick(VerificationDocumentType.idDocumentFront),
+        onRemove: () =>
+            _documents.remove(VerificationDocumentType.idDocumentFront),
+        onRetry: () =>
+            _documents.retry(VerificationDocumentType.idDocumentFront),
         onRetryPreview: () =>
-            _documents.loadPreview(VerificationDocumentType.idDocument),
+            _documents.loadPreview(VerificationDocumentType.idDocumentFront),
       ),
+      if (documents.idDocument.hasFile) ...<Widget>[
+        const SizedBox(height: AppSpacing.md),
+        Text('Back ID image', style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.xs),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: <Widget>[
+            OutlinedButton(
+              onPressed: documents.isBusy ? null : _chooseAndPickBackImage,
+              child: const Text('Upload Back ID Image'),
+            ),
+            OutlinedButton(
+              onPressed: documents.isBusy
+                  ? null
+                  : () => _documents.chooseBackImage(hasNoBackImage: true),
+              child: const Text('My ID Has No Back Image'),
+            ),
+          ],
+        ),
+        if (documents.hasNoBackImage == true)
+          const Text('You declared that your Government ID has no back image.'),
+        if (documents.hasNoBackImage == false &&
+            (documents.idDocumentBack.hasFile ||
+                documents
+                    .idDocumentBack
+                    .hasPreviousRecordDocument)) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          SellerVerificationDocumentCard(
+            title: 'Government ID — Back',
+            instruction:
+                'Upload a clear image of the back of your Government ID.',
+            qualityGuidance: 'Keep the full ID visible and readable.',
+            document: documents.idDocumentBack,
+            pickLabel: 'Upload Back ID Image',
+            changeLabel: 'Replace',
+            onPick: () => _pick(VerificationDocumentType.idDocumentBack),
+            onRemove: () =>
+                _documents.remove(VerificationDocumentType.idDocumentBack),
+            onRetry: () =>
+                _documents.retry(VerificationDocumentType.idDocumentBack),
+            onRetryPreview: () =>
+                _documents.loadPreview(VerificationDocumentType.idDocumentBack),
+          ),
+        ],
+        if (documents.hasNoBackImage == null)
+          Text(
+            'Choose whether your ID has a back image before continuing.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+      ],
       const SizedBox(height: AppSpacing.md),
       SellerVerificationDocumentCard(
         title: 'Proof of Address',
@@ -651,9 +858,18 @@ class _SellerVerificationFormScreenState
     final ThemeData theme = Theme.of(context);
     final String? accountName =
         widget.accountName ?? _authController?.state.user?.name;
+    final String description = _businessDescription.text.trim();
     final String businessName = _businessName.text.trim();
     final String location = _businessLocation.text.trim();
-    final String description = _businessDescription.text.trim();
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final String address = catalog == null
+        ? (_legacyAddress ?? 'Not provided')
+        : (_location?.formattedAddress(
+                municipality: catalog.municipality,
+                province: catalog.province,
+              ) ??
+              _legacyAddress ??
+              'Not provided');
 
     return <Widget>[
       Text('Review Your Information', style: theme.textTheme.titleLarge),
@@ -677,12 +893,7 @@ class _SellerVerificationFormScreenState
                 ? 'Not provided'
                 : _phone.text.trim(),
           ),
-          DetailRow(
-            label: 'Address',
-            value: _address.text.trim().isEmpty
-                ? 'Not provided'
-                : _address.text.trim(),
-          ),
+          DetailRow(label: 'Address', value: address),
           DetailRow(
             label: 'Business name',
             value: businessName.isEmpty ? 'Not provided' : businessName,
@@ -710,8 +921,20 @@ class _SellerVerificationFormScreenState
         title: 'Uploaded Documents',
         children: <Widget>[
           _DocumentSummaryRow(
-            label: 'Government-Issued ID',
+            label: 'Government ID front',
             document: documents.idDocument,
+          ),
+          _DocumentSummaryRow(
+            label: 'Government ID back',
+            document: documents.idDocumentBack,
+          ),
+          DetailRow(
+            label: 'Back image declaration',
+            value: documents.hasNoBackImage == true
+                ? 'Applicant declared no back image'
+                : documents.hasNoBackImage == false
+                ? 'Back image uploaded'
+                : 'Not selected',
           ),
           const SizedBox(height: AppSpacing.xs),
           _DocumentSummaryRow(

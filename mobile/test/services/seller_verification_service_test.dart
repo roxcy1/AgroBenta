@@ -67,7 +67,7 @@ void main() {
 
       await service.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
 
@@ -80,7 +80,7 @@ void main() {
 
       await service.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
         businessLocation: 'Mabalacat, Pampanga',
         businessDescription: 'Cattle and goats.',
@@ -94,6 +94,8 @@ void main() {
         'business_location',
         'business_description',
         'id_document_ref',
+        'government_id_type',
+        'has_no_back_image',
       });
     });
 
@@ -104,7 +106,7 @@ void main() {
 
         await service.submit(
           phone: ' 09171234567 ',
-          address: ' Trinidad, Bohol ',
+          address: ' Barangay Poblacion, Trinidad, Bohol ',
           businessName: 'Rizal Farms',
           businessLocation: '   ',
           businessDescription: '',
@@ -115,8 +117,10 @@ void main() {
         // rather than "they did not say". Only the required key is sent.
         expect(recorded.single.body, <String, dynamic>{
           'phone': '09171234567',
-          'address': 'Trinidad, Bohol',
+          'address': 'Barangay Poblacion, Trinidad, Bohol',
           'business_name': 'Rizal Farms',
+          'government_id_type': 'philippine_national_id',
+          'has_no_back_image': false,
         });
       },
     );
@@ -126,13 +130,16 @@ void main() {
 
       await service.submit(
         phone: ' 09171234567 ',
-        address: ' Trinidad, Bohol ',
+        address: ' Barangay Poblacion, Trinidad, Bohol ',
         businessName: '  Rizal Farms  ',
       );
 
       expect(recorded.single.body['business_name'], 'Rizal Farms');
       expect(recorded.single.body['phone'], '09171234567');
-      expect(recorded.single.body['address'], 'Trinidad, Bohol');
+      expect(
+        recorded.single.body['address'],
+        'Barangay Poblacion, Trinidad, Bohol',
+      );
     });
 
     test('never sends a server-owned field', () async {
@@ -140,7 +147,7 @@ void main() {
 
       await service.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
         businessLocation: 'Pampanga',
       );
@@ -172,7 +179,7 @@ void main() {
       await expectLater(
         service.submit(
           phone: '09171234567',
-          address: 'Trinidad, Bohol',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
           businessName: 'Rizal Farms',
         ),
         throwsA(
@@ -199,7 +206,7 @@ void main() {
       await expectLater(
         service.submit(
           phone: '09171234567',
-          address: 'Trinidad, Bohol',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
           businessName: '',
         ),
         throwsA(
@@ -224,7 +231,7 @@ void main() {
       await expectLater(
         service.submit(
           phone: '09171234567',
-          address: 'Trinidad, Bohol',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
           businessName: 'Rizal Farms',
         ),
         throwsA(
@@ -246,7 +253,7 @@ void main() {
 
       final SellerVerification created = await service.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
 

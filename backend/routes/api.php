@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\SellerListing\PriceSuggestionController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
+use App\Http\Controllers\Api\TrinidadLocationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
@@ -34,6 +35,8 @@ Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
 // Shared reference data for both mobile and admin tokens. Deliberately outside
 // the `ability:mobile` and `ability:admin` groups so either token can read it.
 Route::middleware('auth:sanctum')->get('/livestock-types', LivestockTypeController::class);
+Route::middleware('auth:sanctum', 'ability:mobile')
+    ->get('/locations/trinidad/barangays', TrinidadLocationController::class);
 
 Route::post('/admin/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');

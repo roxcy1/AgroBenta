@@ -391,6 +391,7 @@ void main() {
         find.widgetWithText(TextFormField, 'Email address'),
         'new@example.test',
       );
+      await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.widgetWithText(FilledButton, 'Save changes'),
       );
@@ -411,6 +412,7 @@ void main() {
       );
 
       // Try again and confirm
+      await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.widgetWithText(FilledButton, 'Save changes'),
       );
@@ -525,6 +527,14 @@ void main() {
         find.widgetWithText(TextFormField, 'Full name'),
         'New Name',
       );
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Banlasan').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Street / Purok (optional)'),
+        'Purok 4',
+      );
       await tester.pumpAndSettle();
       final Finder saveBtn = find.widgetWithText(FilledButton, 'Save changes');
       await tester.ensureVisible(saveBtn);
@@ -541,6 +551,7 @@ void main() {
       );
       final Map<String, dynamic> body = putReq.body;
       expect(body.containsKey('current_password'), isFalse);
+      expect(body['location'], 'Purok 4, Barangay Banlasan, Trinidad, Bohol');
     },
   );
 
@@ -631,6 +642,7 @@ void main() {
         find.widgetWithText(TextFormField, 'Email address'),
         'new@example.test',
       );
+      await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.widgetWithText(FilledButton, 'Save changes'),
       );
@@ -769,6 +781,7 @@ void main() {
         find.widgetWithText(TextFormField, 'Email address'),
         'new@example.test',
       );
+      await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.widgetWithText(FilledButton, 'Save changes'),
       );

@@ -8,8 +8,10 @@ use Illuminate\Support\Str;
 /**
  * Normalize the free-text listing breed to the provider's canonical vocabulary.
  *
- * The canonical lists live on [LivestockType], which mirrors
- * ml-service/features.py. An unknown value is rejected rather than guessed.
+ * The canonical provider lists live on [LivestockType::canonicalBreeds()],
+ * which mirrors ml-service/features.py. The public catalog may use readable
+ * breed names, so both names are normalized to the provider's stable slugs.
+ * An unknown value is rejected rather than guessed.
  */
 final class BreedNormalizer
 {
@@ -33,6 +35,9 @@ final class BreedNormalizer
         'landrace_cross' => 'duroc_landrace_cross',
         'large_white' => 'large_white_yorkshire',
         'yorkshire' => 'large_white_yorkshire',
+        'nativemurrah_cross' => 'native_murrah_cross',
+        'ubayboholano_native_goat' => 'ubay_boholano_native_goat',
+        'duroclandrace_cross' => 'duroc_landrace_cross',
         'boholano_native' => 'boholano_native_chicken',
         'improved_native' => 'improved_native_chicken',
         'broiler_chicken' => 'broiler',
@@ -46,7 +51,7 @@ final class BreedNormalizer
         }
 
         $category = strtolower(trim($livestockType));
-        $canonical = LivestockType::tryFrom($category)?->breeds() ?? [];
+        $canonical = LivestockType::tryFrom($category)?->canonicalBreeds() ?? [];
         $slug = Str::slug($breed, '_');
         $candidate = self::ALIASES[$slug] ?? $slug;
 

@@ -13,6 +13,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'auth_fakes.dart';
 import 'seller_verification_fakes.dart';
+import 'trinidad_location_fakes.dart';
 
 /// A repository that fails loudly if anything reaches for it.
 ///
@@ -47,10 +48,13 @@ class SellerVerificationTestScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SellerVerificationScope(
-      repository: unusedRepository(),
-      controller: controller,
-      child: child,
+    return TrinidadLocationTestScope(
+      tokenStore: FakeTokenStore('unused'),
+      child: SellerVerificationScope(
+        repository: unusedRepository(),
+        controller: controller,
+        child: child,
+      ),
     );
   }
 }
@@ -97,7 +101,10 @@ class _NeverSubmittedVerificationScopeState
     return SellerVerificationScope(
       repository: unusedRepository(),
       controller: _controller,
-      child: widget.child,
+      child: TrinidadLocationTestScope(
+        tokenStore: FakeTokenStore('unused'),
+        child: widget.child,
+      ),
     );
   }
 }
@@ -146,18 +153,21 @@ class SellerVerificationHarness {
     await tester.pumpWidget(
       // Above `MaterialApp`, exactly as `main.dart` does it. The form is a
       // pushed route, and a scope inside `home` would be invisible to it.
-      SellerVerificationScope(
-        repository: buildSellerVerificationRepository(
-          tokenStore,
-          handler,
-          recorded: recorded,
-        ),
-        controller: controller,
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: SellerVerificationScreen(
-            accountName: accountName,
-            pickImage: pickImage,
+      TrinidadLocationTestScope(
+        tokenStore: tokenStore,
+        child: SellerVerificationScope(
+          repository: buildSellerVerificationRepository(
+            tokenStore,
+            handler,
+            recorded: recorded,
+          ),
+          controller: controller,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: SellerVerificationScreen(
+              accountName: accountName,
+              pickImage: pickImage,
+            ),
           ),
         ),
       ),
@@ -220,12 +230,18 @@ Future<void> scrollSellerVerificationIntoView(
   final Finder scrollable = find
       .ancestor(of: target, matching: find.byType(Scrollable))
       .first;
-  await tester.scrollUntilVisible(
-    target,
-    120,
-    scrollable: scrollable,
-  );
-  await tester.pump(const Duration(milliseconds: 50));
+  for (int attempt = 0; attempt < 12; attempt++) {
+    if (target.hitTestable().evaluate().isNotEmpty) {
+      // Let the scroll settle enough for the button center to stay in the
+      // viewport when the caller taps it, without pumpAndSettle's spinner risk.
+      for (int frame = 0; frame < 4; frame++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      if (target.hitTestable().evaluate().isNotEmpty) return;
+    }
+    await tester.drag(scrollable, const Offset(0, -160));
+    await tester.pump(const Duration(milliseconds: 50));
+  }
 }
 
 /// A tiny in-memory PNG an [XFile] can read, for picker injection in tests.
@@ -327,16 +343,31 @@ Future<void> tapDocumentPick(WidgetTester tester, String cardTitle) async {
   );
   final Finder button = find.descendant(
     of: card,
-    matching: find.widgetWithText(FilledButton, 'Take Photo'),
+    matching: find.widgetWithText(
+      FilledButton,
+      cardTitle == 'Government ID — Front'
+          ? 'Upload Front ID Image'
+          : cardTitle == 'Government ID — Back'
+          ? 'Upload Back ID Image'
+          : 'Take Photo',
+    ),
   );
-  await scrollSellerVerificationIntoView(tester, button);
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
   await tester.tap(button);
   await settleSellerVerification(tester);
 }
 
 /// Advances through the Documents step by uploading the required images.
 Future<void> uploadBothDocuments(WidgetTester tester) async {
-  await tapDocumentPick(tester, 'Valid Government-Issued ID');
+  await tapDocumentPick(tester, 'Government ID — Front');
+  final Finder noBack = find.widgetWithText(
+    OutlinedButton,
+    'My ID Has No Back Image',
+  );
+  await scrollSellerVerificationIntoView(tester, noBack);
+  await tester.tap(noBack);
+  await settleSellerVerification(tester);
   await tapDocumentPick(tester, 'Proof of Address');
   await tapDocumentPick(tester, 'Selfie Holding Your ID');
 }

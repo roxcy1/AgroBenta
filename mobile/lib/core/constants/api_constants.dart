@@ -100,6 +100,12 @@ abstract final class LivestockTypeEndpoints {
   static const String catalog = '/livestock-types';
 }
 
+/// The approved locality catalog for the initial Trinidad, Bohol locale.
+abstract final class TrinidadLocationEndpoints {
+  /// `GET` — fixed region/province/municipality and the approved barangays.
+  static const String catalog = '/locations/trinidad/barangays';
+}
+
 /// Seller verification endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the caller's
@@ -167,6 +173,9 @@ abstract final class SellerVerificationEndpoints {
     'business_location',
     'business_description',
     'id_document_ref',
+    'government_id_type',
+    'government_id_description',
+    'has_no_back_image',
   ];
 }
 

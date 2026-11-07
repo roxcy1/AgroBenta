@@ -111,11 +111,13 @@ class PopularLivestockTest extends TestCase
         $this->completeSale($goat);
         $this->completeSale($swine);
         $this->completeSale($chicken);
+        $this->completeSale($chicken);
+        $this->completeSale($chicken);
 
         $categories = $this->categories();
 
-        $this->assertSame(['Cattle', 'Chicken', 'Goat', 'Swine'], array_column($categories, 'livestock_type'));
-        $this->assertSame([2, 1, 1, 1], array_column($categories, 'completed_sales'));
+        $this->assertSame(['Chicken', 'Cattle', 'Goat', 'Swine'], array_column($categories, 'livestock_type'));
+        $this->assertSame([3, 2, 1, 1], array_column($categories, 'completed_sales'));
 
         $response = $this->withHeader(
             'Authorization',

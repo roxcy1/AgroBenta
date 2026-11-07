@@ -6,6 +6,7 @@ use App\Enums\ListingStatus;
 use App\Enums\LivestockType;
 use App\Models\Listing;
 use App\Rules\MaximumAgeForUnit;
+use App\Rules\TrinidadLocationAddressRule;
 use App\Services\SettingService;
 use Illuminate\Validation\Rule;
 
@@ -77,7 +78,7 @@ trait SellerListingRules
             // (`decimal(14,2)`) supplies the fallback when the setting is absent.
             'asking_price' => ['numeric', 'decimal:0,2', 'min:0', 'max:'.$this->maxAskingPrice()],
 
-            'location' => ['string', 'max:255'],
+            'location' => ['string', 'max:255', $this->locationAddressRule()],
             'health_status' => ['nullable', 'string', 'max:255'],
             'vaccination' => ['nullable', 'string', 'max:255'],
             'short_description' => ['nullable', 'string', 'max:255'],
@@ -117,6 +118,15 @@ trait SellerListingRules
     protected function maxAskingPrice(): float
     {
         return app(SettingService::class)->getDecimal('listing.max_price', 99999999999.99);
+    }
+
+    /**
+     * New locations must be canonical. An update request may allow its exact
+     * unchanged legacy string; publication always uses the strict default.
+     */
+    protected function locationAddressRule(): TrinidadLocationAddressRule
+    {
+        return new TrinidadLocationAddressRule;
     }
 
     /**
