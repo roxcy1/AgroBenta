@@ -5,7 +5,11 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
+import '../../../models/livestock_type.dart';
 import '../../../widgets/paged_list_state_views.dart';
+import '../../livestock_types/state/livestock_types_controller.dart';
+import '../../livestock_types/state/livestock_types_scope.dart';
+import '../../livestock_types/state/livestock_types_state.dart';
 import '../state/listing_filters.dart';
 import '../state/marketplace_controller.dart';
 import '../state/marketplace_scope.dart';
@@ -37,6 +41,7 @@ class MarketplaceScreen extends StatefulWidget {
 
 class _MarketplaceScreenState extends State<MarketplaceScreen> {
   late final MarketplaceController _controller;
+  late final LivestockTypesController _livestockTypes;
   late final TextEditingController _searchField;
   late final ScrollController _scrollController;
 
@@ -44,6 +49,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   void initState() {
     super.initState();
     _controller = MarketplaceScope.readOf(context).controller;
+    _livestockTypes = LivestockTypesScope.readOf(context);
     _searchField = TextEditingController(text: _controller.state.searchText);
     _scrollController = ScrollController()..addListener(_onScroll);
     _controller.addListener(_onControllerChanged);
@@ -53,6 +59,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     // and drops stale responses, so a rebuild that re-enters here cannot
     // produce a second overlapping fetch.
     _controller.loadInitial();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _livestockTypes.ensureLoaded();
+    });
   }
 
   @override
@@ -201,6 +210,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               children: <Widget>[
                 _SearchAndFilters(
                   controller: _controller,
+                  livestockTypes: _livestockTypes,
                   searchField: _searchField,
                   state: state,
                   onOpenFilters: () => _openFilters(state),
@@ -327,6 +337,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 class _SearchAndFilters extends StatelessWidget {
   const _SearchAndFilters({
     required this.controller,
+    required this.livestockTypes,
     required this.searchField,
     required this.state,
     required this.onOpenFilters,
@@ -336,6 +347,7 @@ class _SearchAndFilters extends StatelessWidget {
   });
 
   final MarketplaceController controller;
+  final LivestockTypesController livestockTypes;
   final TextEditingController searchField;
   final MarketplaceState state;
   final VoidCallback onOpenFilters;
@@ -388,24 +400,44 @@ class _SearchAndFilters extends StatelessWidget {
           // Directly below the search bar, per the Browse prototype. These
           // chips drive the same exact-match `livestock_type` filter as the
           // Filter screen, so the two can never disagree.
-          _BrowseCategoryChips(
-            selected: state.filters.livestockType.trim(),
-            onSelect: onSelectCategory,
+          ListenableBuilder(
+            listenable: livestockTypes,
+            builder: (BuildContext context, Widget? child) {
+              final LivestockTypesState catalog = livestockTypes.state;
+              final List<LivestockType> types = catalog.isReady
+                  ? catalog.types
+                  : const <LivestockType>[];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _BrowseCategoryChips(
+                    selected: state.filters.livestockType.trim(),
+                    types: types,
+                    onSelect: onSelectCategory,
+                  ),
+                  if (state.filters.livestockType
+                      .trim()
+                      .isNotEmpty) ...<Widget>[
+                    const SizedBox(height: AppSpacing.xs),
+                    _ActiveCategoryIndicator(
+                      label: _BrowseCategory.labelFor(
+                        state.filters.livestockType.trim(),
+                        types,
+                      ),
+                      onClear: onClearCategory,
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
-          if (state.filters.livestockType.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: AppSpacing.xs),
-            _ActiveCategoryIndicator(
-              label: _BrowseCategory.labelFor(state.filters.livestockType.trim()),
-              onClear: onClearCategory,
-            ),
-          ],
         ],
       ),
     );
   }
 }
 
-/// The five Browse categories, matching the Filter screen's Animal Type tiles.
+/// A Browse category rendered from the backend-owned livestock catalog.
 class _BrowseCategory {
   const _BrowseCategory(this.label, this.value);
 
@@ -415,22 +447,14 @@ class _BrowseCategory {
   final String? value;
 
   /// The chip label for a filter value; an unknown value is shown as typed.
-  static String labelFor(String value) {
-    for (final _BrowseCategory category in values) {
-      if (category.value == value) {
-        return category.label;
+  static String labelFor(String value, List<LivestockType> types) {
+    for (final LivestockType type in types) {
+      if (type.value == value) {
+        return type.label;
       }
     }
     return value;
   }
-
-  static const List<_BrowseCategory> values = <_BrowseCategory>[
-    _BrowseCategory('All', null),
-    _BrowseCategory('Cattle', 'cattle'),
-    _BrowseCategory('Swine', 'swine'),
-    _BrowseCategory('Goat', 'goat'),
-    _BrowseCategory('Carabao', 'carabao'),
-  ];
 }
 
 /// A horizontally scrollable chip row. Selecting a chip applies its
@@ -438,9 +462,14 @@ class _BrowseCategory {
 /// shared filter state, so a selection made on Home or in the Filter screen is
 /// reflected here without any extra request.
 class _BrowseCategoryChips extends StatelessWidget {
-  const _BrowseCategoryChips({required this.selected, required this.onSelect});
+  const _BrowseCategoryChips({
+    required this.selected,
+    required this.types,
+    required this.onSelect,
+  });
 
   final String selected;
+  final List<LivestockType> types;
   final ValueChanged<String?> onSelect;
 
   @override
@@ -449,11 +478,13 @@ class _BrowseCategoryChips extends StatelessWidget {
       height: 40,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _BrowseCategory.values.length,
+        itemCount: types.length + 1,
         separatorBuilder: (BuildContext context, int index) =>
             const SizedBox(width: AppSpacing.xs),
         itemBuilder: (BuildContext context, int index) {
-          final _BrowseCategory category = _BrowseCategory.values[index];
+          final _BrowseCategory category = index == 0
+              ? const _BrowseCategory('All', null)
+              : _BrowseCategory(types[index - 1].label, types[index - 1].value);
           final bool isSelected = category.value == null
               ? selected.isEmpty
               : selected.toLowerCase() == category.value!.toLowerCase();

@@ -60,7 +60,7 @@ void main() {
 
       expect(verification.id, 9);
       expect(verification.phone, '09171234567');
-      expect(verification.address, 'Trinidad, Bohol');
+      expect(verification.address, 'Barangay Poblacion, Trinidad, Bohol');
       expect(verification.businessName, 'Santos Cattle Co.');
       expect(verification.businessLocation, 'Mabalacat, Pampanga');
       expect(

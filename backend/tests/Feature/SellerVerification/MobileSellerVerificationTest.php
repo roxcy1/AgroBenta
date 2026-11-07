@@ -77,7 +77,7 @@ class MobileSellerVerificationTest extends TestCase
         return SellerVerification::create(array_merge([
             'user_id' => $user->id,
             'phone' => '09171234567',
-            'address' => 'Trinidad, Bohol',
+            'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
             'business_name' => 'Reyes Livestock',
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm.',
@@ -99,7 +99,7 @@ class MobileSellerVerificationTest extends TestCase
     {
         return array_merge([
             'phone' => '09171234567',
-            'address' => 'Trinidad, Bohol',
+            'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
             'business_name' => 'Reyes Livestock',
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm since 1998.',
@@ -161,7 +161,7 @@ class MobileSellerVerificationTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', SellerVerificationStatus::Submitted->value)
             ->assertJsonPath('data.phone', '09171234567')
-            ->assertJsonPath('data.address', 'Trinidad, Bohol')
+            ->assertJsonPath('data.address', 'Purok 3, Barangay Poblacion, Trinidad, Bohol')
             ->assertJsonPath('data.business_name', 'Reyes Livestock')
             ->assertJsonPath('data.business_location', 'Mabalacat, Pampanga')
             ->assertJsonPath('data.business_description', 'Family cattle farm since 1998.')
@@ -174,7 +174,7 @@ class MobileSellerVerificationTest extends TestCase
             'user_id' => $this->buyer->id,
             'status' => SellerVerificationStatus::Submitted->value,
             'phone' => '09171234567',
-            'address' => 'Trinidad, Bohol',
+            'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
         ]);
 
         // The submitted record preserves the applicant's values even if their
@@ -187,7 +187,26 @@ class MobileSellerVerificationTest extends TestCase
             ->getJson('/api/seller-verification/me')
             ->assertOk()
             ->assertJsonPath('data.phone', '09171234567')
-            ->assertJsonPath('data.address', 'Trinidad, Bohol');
+            ->assertJsonPath('data.address', 'Purok 3, Barangay Poblacion, Trinidad, Bohol');
+    }
+
+    #[Test]
+    public function a_new_verification_requires_a_supported_trinidad_location(): void
+    {
+        foreach ([
+            'Barangay Unknown, Trinidad, Bohol',
+            'Barangay Poblacion, Tagbilaran, Bohol',
+            'Barangay Poblacion, Trinidad, Cebu',
+        ] as $address) {
+            $this->withToken($this->mobileToken($this->buyer))
+                ->postJson('/api/seller-verification', $this->payload([
+                    'address' => $address,
+                ]))
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('address');
+        }
+
+        $this->assertDatabaseCount('seller_verifications', 0);
     }
 
     #[Test]
@@ -214,7 +233,7 @@ class MobileSellerVerificationTest extends TestCase
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', [
                 'phone' => '09171234567',
-                'address' => 'Trinidad, Bohol',
+                'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'business_name' => 'Only a name',
                 'government_id_type' => 'philippine_national_id',
                 'has_no_back_image' => false,
@@ -234,7 +253,7 @@ class MobileSellerVerificationTest extends TestCase
         $this->withToken($this->mobileToken($this->buyer))
             ->postJson('/api/seller-verification', [
                 'phone' => '09171234567',
-                'address' => 'Trinidad, Bohol',
+                'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'business_location' => 'Mabalacat, Pampanga',
                 'government_id_type' => 'philippine_national_id',
                 'has_no_back_image' => false,

@@ -37,10 +37,11 @@ class LivestockTypeTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'data' => [
-                    ['value' => 'cattle', 'label' => 'Cattle'],
-                    ['value' => 'carabao', 'label' => 'Carabao'],
-                    ['value' => 'goat', 'label' => 'Goat'],
-                    ['value' => 'swine', 'label' => 'Swine'],
+                    ['value' => 'cattle', 'label' => 'Cattle', 'breeds' => ['Philippine Native Cattle', 'Brahman', 'Holstein Friesian', 'Brahman Cross']],
+                    ['value' => 'carabao', 'label' => 'Carabao', 'breeds' => ['Philippine Native Carabao', 'Murrah', 'Native–Murrah Cross']],
+                    ['value' => 'goat', 'label' => 'Goat', 'breeds' => ['Ubay/Boholano Native Goat', 'Boer', 'Anglo-Nubian', 'Saanen']],
+                    ['value' => 'swine', 'label' => 'Swine', 'breeds' => ['Native Pig', 'Landrace', 'Large White (Yorkshire)', 'Duroc', 'Duroc–Landrace Cross']],
+                    ['value' => 'chicken', 'label' => 'Chicken', 'breeds' => ['Boholano Native Chicken', 'Broiler', 'Layer', 'Improved Native Chicken']],
                 ],
             ]);
     }
@@ -58,10 +59,11 @@ class LivestockTypeTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'data' => [
-                    ['value' => 'cattle', 'label' => 'Cattle'],
-                    ['value' => 'carabao', 'label' => 'Carabao'],
-                    ['value' => 'goat', 'label' => 'Goat'],
-                    ['value' => 'swine', 'label' => 'Swine'],
+                    ['value' => 'cattle', 'label' => 'Cattle', 'breeds' => ['Philippine Native Cattle', 'Brahman', 'Holstein Friesian', 'Brahman Cross']],
+                    ['value' => 'carabao', 'label' => 'Carabao', 'breeds' => ['Philippine Native Carabao', 'Murrah', 'Native–Murrah Cross']],
+                    ['value' => 'goat', 'label' => 'Goat', 'breeds' => ['Ubay/Boholano Native Goat', 'Boer', 'Anglo-Nubian', 'Saanen']],
+                    ['value' => 'swine', 'label' => 'Swine', 'breeds' => ['Native Pig', 'Landrace', 'Large White (Yorkshire)', 'Duroc', 'Duroc–Landrace Cross']],
+                    ['value' => 'chicken', 'label' => 'Chicken', 'breeds' => ['Boholano Native Chicken', 'Broiler', 'Layer', 'Improved Native Chicken']],
                 ],
             ]);
     }

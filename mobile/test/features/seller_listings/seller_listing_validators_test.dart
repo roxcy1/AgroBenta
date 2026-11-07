@@ -202,5 +202,19 @@ void main() {
       expect(body.containsKey('quantity'), isFalse);
       expect(body['asking_price'], '42500');
     });
+
+    test('sends null only when an edit intentionally clears Breed', () {
+      const SellerListingDraft draft = SellerListingDraft(
+        livestockType: 'cattle',
+        clearBreed: true,
+        quantity: '1',
+        askingPrice: '42500',
+        location: 'Barangay Poblacion, Trinidad, Bohol',
+      );
+
+      final Map<String, dynamic> body = draft.toRequestBody();
+      expect(body.containsKey('breed'), isTrue);
+      expect(body['breed'], isNull);
+    });
   });
 }

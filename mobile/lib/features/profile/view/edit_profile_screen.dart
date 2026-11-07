@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../models/trinidad_location.dart';
 import '../../../models/user.dart';
+import '../../trinidad_location/state/trinidad_location_controller.dart';
+import '../../trinidad_location/state/trinidad_location_scope.dart';
 import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
+import '../../../widgets/trinidad_location_selector.dart';
 
 /// The profile edit form.
 ///
@@ -37,12 +41,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _name;
   late final TextEditingController _email;
   late final TextEditingController _phone;
-  late final TextEditingController _location;
   late final TextEditingController _avatarUrl;
   late final TextEditingController _bio;
 
   late final ProfileController _controller;
+  late final TrinidadLocationController _locationCatalog;
   late final User _initial;
+  TrinidadLocation? _location;
+  String? _legacyLocation;
+  String? _pendingLocation;
+  bool _locationTouched = false;
 
   /// The field errors currently on screen, so a repeat of the same server error
   /// does not re-validate for nothing.
@@ -50,10 +58,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
+    _locationCatalog.removeListener(_onLocationCatalogChanged);
     _name.dispose();
     _email.dispose();
     _phone.dispose();
-    _location.dispose();
     _avatarUrl.dispose();
     _bio.dispose();
     super.dispose();
@@ -88,7 +96,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String name = _name.text.trim();
     final String email = _email.text.trim();
     final String phone = _phone.text.trim();
-    final String location = _location.text.trim();
+    final TrinidadLocationCatalog? locationCatalog =
+        _locationCatalog.state.catalog;
+    final String? location = _locationTouched
+        ? (_location?.formattedAddress(
+                municipality: locationCatalog?.municipality ?? '',
+                province: locationCatalog?.province ?? '',
+              ) ??
+              '')
+        : null;
     final String avatarUrl = _avatarUrl.text.trim();
     final String bio = _bio.text.trim();
 
@@ -99,7 +115,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         name: name == _initial.name ? null : name,
         email: emailChanged ? email : null,
         phone: phone == (_initial.phone ?? '') ? null : phone,
-        location: location == (_initial.location ?? '') ? null : location,
+        location: location == null || location == (_initial.location ?? '')
+            ? null
+            : location,
         avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
         bio: bio == (_initial.bio ?? '') ? null : bio,
         currentPassword: currentPassword,
@@ -140,6 +158,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  void _queueInitialLocation(String? raw) {
+    _pendingLocation = raw?.trim();
+    _restoreQueuedLocation();
+  }
+
+  void _restoreQueuedLocation() {
+    final String? raw = _pendingLocation;
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final TrinidadLocation? parsed = catalog?.parseAddress(raw);
+    _location = parsed;
+    _legacyLocation = raw != null && raw.isNotEmpty && parsed == null
+        ? raw
+        : null;
+  }
+
+  void _onLocationCatalogChanged() {
+    if (_pendingLocation != null && _locationCatalog.state.isReady && mounted) {
+      setState(_restoreQueuedLocation);
+    }
+  }
+
+  void _onLocationChanged(TrinidadLocation? value) {
+    setState(() {
+      _location = value;
+      _legacyLocation = null;
+      _pendingLocation = null;
+      _locationTouched = true;
+    });
+  }
+
   Future<String?> _promptCurrentPassword({String? error}) async {
     final String? result = await showDialog<String>(
       context: context,
@@ -159,6 +207,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     // `readOf`, not `of`: a dependency cannot be registered from `initState`.
     _controller = ProfileScope.readOf(context);
+    _locationCatalog = TrinidadLocationScope.readOf(context);
+    _locationCatalog.addListener(_onLocationCatalogChanged);
     _initial =
         _controller.state.user ??
         (throw StateError(
@@ -168,9 +218,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _name = TextEditingController(text: _initial.name);
     _email = TextEditingController(text: _initial.email);
     _phone = TextEditingController(text: _initial.phone ?? '');
-    _location = TextEditingController(text: _initial.location ?? '');
+    _queueInitialLocation(_initial.location);
     _avatarUrl = TextEditingController(text: _initial.avatarUrl ?? '');
     _bio = TextEditingController(text: _initial.bio ?? '');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _locationCatalog.ensureLoaded();
+    });
   }
 
   @override
@@ -258,19 +311,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     state.errorFor('phone'),
                               ),
                               const SizedBox(height: AppSpacing.md),
-                              TextFormField(
-                                controller: _location,
-                                textCapitalization: TextCapitalization.words,
-                                textInputAction: TextInputAction.next,
-                                maxLength: 191,
+                              TrinidadLocationSelector(
+                                value: _location,
+                                legacyAddress: _legacyLocation,
+                                maxFormattedLength:
+                                    TrinidadLocation.profileAddressMax,
+                                isRequired: false,
                                 enabled: !isSaving,
-                                decoration: const InputDecoration(
-                                  labelText: 'Location',
-                                  helperText:
-                                      'Optional. Town, city or province.',
-                                ),
-                                validator: (String? value) =>
-                                    state.errorFor('location'),
+                                externalError: state.errorFor('location'),
+                                onChanged: _onLocationChanged,
                               ),
                               const SizedBox(height: AppSpacing.md),
                               TextFormField(

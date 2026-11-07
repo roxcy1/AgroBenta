@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_form_screen.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_screen.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_submitted_screen.dart';
+import 'package:agrobenta_mobile/features/trinidad_location/state/trinidad_location_scope.dart';
 import 'package:agrobenta_mobile/models/seller_verification.dart';
 import 'package:agrobenta_mobile/widgets/local_image_preview.dart';
 import 'package:flutter/material.dart';
@@ -23,11 +24,7 @@ void main() {
     final Finder target = find.widgetWithText(FilledButton, label);
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
-    await tester.ensureVisible(target);
-    await tester.pumpAndSettle();
-    // There is no in-flight request before this tap, so settling here only waits
-    // for the scroll animation; request spinners are handled by the bounded helper.
-    await tester.pumpAndSettle();
+    await scrollSellerVerificationIntoView(tester, target);
     await tester.tap(target);
     await settleSellerVerification(tester);
   }
@@ -35,6 +32,26 @@ void main() {
   /// Advances one step, supplying the required contact snapshots in this shared
   /// form-flow helper when no auth profile values were provided by a test.
   Future<void> tapNext(WidgetTester tester) async {
+    final Finder barangay = find.ancestor(
+      of: find.text('Barangay'),
+      matching: find.byType(DropdownButtonFormField<String>),
+    );
+    if (barangay.evaluate().isNotEmpty &&
+        tester.widget<DropdownButtonFormField<String>>(barangay).initialValue ==
+            null) {
+      expect(
+        TrinidadLocationScope.readOf(
+          tester.element(find.byType(SellerVerificationFormScreen)),
+        ).state.catalog?.barangays,
+        contains('Banlasan'),
+      );
+      await scrollSellerVerificationIntoView(tester, barangay);
+      await tester.tap(barangay);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Banlasan').last);
+      await tester.pumpAndSettle();
+    }
+
     final Finder idType = find.byType(
       DropdownButtonFormField<GovernmentIdType>,
     );
@@ -43,7 +60,8 @@ void main() {
                 .widget<DropdownButtonFormField<GovernmentIdType>>(idType)
                 .initialValue ==
             null) {
-      await scrollSellerVerificationIntoView(tester, idType);
+      await tester.ensureVisible(idType);
+      await tester.pumpAndSettle();
       await tester.tap(idType);
       await tester.pumpAndSettle();
       await tester.tap(
@@ -53,7 +71,6 @@ void main() {
     }
     for (final (String label, String value) in <(String, String)>[
       ('Phone number', '09171234567'),
-      ('Address', 'Trinidad, Bohol'),
     ]) {
       final Finder field = find.widgetWithText(TextFormField, label);
       if (field.evaluate().isNotEmpty &&
@@ -205,7 +222,7 @@ void main() {
 
   group('form', () {
     testWidgets(
-      'shows required applicant snapshots and optional business fields',
+      'shows applicant snapshots and the shared Trinidad location selector',
       (WidgetTester tester) async {
         await SellerVerificationHarness.pump(
           tester,
@@ -217,9 +234,9 @@ void main() {
 
         expect(find.byType(SellerVerificationFormScreen), findsOneWidget);
 
-        // Full name is read-only account data. Phone and address are required
-        // application snapshots; business fields remain optional.
-        expect(find.byType(TextFormField), findsNWidgets(6));
+        // Full name is read-only account data. The app now captures the address
+        // through the shared selector rather than a free-text field.
+        expect(find.byType(TextFormField), findsNWidgets(4));
         expect(
           find.byType(DropdownButtonFormField<GovernmentIdType>),
           findsNothing,
@@ -227,9 +244,12 @@ void main() {
         expect(find.text('Specify Government ID'), findsNothing);
         expect(find.text('Full name'), findsOneWidget);
         expect(find.text('Phone number'), findsOneWidget);
-        expect(find.text('Address'), findsOneWidget);
-        expect(find.text('Business name'), findsOneWidget);
-        expect(find.text('Business location'), findsOneWidget);
+        expect(find.text('Province'), findsOneWidget);
+        expect(find.text('Municipality'), findsOneWidget);
+        expect(find.text('Barangay'), findsOneWidget);
+        expect(find.text('Street / Purok (optional)'), findsOneWidget);
+        expect(find.text('Business name'), findsNothing);
+        expect(find.text('Business location'), findsNothing);
         expect(find.text('Business description'), findsOneWidget);
         expect(find.text('ID document reference'), findsNothing);
       },
@@ -251,7 +271,7 @@ void main() {
       await settleSellerVerification(tester);
 
       expect(find.text('Phone number is required.'), findsOneWidget);
-      expect(find.text('Address is required.'), findsOneWidget);
+      expect(find.text('Select a barangay.'), findsOneWidget);
       expect(find.text('Government ID Verification'), findsNothing);
     });
 
@@ -266,10 +286,6 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
 
       // The Documents step is the only place the flow offers an upload, and it
@@ -441,16 +457,13 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
 
       expect(find.text('Review Your Information'), findsOneWidget);
-      expect(find.text('Rizal Farms'), findsOneWidget);
+      expect(find.text('Business name'), findsNothing);
+      expect(find.text('Business location'), findsNothing);
       expect(
         find.widgetWithText(FilledButton, 'Submit Application'),
         findsOneWidget,
@@ -487,10 +500,12 @@ void main() {
           );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
+      final Finder businessDescription = find.widgetWithText(
+        TextFormField,
+        'Business description',
       );
+      await scrollSellerVerificationIntoView(tester, businessDescription);
+      await tester.enterText(businessDescription, 'Cattle and goat farm.');
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
@@ -509,7 +524,9 @@ void main() {
                 r.method == 'POST' && r.apiPath == '/seller-verification',
           )
           .body;
-      expect(body, containsPair('business_name', 'Rizal Farms'));
+      expect(body.containsKey('business_name'), isFalse);
+      expect(body.containsKey('business_location'), isFalse);
+      expect(body['business_description'], 'Cattle and goat farm.');
       expect(body.containsKey('seller_capability'), isFalse);
       expect(body.containsKey('role'), isFalse);
       expect(body.containsKey('status'), isFalse);
@@ -565,10 +582,6 @@ void main() {
         );
 
         await openSellerVerificationForm(tester, resubmission: false);
-        await tester.enterText(
-          find.widgetWithText(TextFormField, 'Business name'),
-          'Rizal Farms',
-        );
         await tapNext(tester);
         await uploadBothDocuments(tester);
         await tapNext(tester);
@@ -628,29 +641,29 @@ void main() {
           }
           return sellerVerificationValidationResponse(
             errors: <String, Object>{
-              'business_name': <String>['The business name field is required.'],
+              'address': <String>[
+                'Choose a barangay in Trinidad, Bohol and enter a valid location.',
+              ],
             },
           );
         },
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
       await tapFilled(tester, 'Submit Application');
 
       // Back on the field, with the server's message beside it.
-      expect(find.text('The business name field is required.'), findsOneWidget);
-      expect(find.text('Review Your Information'), findsNothing);
       expect(
-        find.widgetWithText(TextFormField, 'Business name'),
+        find.text(
+          'Choose a barangay in Trinidad, Bohol and enter a valid location.',
+        ),
         findsOneWidget,
       );
+      expect(find.text('Review Your Information'), findsNothing);
+      expect(find.text('Barangay'), findsOneWidget);
     });
 
     testWidgets('shows a 409 as information, not a failure', (
@@ -684,10 +697,6 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
@@ -724,10 +733,6 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: false);
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       await uploadBothDocuments(tester);
       await tapNext(tester);
@@ -777,13 +782,16 @@ void main() {
       );
       await openSellerVerificationForm(tester, resubmission: true);
 
+      expect(find.text('Business name'), findsNothing);
+      expect(find.text('Business location'), findsNothing);
       expect(
-        find.widgetWithText(TextFormField, 'Santos Cattle Co.'),
-        findsOneWidget,
-      );
-      expect(
-        find.widgetWithText(TextFormField, 'Mabalacat, Pampanga'),
-        findsOneWidget,
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Business description'),
+            )
+            .controller!
+            .text,
+        'Family-run cattle farm, trading since 2011.',
       );
       expect(
         tester
@@ -796,12 +804,14 @@ void main() {
       );
       expect(
         tester
-            .widget<TextFormField>(
-              find.widgetWithText(TextFormField, 'Address'),
+            .widget<DropdownButtonFormField<String>>(
+              find.ancestor(
+                of: find.text('Barangay'),
+                matching: find.byType(DropdownButtonFormField<String>),
+              ),
             )
-            .controller!
-            .text,
-        'Barangay Poblacion, Trinidad, Bohol',
+            .initialValue,
+        'Poblacion',
       );
     });
   });
@@ -820,10 +830,6 @@ void main() {
             handler: handler,
           );
       await openSellerVerificationForm(tester, resubmission: false);
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
       return harness;
     }
@@ -939,10 +945,6 @@ void main() {
             handler: (_) async => sellerVerificationNotFoundResponse(),
           );
       await openSellerVerificationForm(tester, resubmission: false);
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Business name'),
-        'Rizal Farms',
-      );
       await tapNext(tester);
 
       await tapDocumentPick(tester, 'Government ID — Front');

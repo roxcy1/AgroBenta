@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\SellerListing;
 
+use App\Enums\LivestockType;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 /**
  * Body for creating a listing.
@@ -44,5 +46,29 @@ class StoreSellerListingRequest extends FormRequest
                 $this->requiredFieldRules(),
             ),
         );
+    }
+
+    /** Enforce that a newly selected catalog breed belongs to the selected type. */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->has('livestock_type') ||
+                $validator->errors()->has('breed')) {
+                return;
+            }
+
+            $breed = trim((string) ($this->input('breed') ?? ''));
+            if ($breed === '') {
+                return;
+            }
+
+            $type = LivestockType::tryFrom((string) $this->input('livestock_type'));
+            if ($type !== null && ! $type->hasBreed($breed)) {
+                $validator->errors()->add(
+                    'breed',
+                    'Choose a breed from the selected livestock type.',
+                );
+            }
+        }];
     }
 }

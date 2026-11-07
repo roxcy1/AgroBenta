@@ -14,6 +14,7 @@ import TransactionStatsCards from './TransactionStatsCards';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDate, formatPeso } from '../../../../lib/format';
 import { emptyListMessage } from '../../../../lib/emptyState';
+import { livestockTypeLabel, useLivestockTypes } from '../../livestock/api/useLivestockTypes';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -36,6 +37,7 @@ export function TransactionsPage() {
   const [searchParams] = useSearchParams();
   const linkedTransactionId = parsePositiveInt(searchParams.get('transaction'));
   const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
+  const { data: livestockTypes } = useLivestockTypes();
 
   const { data, isLoading, error, refetch } = useTransactions({
     search: search || undefined,
@@ -281,7 +283,7 @@ export function TransactionsPage() {
                         <td className="lv-name-cell">#{tx.id}</td>
                         <td className="lv-seller-cell">{tx.buyer.name}</td>
                         <td className="lv-seller-cell">{tx.seller.name}</td>
-                        <td>{tx.listing.livestock_type} / {tx.listing.breed}</td>
+                        <td>{livestockTypeLabel(tx.listing.livestock_type, livestockTypes)} / {tx.listing.breed}</td>
                         <td>{tx.quantity}</td>
                         <td className="lv-price-cell">{formatPeso(tx.total_amount)}</td>
                         <td>
@@ -338,6 +340,7 @@ export function TransactionsPage() {
       {activeTransaction && (
         <TransactionDetailDialog
           transaction={activeTransaction}
+          livestockTypes={livestockTypes ?? []}
           onClose={handleCloseTransaction}
         />
       )}

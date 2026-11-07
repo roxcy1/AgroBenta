@@ -2,6 +2,7 @@ import { ArrowLeftRight, Package, Store, Users as UsersIcon } from 'lucide-react
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
 import { useReports } from '../api/useReports';
+import { livestockTypeLabel, useLivestockTypes } from '../../livestock/api/useLivestockTypes';
 import { formatNumber, formatPeso } from '../../../../lib/format';
 import { statusChartColor } from '../../../../lib/status';
 import { CHART_AXIS, CHART_BAR, CHART_BAR_SECONDARY, CHART_GRID, CHART_LINE_ACCENT, CHART_PIE_COLORS, CHART_TICK, CHART_TICK_SMALL, CHART_TOOLTIP_STYLE } from '../../../../lib/chartTheme';
@@ -13,6 +14,7 @@ export function ReportsPage() {
   const [validationError, setValidationError] = useState('');
 
   const { data, isLoading, isFetching, error, refetch } = useReports(appliedFilters);
+  const { data: livestockTypes } = useLivestockTypes();
 
   const today = (() => {
     const now = new Date();
@@ -457,7 +459,7 @@ export function ReportsPage() {
               {transactions.by_livestock.length > 0 ? (
                 transactions.by_livestock.map((item) => (
                   <li key={item.livestock_type}>
-                    <span className="dashboard-breakdown-label">{item.livestock_type}</span>
+                    <span className="dashboard-breakdown-label">{livestockTypeLabel(item.livestock_type, livestockTypes)}</span>
                     <span className="dashboard-breakdown-value">{formatNumber(item.count)} ({formatPeso(item.total_amount)})</span>
                   </li>
                 ))

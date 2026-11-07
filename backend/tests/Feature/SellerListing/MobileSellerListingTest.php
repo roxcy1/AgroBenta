@@ -85,7 +85,7 @@ class MobileSellerListingTest extends TestCase
             'weight_unit' => 'kg',
             'quantity' => 1,
             'asking_price' => 50000.00,
-            'location' => 'Bukidnon',
+            'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
             'health_status' => 'healthy',
             'vaccination' => 'up_to_date',
             'short_description' => 'Healthy Angus bull',
@@ -117,7 +117,7 @@ class MobileSellerListingTest extends TestCase
             'Bearer '.($token ?? $this->mobileToken($this->seller)),
         )->postJson('/api/seller/listings', array_merge([
             'livestock_type' => 'cattle',
-            'location' => 'Bukidnon',
+            'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
             'asking_price' => 50000,
             'quantity' => 3,
         ], $body));
@@ -251,7 +251,7 @@ class MobileSellerListingTest extends TestCase
     {
         return [
             'capitalized' => ['Cattle'],
-            'outside scope' => ['chicken'],
+            'outside scope' => ['poultry'],
             'free text' => ['Cow'],
         ];
     }
@@ -277,6 +277,7 @@ class MobileSellerListingTest extends TestCase
             'carabao' => ['carabao'],
             'goat' => ['goat'],
             'swine' => ['swine'],
+            'chicken' => ['chicken'],
         ];
     }
 
@@ -287,6 +288,39 @@ class MobileSellerListingTest extends TestCase
         $this->store(['livestock_type' => $type])
             ->assertCreated()
             ->assertJsonPath('data.livestock_type', $type);
+    }
+
+    #[Test]
+    public function a_new_listing_location_must_use_a_supported_trinidad_barangay(): void
+    {
+        foreach ([
+            'Purok 3, Barangay Unknown, Trinidad, Bohol',
+            'Purok 3, Barangay Poblacion, Tagbilaran, Bohol',
+            'Purok 3, Barangay Poblacion, Trinidad, Cebu',
+        ] as $location) {
+            $this->store(['location' => $location])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('location');
+        }
+
+        $this->assertDatabaseCount('listings', 0);
+    }
+
+    #[Test]
+    public function a_catalog_breed_must_match_its_livestock_type(): void
+    {
+        $this->store([
+            'livestock_type' => 'chicken',
+            'breed' => 'Broiler',
+        ])->assertCreated()
+            ->assertJsonPath('data.livestock_type', 'chicken')
+            ->assertJsonPath('data.breed', 'Broiler');
+
+        $this->store([
+            'livestock_type' => 'chicken',
+            'breed' => 'Brahman',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors('breed');
     }
 
     #[Test]
@@ -652,13 +686,57 @@ class MobileSellerListingTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->patchJson('/api/seller/listings/'.$listing->id, [
                 'asking_price' => 62500,
-                'breed' => 'Hereford',
+                'breed' => 'Brahman',
             ])
             ->assertOk()
             ->assertJsonPath('data.asking_price', '62500.00')
-            ->assertJsonPath('data.breed', 'Hereford')
+            ->assertJsonPath('data.breed', 'Brahman')
             // Untouched fields stay untouched: this is a PATCH, not a replace.
-            ->assertJsonPath('data.location', 'Bukidnon');
+            ->assertJsonPath(
+                'data.location',
+                'Purok 3, Barangay Poblacion, Trinidad, Bohol',
+            );
+    }
+
+    #[Test]
+    public function an_unchanged_legacy_location_can_be_saved_but_not_replaced_with_an_invalid_one(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'location' => 'Trinidad, Bohol',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'quantity' => 2,
+                'location' => 'Trinidad, Bohol',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.location', 'Trinidad, Bohol');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'location' => 'Barangay Poblacion, Tagbilaran, Bohol',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('location');
+    }
+
+    #[Test]
+    public function changing_type_without_a_breed_clears_the_previous_breed(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'breed' => 'Brahman',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'livestock_type' => 'chicken',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.livestock_type', 'chicken')
+            ->assertJsonPath('data.breed', '');
     }
 
     #[Test]
@@ -668,7 +746,7 @@ class MobileSellerListingTest extends TestCase
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->patchJson('/api/seller/listings/'.$listing->id, [
-                'livestock_type' => 'chicken',
+                'livestock_type' => 'poultry',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('livestock_type');
@@ -684,17 +762,17 @@ class MobileSellerListingTest extends TestCase
     {
         $listing = $this->createListing($this->seller, [
             'status' => ListingStatus::Draft,
-            'livestock_type' => 'chicken',
+            'livestock_type' => 'poultry',
         ]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
-            ->patchJson('/api/seller/listings/'.$listing->id, ['breed' => 'Hereford'])
+            ->patchJson('/api/seller/listings/'.$listing->id, ['breed' => 'Anglo-Nubian'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('livestock_type');
 
         $this->assertDatabaseHas('listings', [
             'id' => $listing->id,
-            'livestock_type' => 'chicken',
+            'livestock_type' => 'poultry',
             'breed' => 'Angus',
         ]);
     }
@@ -704,7 +782,7 @@ class MobileSellerListingTest extends TestCase
     {
         $listing = $this->createListing($this->seller, [
             'status' => ListingStatus::Draft,
-            'livestock_type' => 'chicken',
+            'livestock_type' => 'poultry',
         ]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
@@ -737,9 +815,9 @@ class MobileSellerListingTest extends TestCase
         // they never touched. This is the assertion that catches a `required`
         // rule left in place on the PATCH path.
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
-            ->patchJson('/api/seller/listings/'.$listing->id, ['breed' => 'Hereford'])
+            ->patchJson('/api/seller/listings/'.$listing->id, ['breed' => 'Brahman'])
             ->assertOk()
-            ->assertJsonPath('data.breed', 'Hereford')
+            ->assertJsonPath('data.breed', 'Brahman')
             ->assertJsonPath('data.livestock_type', 'cattle')
             ->assertJsonPath('data.asking_price', '50000.00');
     }
@@ -1037,7 +1115,7 @@ class MobileSellerListingTest extends TestCase
     {
         $listing = $this->createListing($this->seller, [
             'status' => ListingStatus::Draft,
-            'livestock_type' => 'chicken',
+            'livestock_type' => 'poultry',
         ]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
@@ -1048,6 +1126,26 @@ class MobileSellerListingTest extends TestCase
         $this->assertDatabaseHas('listings', [
             'id' => $listing->id,
             'status' => ListingStatus::Draft->value,
+        ]);
+    }
+
+    #[Test]
+    public function a_legacy_unmapped_location_must_be_replaced_before_submission(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'location' => 'Trinidad, Bohol',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('location');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+            'location' => 'Trinidad, Bohol',
         ]);
     }
 
