@@ -97,11 +97,21 @@ void main() {
           httpClient: MockClient(
             (_) async => http.Response(
               jsonEncode(<String, Object>{
-                'data': <Map<String, String>>[
+                'data': <Map<String, Object>>[
                   <String, String>{'value': 'cattle', 'label': 'Cattle'},
                   <String, String>{'value': 'carabao', 'label': 'Carabao'},
                   <String, String>{'value': 'goat', 'label': 'Goat'},
                   <String, String>{'value': 'swine', 'label': 'Swine'},
+                  <String, Object>{
+                    'value': 'chicken',
+                    'label': 'Chicken',
+                    'breeds': <String>[
+                      'boholano_native_chicken',
+                      'broiler',
+                      'improved_native_chicken',
+                      'layer',
+                    ],
+                  },
                 ],
               }),
               200,
@@ -282,7 +292,7 @@ void main() {
       );
     });
 
-    testWidgets('the grid carries the four supported catalog categories', (
+    testWidgets('the grid carries the supported catalog categories', (
       WidgetTester tester,
     ) async {
       await pumpSignedIn(tester);
@@ -292,6 +302,7 @@ void main() {
         'Carabao',
         'Goat',
         'Swine',
+        'Chicken',
       ]) {
         expect(find.text(label), findsWidgets, reason: 'missing $label');
       }

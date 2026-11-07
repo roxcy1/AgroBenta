@@ -60,24 +60,23 @@ void main() {
 
   group('writableBody allow-list', () {
     test('keeps every contract field and drops nothing else', () {
-      final Map<String, dynamic> body = SellerListingService.writableBody(
-        <String, dynamic>{
-          'livestock_type': 'cattle',
-          'breed': 'Holstein',
-          'age_value': 18,
-          'age_unit': 'month',
-          'gender': 'female',
-          'weight_value': '320.5',
-          'weight_unit': 'kg',
-          'quantity': 4,
-          'asking_price': '42500',
-          'location': 'Mabalacat, Pampanga',
-          'health_status': 'Healthy',
-          'vaccination': 'Vaccinated',
-          'short_description': 'Ready for breeding.',
-          'additional_notes': 'Weekend delivery.',
-        },
-      );
+      final Map<String, dynamic> body =
+          SellerListingService.writableBody(<String, dynamic>{
+            'livestock_type': 'cattle',
+            'breed': 'Holstein',
+            'age_value': 18,
+            'age_unit': 'month',
+            'gender': 'female',
+            'weight_value': '320.5',
+            'weight_unit': 'kg',
+            'quantity': 4,
+            'asking_price': '42500',
+            'location': 'Mabalacat, Pampanga',
+            'health_status': 'Healthy',
+            'vaccination': 'Vaccinated',
+            'short_description': 'Ready for breeding.',
+            'additional_notes': 'Weekend delivery.',
+          });
 
       expect(body, hasLength(14));
       expect(body['gender'], 'female');
@@ -122,6 +121,30 @@ void main() {
       );
 
       expect(body.containsKey('photos'), isFalse);
+    });
+  });
+
+  group('price suggestion', () {
+    test('posts to the exact endpoint with no body', () async {
+      final FakeTokenStore tokenStore = FakeTokenStore('1|test-mobile-token');
+      final List<RecordedRequest> recorded = <RecordedRequest>[];
+      final SellerListingRepository repository = buildSellerListingRepository(
+        tokenStore,
+        (RecordedRequest request) async => aiPriceSuggestionResponse(),
+        recorded: recorded,
+      );
+
+      final estimate = await repository.requestPriceSuggestion(7);
+
+      expect(estimate.listingId, 7);
+      expect(estimate.estimatedValue, '9798.00');
+      expect(estimate.modelVersion, 'v3-targeted');
+      expect(estimate.provenance, 'synthetic');
+
+      final RecordedRequest sent = recorded.single;
+      expect(sent.method, 'POST');
+      expect(sent.apiPath, '/seller/listings/7/price-suggestion');
+      expect(sent.request.body, isEmpty);
     });
   });
 

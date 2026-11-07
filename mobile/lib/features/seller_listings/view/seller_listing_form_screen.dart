@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/app_formatters.dart';
+import '../../../models/ai_price_estimate.dart';
 import '../../../models/listing.dart';
 import '../../../models/livestock_type.dart';
 import '../../livestock_types/state/livestock_types_controller.dart';
@@ -18,6 +20,7 @@ import '../widgets/listing_photo_grid.dart';
 import 'seller_listing_input_formatters.dart';
 import 'seller_listing_views.dart';
 import 'seller_listing_validators.dart';
+import '../../../widgets/notice_banner.dart';
 import '../../../widgets/section_card.dart';
 
 /// Which Stepper step shows each server-validated field.
@@ -112,6 +115,16 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   late final SellerListingController _controller;
   bool _submitting = false;
 
+  /// A local validation message for the AI-only inputs.
+  ///
+  /// These fields are optional for saving a normal listing, so they cannot be
+  /// made into form-wide required fields without changing the listing contract.
+  String? _suggestionInputMessage;
+
+  /// Incremented whenever an input that feeds the model changes. It lets the
+  /// form discard a reply that belongs to values the seller has already edited.
+  int _suggestionInputRevision = 0;
+
   /// The listing this form created, if a save succeeded but photo work did not.
   ///
   /// The form stays open on an upload failure so the seller can retry. The next
@@ -168,6 +181,13 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       _additionalNotes.text = draft.additionalNotes;
     }
 
+    // These three fields are free text and are model inputs. Listening here
+    // clears a suggestion as soon as the seller edits one, without adding a
+    // second onChanged parameter to the shared text-field widget.
+    _breed.addListener(_onSuggestionInputChanged);
+    _ageValue.addListener(_onSuggestionInputChanged);
+    _weightValue.addListener(_onSuggestionInputChanged);
+
     // Seed the photo composer from the server-served URLs when editing, or
     // leave it empty for a new draft. Photos upload once the listing exists.
     //
@@ -176,6 +196,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     // throws "setState() or markNeedsBuild() called during build".
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // The controller is session-scoped. A result from a previous form must
+      // never appear beside this form's values.
+      _controller.clearPriceSuggestion();
       _catalog.ensureLoaded();
       _controller.startPhotoComposer(
         widget.listing?.id,
@@ -186,6 +209,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
 
   @override
   void dispose() {
+    _breed.removeListener(_onSuggestionInputChanged);
+    _ageValue.removeListener(_onSuggestionInputChanged);
+    _weightValue.removeListener(_onSuggestionInputChanged);
     _breed.dispose();
     _ageValue.dispose();
     _weightValue.dispose();
@@ -201,7 +227,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
 
   SellerListingDraft _buildDraft() => SellerListingDraft(
     livestockType: _livestockType ?? '',
-    breed: _breed.text,
+    breed: _breedForSubmission(_catalog.state.types),
     ageValue: _ageValue.text,
     ageUnit: _ageUnit,
     gender: _gender,
@@ -216,14 +242,59 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     additionalNotes: _additionalNotes.text,
   );
 
-  String? _selectedLivestockType(List<LivestockType> types) {
+  LivestockType? _typeForValue(List<LivestockType> types, String value) {
+    for (final LivestockType type in types) {
+      if (type.value == value) {
+        return type;
+      }
+    }
+    return null;
+  }
+
+  LivestockType? _selectedType(List<LivestockType> types) {
     final String? value = _livestockType;
-    if (value == null ||
-        !types.any((LivestockType type) => type.value == value)) {
+    return value == null ? null : _typeForValue(types, value);
+  }
+
+  String? _selectedLivestockType(List<LivestockType> types) =>
+      _selectedType(types)?.value;
+
+  /// Chicken is the first category with a controlled breed list.
+  ///
+  /// The other categories keep their existing free-text breed field so this
+  /// change does not alter how their listings are entered.
+  bool _usesBreedDropdown(LivestockType? type) =>
+      type?.value == 'chicken' && (type?.breeds.isNotEmpty ?? false);
+
+  String? _selectedBreed(LivestockType type) {
+    if (!_usesBreedDropdown(type)) {
       return null;
     }
+    return LivestockType.matchBreed(_breed.text, type.breeds);
+  }
 
-    return value;
+  /// The breed value to send for the selected category.
+  ///
+  /// For a controlled list, an unrecognized value left over from a type change
+  /// or a legacy listing is omitted rather than submitted while the dropdown
+  /// shows no selection.
+  String _breedForSubmission(List<LivestockType> types) {
+    final LivestockType? type = _selectedType(types);
+    if (type != null && _usesBreedDropdown(type)) {
+      return LivestockType.matchBreed(_breed.text, type.breeds) ?? '';
+    }
+    return _breed.text;
+  }
+
+  String _breedReviewLabel(List<LivestockType> types) {
+    final LivestockType? type = _selectedType(types);
+    if (type != null && _usesBreedDropdown(type)) {
+      final String? breed = LivestockType.matchBreed(_breed.text, type.breeds);
+      if (breed != null) {
+        return LivestockType.breedLabel(breed);
+      }
+    }
+    return _breed.text;
   }
 
   /// Whether [step] has at least one client-side error.
@@ -293,12 +364,49 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   }
 
   Future<void> _save() async {
+    final Listing? saved = await _persistDraft();
+    if (!mounted || saved == null) {
+      return;
+    }
+
+    _saved = saved;
+
+    // Upload any locally-picked photos that were not yet stored. The server
+    // returns the whole listing, so the composer is rebuilt from served URLs
+    // and client and server agree. A previously failed batch is resent too.
+    final bool hasPhotoWork = _controller.photos.any(
+      (ListingPhotoItem p) =>
+          p.status == ListingPhotoStatus.pending ||
+          p.status == ListingPhotoStatus.failed,
+    );
+    if (hasPhotoWork) {
+      final bool uploaded = await _controller.uploadComposerPhotos(saved.id);
+      if (!mounted) {
+        return;
+      }
+      if (!uploaded) {
+        // Stay on the form: the failed tiles and their retry controls are on
+        // step 0, so that is where the seller needs to be.
+        setState(() => _step = 0);
+        return;
+      }
+    }
+    // The caller needs the record it just wrote, to open or refresh with.
+    if (mounted) Navigator.of(context).pop(saved);
+  }
+
+  /// Validates and persists the current form without deciding what to do next.
+  ///
+  /// Shared by the normal Save action and the AI suggestion action so the two
+  /// cannot drift. Returns `null` when validation or the request failed, in
+  /// which case the existing per-field error handling has already run.
+  Future<Listing?> _persistDraft() async {
     if (!_catalog.state.isReady) {
       setState(() => _step = 0);
       if (_catalog.state.hasFailed) {
         _catalog.retry();
       }
-      return;
+      return null;
     }
 
     final int? invalidStep = _firstInvalidStep();
@@ -310,7 +418,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
         if (!mounted) return;
         _formKey.currentState?.validate();
       });
-      return;
+      return null;
     }
 
     final SellerListingDraft draft = _buildDraft();
@@ -324,36 +432,13 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
         : await _controller.create(draft);
 
     if (!mounted) {
-      return;
+      return null;
     }
     setState(() => _submitting = false);
 
     if (saved != null) {
       _saved = saved;
-
-      // Upload any locally-picked photos that were not yet stored. The server
-      // returns the whole listing, so the composer is rebuilt from served URLs
-      // and client and server agree. A previously failed batch is resent too.
-      final bool hasPhotoWork = _controller.photos.any(
-        (ListingPhotoItem p) =>
-            p.status == ListingPhotoStatus.pending ||
-            p.status == ListingPhotoStatus.failed,
-      );
-      if (hasPhotoWork) {
-        final bool uploaded = await _controller.uploadComposerPhotos(saved.id);
-        if (!mounted) {
-          return;
-        }
-        if (!uploaded) {
-          // Stay on the form: the failed tiles and their retry controls are on
-          // step 0, so that is where the seller needs to be.
-          setState(() => _step = 0);
-          return;
-        }
-      }
-      // The caller needs the record it just wrote, to open or refresh with.
-      if (mounted) Navigator.of(context).pop(saved);
-      return;
+      return saved;
     }
 
     // A `422` arrives as per-field messages. Re-validating after this frame
@@ -363,7 +448,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     final Map<String, List<String>> serverErrors =
         _controller.state.validationErrors;
     if (serverErrors.isEmpty) {
-      return;
+      return null;
     }
     final int? errorStep = _firstStepWithServerError(serverErrors);
     if (errorStep != null && errorStep != _step) {
@@ -373,6 +458,110 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       if (!mounted) return;
       _formKey.currentState?.validate();
     });
+    return null;
+  }
+
+  /// Saves the current form as a draft, then asks the server for an estimate.
+  ///
+  /// The draft has to exist first: the endpoint is keyed by listing id and reads
+  /// the persisted record, not the form. Keeping the form open after the save is
+  /// deliberate — the result belongs beside Asking Price, and the seller may
+  /// choose to use it, ignore it, or edit further.
+  Future<void> _suggestPrice() async {
+    if (_submitting ||
+        _controller.state.isActioning ||
+        !_canRequestPriceSuggestion) {
+      return;
+    }
+
+    final String? inputError = _suggestionInputError();
+    if (inputError != null) {
+      setState(() => _suggestionInputMessage = inputError);
+      return;
+    }
+
+    setState(() => _suggestionInputMessage = null);
+    final int revision = _suggestionInputRevision;
+    final Listing? saved = await _persistDraft();
+    if (!mounted || saved == null) {
+      return;
+    }
+
+    if (revision != _suggestionInputRevision) {
+      setState(() {
+        _suggestionInputMessage =
+            'Your details changed while the draft was saving. Request the '
+            'suggestion again.';
+      });
+      return;
+    }
+
+    await _controller.requestPriceSuggestion(saved.id);
+    if (!mounted) {
+      return;
+    }
+
+    if (revision != _suggestionInputRevision) {
+      _controller.clearPriceSuggestion();
+      setState(() {
+        _suggestionInputMessage =
+            'Your details changed while the suggestion was being generated. '
+            'Request it again for the updated values.';
+      });
+    }
+  }
+
+  /// The first AI-only input that is missing or not positive, or `null`.
+  ///
+  /// These checks do not change normal listing validation: age, weight and sex
+  /// stay optional for saving, and only the AI action requires them.
+  String? _suggestionInputError() {
+    if (!_catalog.state.isReady) {
+      return 'Livestock types are still loading. Please try again.';
+    }
+
+    final LivestockType? type = _selectedType(_catalog.state.types);
+    if (type == null) {
+      return 'Choose the type of livestock before requesting a price.';
+    }
+    if (_breedForSubmission(_catalog.state.types).trim().isEmpty) {
+      return 'Choose or enter a supported breed before requesting a price.';
+    }
+    if (_gender == null) {
+      return 'Select the animal sex before requesting a price.';
+    }
+    if (_ageValue.text.trim().isEmpty || _ageUnit == null) {
+      return 'Add the animal age and unit before requesting a price.';
+    }
+    if ((int.tryParse(_ageValue.text.trim()) ?? 0) <= 0) {
+      return 'The age must be greater than zero for a price suggestion.';
+    }
+    if (_weightValue.text.trim().isEmpty || _weightUnit == null) {
+      return 'Add the animal weight and unit before requesting a price.';
+    }
+    if ((double.tryParse(_weightValue.text.trim()) ?? 0) <= 0) {
+      return 'The weight must be greater than zero for a price suggestion.';
+    }
+    return null;
+  }
+
+  /// Clears a result as soon as one of the model inputs changes.
+  void _onSuggestionInputChanged() {
+    _suggestionInputRevision++;
+    _controller.clearPriceSuggestion();
+    if (_suggestionInputMessage != null && mounted) {
+      setState(() => _suggestionInputMessage = null);
+    }
+  }
+
+  /// Whether the current form can call the draft-only suggestion endpoint.
+  bool get _canRequestPriceSuggestion {
+    final Listing? target = _saved ?? widget.listing;
+    return target == null || target.status == ListingStatus.draft;
+  }
+
+  void _useSuggestedPrice(String value) {
+    setState(() => _askingPrice.text = value);
   }
 
   @override
@@ -521,9 +710,10 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               builder: (BuildContext context, Widget? child) {
                 final LivestockTypesState catalogState = _catalog.state;
                 if (catalogState.isReady) {
-                  final String? selected = _selectedLivestockType(
+                  final LivestockType? selectedType = _selectedType(
                     catalogState.types,
                   );
+                  final String? selected = selectedType?.value;
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -538,8 +728,23 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                               ),
                             )
                             .toList(growable: false),
-                        onChanged: (String? value) =>
-                            setState(() => _livestockType = value),
+                        onChanged: (String? value) {
+                          final LivestockType? type = value == null
+                              ? null
+                              : _typeForValue(catalogState.types, value);
+                          setState(() {
+                            _livestockType = value;
+                            if (_usesBreedDropdown(type) &&
+                                LivestockType.matchBreed(
+                                      _breed.text,
+                                      type!.breeds,
+                                    ) ==
+                                    null) {
+                              _breed.clear();
+                            }
+                          });
+                          _onSuggestionInputChanged();
+                        },
                         validator: validateLivestockType,
                         serverErrors: state.validationErrors['livestock_type'],
                       ),
@@ -597,13 +802,39 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               },
             ),
             const SizedBox(height: AppSpacing.md),
-            _TextField(
-              controller: _breed,
-              label: 'Breed',
-              hint: 'e.g. Brahman',
-              helper: 'Optional. Used as the listing title.',
-              validator: validateBreed,
-              serverErrors: state.validationErrors['breed'],
+            ListenableBuilder(
+              listenable: _catalog,
+              builder: (BuildContext context, Widget? child) {
+                final LivestockType? type = _catalog.state.isReady
+                    ? _selectedType(_catalog.state.types)
+                    : null;
+                if (!_usesBreedDropdown(type)) {
+                  return _TextField(
+                    controller: _breed,
+                    label: 'Breed',
+                    hint: 'e.g. Brahman',
+                    helper: 'Optional. Used as the listing title.',
+                    validator: validateBreed,
+                    serverErrors: state.validationErrors['breed'],
+                  );
+                }
+
+                return _Dropdown<String>(
+                  label: 'Breed',
+                  value: _selectedBreed(type!),
+                  items: type.breeds
+                      .map(
+                        (String breed) => DropdownMenuItem<String>(
+                          value: breed,
+                          child: Text(LivestockType.breedLabel(breed)),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (String? value) =>
+                      setState(() => _breed.text = value ?? ''),
+                  serverErrors: state.validationErrors['breed'],
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.md),
             Row(
@@ -649,6 +880,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                       // typed may now be out of range. Only that field is
                       // re-validated; no untouched field gains an error.
                       _ageValueFieldKey.currentState?.validate();
+                      _onSuggestionInputChanged();
                     },
                     validator: (String? value) =>
                         state.validationErrors['age_unit']?.first ??
@@ -694,8 +926,10 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                         child: Text('Pounds'),
                       ),
                     ],
-                    onChanged: (String? value) =>
-                        setState(() => _weightUnit = value),
+                    onChanged: (String? value) {
+                      setState(() => _weightUnit = value);
+                      _onSuggestionInputChanged();
+                    },
                     validator: (String? value) =>
                         state.validationErrors['weight_unit']?.first ??
                         validateWeightUnit(
@@ -715,6 +949,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   }
 
   Widget _buildDetailsStep(SellerListingState state) {
+    final bool busy = _submitting || state.isActioning;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -749,6 +985,43 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               ],
               prefixText: '₱ ',
             ),
+            if (_canRequestPriceSuggestion) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                key: const ValueKey<String>('ai-suggest-price'),
+                onPressed: busy ? null : _suggestPrice,
+                icon: state.action == SellerListingAction.suggestingPrice
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('AI Suggest Price'),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Requesting AI assistance saves this draft first. The suggestion '
+                'is reference only; you still choose the final asking price.',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+              if (_suggestionInputMessage != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.sm),
+                NoticeBanner(
+                  accent: AppColors.warning,
+                  icon: Icons.info_outline,
+                  message: _suggestionInputMessage!,
+                  backgroundColor: AppColors.warningSurface,
+                ),
+              ],
+              if (state.priceSuggestion != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                _AiPriceSuggestionPanel(
+                  result: state.priceSuggestion!,
+                  onUsePrice: _useSuggestedPrice,
+                  onRetry: busy ? null : _suggestPrice,
+                ),
+              ],
+            ],
             const SizedBox(height: AppSpacing.md),
             _TextField(
               controller: _location,
@@ -774,7 +1047,10 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                   child: Text('Female'),
                 ),
               ],
-              onChanged: (String? value) => setState(() => _gender = value),
+              onChanged: (String? value) {
+                setState(() => _gender = value);
+                _onSuggestionInputChanged();
+              },
               serverErrors: state.validationErrors['gender'],
             ),
             const SizedBox(height: AppSpacing.md),
@@ -834,7 +1110,10 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
           children: <Widget>[
             _ReviewRow(label: 'Type', value: _livestockType ?? '—'),
             if (_breed.text.isNotEmpty)
-              _ReviewRow(label: 'Breed', value: _breed.text),
+              _ReviewRow(
+                label: 'Breed',
+                value: _breedReviewLabel(_catalog.state.types),
+              ),
             if (_ageValue.text.isNotEmpty && _ageUnit != null)
               _ReviewRow(label: 'Age', value: '${_ageValue.text} ${_ageUnit!}'),
             if (_gender != null) _ReviewRow(label: 'Gender', value: _gender!),
@@ -866,6 +1145,191 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
           textAlign: TextAlign.center,
         ),
       ],
+    );
+  }
+}
+
+/// The result of one AI price-suggestion attempt.
+///
+/// A successful estimate is the only branch that renders a number. Refusals and
+/// failures render their server-side explanation instead, never a placeholder
+/// price or an invented confidence score.
+class _AiPriceSuggestionPanel extends StatelessWidget {
+  const _AiPriceSuggestionPanel({
+    required this.result,
+    required this.onUsePrice,
+    this.onRetry,
+  });
+
+  final PriceSuggestionResult result;
+  final ValueChanged<String> onUsePrice;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    if (!result.hasEstimate) {
+      return _SuggestionProblem(
+        result: result,
+        onRetry: result.canRetry ? onRetry : null,
+      );
+    }
+
+    final AiPriceEstimate estimate = result.estimate!;
+    final String money =
+        AppFormatters.formatMoney(estimate.estimatedValue) ??
+        estimate.estimatedValue;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.primarySurface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(
+                Icons.auto_awesome,
+                size: 18,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  'AI Price Suggestion',
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              Text(
+                estimate.isWarning
+                    ? 'Review recommended'
+                    : 'Within model range',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: estimate.isWarning
+                      ? AppColors.warning
+                      : AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            money,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Synthetic Data — Reference Only. This is not a valuation; you '
+            'decide the final asking price.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            [
+              if (estimate.modelVersion != null)
+                'Model ${estimate.modelVersion}',
+              if (estimate.provenance != null) '${estimate.provenance} data',
+            ].join(' · '),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          if (estimate.warnings.isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            NoticeBanner(
+              accent: AppColors.warning,
+              icon: Icons.info_outline,
+              message: estimate.warnings.join('\n'),
+              backgroundColor: AppColors.warningSurface,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: () => onUsePrice(estimate.estimatedValue),
+            icon: const Icon(Icons.edit_outlined, size: 17),
+            label: const Text('Use This Price'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A refusal or failure: no number, an explanation, and a retry only when a
+/// retry could actually change the answer.
+class _SuggestionProblem extends StatelessWidget {
+  const _SuggestionProblem({required this.result, this.onRetry});
+
+  final PriceSuggestionResult result;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isError =
+        result.outcome == PriceSuggestionOutcome.error ||
+        result.outcome == PriceSuggestionOutcome.unavailable;
+    final String title = switch (result.outcome) {
+      PriceSuggestionOutcome.withheld => 'Price suggestion withheld',
+      PriceSuggestionOutcome.unavailable => 'Price suggestion unavailable',
+      PriceSuggestionOutcome.invalid => 'Cannot generate a price suggestion',
+      _ => 'Price suggestion failed',
+    };
+
+    final Widget notice = NoticeBanner(
+      accent: isError ? AppColors.error : AppColors.warning,
+      icon: isError ? Icons.error_outline : Icons.info_outline,
+      title: title,
+      message: result.warnings.isEmpty
+          ? result.message
+          : result.warnings.join('\n'),
+      backgroundColor: isError
+          ? AppColors.error.withValues(alpha: 0.06)
+          : AppColors.warningSurface,
+    );
+
+    final List<Widget> extras = <Widget>[
+      if (result.reasonCodes.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(
+            top: AppSpacing.xs,
+            left: AppSpacing.sm,
+          ),
+          child: Text(
+            'Reason: ${result.reasonCodes.join(', ')}',
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
+          ),
+        ),
+      if (onRetry != null)
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Retry'),
+          ),
+        ),
+    ];
+
+    if (extras.isEmpty) {
+      return notice;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[notice, ...extras],
     );
   }
 }

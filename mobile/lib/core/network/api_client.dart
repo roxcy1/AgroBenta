@@ -542,6 +542,7 @@ class ApiClient {
                 : 'The email or password is incorrect.'),
         statusCode: 401,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       );
     }
 
@@ -556,18 +557,21 @@ class ApiClient {
             _messageFrom(decoded) ?? 'You do not have permission to do that.',
         statusCode: 403,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       404 => ApiException(
         kind: ApiErrorKind.notFound,
         message: _messageFrom(decoded) ?? 'The requested item was not found.',
         statusCode: 404,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       409 => ApiException(
         kind: ApiErrorKind.conflict,
         message: _messageFrom(decoded) ?? _defaultConflictMessage,
         statusCode: 409,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       422 => ApiException(
         kind: ApiErrorKind.validation,
@@ -576,6 +580,7 @@ class ApiClient {
         statusCode: 422,
         serverMessage: _messageFrom(decoded),
         validationErrors: _validationErrorsFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       429 => ApiException(
         kind: ApiErrorKind.rateLimited,
@@ -584,6 +589,7 @@ class ApiClient {
             'Too many attempts. Please wait a moment and try again.',
         statusCode: 429,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       // The server's own text for a 5xx is an exception message such as
       // "Target class [...] does not exist". It stays in [serverMessage] for
@@ -593,14 +599,27 @@ class ApiClient {
         message: 'Something went wrong on the server.',
         statusCode: response.statusCode,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       _ => ApiException(
         kind: ApiErrorKind.server,
         message: _messageFrom(decoded) ?? 'The request failed.',
         statusCode: response.statusCode,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
     };
+  }
+
+  /// Returns the decoded error body as a details map, or an empty map.
+  ///
+  /// A Laravel `abort()` response may be a bare JSON string rather than an
+  /// object; that case has no structured detail to preserve.
+  static Map<String, dynamic> _detailsFrom(Object? decoded) {
+    if (decoded is Map) {
+      return decoded.cast<String, dynamic>();
+    }
+    return const <String, dynamic>{};
   }
 
   /// Fallback wording for a `409` that carried no message.

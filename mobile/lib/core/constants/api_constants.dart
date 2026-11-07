@@ -87,7 +87,7 @@ abstract final class MarketplaceEndpoints {
 
 /// The approved livestock-type catalog, relative to the API root.
 ///
-/// This is the backend enum's public projection. The four values are the only
+/// This is the backend enum's public projection. The catalog values are the only
 /// ones a seller may write; historical rows may still hold values outside the
 /// catalog, and those remain readable everywhere.
 abstract final class LivestockTypeEndpoints {
@@ -209,6 +209,16 @@ abstract final class SellerListingEndpoints {
   /// and it is one-way: the server answers `409` for a listing that is not a
   /// draft.
   static String submit(int id) => '/seller/listings/$id/submit';
+
+  /// `POST` — request an AI price suggestion for a draft. 200, plain envelope.
+  ///
+  /// [id] is appended. The endpoint accepts no request body. It is owner-scoped
+  /// and draft-only; the server answers `422` for another state. A successful
+  /// response is an `AiPriceEstimateResource`; `withheld` and `invalid` refusals
+  /// arrive as structured `422` bodies with `status`, `warnings` and
+  /// `reason_codes`.
+  static String priceSuggestion(int id) =>
+      '/seller/listings/$id/price-suggestion';
 
   /// `POST` — mark an active listing as sold. 200, plain envelope.
   ///

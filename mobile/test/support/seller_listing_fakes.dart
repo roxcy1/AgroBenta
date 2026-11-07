@@ -53,6 +53,74 @@ http.Response sellerListingResponse({
   headers: <String, String>{'content-type': 'application/json'},
 );
 
+/// One `AiPriceEstimateResource` payload.
+Map<String, dynamic> aiPriceEstimateJson({
+  int listingId = 7,
+  String status = 'ok',
+  String estimatedValue = '9798.00',
+  String basis =
+      'Prototype CatBoost estimate from v3-targeted (synthetic data); reference only.',
+  List<String> warnings = const <String>[],
+  List<String> reasonCodes = const <String>[],
+  String modelVersion = 'v3-targeted',
+  String provenance = 'synthetic',
+}) {
+  return <String, dynamic>{
+    'listing_id': listingId,
+    'estimated_min': null,
+    'estimated_max': null,
+    'estimated_value': estimatedValue,
+    'basis': basis,
+    'input_snapshot': <String, dynamic>{
+      'livestock_type': 'chicken',
+      'breed': 'broiler',
+      'sex': 'male',
+      'age_months': 0.492813,
+      'weight_kg': 0.5,
+    },
+    'estimated_at': '2026-11-06T11:49:04.000000Z',
+    'status': status,
+    'warnings': warnings,
+    'reason_codes': reasonCodes,
+    'provenance': provenance,
+    'model_version': modelVersion,
+  };
+}
+
+/// A successful `POST /seller/listings/{id}/price-suggestion`.
+http.Response aiPriceSuggestionResponse({
+  Map<String, dynamic>? estimate,
+  int statusCode = 200,
+}) => http.Response(
+  jsonEncode(
+    successEnvelope(
+      data: estimate ?? aiPriceEstimateJson(),
+      message: 'Price suggestion generated.',
+    ),
+  ),
+  statusCode,
+  headers: const <String, String>{'content-type': 'application/json'},
+);
+
+/// A structured price-suggestion refusal or failure.
+http.Response aiPriceSuggestionErrorResponse({
+  required String status,
+  List<String> warnings = const <String>[],
+  List<String> reasonCodes = const <String>[],
+  String message = 'A price suggestion cannot be generated for this listing.',
+  int statusCode = 422,
+}) => http.Response(
+  jsonEncode(<String, dynamic>{
+    'success': false,
+    'message': message,
+    'status': status,
+    'warnings': warnings,
+    'reason_codes': reasonCodes,
+  }),
+  statusCode,
+  headers: const <String, String>{'content-type': 'application/json'},
+);
+
 /// A successful `DELETE` response.
 ///
 /// The endpoint answers `200` with a message and **no `data`**, so this fixture

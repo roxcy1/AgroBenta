@@ -69,6 +69,7 @@ class ApiException implements Exception {
     this.statusCode,
     this.serverMessage,
     this.validationErrors = const <String, List<String>>{},
+    this.details = const <String, dynamic>{},
     this.cause,
   });
 
@@ -97,6 +98,15 @@ class ApiException implements Exception {
   /// Per-field validation messages, keyed by field name. Populated for
   /// [ApiErrorKind.validation] (Laravel 422).
   final Map<String, List<String>> validationErrors;
+
+  /// The decoded error body, when one was available.
+  ///
+  /// Most endpoints need only [message], but some return structured refusal
+  /// metadata alongside it. The price-suggestion endpoint, for example, puts
+  /// `status`, `warnings` and `reason_codes` at the top level. Keeping the body
+  /// here is additive: existing callers continue to read the fields they already
+  /// used, while feature code can preserve the server's structured answer.
+  final Map<String, dynamic> details;
 
   /// Server-side detail, when the backend returned a meaningful one. Useful in
   /// logs; not necessarily suitable for display.

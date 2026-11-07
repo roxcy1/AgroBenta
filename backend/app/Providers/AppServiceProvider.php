@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Auth\PasswordResetCodeBrokerManager;
+use App\Contracts\PriceSuggestionProvider;
+use App\Services\PriceSuggestion\FastApiPriceSuggestionProvider;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\ServiceProvider;
@@ -15,6 +17,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->extend('auth.password', fn ($manager, $app) => new PasswordResetCodeBrokerManager($app));
+
+        $this->app->bind(PriceSuggestionProvider::class, FastApiPriceSuggestionProvider::class);
     }
 
     /**

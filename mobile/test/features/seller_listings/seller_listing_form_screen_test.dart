@@ -1,14 +1,22 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:agrobenta_mobile/core/theme/app_theme.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/listing_photo_item.dart';
+import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_controller.dart';
+import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_scope.dart';
 import 'package:agrobenta_mobile/features/seller_listings/view/seller_listing_form_screen.dart';
+import 'package:agrobenta_mobile/models/listing.dart';
+import 'package:agrobenta_mobile/repositories/seller_listing_repository.dart';
 import 'package:agrobenta_mobile/widgets/local_image_preview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
+import '../../support/livestock_type_fakes.dart';
 import '../../support/seller_listing_fakes.dart';
 import '../../support/seller_listings_app_harness.dart';
 
@@ -50,6 +58,48 @@ void main() {
     return harness;
   }
 
+  /// Mounts the form directly over a listing, for draft and non-draft cases.
+  Future<List<RecordedRequest>> pumpEditForm(
+    WidgetTester tester, {
+    required Listing listing,
+    required Future<http.Response> Function(RecordedRequest request) handler,
+  }) async {
+    final FakeTokenStore tokenStore = FakeTokenStore('1|test-mobile-token');
+    final List<RecordedRequest> recorded = <RecordedRequest>[];
+    final SellerListingRepository repository = buildSellerListingRepository(
+      tokenStore,
+      handler,
+      recorded: recorded,
+    );
+    final SellerListingController controller = SellerListingController(
+      repository,
+    );
+    final catalogRepository = buildLivestockTypeRepository(tokenStore);
+    final LivestockTypesController catalog = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(catalog.dispose);
+    await catalog.ensureLoaded();
+
+    await tester.pumpWidget(
+      LivestockTypesScope(
+        repository: catalogRepository,
+        controller: catalog,
+        child: SellerListingScope(
+          repository: repository,
+          controller: controller,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: SellerListingFormScreen(listing: listing),
+          ),
+        ),
+      ),
+    );
+    await settleSellerListings(tester);
+    return recorded;
+  }
+
   Finder field(String label) => find.widgetWithText(TextFormField, label);
 
   String fieldText(WidgetTester tester, String label) =>
@@ -64,6 +114,30 @@ void main() {
     of: find.text('Type of livestock'),
     matching: find.byType(DropdownButtonFormField<String>),
   );
+
+  Finder breedDropdown() => find.ancestor(
+    of: find.text('Breed'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
+  Finder weightUnitDropdown() => find.ancestor(
+    of: find.text('Weight unit'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
+  Finder genderDropdown() => find.ancestor(
+    of: find.text('Gender'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
+  Finder aiButton() => find.byKey(const ValueKey<String>('ai-suggest-price'));
+
+  Future<void> tapAiButton(WidgetTester tester) async {
+    await tester.ensureVisible(aiButton());
+    await tester.pumpAndSettle();
+    await tester.tap(aiButton());
+    await tester.pumpAndSettle();
+  }
 
   String? fieldError(WidgetTester tester, String label) {
     if (label == 'Type of livestock') {
@@ -96,6 +170,26 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> selectWeightUnit(WidgetTester tester, String label) async {
+    final Finder dropdown = weightUnitDropdown();
+    await tester.ensureVisible(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> selectGender(WidgetTester tester, String label) async {
+    final Finder dropdown = genderDropdown();
+    await tester.ensureVisible(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
   /// Taps a form control, scrolling the Stepper to it first.
   ///
   /// Every step's controls exist in the Stepper's list, and the list builds
@@ -117,6 +211,24 @@ void main() {
 
   Future<void> tapContinue(WidgetTester tester) =>
       tapFormControl(tester, find.widgetWithText(FilledButton, 'Continue'));
+
+  /// Fills the fields the AI action needs and moves to Details.
+  Future<void> fillSuggestionInputs(WidgetTester tester) async {
+    await selectLivestockType(tester, 'Cattle');
+    await tester.enterText(field('Breed'), 'Brahman');
+    await tester.enterText(field('Age'), '2');
+    await selectAgeUnit(tester, 'Year');
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
+    await tester.pump();
+    await tapContinue(tester);
+
+    await tester.enterText(field('Quantity available'), '1');
+    await tester.enterText(field('Asking price'), '42500');
+    await tester.enterText(field('Location'), 'Trinidad, Bohol');
+    await selectGender(tester, 'Male');
+    await tester.pump();
+  }
 
   Future<void> tapSave(WidgetTester tester) => tapFormControl(
     tester,
@@ -293,6 +405,398 @@ void main() {
     expect(posts.single.body.containsKey('status'), isFalse);
 
     expect(find.byType(SellerListingFormScreen), findsNothing);
+  });
+
+  testWidgets('chicken offers only the supported breed choices', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 8, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await selectLivestockType(tester, 'Chicken');
+    await tester.pump();
+
+    expect(find.widgetWithText(TextFormField, 'Breed'), findsNothing);
+
+    await tester.tap(breedDropdown());
+    await tester.pumpAndSettle();
+    for (final String breed in <String>[
+      'Boholano Native Chicken',
+      'Broiler',
+      'Improved Native Chicken',
+      'Layer',
+    ]) {
+      expect(find.text(breed), findsWidgets, reason: breed);
+    }
+    expect(find.text('Duck'), findsNothing);
+    await tester.tap(find.text('Broiler').last);
+    await tester.pumpAndSettle();
+
+    await tapContinue(tester);
+    await tester.enterText(field('Quantity available'), '1');
+    await tester.enterText(field('Asking price'), '500');
+    await tester.enterText(field('Location'), 'Trinidad, Bohol');
+    await tester.pump();
+    await tapContinue(tester);
+    await tapSave(tester);
+    await settleSellerListings(tester);
+
+    final RecordedRequest post = harness.recorded.singleWhere(
+      (RecordedRequest request) =>
+          request.method == 'POST' && request.apiPath == '/seller/listings',
+    );
+    expect(post.body['livestock_type'], 'chicken');
+    expect(post.body['breed'], 'broiler');
+  });
+
+  testWidgets(
+    'AI Suggest saves a new draft, keeps the form open, and shows the estimate',
+    (WidgetTester tester) async {
+      final SellerListingsHarness harness = await openForm(
+        tester,
+        handler: (RecordedRequest request) async {
+          if (request.method == 'POST' &&
+              request.apiPath == '/seller/listings') {
+            return sellerListingResponse(
+              listing: listingJson(id: 7, status: 'draft'),
+              statusCode: 201,
+            );
+          }
+          if (request.method == 'POST' &&
+              request.apiPath == '/seller/listings/7/price-suggestion') {
+            return aiPriceSuggestionResponse();
+          }
+          return emptyListHandler(request);
+        },
+      );
+
+      await fillSuggestionInputs(tester);
+      expect(aiButton(), findsOneWidget);
+      expect(
+        find.text(
+          'Requesting AI assistance saves this draft first. The suggestion is '
+          'reference only; you still choose the final asking price.',
+        ),
+        findsOneWidget,
+      );
+
+      await tapAiButton(tester);
+      await settleSellerListings(tester, frames: 20);
+
+      expect(find.byType(SellerListingFormScreen), findsOneWidget);
+      expect(find.text('AI Price Suggestion'), findsOneWidget);
+      expect(find.text('₱9,798.00'), findsOneWidget);
+      expect(
+        find.text(
+          'Synthetic Data — Reference Only. This is not a valuation; you decide the final asking price.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Model v3-targeted · synthetic data'), findsOneWidget);
+      expect(fieldText(tester, 'Asking price'), '42500');
+
+      expect(
+        harness.recorded.where(
+          (RecordedRequest request) =>
+              request.method == 'POST' && request.apiPath == '/seller/listings',
+        ),
+        hasLength(1),
+      );
+      expect(
+        harness.recorded.where(
+          (RecordedRequest request) =>
+              request.method == 'POST' &&
+              request.apiPath == '/seller/listings/7/price-suggestion',
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  testWidgets(
+    'Use This Price only changes the editable asking price when tapped',
+    (WidgetTester tester) async {
+      await openForm(
+        tester,
+        handler: (RecordedRequest request) async {
+          if (request.method == 'POST' &&
+              request.apiPath == '/seller/listings') {
+            return sellerListingResponse(
+              listing: listingJson(id: 7, status: 'draft'),
+              statusCode: 201,
+            );
+          }
+          if (request.method == 'POST' &&
+              request.apiPath == '/seller/listings/7/price-suggestion') {
+            return aiPriceSuggestionResponse();
+          }
+          return emptyListHandler(request);
+        },
+      );
+
+      await fillSuggestionInputs(tester);
+      await tapAiButton(tester);
+      await settleSellerListings(tester, frames: 20);
+      expect(fieldText(tester, 'Asking price'), '42500');
+
+      await tester.ensureVisible(find.text('Use This Price'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use This Price'));
+      await tester.pump();
+
+      expect(fieldText(tester, 'Asking price'), '9798.00');
+    },
+  );
+
+  testWidgets('editing a model input clears the previous suggestion', (
+    WidgetTester tester,
+  ) async {
+    await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionResponse();
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await fillSuggestionInputs(tester);
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+    expect(find.text('AI Price Suggestion'), findsOneWidget);
+
+    await tapFormControl(tester, find.widgetWithText(TextButton, 'Back'));
+    await tester.enterText(field('Weight'), '600');
+    await tester.pump();
+    await tapContinue(tester);
+
+    expect(find.text('AI Price Suggestion'), findsNothing);
+  });
+
+  testWidgets('a warning is shown with its server warning text', (
+    WidgetTester tester,
+  ) async {
+    await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionResponse(
+            estimate: aiPriceEstimateJson(
+              status: 'warning',
+              warnings: <String>['Outside the typical age-band range.'],
+            ),
+          );
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await fillSuggestionInputs(tester);
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+
+    expect(find.text('Review recommended'), findsOneWidget);
+    expect(find.text('Outside the typical age-band range.'), findsOneWidget);
+  });
+
+  testWidgets('withheld shows no price and no Use This Price action', (
+    WidgetTester tester,
+  ) async {
+    await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionErrorResponse(
+            status: 'withheld',
+            warnings: <String>['Outside the supported model envelope.'],
+            reasonCodes: <String>['insufficient_model_support'],
+          );
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await fillSuggestionInputs(tester);
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+
+    expect(find.text('Price suggestion withheld'), findsOneWidget);
+    expect(find.text('Outside the supported model envelope.'), findsOneWidget);
+    expect(find.text('Reason: insufficient_model_support'), findsOneWidget);
+    expect(find.text('Use This Price'), findsNothing);
+    expect(find.text('₱'), findsNothing);
+  });
+
+  testWidgets('unavailable is displayed and Retry requests again', (
+    WidgetTester tester,
+  ) async {
+    bool firstAttempt = true;
+    final SellerListingsHarness harness = await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'PATCH' &&
+            request.apiPath == '/seller/listings/7') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          if (firstAttempt) {
+            firstAttempt = false;
+            return aiPriceSuggestionErrorResponse(
+              status: 'unavailable',
+              reasonCodes: <String>['provider_unavailable'],
+              message: 'The price suggestion service is unavailable.',
+              statusCode: 503,
+            );
+          }
+          return aiPriceSuggestionResponse();
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await fillSuggestionInputs(tester);
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+
+    expect(find.text('Price suggestion unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Use This Price'), findsNothing);
+
+    await tester.ensureVisible(find.text('Retry'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Retry'));
+    await settleSellerListings(tester, frames: 20);
+
+    expect(find.text('AI Price Suggestion'), findsOneWidget);
+    expect(find.text('₱9,798.00'), findsOneWidget);
+    expect(find.text('Use This Price'), findsOneWidget);
+
+    expect(
+      harness.recorded.where(
+        (RecordedRequest request) =>
+            request.method == 'POST' && request.apiPath == '/seller/listings',
+      ),
+      hasLength(1),
+    );
+    expect(
+      harness.recorded.where(
+        (RecordedRequest request) =>
+            request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion',
+      ),
+      hasLength(2),
+    );
+  });
+
+  testWidgets('an active listing does not offer AI Suggest Price', (
+    WidgetTester tester,
+  ) async {
+    final Listing active = Listing.fromJson(
+      listingJson(id: 42, status: 'active'),
+    );
+    await pumpEditForm(
+      tester,
+      listing: active,
+      handler: (_) async => sellerListingListResponse(),
+    );
+
+    await tapContinue(tester);
+    expect(aiButton(), findsNothing);
+    expect(find.text('AI Suggest Price'), findsNothing);
+  });
+
+  testWidgets('an existing draft updates before requesting the suggestion', (
+    WidgetTester tester,
+  ) async {
+    final Listing draft = Listing.fromJson(
+      listingJson(id: 42, status: 'draft'),
+    );
+    final List<RecordedRequest> recorded = await pumpEditForm(
+      tester,
+      listing: draft,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'PATCH' &&
+            request.apiPath == '/seller/listings/42') {
+          return sellerListingResponse(
+            listing: listingJson(id: 42, status: 'draft'),
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/42/price-suggestion') {
+          return aiPriceSuggestionResponse(
+            estimate: aiPriceEstimateJson(listingId: 42),
+          );
+        }
+        return sellerListingListResponse();
+      },
+    );
+
+    await tapContinue(tester);
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+
+    expect(find.text('AI Price Suggestion'), findsOneWidget);
+    expect(find.text('Use This Price'), findsOneWidget);
+
+    final int patchIndex = recorded.indexWhere(
+      (RecordedRequest request) =>
+          request.method == 'PATCH' && request.apiPath == '/seller/listings/42',
+    );
+    final int suggestionIndex = recorded.indexWhere(
+      (RecordedRequest request) =>
+          request.method == 'POST' &&
+          request.apiPath == '/seller/listings/42/price-suggestion',
+    );
+    expect(patchIndex, greaterThanOrEqualTo(0));
+    expect(suggestionIndex, greaterThan(patchIndex));
+    expect(
+      recorded.where(
+        (RecordedRequest request) =>
+            request.method == 'POST' && request.apiPath == '/seller/listings',
+      ),
+      isEmpty,
+    );
   });
 
   testWidgets('a 422 opens the step that owns the field it names', (

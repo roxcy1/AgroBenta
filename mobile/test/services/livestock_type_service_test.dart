@@ -22,6 +22,16 @@ void main() {
                 {'value': 'carabao', 'label': 'Carabao'},
                 {'value': 'goat', 'label': 'Goat'},
                 {'value': 'swine', 'label': 'Swine'},
+                {
+                  'value': 'chicken',
+                  'label': 'Chicken',
+                  'breeds': [
+                    'boholano_native_chicken',
+                    'broiler',
+                    'improved_native_chicken',
+                    'layer',
+                  ],
+                },
               ],
             }),
             200,
@@ -38,6 +48,16 @@ void main() {
       'carabao',
       'goat',
       'swine',
+      'chicken',
     ]);
+
+    final chicken = types.singleWhere((type) => type.value == 'chicken');
+    expect(chicken.breeds, [
+      'boholano_native_chicken',
+      'broiler',
+      'improved_native_chicken',
+      'layer',
+    ]);
+    expect(chicken.breeds.contains('duck'), isFalse);
   });
 }

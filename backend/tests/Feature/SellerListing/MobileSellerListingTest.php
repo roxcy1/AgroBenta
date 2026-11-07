@@ -251,7 +251,7 @@ class MobileSellerListingTest extends TestCase
     {
         return [
             'capitalized' => ['Cattle'],
-            'outside scope' => ['chicken'],
+            'outside scope' => ['duck'],
             'free text' => ['Cow'],
         ];
     }
@@ -277,6 +277,7 @@ class MobileSellerListingTest extends TestCase
             'carabao' => ['carabao'],
             'goat' => ['goat'],
             'swine' => ['swine'],
+            'chicken' => ['chicken'],
         ];
     }
 
@@ -668,7 +669,7 @@ class MobileSellerListingTest extends TestCase
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->patchJson('/api/seller/listings/'.$listing->id, [
-                'livestock_type' => 'chicken',
+                'livestock_type' => 'duck',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('livestock_type');
@@ -684,7 +685,7 @@ class MobileSellerListingTest extends TestCase
     {
         $listing = $this->createListing($this->seller, [
             'status' => ListingStatus::Draft,
-            'livestock_type' => 'chicken',
+            'livestock_type' => 'duck',
         ]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
@@ -694,7 +695,7 @@ class MobileSellerListingTest extends TestCase
 
         $this->assertDatabaseHas('listings', [
             'id' => $listing->id,
-            'livestock_type' => 'chicken',
+            'livestock_type' => 'duck',
             'breed' => 'Angus',
         ]);
     }
@@ -704,7 +705,7 @@ class MobileSellerListingTest extends TestCase
     {
         $listing = $this->createListing($this->seller, [
             'status' => ListingStatus::Draft,
-            'livestock_type' => 'chicken',
+            'livestock_type' => 'duck',
         ]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
@@ -1037,7 +1038,7 @@ class MobileSellerListingTest extends TestCase
     {
         $listing = $this->createListing($this->seller, [
             'status' => ListingStatus::Draft,
-            'livestock_type' => 'chicken',
+            'livestock_type' => 'duck',
         ]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
@@ -1391,6 +1392,9 @@ class MobileSellerListingTest extends TestCase
                 // everything above. They change no listing status.
                 'POST api/seller/listings/{listing}/photos',
                 'DELETE api/seller/listings/{listing}/photos',
+                // Optional decision support; accepts no body and does not
+                // change asking_price or listing status.
+                'POST api/seller/listings/{listing}/price-suggestion',
             ],
             $sellerRoutes,
         );

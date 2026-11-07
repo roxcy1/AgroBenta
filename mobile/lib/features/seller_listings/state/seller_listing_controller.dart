@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../models/ai_price_estimate.dart';
 import '../../../models/listing.dart';
 import '../../../models/marketplace_page.dart';
 import '../../../repositories/seller_listing_repository.dart';
@@ -329,6 +330,91 @@ class SellerListingController extends ChangeNotifier {
       );
       return null;
     }
+  }
+
+  /// Requests an AI price suggestion for a draft. Returns the result, or `null`
+  /// when another action is already in flight.
+  ///
+  /// The endpoint is decision support only: it never writes `asking_price` and
+  /// never changes the listing lifecycle. The parsed result is also published in
+  /// [SellerListingState.priceSuggestion] so the form can render it.
+  Future<PriceSuggestionResult?> requestPriceSuggestion(int listingId) async {
+    if (_state.isActioning) {
+      return null;
+    }
+
+    _beginAction(SellerListingAction.suggestingPrice, listingId: listingId);
+
+    try {
+      final AiPriceEstimate estimate = await _repository.requestPriceSuggestion(
+        listingId,
+      );
+
+      if (_disposed) {
+        return null;
+      }
+
+      final PriceSuggestionResult result = PriceSuggestionResult(
+        outcome: estimate.isWarning
+            ? PriceSuggestionOutcome.warning
+            : PriceSuggestionOutcome.ok,
+        message: estimate.isWarning
+            ? 'The estimate is usable, but the model flagged the input.'
+            : 'Price suggestion generated.',
+        estimate: estimate,
+        warnings: estimate.warnings,
+        reasonCodes: estimate.reasonCodes,
+      );
+      _set(
+        _state.copyWith(
+          action: SellerListingAction.none,
+          clearActionListingId: true,
+          priceSuggestion: result,
+        ),
+      );
+      return result;
+    } on ApiException catch (error) {
+      if (_disposed) {
+        return null;
+      }
+      final PriceSuggestionResult result = _suggestionErrorFrom(error);
+      _set(
+        _state.copyWith(
+          action: SellerListingAction.none,
+          clearActionListingId: true,
+          priceSuggestion: result,
+        ),
+      );
+      return result;
+    } on Object {
+      if (_disposed) {
+        return null;
+      }
+      const PriceSuggestionResult result = PriceSuggestionResult(
+        outcome: PriceSuggestionOutcome.error,
+        message:
+            'The price suggestion could not be generated. Please try again.',
+      );
+      _set(
+        _state.copyWith(
+          action: SellerListingAction.none,
+          clearActionListingId: true,
+          priceSuggestion: result,
+        ),
+      );
+      return result;
+    }
+  }
+
+  /// Clears the form's current price suggestion.
+  ///
+  /// Called when a model input changes, so a result is never presented beside
+  /// values it was not produced from.
+  void clearPriceSuggestion() {
+    if (_state.priceSuggestion == null) {
+      return;
+    }
+    _set(_state.copyWith(clearPriceSuggestion: true));
   }
 
   /// Submits [listingId] for review. Returns the updated listing, or `null`.
@@ -905,9 +991,50 @@ class SellerListingController extends ChangeNotifier {
         clearActionError: true,
         clearConflict: true,
         clearActionMessage: true,
+        clearPriceSuggestion: true,
         validationErrors: const <String, List<String>>{},
       ),
     );
+  }
+
+  /// Converts a structured API refusal into the form's suggestion result.
+  ///
+  /// A price-suggestion `422` carries top-level `status`, `warnings` and
+  /// `reason_codes` rather than Laravel field errors. [ApiException.details]
+  /// preserves that body so the form can distinguish `withheld` from `invalid`,
+  /// and a `503` can remain visibly retryable.
+  PriceSuggestionResult _suggestionErrorFrom(ApiException error) {
+    final Map<String, dynamic> details = error.details;
+    final Object? serverStatus = details['status'];
+    final Object? serverMessage = details['message'];
+    final List<String> warnings = _stringList(details['warnings']);
+    final List<String> reasonCodes = _stringList(details['reason_codes']);
+
+    final PriceSuggestionOutcome outcome = switch (serverStatus) {
+      'withheld' => PriceSuggestionOutcome.withheld,
+      'invalid' => PriceSuggestionOutcome.invalid,
+      'unavailable' => PriceSuggestionOutcome.unavailable,
+      'error' => PriceSuggestionOutcome.error,
+      _ when error.kind == ApiErrorKind.validation =>
+        PriceSuggestionOutcome.invalid,
+      _ => PriceSuggestionOutcome.error,
+    };
+
+    return PriceSuggestionResult(
+      outcome: outcome,
+      message: serverMessage is String && serverMessage.trim().isNotEmpty
+          ? serverMessage
+          : error.message,
+      warnings: warnings,
+      reasonCodes: reasonCodes,
+    );
+  }
+
+  static List<String> _stringList(Object? value) {
+    if (value is! List) {
+      return const <String>[];
+    }
+    return value.whereType<String>().toList(growable: false);
   }
 
   void _endAction({required String message}) {

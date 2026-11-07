@@ -37,10 +37,56 @@ class LivestockTypeTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'data' => [
-                    ['value' => 'cattle', 'label' => 'Cattle'],
-                    ['value' => 'carabao', 'label' => 'Carabao'],
-                    ['value' => 'goat', 'label' => 'Goat'],
-                    ['value' => 'swine', 'label' => 'Swine'],
+                    [
+                        'value' => 'cattle',
+                        'label' => 'Cattle',
+                        'breeds' => [
+                            'brahman',
+                            'brahman_cross',
+                            'holstein_friesian',
+                            'philippine_native_cattle',
+                        ],
+                    ],
+                    [
+                        'value' => 'carabao',
+                        'label' => 'Carabao',
+                        'breeds' => [
+                            'murrah',
+                            'native_murrah_cross',
+                            'philippine_native_carabao',
+                        ],
+                    ],
+                    [
+                        'value' => 'goat',
+                        'label' => 'Goat',
+                        'breeds' => [
+                            'anglo_nubian',
+                            'boer',
+                            'saanen',
+                            'ubay_boholano_native_goat',
+                        ],
+                    ],
+                    [
+                        'value' => 'swine',
+                        'label' => 'Swine',
+                        'breeds' => [
+                            'duroc',
+                            'duroc_landrace_cross',
+                            'landrace',
+                            'large_white_yorkshire',
+                            'native_pig',
+                        ],
+                    ],
+                    [
+                        'value' => 'chicken',
+                        'label' => 'Chicken',
+                        'breeds' => [
+                            'boholano_native_chicken',
+                            'broiler',
+                            'improved_native_chicken',
+                            'layer',
+                        ],
+                    ],
                 ],
             ]);
     }
@@ -58,10 +104,56 @@ class LivestockTypeTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'data' => [
-                    ['value' => 'cattle', 'label' => 'Cattle'],
-                    ['value' => 'carabao', 'label' => 'Carabao'],
-                    ['value' => 'goat', 'label' => 'Goat'],
-                    ['value' => 'swine', 'label' => 'Swine'],
+                    [
+                        'value' => 'cattle',
+                        'label' => 'Cattle',
+                        'breeds' => [
+                            'brahman',
+                            'brahman_cross',
+                            'holstein_friesian',
+                            'philippine_native_cattle',
+                        ],
+                    ],
+                    [
+                        'value' => 'carabao',
+                        'label' => 'Carabao',
+                        'breeds' => [
+                            'murrah',
+                            'native_murrah_cross',
+                            'philippine_native_carabao',
+                        ],
+                    ],
+                    [
+                        'value' => 'goat',
+                        'label' => 'Goat',
+                        'breeds' => [
+                            'anglo_nubian',
+                            'boer',
+                            'saanen',
+                            'ubay_boholano_native_goat',
+                        ],
+                    ],
+                    [
+                        'value' => 'swine',
+                        'label' => 'Swine',
+                        'breeds' => [
+                            'duroc',
+                            'duroc_landrace_cross',
+                            'landrace',
+                            'large_white_yorkshire',
+                            'native_pig',
+                        ],
+                    ],
+                    [
+                        'value' => 'chicken',
+                        'label' => 'Chicken',
+                        'breeds' => [
+                            'boholano_native_chicken',
+                            'broiler',
+                            'improved_native_chicken',
+                            'layer',
+                        ],
+                    ],
                 ],
             ]);
     }

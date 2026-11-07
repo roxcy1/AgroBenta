@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerActivity\SellerActivityController;
 use App\Http\Controllers\Api\SellerDashboard\SellerDashboardController;
 use App\Http\Controllers\Api\SellerInquiry\SellerInquiryController;
+use App\Http\Controllers\Api\SellerListing\PriceSuggestionController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
@@ -136,6 +137,12 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     // another seller's id is a 404 here, never a 403 that confirms it exists.
     Route::post('/{listing}/photos', [SellerListingController::class, 'storePhotos']);
     Route::delete('/{listing}/photos', [SellerListingController::class, 'destroyPhoto']);
+
+    // Optional decision support for a seller's own draft listing. The listing
+    // carries the model inputs; the endpoint accepts no request body and never
+    // writes asking_price or a listing status.
+    Route::post('/{listing}/price-suggestion', [PriceSuggestionController::class, 'store'])
+        ->whereNumber('listing');
 });
 
 // Inquiries received by the caller as a seller. Read-only in this phase:

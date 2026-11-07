@@ -15,3 +15,6 @@ catboost_info/
 
 # Private local training data
 data/*.csv
+
+# Generated ML reports
+reports/

@@ -434,6 +434,10 @@ void main() {
 
       expect(chip('all').selected, isTrue);
       expect(find.text('Category:'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('browse-category-chicken')),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const ValueKey<String>('browse-category-swine')),

@@ -65,6 +65,16 @@ class SellerListingsHarness {
                     {'value': 'carabao', 'label': 'Carabao'},
                     {'value': 'goat', 'label': 'Goat'},
                     {'value': 'swine', 'label': 'Swine'},
+                    {
+                      'value': 'chicken',
+                      'label': 'Chicken',
+                      'breeds': [
+                        'boholano_native_chicken',
+                        'broiler',
+                        'improved_native_chicken',
+                        'layer',
+                      ],
+                    },
                   ],
                 }),
                 200,
@@ -131,6 +141,16 @@ class SellerListingsHarness {
                   {'value': 'carabao', 'label': 'Carabao'},
                   {'value': 'goat', 'label': 'Goat'},
                   {'value': 'swine', 'label': 'Swine'},
+                  {
+                    'value': 'chicken',
+                    'label': 'Chicken',
+                    'breeds': [
+                      'boholano_native_chicken',
+                      'broiler',
+                      'improved_native_chicken',
+                      'layer',
+                    ],
+                  },
                 ],
               }),
               200,

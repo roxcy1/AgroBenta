@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'listing_id', 'input_snapshot', 'estimated_min', 'estimated_max',
-    'estimated_value', 'basis', 'estimated_at',
+    'estimated_value', 'basis', 'status', 'provider_metadata', 'estimated_at',
 ])]
 class AiPriceEstimate extends Model
 {
@@ -21,6 +21,7 @@ class AiPriceEstimate extends Model
     {
         return [
             'input_snapshot' => 'array',
+            'provider_metadata' => 'array',
             'estimated_at' => 'datetime',
             'estimated_min' => 'decimal:2',
             'estimated_max' => 'decimal:2',

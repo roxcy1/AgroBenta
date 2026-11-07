@@ -22,6 +22,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Graphify generated outputs
+graphify-out/
+
 # Crash logs
 hs_err_pid*.log
 # Python ML environment

@@ -395,7 +395,9 @@ class _SearchAndFilters extends StatelessWidget {
           if (state.filters.livestockType.trim().isNotEmpty) ...<Widget>[
             const SizedBox(height: AppSpacing.xs),
             _ActiveCategoryIndicator(
-              label: _BrowseCategory.labelFor(state.filters.livestockType.trim()),
+              label: _BrowseCategory.labelFor(
+                state.filters.livestockType.trim(),
+              ),
               onClear: onClearCategory,
             ),
           ],
@@ -405,7 +407,7 @@ class _SearchAndFilters extends StatelessWidget {
   }
 }
 
-/// The five Browse categories, matching the Filter screen's Animal Type tiles.
+/// The Browse categories, matching the Filter screen's Animal Type tiles.
 class _BrowseCategory {
   const _BrowseCategory(this.label, this.value);
 
@@ -430,6 +432,7 @@ class _BrowseCategory {
     _BrowseCategory('Swine', 'swine'),
     _BrowseCategory('Goat', 'goat'),
     _BrowseCategory('Carabao', 'carabao'),
+    _BrowseCategory('Chicken', 'chicken'),
   ];
 }
 

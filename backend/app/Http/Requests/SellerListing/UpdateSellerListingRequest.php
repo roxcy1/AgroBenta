@@ -88,9 +88,17 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
                 return;
             }
 
+            $labels = array_map(
+                static fn (LivestockType $type): string => $type->label(),
+                LivestockType::cases(),
+            );
+
             $validator->errors()->add(
                 'livestock_type',
-                'This listing uses an unsupported livestock type. Choose Cattle, Carabao, Goat, or Swine before saving.',
+                sprintf(
+                    'This listing uses an unsupported livestock type. Choose %s before saving.',
+                    implode(', ', $labels),
+                ),
             );
         });
     }

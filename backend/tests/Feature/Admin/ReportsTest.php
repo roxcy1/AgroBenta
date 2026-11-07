@@ -174,7 +174,7 @@ class ReportsTest extends TestCase
     public function test_reports_keep_legacy_livestock_values_visible(): void
     {
         $listing = $this->createListing('active');
-        $listing->update(['livestock_type' => 'chicken']);
+        $listing->update(['livestock_type' => 'duck']);
 
         Transaction::create([
             'buyer_id' => $this->buyer->id,
@@ -191,12 +191,12 @@ class ReportsTest extends TestCase
         $response->assertStatus(200);
 
         $byType = collect($response->json('data.listings.by_type'))
-            ->firstWhere('type', 'chicken');
+            ->firstWhere('type', 'duck');
         $this->assertNotNull($byType);
         $this->assertEquals(1, $byType['count']);
 
         $byLivestock = collect($response->json('data.transactions.by_livestock'))
-            ->firstWhere('livestock_type', 'chicken');
+            ->firstWhere('livestock_type', 'duck');
         $this->assertNotNull($byLivestock);
         $this->assertEquals(1, $byLivestock['count']);
         $this->assertEquals(50000.00, $byLivestock['total_amount']);

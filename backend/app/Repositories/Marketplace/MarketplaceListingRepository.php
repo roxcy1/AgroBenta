@@ -70,7 +70,7 @@ class MarketplaceListingRepository
      *
      * @var list<string>
      */
-    public const POPULAR_TYPES = ['cattle', 'carabao', 'goat', 'swine'];
+    public const POPULAR_TYPES = ['cattle', 'carabao', 'goat', 'swine', 'chicken'];
 
     /**
      * Rank the canonical livestock categories by completed sales, newest window
