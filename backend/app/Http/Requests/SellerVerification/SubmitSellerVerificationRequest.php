@@ -4,6 +4,7 @@ namespace App\Http\Requests\SellerVerification;
 
 use App\Enums\GovernmentIdType;
 use App\Enums\SellerCapability;
+use App\Rules\TrinidadLocationAddressRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -53,7 +54,7 @@ class SubmitSellerVerificationRequest extends FormRequest
     {
         return [
             'phone' => ['required', 'string', 'max:32'],
-            'address' => ['required', 'string', 'max:191'],
+            'address' => ['required', 'string', 'max:191', new TrinidadLocationAddressRule],
             'business_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_location' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_description' => ['sometimes', 'nullable', 'string', 'max:2000'],

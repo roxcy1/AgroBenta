@@ -223,6 +223,128 @@ void main() {
     expect(submit.onPressed, isNotNull);
   });
 
+  testWidgets(
+    'submit confirmation actions stay horizontal on a narrow screen and Cancel does not submit',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final SellerListingsHarness harness = await SellerListingsHarness.pump(
+        tester,
+        handler: (RecordedRequest request) async => sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(
+              id: 1,
+              livestockType: 'Cattle',
+              status: 'draft',
+              photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+            ),
+          ],
+          total: 1,
+        ),
+      );
+
+      await tester.tap(find.widgetWithText(TextButton, 'Submit'));
+      await sellerListingsSettle(tester);
+
+      expect(find.text('Submit for review?'), findsOneWidget);
+      expect(
+        find.text(
+          'An administrator will review this listing. Once submitted you cannot '
+          'change or resubmit it yourself.',
+        ),
+        findsOneWidget,
+      );
+
+      final Finder submitButton = find.byKey(
+        const ValueKey<String>('submit-for-review-confirm'),
+      );
+      final Finder cancelButton = find.byKey(
+        const ValueKey<String>('cancel-submit-for-review'),
+      );
+      expect(submitButton, findsOneWidget);
+      expect(cancelButton, findsOneWidget);
+      expect(
+        tester.getCenter(submitButton).dx,
+        lessThan(tester.getCenter(cancelButton).dx),
+      );
+      expect(
+        tester.getRect(submitButton).height,
+        tester.getRect(cancelButton).height,
+      );
+      expect(
+        tester.getRect(submitButton).width,
+        greaterThan(tester.getRect(cancelButton).width),
+      );
+      expect(tester.takeException(), isNull);
+
+      final int requestCount = harness.recorded.length;
+      await tester.tap(cancelButton);
+      await sellerListingsSettle(tester);
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(harness.recorded.length, requestCount);
+      expect(
+        harness.recorded.where(
+          (RecordedRequest request) =>
+              request.apiPath.endsWith('/submit') && request.method == 'POST',
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets('Submit for review still invokes the existing submission flow', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/1/submit') {
+          return sellerListingResponse(
+            listing: listingJson(
+              id: 1,
+              livestockType: 'Cattle',
+              status: 'pending',
+              photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+            ),
+          );
+        }
+
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(
+              id: 1,
+              livestockType: 'Cattle',
+              status: 'draft',
+              photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+            ),
+          ],
+          total: 1,
+        );
+      },
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, 'Submit'));
+    await sellerListingsSettle(tester);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('submit-for-review-confirm')),
+    );
+    await sellerListingsSettle(tester);
+
+    expect(
+      harness.recorded.where(
+        (RecordedRequest request) =>
+            request.method == 'POST' &&
+            request.apiPath == '/seller/listings/1/submit',
+      ),
+      hasLength(1),
+    );
+    expect(find.text('Pending review'), findsWidgets);
+  });
+
   testWidgets('the detail screen blocks submit for a draft without photos', (
     WidgetTester tester,
   ) async {

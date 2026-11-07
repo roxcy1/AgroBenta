@@ -1,12 +1,14 @@
 import type { DashboardRecentListing } from '../api/useDashboard';
 import { formatCurrency, formatDate } from './dashboardFormat';
 import { StatusBadge } from './StatusBadge';
+import { livestockTypeLabel, useLivestockTypes } from '../livestock/api/useLivestockTypes';
 
 interface RecentListingsTableProps {
   listings: DashboardRecentListing[];
 }
 
 export function RecentListingsTable({ listings }: RecentListingsTableProps) {
+  const { data: livestockTypes } = useLivestockTypes();
   if (listings.length === 0) {
     return (
       <div className="dashboard-empty-state">
@@ -31,7 +33,7 @@ export function RecentListingsTable({ listings }: RecentListingsTableProps) {
         <tbody>
           {listings.map((listing) => (
             <tr key={listing.id}>
-              <td className="lv-name-cell">{listing.livestock_type}</td>
+              <td className="lv-name-cell">{livestockTypeLabel(listing.livestock_type, livestockTypes)}</td>
               <td>{listing.breed ?? '—'}</td>
               <td className="lv-price-cell">{formatCurrency(listing.asking_price)}</td>
               <td>

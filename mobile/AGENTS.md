@@ -910,12 +910,12 @@ exist. Nothing missing here has been worked around in the app.
 
 Report these; do not decide them unilaterally.
 
-* **`livestock_type` categories.** The manuscript limits listings to
-  **cattle, carabao, goat and swine** (functional documentation §4.1), but
-  `listings.livestock_type` is still a plain `string` with no validation list,
-  and the prototype also shows "Others" (open item MS-03). Where the list lives
-  — backend validation exposed through an endpoint, or app constants — is
-  still to be decided; do not hard-code a different list.
+* **`livestock_type` categories — resolved by DEC-06.** The supported values
+  are Cattle, Carabao, Goat, Swine and Chicken. The backend's authenticated
+  `/livestock-types` catalog provides labels and optional breed choices; use it
+  rather than duplicating the list in the app. Historical unsupported values
+  remain readable and must not be silently rewritten. The manuscript should be
+  updated to reflect the project decision (§4.1, MS-03).
 * **Currency and locale.** The Admin Web formats as `₱` / `en-PH`. The schema
   has no currency column. Assume PHP peso until told otherwise, and centralise
   the formatter so it is a one-line change.

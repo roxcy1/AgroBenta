@@ -65,6 +65,26 @@ void main() {
     matching: find.byType(DropdownButtonFormField<String>),
   );
 
+  Finder breedDropdown() => find.ancestor(
+    of: find.text('Breed (optional)'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
+  Finder genderDropdown() => find.ancestor(
+    of: find.text('Gender'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
+  Finder weightUnitDropdown() => find.ancestor(
+    of: find.text('Weight unit'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
+  Finder locationBarangayDropdown() => find.ancestor(
+    of: find.text('Barangay'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
   String? fieldError(WidgetTester tester, String label) {
     if (label == 'Type of livestock') {
       return tester
@@ -84,6 +104,40 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(label).last);
     await tester.pumpAndSettle();
+  }
+
+  Future<void> selectBreed(WidgetTester tester, String label) async {
+    await tester.tap(breedDropdown());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> selectOption(
+    WidgetTester tester,
+    Finder dropdown,
+    String label,
+  ) async {
+    await tester.ensureVisible(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> selectListingLocation(
+    WidgetTester tester, {
+    required String barangay,
+    String street = '',
+  }) async {
+    await selectOption(tester, locationBarangayDropdown(), barangay);
+    if (street.isNotEmpty) {
+      final Finder streetField = field('Street / Purok (optional)');
+      await tester.ensureVisible(streetField);
+      await tester.enterText(streetField, street);
+      await tester.pump();
+    }
   }
 
   Future<void> selectAgeUnit(WidgetTester tester, String label) async {
@@ -131,7 +185,11 @@ void main() {
 
     await tester.enterText(field('Quantity available'), '2');
     await tester.enterText(field('Asking price'), '42500');
-    await tester.enterText(field('Location'), 'Trinidad, Bohol');
+    await selectListingLocation(
+      tester,
+      barangay: 'Banlasan',
+      street: 'Purok 3',
+    );
     await tester.pump();
     await tapContinue(tester);
   }
@@ -171,6 +229,21 @@ void main() {
       expect(dropdown.autovalidateMode, AutovalidateMode.onUserInteraction);
     }
   });
+
+  testWidgets(
+    'breed choices follow the selected category and reset on change',
+    (WidgetTester tester) async {
+      await openForm(tester, handler: emptyListHandler);
+
+      await selectLivestockType(tester, 'Chicken');
+      await selectBreed(tester, 'Broiler');
+      expect(find.text('Broiler'), findsOneWidget);
+
+      await selectLivestockType(tester, 'Goat');
+      expect(find.text('No breed selected'), findsOneWidget);
+      expect(find.text('Broiler'), findsNothing);
+    },
+  );
 
   testWidgets('rejects pasted text instead of stripping or rounding it', (
     WidgetTester tester,
@@ -252,6 +325,100 @@ void main() {
     expect(find.text('Enter how many head are available.'), findsNothing);
   });
 
+  testWidgets('Review back arrow preserves values and makes no API request', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await openForm(
+      tester,
+      handler: emptyListHandler,
+    );
+    harness.controller.addPickedPhotos(<XFile>[
+      XFile.fromData(_pngBytes, path: 'review-photo.png'),
+    ]);
+    await tester.pump();
+
+    await selectLivestockType(tester, 'Cattle');
+    await selectBreed(tester, 'Brahman');
+    await tester.enterText(field('Age'), '5');
+    await selectAgeUnit(tester, 'Year');
+    await tester.enterText(field('Weight'), '350');
+    await selectOption(tester, weightUnitDropdown(), 'Kilograms');
+    await tapContinue(tester);
+
+    await tester.enterText(field('Quantity available'), '2');
+    await tester.enterText(field('Asking price'), '42500');
+    await selectListingLocation(
+      tester,
+      barangay: 'Banlasan',
+      street: 'Purok 3',
+    );
+    await selectOption(tester, genderDropdown(), 'Female');
+    await tapContinue(tester);
+    expect(currentStep(tester), 2);
+
+    expect(find.text('Cattle'), findsOneWidget);
+    expect(find.text('Brahman'), findsOneWidget);
+    expect(find.text('5 year'), findsOneWidget);
+    expect(find.text('female'), findsOneWidget);
+    expect(find.text('350 kg'), findsOneWidget);
+    expect(find.text('2'), findsWidgets);
+    expect(find.text('₱ 42500'), findsOneWidget);
+    expect(
+      find.text('Purok 3, Barangay Banlasan, Trinidad, Bohol'),
+      findsOneWidget,
+    );
+    expect(harness.controller.photos, hasLength(1));
+
+    final int requestsBeforeBack = harness.recorded.length;
+    final Finder reviewBack = find.byKey(
+      const ValueKey<String>('listing-review-back'),
+    );
+    final Finder saveDraft = find.widgetWithText(FilledButton, 'Save as draft');
+    expect(reviewBack, findsOneWidget);
+    expect(
+      tester.getCenter(reviewBack).dx,
+      lessThan(tester.getCenter(saveDraft).dx),
+    );
+    await tapFormControl(tester, reviewBack);
+
+    expect(currentStep(tester), 1);
+    expect(fieldText(tester, 'Quantity available'), '2');
+    expect(fieldText(tester, 'Asking price'), '42500');
+    expect(
+      tester
+          .widget<TextFormField>(field('Street / Purok (optional)'))
+          .controller!
+          .text,
+      'Purok 3',
+    );
+    expect(harness.recorded.length, requestsBeforeBack);
+    expect(harness.controller.photos, hasLength(1));
+
+    await tester.enterText(field('Asking price'), '50000');
+    await selectListingLocation(tester, barangay: 'Bongbong');
+    await selectOption(tester, genderDropdown(), 'Male');
+    await tapContinue(tester);
+
+    expect(currentStep(tester), 2);
+    expect(find.text('Cattle'), findsOneWidget);
+    expect(find.text('Brahman'), findsOneWidget);
+    expect(find.text('5 year'), findsOneWidget);
+    expect(find.text('male'), findsOneWidget);
+    expect(find.text('350 kg'), findsOneWidget);
+    expect(find.text('₱ 50000'), findsOneWidget);
+    expect(
+      find.text('Purok 3, Barangay Bongbong, Trinidad, Bohol'),
+      findsOneWidget,
+    );
+    expect(
+      harness.recorded.where(
+        (RecordedRequest request) =>
+            request.method == 'POST' && request.apiPath == '/seller/listings',
+      ),
+      isEmpty,
+    );
+  });
+
   testWidgets('a valid form posts a create request and closes', (
     WidgetTester tester,
   ) async {
@@ -274,7 +441,7 @@ void main() {
 
     await tester.enterText(field('Quantity available'), '2');
     await tester.enterText(field('Asking price'), '42500');
-    await tester.enterText(field('Location'), 'Trinidad, Bohol');
+    await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
     await tapContinue(tester);
 
@@ -288,7 +455,7 @@ void main() {
     expect(posts.single.body['livestock_type'], 'cattle');
     expect(posts.single.body['quantity'], 2);
     expect(posts.single.body['asking_price'], '42500');
-    expect(posts.single.body['location'], 'Trinidad, Bohol');
+    expect(posts.single.body['location'], 'Barangay Banlasan, Trinidad, Bohol');
     // The client never sends a status; the server decides it.
     expect(posts.single.body.containsKey('status'), isFalse);
 
@@ -319,7 +486,7 @@ void main() {
 
     await tester.enterText(field('Quantity available'), '2');
     await tester.enterText(field('Asking price'), '42500');
-    await tester.enterText(field('Location'), 'Trinidad, Bohol');
+    await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
     await tapContinue(tester);
 
@@ -367,7 +534,7 @@ void main() {
 
     await tester.enterText(field('Quantity available'), '2');
     await tester.enterText(field('Asking price'), '42500');
-    await tester.enterText(field('Location'), 'Trinidad, Bohol');
+    await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
     await tapContinue(tester);
     expect(currentStep(tester), 2);

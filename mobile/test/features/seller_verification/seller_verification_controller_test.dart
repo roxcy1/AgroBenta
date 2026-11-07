@@ -179,7 +179,7 @@ void main() {
       await controller.load();
       final bool created = await controller.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
       await Future<void>.delayed(Duration.zero);
@@ -208,7 +208,7 @@ void main() {
 
       final bool created = await controller.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
 
@@ -237,12 +237,12 @@ void main() {
 
       final Future<bool> first = controller.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
       final bool second = await controller.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
 
@@ -277,7 +277,7 @@ void main() {
 
       final bool created = await controller.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: '',
       );
 
@@ -311,7 +311,7 @@ void main() {
 
         await controller.submit(
           phone: '09171234567',
-          address: 'Trinidad, Bohol',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
           businessName: '',
         );
 
@@ -339,7 +339,7 @@ void main() {
 
       final bool created = await controller.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
       await Future<void>.delayed(Duration.zero);
@@ -365,7 +365,7 @@ void main() {
 
       await controller.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
 
@@ -386,7 +386,7 @@ void main() {
       await controller.load();
       await controller.submit(
         phone: '09171234567',
-        address: 'Trinidad, Bohol',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
 

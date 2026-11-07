@@ -232,6 +232,12 @@ Rules:
 | "Remember me" | Shown on the login prototype. **[OPEN]** (§13, MS-11). |
 | Google / Facebook sign-in | Shown on the login prototype. **[OPEN]** (§13, MS-11). |
 
+**Address editing [DEC-07, project-owner decision 2026-11-07]:** profile
+addresses remain optional. When supplied, the app uses the shared Trinidad
+barangay catalog and stores the canonical address string described in §3.3.
+Existing addresses that cannot be matched to that catalog remain unchanged
+until the user explicitly replaces them.
+
 ---
 
 ## 3. Seller verification
@@ -282,6 +288,15 @@ Exactly four. These match the manuscript ERD. **[MS p.94]**
 | Farm / business name | **no** — shown as optional in the prototype | Project decision, 2026-11-03 (§13, MS-05). |
 | Business description | no | Existing field. |
 | `id_document_ref` | no | Existing free-text reference field. Not shown in the prototype. |
+
+**Address format [DEC-07, project-owner decision 2026-11-07]:** the municipality
+catalog supplies the 20 barangay names. New addresses use
+`[optional street/purok], Barangay [name], Trinidad, Bohol`; the prefix is
+omitted when blank. The fixed UI labels `Central Visayas (Region VII)` and
+`Bohol` are not stored as address fields. The catalog has no PSGC codes. Seller
+verification requires a selected barangay and a canonical address; unmatched
+legacy addresses are preserved for display but must be replaced before
+submission.
 
 **Supporting documents** — uploaded files, reviewed by an administrator:
 
@@ -340,7 +355,7 @@ The marketplace inventory unit. Owned by exactly one seller.
 | Ownership assignment | Set by the server from the authenticated user. **Never accepted from the client.** |
 | Status | `draft`, `pending`, `active`, `sold`, `inactive`. **[MS ERD p.94]** |
 | Default status | `draft`. |
-| Category | `livestock_type`: **cattle, carabao, goat, swine** (§4.1). |
+| Category | `livestock_type`: **cattle, carabao, goat, swine, chicken** (§4.1). |
 | Title | Shown as required in the prototype **[MS-P Figure 22]**; there is no title column in the ERD — see §13, MS-08. |
 | Description | Required in the prototype (up to 500 characters). |
 | Price | `asking_price`, set by the seller; at most two decimal places **[DEC-02]** (§4.7). |
@@ -351,21 +366,34 @@ The marketplace inventory unit. Owned by exactly one seller.
 | Sex | `gender`: `male` / `female`. Optional. |
 | Condition | `health_status`, free text. Optional. |
 | Vaccination | `vaccination`, free text. Optional. |
-| Location | Required. Within the locale (§1). |
+| Location | Required. Within the locale (§1); new or edited values use the shared Trinidad barangay catalog and canonical address string **[DEC-07]**. |
 | Photos | At least one photo **[MS-P Figure 22]**, required at submission **[DEC-03]**. A draft may have none (§4.5). Stored in `listings.photos` (JSON). |
 
 Listing information follows **[MS p.14]**: *"livestock category, breed, age,
 sex, weight, condition, location, images, description, and asking price."*
 
-### 4.1 Livestock categories **[MS p.13, Limitation 2]**
+### 4.1 Livestock categories **[MS p.13, Limitation 2; DEC-06]**
 
-The initial implementation covers exactly **cattle, carabao, goats and swine**.
-`livestock_type` must be one of these four.
+The project-owner decision resolving MS-03 adopts **Cattle, Carabao, Goat,
+Swine and Chicken** as the supported listing categories. `livestock_type` must
+be one of these five for new or updated listings. The database column remains a
+string; no schema change is required. Historical values outside this catalog
+remain readable and must not be silently normalized.
 
-* Enforce this in request validation and offer the four as choices in the
-  mobile form. A schema change is not required.
-* The prototype's "Others" option and the "Native Chicken" sample listing are
-  outside the written scope — see §13, MS-03.
+The backend catalog (`GET /api/livestock-types`) is the source for category
+labels and the optional breed choices:
+
+| Category | Breed choices |
+|---|---|
+| Cattle | Philippine Native Cattle; Brahman; Holstein Friesian; Brahman Cross |
+| Carabao | Philippine Native Carabao; Murrah; Native–Murrah Cross |
+| Goat | Ubay/Boholano Native Goat; Boer; Anglo-Nubian; Saanen |
+| Swine | Native Pig; Landrace; Large White (Yorkshire); Duroc; Duroc–Landrace Cross |
+| Chicken | Boholano Native Chicken; Broiler; Layer; Improved Native Chicken |
+
+Breed is optional. New catalog breed selections must belong to the selected
+category. An unchanged historical free-text breed remains readable while its
+listing is edited; changing the category clears that incompatible value.
 
 ### 4.2 Only verified sellers may create listings
 
@@ -884,7 +912,7 @@ for the manuscript's author.
 |---|---|---|
 | ~~DG-01~~ | The planning original was not in Git | The manuscript is the final document (§0). |
 | ~~OQ-03~~ | Estimation method | An **external AI API** through the backend (§5.3). The provider is still open (MS-09). |
-| ~~OQ-04~~ | Controlled vocabulary for `livestock_type` | **Cattle, carabao, goat, swine** (§4.1). |
+| ~~OQ-04~~ | Controlled vocabulary for `livestock_type` | **Cattle, Carabao, Goat, Swine and Chicken** (DEC-06, §4.1). |
 | ~~OQ-06~~ | Notification types (partly) | Verification updates and transaction status changes (§7). The full list is MS-15. |
 | ~~OQ-15 / A-03~~ | Who confirms completion | **Seller accepts, buyer confirms receipt** (§6.4). |
 | ~~D-13~~ | Can buyers see a price suggestion? | **Yes**, as a reference **[MS p.48]** (§5.1). |
@@ -898,7 +926,6 @@ for the manuscript's author.
 |---|---|
 | **MS-01** | **Listing publication:** may a seller publish directly (prototype Figure 22, "Status: Active" / "Publish Listing"), or must an administrator approve first (class diagram p.88)? |
 | **MS-02** | **Reactivation:** may a sold or inactive listing be put back on sale ("Reactivate Listing", Figure 23)? |
-| **MS-03** | **Categories:** the prototype shows "Others", "Pig" and a "Native Chicken" sample, and omits carabao. Are only cattle, carabao, goats and swine allowed? |
 | **MS-04** | **Diagrams:** will the class diagrams (Payment, Conversation, JWT, `role: seller`, `archived`) be redrawn to match the ERD and the text? |
 | **MS-05** | **Verification documents:** Should the selfie the current app asks for be removed? ~~Confirm Valid ID + Proof of Address + Farm Photos (optional).~~ Implemented as in Figure 19. ~~Is the farm/business name optional?~~ Yes (project decision, 2026-11-03; see §3.3). |
 | **MS-06** | **Editing an application:** may a pending application be edited ("Edit Application", Figure 19), given that resubmission creates a new record? |
@@ -940,7 +967,19 @@ available (§0.1).
 | **DEC-02** | Decimal precision | Weight and asking price accept at most two decimal places; a third decimal is rejected (§4.7). |
 | **DEC-03** | Listing photos | A draft may have none; submission requires at least one stored photo, and admin approval refuses a zero-photo `pending` listing as a legacy guard (§4.4 rule 8, §4.5). |
 
+### 13.5 Closed by project-owner decision (2026-11-05)
+
+| ID | Item | Resolution |
+|---|---|---|
+| **DEC-06 / MS-03** | Livestock categories and breed choices | Adopt Cattle, Carabao, Goat, Swine and Chicken, with the optional breed catalog in §4.1. This project decision resolves the open category question; the manuscript should be updated to reflect the Chicken category and prototype choices. |
+
 MS-08 (listing title) remains open in §13.2. No title field or column is added.
+
+### 13.6 Closed by project-owner decision (2026-11-07)
+
+| ID | Item | Resolution |
+|---|---|---|
+| **DEC-07** | Trinidad addresses | Use the backend-owned 20-barangay catalog; new values use the canonical format in §3.3. Seller verification and listing locations are required, while profile location remains optional. Preserve unmatched legacy values until explicitly replaced; they must be corrected before listing submission for review. Existing string fields are reused without a schema change. |
 
 ---
 
@@ -971,4 +1010,6 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-03 | Part of MS-05 decided: the farm/business name is optional, and Proof of Address and Farm photos are implemented (§3.3, Figure 19). Whether to remove the selfie remains open, and MS-07 is unchanged. |
 | 2026-11-05 | **[DEC-05]** Per-user Account Mode preference is retained across logout and restored for the same authenticated user. This replaces the earlier logout-clear behavior in §2.7 rule 6; preferences are keyed by user ID and permission-checked on restoration. |
 | 2026-11-04 | **[DEC-04]** Government ID type selection and two-sided image capture, including the applicant's explicit no-back declaration, were specified by the project owner. This does not change the existing selfie, Proof of Address, privacy, review, or resubmission rules (§3.3). |
+| 2026-11-05 | **[DEC-06]** Resolved MS-03 by adopting Chicken alongside Cattle, Carabao, Goat and Swine, and approved the optional type-dependent breed catalog (§4.1). The manuscript remains to be updated. |
+| 2026-11-07 | **[DEC-07]** Adopted a backend-owned Trinidad barangay catalog and canonical address format (§2.8, §3.3, §4, §13.6). Profile location remains optional; seller verification and listing locations require a catalog barangay. Legacy values are preserved until replaced, with listing values corrected before submission. No PSGC codes or schema changes are introduced. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

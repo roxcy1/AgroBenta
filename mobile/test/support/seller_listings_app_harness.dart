@@ -17,6 +17,60 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'seller_listing_fakes.dart';
+import 'trinidad_location_fakes.dart';
+
+const List<Map<String, Object>> _livestockTypeOptions = <Map<String, Object>>[
+  <String, Object>{
+    'value': 'cattle',
+    'label': 'Cattle',
+    'breeds': <String>[
+      'Philippine Native Cattle',
+      'Brahman',
+      'Holstein Friesian',
+      'Brahman Cross',
+    ],
+  },
+  <String, Object>{
+    'value': 'carabao',
+    'label': 'Carabao',
+    'breeds': <String>[
+      'Philippine Native Carabao',
+      'Murrah',
+      'Native–Murrah Cross',
+    ],
+  },
+  <String, Object>{
+    'value': 'goat',
+    'label': 'Goat',
+    'breeds': <String>[
+      'Ubay/Boholano Native Goat',
+      'Boer',
+      'Anglo-Nubian',
+      'Saanen',
+    ],
+  },
+  <String, Object>{
+    'value': 'swine',
+    'label': 'Swine',
+    'breeds': <String>[
+      'Native Pig',
+      'Landrace',
+      'Large White (Yorkshire)',
+      'Duroc',
+      'Duroc–Landrace Cross',
+    ],
+  },
+  <String, Object>{
+    'value': 'chicken',
+    'label': 'Chicken',
+    'breeds': <String>[
+      'Boholano Native Chicken',
+      'Broiler',
+      'Layer',
+      'Improved Native Chicken',
+    ],
+  },
+];
 
 /// Pumps My Listings over a mock transport, with the same `SellerListingScope`
 /// shape `main.dart` installs.
@@ -59,14 +113,7 @@ class SellerListingsHarness {
           httpClient: MockClient((http.Request request) async {
             if (request.url.path.endsWith('/livestock-types')) {
               return http.Response(
-                jsonEncode({
-                  'data': [
-                    {'value': 'cattle', 'label': 'Cattle'},
-                    {'value': 'carabao', 'label': 'Carabao'},
-                    {'value': 'goat', 'label': 'Goat'},
-                    {'value': 'swine', 'label': 'Swine'},
-                  ],
-                }),
+                jsonEncode({'data': _livestockTypeOptions}),
                 200,
                 headers: const {'content-type': 'application/json'},
               );
@@ -84,15 +131,18 @@ class SellerListingsHarness {
     await catalogController.ensureLoaded();
 
     await tester.pumpWidget(
-      LivestockTypesScope(
-        repository: catalogRepository,
-        controller: catalogController,
-        child: SellerListingScope(
-          repository: repository,
-          controller: controller,
-          child: MaterialApp(
-            theme: AppTheme.light(),
-            home: const SellerListingsScreen(),
+      TrinidadLocationTestScope(
+        tokenStore: tokenStore,
+        child: LivestockTypesScope(
+          repository: catalogRepository,
+          controller: catalogController,
+          child: SellerListingScope(
+            repository: repository,
+            controller: controller,
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: const SellerListingsScreen(),
+            ),
           ),
         ),
       ),
@@ -125,14 +175,7 @@ class SellerListingsHarness {
           tokenStorage: tokenStore,
           httpClient: MockClient(
             (http.Request request) async => http.Response(
-              jsonEncode({
-                'data': [
-                  {'value': 'cattle', 'label': 'Cattle'},
-                  {'value': 'carabao', 'label': 'Carabao'},
-                  {'value': 'goat', 'label': 'Goat'},
-                  {'value': 'swine', 'label': 'Swine'},
-                ],
-              }),
+              jsonEncode({'data': _livestockTypeOptions}),
               200,
               headers: const {'content-type': 'application/json'},
             ),
@@ -148,15 +191,18 @@ class SellerListingsHarness {
     await catalogController.ensureLoaded();
 
     await tester.pumpWidget(
-      LivestockTypesScope(
-        repository: catalogRepository,
-        controller: catalogController,
-        child: SellerListingScope(
-          repository: repository,
-          controller: controller,
-          child: MaterialApp(
-            theme: AppTheme.light(),
-            home: const SellerListingsScreen(),
+      TrinidadLocationTestScope(
+        tokenStore: tokenStore,
+        child: LivestockTypesScope(
+          repository: catalogRepository,
+          controller: catalogController,
+          child: SellerListingScope(
+            repository: repository,
+            controller: controller,
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: const SellerListingsScreen(),
+            ),
           ),
         ),
       ),

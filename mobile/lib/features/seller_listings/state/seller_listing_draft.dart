@@ -14,6 +14,7 @@ import '../../../models/listing.dart';
 /// sending `null`. That is the honest encoding of a form, and on a PATCH it is
 /// also the correct one: the server treats an absent field as "leave it alone",
 /// so a null would be asking to clear a value the seller never touched.
+/// `clearBreed` is the explicit user action that opts into sending `breed: null`.
 ///
 /// It also sidesteps a genuine ambiguity. `age_value`/`age_unit` and
 /// `weight_value`/`weight_unit` are required in pairs, and the contract expresses
@@ -33,6 +34,7 @@ class SellerListingDraft {
   const SellerListingDraft({
     this.livestockType = '',
     this.breed = '',
+    this.clearBreed = false,
     this.ageValue = '',
     this.ageUnit,
     this.gender,
@@ -79,6 +81,7 @@ class SellerListingDraft {
   /// make it possible to save a body that does not match what is on screen.
   final String livestockType;
   final String breed;
+  final bool clearBreed;
   final String ageValue;
   final String? ageUnit;
   final String? gender;
@@ -111,7 +114,11 @@ class SellerListingDraft {
         case 'livestock_type':
           put(key, livestockType);
         case 'breed':
-          put(key, breed);
+          if (clearBreed) {
+            body[key] = null;
+          } else {
+            put(key, breed);
+          }
         case 'age_value':
           // Integer per the contract. Parsed with `tryParse` rather than
           // `parse`: the form validates before it gets here, but a draft can
