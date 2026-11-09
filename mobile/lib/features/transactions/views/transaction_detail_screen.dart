@@ -17,12 +17,12 @@ import 'transaction_status_screen.dart';
 ///
 /// Takes a [transactionId] and nothing else. The list object is deliberately
 /// not passed in: the whole point of re-fetching is that a transaction may
-/// have left `pending` since it was listed, and seeding the screen with the
-/// list copy would show a stale state for a moment.
+/// have changed since it was listed, and seeding the screen with the list copy
+/// would show a stale state for a moment.
 ///
-/// There is deliberately **no "Mark complete" affordance**. The backend
-/// answers that transition with 501 (OQ-15) and the client hides it entirely
-/// — a button that always errors is worse than no button.
+/// Action buttons come only from the server's `permitted_actions`: the seller
+/// sees at most one next fulfillment step, the buyer sees Confirm Received only
+/// after pickup/delivery, and cancellation disappears after the backend cutoff.
 class TransactionDetailScreen extends StatelessWidget {
   const TransactionDetailScreen({required this.transactionId, super.key});
 
@@ -105,10 +105,15 @@ class _DetailBodyState extends State<_DetailBody> {
         return TransactionDetailContent(
           transaction: transaction,
           isCancelling: state.isCancelling,
+          isUpdating: state.isUpdating,
+          activeAction: state.activeAction,
           cancelErrorMessage: state.cancelErrorMessage,
+          actionErrorMessage: state.actionErrorMessage,
           canCancel: state.canCancel,
           onCancel: () => _confirmCancel(transaction),
           onDismissCancelError: _controller.clearCancelError,
+          onDismissActionError: _controller.clearActionError,
+          onAction: _confirmAction,
           onMessageCounterparty: () => _openThread(context, transaction),
           onViewStatus: () => _openStatus(context, transaction),
         );
@@ -189,6 +194,78 @@ class _DetailBodyState extends State<_DetailBody> {
     );
     if (confirmed == true && mounted) {
       await _controller.cancel();
+    }
+  }
+
+  /// Confirms one server-permitted fulfillment action, then calls it.
+  Future<void> _confirmAction(TransactionFulfillmentAction action) async {
+    final (String title, String body, String confirmLabel) = switch (action) {
+      TransactionFulfillmentAction.preparing => (
+        'Start preparing?',
+        'The buyer will see that preparation has started.',
+        'Start Preparing',
+      ),
+      TransactionFulfillmentAction.readyForPickup => (
+        'Mark ready for pickup?',
+        'The buyer will see that the livestock is ready for pickup.',
+        'Mark Ready',
+      ),
+      TransactionFulfillmentAction.pickedUp => (
+        'Confirm handover?',
+        'The buyer will be asked to confirm receipt. Cancellation is no longer '
+            'available after handover.',
+        'Confirm Handover',
+      ),
+      TransactionFulfillmentAction.onTheWay => (
+        'Mark on the way?',
+        'The buyer will see that the livestock has been dispatched. '
+            'Cancellation is no longer available after dispatch.',
+        'Mark On the Way',
+      ),
+      TransactionFulfillmentAction.delivered => (
+        'Mark delivered?',
+        'The buyer will be asked to confirm receipt when they have the '
+            'livestock.',
+        'Mark Delivered',
+      ),
+      TransactionFulfillmentAction.confirmReceived => (
+        'Confirm receipt?',
+        'This confirms you received the livestock. The transaction will be '
+            'completed and cannot be changed.',
+        'Confirm Received',
+      ),
+    };
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final bool succeeded = await _controller.performAction(action);
+    if (!mounted) {
+      return;
+    }
+    if (succeeded) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(action.successMessage)));
     }
   }
 }

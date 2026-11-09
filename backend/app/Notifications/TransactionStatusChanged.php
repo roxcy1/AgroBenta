@@ -11,9 +11,9 @@ use Illuminate\Notifications\Notification;
  *
  * Fired to the **counterparty** (the party that did not make the change).
  *
- * Currently triggered when a transaction is cancelled (`pending -> cancelled`).
- * When the `complete` transition is implemented (currently blocked by OQ-15),
- * this same class will fire with `newStatus = 'completed'`.
+ * Triggered when a transaction is cancelled (`pending -> cancelled`) and when
+ * the buyer confirms receipt (`pending -> completed`). Fulfillment-stage changes
+ * use `TransactionFulfillmentChanged` so the transaction status is not implied.
  */
 class TransactionStatusChanged extends Notification
 {
@@ -24,8 +24,7 @@ class TransactionStatusChanged extends Notification
         public readonly int $actorId,
         public readonly string $oldStatus,
         public readonly string $newStatus,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<int, string>

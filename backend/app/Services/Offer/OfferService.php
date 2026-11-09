@@ -8,9 +8,11 @@ use App\Enums\OfferStatus;
 use App\Models\Offer;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Notifications\TransactionCreated;
 use App\Repositories\Offer\OfferRepository;
 use App\Repositories\Transaction\TransactionRepository;
 use App\Services\ActivityLogger;
+use App\Services\Listing\ListingReservationService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -24,12 +26,10 @@ use Illuminate\Support\Facades\DB;
  * is terminal.
  *
  * Accepting an offer creates exactly one `pending` transaction using the
- * agreed `proposed_amount` as `total_amount`. Transaction completion
- * (buyer confirms receipt) remains blocked by OQ-15 — the backend's
- * `POST /transactions/{id}/complete` answers 501 — so an accepted offer
- * yields a `pending` transaction that awaits that decision. This mirrors
- * functional documentation §6.4 (seller accepts, then buyer confirms receipt)
- * without inventing a completion actor.
+ * agreed `proposed_amount` as `total_amount`, and atomically reserves one head
+ * of the listing's stock. Completion (buyer confirms receipt after pickup or
+ * delivery) belongs to the later fulfillment phase, so this path stops at
+ * `pending`.
  *
  * ## Why the write methods take an id, not a model
  *
@@ -45,6 +45,7 @@ class OfferService
     public function __construct(
         private readonly OfferRepository $offers,
         private readonly TransactionRepository $transactions,
+        private readonly ListingReservationService $reservations,
         private readonly ActivityLogger $activity,
     ) {
         //
@@ -157,10 +158,10 @@ class OfferService
      * Creates exactly one `pending` transaction using the agreed
      * `proposed_amount`, inside the same database transaction as the offer
      * status change. The offer row is locked before its state is read, so a
-     * concurrent acceptance cannot create a second transaction. The listing
-     * row is then locked and must still be `active` with stock, exactly as for
-     * a direct purchase. Lock order is offer, then listing; nothing that holds
-     * the listing lock waits on an offer row.
+     * concurrent acceptance cannot create a second transaction. One head is
+     * then reserved under the listing row lock, exactly as for a direct
+     * purchase. Lock order is offer, then listing; nothing that holds the
+     * listing lock waits on an offer row.
      *
      * @return array{offer: Offer, transaction: Transaction}
      */
@@ -180,23 +181,12 @@ class OfferService
                 abort(409, 'This offer is no longer pending.');
             }
 
-            // The offer may be days old. Re-check the listing under a row lock,
-            // with the same guards a direct purchase uses, so an offer cannot
+            // The offer may be days old. Reserve one head under the same
+            // listing-row lock a direct purchase uses, so an offer cannot
             // become a transaction on a listing that has since been sold,
             // deactivated or run out of stock. The offer stays pending when
             // this refuses, so the seller can still withdraw it.
-            $listing = $this->offers->lockListing((int) $offer->listing_id);
-            if ($listing === null) {
-                abort(404, 'Listing not found.');
-            }
-
-            if ($listing->status !== ListingStatus::Active) {
-                abort(409, 'This listing is not available for new transactions.');
-            }
-
-            if ((int) $listing->quantity < 1) {
-                abort(409, 'There is not enough stock for the requested quantity.');
-            }
+            $this->reservations->reserve((int) $offer->listing_id, 1);
 
             $accepted = $this->offers->updateStatus(
                 $offer,
@@ -214,6 +204,15 @@ class OfferService
                 $accepted->collection_method?->value,
                 $accepted->proposed_pickup_date?->toDateString(),
             );
+
+            // The buyer already knows they accepted. The seller needs to learn
+            // that a sale now exists, exactly as a direct purchase does.
+            $seller = User::find((int) $accepted->seller_id);
+            if ($seller !== null) {
+                $seller->notify(new TransactionCreated(
+                    $transaction->fresh(['listing', 'buyer']),
+                ));
+            }
 
             $this->activity->log(
                 $buyer,

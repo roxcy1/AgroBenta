@@ -11,9 +11,10 @@ use Illuminate\Support\Facades\Storage;
 
 #[Fillable([
     'seller_id', 'livestock_type', 'breed', 'age_value', 'age_unit',
-    'gender', 'weight_value', 'weight_unit', 'quantity', 'asking_price',
-    'location', 'health_status', 'vaccination', 'short_description',
-    'additional_notes', 'photos', 'status', 'admin_note',
+    'age_information', 'gender', 'weight_value', 'weight_unit',
+    'weight_information', 'quantity', 'asking_price', 'location',
+    'health_status', 'vaccination', 'short_description', 'additional_notes',
+    'photos', 'status', 'admin_note',
 ])]
 class Listing extends Model
 {

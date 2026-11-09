@@ -185,8 +185,10 @@ class PriceSuggestionService
                     'breed_raw' => $listing->breed,
                     'age_value' => $listing->age_value,
                     'age_unit' => $ageUnit,
+                    'age_information' => $listing->age_information,
                     'weight_value' => $listing->weight_value,
                     'weight_unit' => $weightUnit,
+                    'weight_information' => $listing->weight_information,
                 ],
             ],
         ];

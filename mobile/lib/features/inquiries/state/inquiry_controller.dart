@@ -121,7 +121,7 @@ class InquiryController extends ChangeNotifier {
   Future<bool> send({
     required int listingId,
     required String message,
-    required InquiryCollectionDateOption collectionDateOption,
+    InquiryCollectionDateOption? collectionDateOption,
     DateTime? preferredSchedule,
     required InquiryPaymentMethod paymentMethod,
     required InquiryCollectionMethod collectionMethod,

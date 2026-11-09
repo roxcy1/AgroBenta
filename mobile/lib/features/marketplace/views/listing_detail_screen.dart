@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
+import '../../../models/message.dart';
+import '../../messaging/view/chat_screen.dart';
 import '../widgets/listing_social_proof.dart';
 import '../../../repositories/marketplace_repository.dart';
 import '../../../widgets/detail_row.dart';
@@ -62,8 +64,9 @@ class _ListingDetailBodyState extends State<_ListingDetailBody> {
     // list controller's state. The screen is pushed above the shell but still
     // under the `MarketplaceScope` that `main.dart` installs, so the lookup
     // resolves the same way it would from the list.
-    final MarketplaceRepository repository = MarketplaceScope.readOf(context)
-        .repository;
+    final MarketplaceRepository repository = MarketplaceScope.readOf(
+      context,
+    ).repository;
     _controller = ListingDetailController(repository, widget.listingId);
     _controller.load();
   }
@@ -255,6 +258,12 @@ class _SummarySection extends StatelessWidget {
               color: AppColors.primary,
             ),
           ),
+          Text(
+            'per head',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
           if (listing.quantity > 0) ...<Widget>[
             const SizedBox(height: AppSpacing.xxs),
             Text(
@@ -306,23 +315,48 @@ class _AttributesSection extends StatelessWidget {
         horizontal: AppSpacing.screenGutter,
         vertical: AppSpacing.md,
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Expanded(
-              child: _Attribute(label: 'Age', value: listing.ageLabel),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _Attribute(
+                    label: listing.ageInformationLabel ?? 'Age',
+                    value: listing.ageLabel,
+                  ),
+                ),
+                const _AttributeSeparator(),
+                Expanded(
+                  child: _Attribute(
+                    label: listing.weightInformationLabel ?? 'Weight',
+                    value: listing.weightLabel,
+                  ),
+                ),
+                const _AttributeSeparator(),
+                Expanded(
+                  child: _Attribute(
+                    label: 'Gender',
+                    value: listing.genderLabel,
+                  ),
+                ),
+              ],
             ),
-            const _AttributeSeparator(),
-            Expanded(
-              child: _Attribute(label: 'Weight', value: listing.weightLabel),
-            ),
-            const _AttributeSeparator(),
-            Expanded(
-              child: _Attribute(label: 'Gender', value: listing.genderLabel),
+          ),
+          if (listing.hasEstimatedMeasurement) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Estimated age or weight is provided by the seller and is not '
+              'independently verified.',
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -494,23 +528,19 @@ class _SellerSection extends StatelessWidget {
   }
 }
 
-/// The pinned Message / Inquire / Buy bar.
+/// The pinned Ask Seller / I'm Interested bar.
 ///
-/// Three separate paths, because they are three separate things: a free-form
-/// chat thread, the structured inquiry form, and transaction creation. The
-/// middle one used to open the Buy sheet, which left a button labelled
-/// "Inquire" creating a transaction — a buyer who wanted to *ask* something
-/// could not, and a buyer who wanted to buy was taken to a sheet they did not
-/// ask for. Each button now does what it says.
+/// Two separate paths: **Ask Seller** opens the existing buyer–seller
+/// conversation without creating an inquiry, offer, transaction or
+/// reservation; **I'm Interested** opens the existing structured inquiry form.
 ///
-/// The labels are text-only on purpose: three icon-plus-label buttons overflow
-/// on a 320dp phone once each button's padding is counted, and the label is
-/// the part that carries the meaning (mobile/DESIGN.md: the word, not the
-/// decoration).
+/// The thread is loaded as the full buyer–seller conversation, while a new
+/// message started here is tagged with this listing. That keeps replies the
+/// seller sent from the normal Messages inbox visible instead of hiding them
+/// behind a listing filter.
 ///
-/// Renders nothing when the viewer owns the listing — a seller has no create
-/// endpoint, cannot transact with themselves (§6.2), and cannot message
-/// themselves either.
+/// Renders nothing when the viewer owns the listing — a seller cannot message
+/// or inquire with themselves.
 class _ActionBar extends StatelessWidget {
   const _ActionBar({required this.listing});
 
@@ -537,10 +567,18 @@ class _ActionBar extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
+            child: OutlinedButton(
+              style: _barButtonStyle,
+              onPressed: () => _openMessages(context, viewerId),
+              child: const Text('Ask Seller'),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
             child: FilledButton(
               style: _barButtonStyle,
               onPressed: () => _openInquiry(context),
-              child: const Text('Inquire About Livestock'),
+              child: const Text('I\'m Interested'),
             ),
           ),
         ],
@@ -555,6 +593,32 @@ class _ActionBar extends StatelessWidget {
       const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
     ),
   );
+
+  /// Opens the existing conversation with the listing's seller.
+  ///
+  /// Nothing is created until the buyer actually sends a message. The thread is
+  /// not narrowed to this listing, so prior buyer–seller history remains
+  /// visible; a new message sent here carries the listing id.
+  void _openMessages(BuildContext context, int? viewerId) {
+    if (viewerId == null) {
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ChatScreen(
+          counterpart: ChatUser(
+            id: listing.seller.id,
+            name: listing.seller.name,
+            avatarUrl: null,
+          ),
+          currentUserId: viewerId,
+          messageListingId: listing.id,
+          counterpartRole: 'Seller',
+        ),
+      ),
+    );
+  }
 
   /// Opens the structured inquiry form with the listing it asks about.
   ///

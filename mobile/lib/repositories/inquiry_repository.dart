@@ -52,7 +52,7 @@ class InquiryRepository {
   Future<Inquiry> create({
     required int listingId,
     required String message,
-    required InquiryCollectionDateOption collectionDateOption,
+    InquiryCollectionDateOption? collectionDateOption,
     DateTime? preferredSchedule,
     String? subject,
     bool? purchaseInterest,

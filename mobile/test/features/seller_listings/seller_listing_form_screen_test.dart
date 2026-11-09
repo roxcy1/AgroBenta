@@ -114,6 +114,16 @@ void main() {
     matching: find.byType(DropdownButtonFormField<String>),
   );
 
+  Finder ageInformationDropdown() => find.ancestor(
+    of: find.text('Age Information'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
+  Finder weightInformationDropdown() => find.ancestor(
+    of: find.text('Weight Information'),
+    matching: find.byType(DropdownButtonFormField<String>),
+  );
+
   Finder livestockTypeDropdown() => find.ancestor(
     of: find.text('Type of livestock'),
     matching: find.byType(DropdownButtonFormField<String>),
@@ -194,6 +204,10 @@ void main() {
     required String barangay,
     String street = '',
   }) async {
+    // The form is taller than the test viewport. Move the Details step up before
+    // opening the barangay dropdown so its centre is reachable.
+    await tester.drag(find.byType(Stepper), const Offset(0, -250));
+    await tester.pumpAndSettle();
     await selectOption(tester, locationBarangayDropdown(), barangay);
     if (street.isNotEmpty) {
       final Finder streetField = field('Street / Purok (optional)');
@@ -256,7 +270,11 @@ void main() {
       tapFormControl(tester, find.widgetWithText(FilledButton, 'Continue'));
 
   /// Fills the fields the AI action needs and moves to Details.
-  Future<void> fillSuggestionInputs(WidgetTester tester) async {
+  Future<void> fillSuggestionInputs(
+    WidgetTester tester, {
+    String quantity = '1',
+    String? askingPrice = '42500',
+  }) async {
     await selectLivestockType(tester, 'Cattle');
     await selectBreed(tester, 'Brahman');
     await tester.enterText(field('Age'), '2');
@@ -266,8 +284,10 @@ void main() {
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Quantity available'), '1');
-    await tester.enterText(field('Asking price'), '42500');
+    await tester.enterText(field('Number of Animals Available'), quantity);
+    if (askingPrice != null) {
+      await tester.enterText(field('Asking Price (₱) — Per Head'), askingPrice);
+    }
     await selectListingLocation(
       tester,
       barangay: 'Banlasan',
@@ -285,11 +305,15 @@ void main() {
   /// Fills the required fields and walks to the Review step.
   Future<void> fillAndReview(WidgetTester tester) async {
     await selectLivestockType(tester, 'Cattle');
+    await tester.enterText(field('Age'), '2');
+    await selectAgeUnit(tester, 'Year');
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Quantity available'), '2');
-    await tester.enterText(field('Asking price'), '42500');
+    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(
       tester,
       barangay: 'Banlasan',
@@ -333,6 +357,92 @@ void main() {
     for (final DropdownButtonFormField<String> dropdown in dropdowns) {
       expect(dropdown.autovalidateMode, AutovalidateMode.onUserInteraction);
     }
+  });
+
+  testWidgets(
+    'age and weight are required before leaving the information step',
+    (WidgetTester tester) async {
+      await openForm(tester, handler: emptyListHandler);
+
+      await selectLivestockType(tester, 'Cattle');
+      await tapContinue(tester);
+
+      expect(currentStep(tester), 0);
+      expect(find.text('Enter the age.'), findsOneWidget);
+      expect(find.text('Choose a unit for the age.'), findsOneWidget);
+      expect(find.text('Enter the weight.'), findsOneWidget);
+      expect(find.text('Choose a unit for the weight.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('estimated age and weight are persisted and surfaced', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionResponse();
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await selectLivestockType(tester, 'Cattle');
+    await selectBreed(tester, 'Brahman');
+    await tester.enterText(field('Age'), '2');
+    await selectAgeUnit(tester, 'Year');
+    await selectOption(tester, ageInformationDropdown(), 'Estimated');
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
+    await selectOption(tester, weightInformationDropdown(), 'Estimated');
+    await tester.pump();
+    await tapContinue(tester);
+
+    await tester.enterText(field('Number of Animals Available'), '1');
+    await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
+    await selectListingLocation(tester, barangay: 'Banlasan');
+    await selectGender(tester, 'Male');
+    await tester.pump();
+
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+    expect(find.text('AI Suggested Price per Head'), findsOneWidget);
+    expect(
+      find.text(
+        'Prediction reliability depends on the seller-provided age and weight '
+        'estimates.',
+      ),
+      findsOneWidget,
+    );
+
+    await tapContinue(tester);
+    expect(find.text('Estimated Age'), findsOneWidget);
+    expect(find.text('Estimated Weight'), findsOneWidget);
+    expect(
+      find.text(
+        'Estimated age or weight will be shown to buyers as seller-provided '
+        'and not independently verified.',
+      ),
+      findsOneWidget,
+    );
+
+    await tapSave(tester);
+    await settleSellerListings(tester);
+
+    final RecordedRequest post = harness.recorded.singleWhere(
+      (RecordedRequest request) =>
+          request.method == 'POST' && request.apiPath == '/seller/listings',
+    );
+    expect(post.body['age_information'], 'estimated');
+    expect(post.body['weight_information'], 'estimated');
   });
 
   testWidgets(
@@ -423,6 +533,10 @@ void main() {
 
     // Step 1 is still empty. It must not block leaving step 0.
     await selectLivestockType(tester, 'Cattle');
+    await tester.enterText(field('Age'), '2');
+    await selectAgeUnit(tester, 'Year');
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
     await tester.pump();
     await tapContinue(tester);
 
@@ -450,8 +564,8 @@ void main() {
     await selectOption(tester, weightUnitDropdown(), 'Kilograms');
     await tapContinue(tester);
 
-    await tester.enterText(field('Quantity available'), '2');
-    await tester.enterText(field('Asking price'), '42500');
+    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(
       tester,
       barangay: 'Banlasan',
@@ -487,8 +601,8 @@ void main() {
     await tapFormControl(tester, reviewBack);
 
     expect(currentStep(tester), 1);
-    expect(fieldText(tester, 'Quantity available'), '2');
-    expect(fieldText(tester, 'Asking price'), '42500');
+    expect(fieldText(tester, 'Number of Animals Available'), '2');
+    expect(fieldText(tester, 'Asking Price (₱) — Per Head'), '42500');
     expect(
       tester
           .widget<TextFormField>(field('Street / Purok (optional)'))
@@ -499,7 +613,7 @@ void main() {
     expect(harness.recorded.length, requestsBeforeBack);
     expect(harness.controller.photos, hasLength(1));
 
-    await tester.enterText(field('Asking price'), '50000');
+    await tester.enterText(field('Asking Price (₱) — Per Head'), '50000');
     await selectListingLocation(tester, barangay: 'Bongbong');
     await selectOption(tester, genderDropdown(), 'Male');
     await tapContinue(tester);
@@ -541,11 +655,15 @@ void main() {
     );
 
     await selectLivestockType(tester, 'Cattle');
+    await tester.enterText(field('Age'), '2');
+    await selectAgeUnit(tester, 'Year');
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Quantity available'), '2');
-    await tester.enterText(field('Asking price'), '42500');
+    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
     await tapContinue(tester);
@@ -558,6 +676,12 @@ void main() {
         .toList();
     expect(posts, hasLength(1));
     expect(posts.single.body['livestock_type'], 'cattle');
+    expect(posts.single.body['age_value'], 2);
+    expect(posts.single.body['age_unit'], 'year');
+    expect(posts.single.body['age_information'], 'known');
+    expect(posts.single.body['weight_value'], '500');
+    expect(posts.single.body['weight_unit'], 'kg');
+    expect(posts.single.body['weight_information'], 'measured');
     expect(posts.single.body['quantity'], 2);
     expect(posts.single.body['asking_price'], '42500');
     expect(posts.single.body['location'], 'Barangay Banlasan, Trinidad, Bohol');
@@ -565,6 +689,75 @@ void main() {
     expect(posts.single.body.containsKey('status'), isFalse);
 
     expect(find.byType(SellerListingFormScreen), findsNothing);
+  });
+
+  testWidgets('a legacy draft with missing age and weight can still be saved', (
+    WidgetTester tester,
+  ) async {
+    final Listing legacy = Listing.fromJson(
+      listingJson(
+        id: 21,
+        status: 'draft',
+        ageValue: null,
+        ageUnit: null,
+        ageInformation: null,
+        weightValue: null,
+        weightInformation: null,
+      ),
+    );
+
+    final List<RecordedRequest> recorded = await pumpEditForm(
+      tester,
+      listing: legacy,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'PATCH' &&
+            request.apiPath == '/seller/listings/21') {
+          return sellerListingResponse(
+            listing: listingJson(
+              id: 21,
+              status: 'draft',
+              ageValue: null,
+              ageUnit: null,
+              ageInformation: null,
+              weightValue: null,
+              weightInformation: null,
+            ),
+          );
+        }
+        return sellerListingListResponse();
+      },
+    );
+
+    await tapContinue(tester);
+    await tapContinue(tester);
+    expect(
+      find.text(
+        'This legacy draft is missing age or weight. You can save it, but add '
+        'both before submitting it for review.',
+      ),
+      findsOneWidget,
+    );
+
+    await tapFormControl(
+      tester,
+      find.widgetWithText(FilledButton, 'Save changes'),
+    );
+    await settleSellerListings(tester);
+
+    final RecordedRequest patch = recorded.singleWhere(
+      (RecordedRequest request) =>
+          request.method == 'PATCH' && request.apiPath == '/seller/listings/21',
+    );
+    for (final String key in <String>[
+      'age_value',
+      'age_unit',
+      'age_information',
+      'weight_value',
+      'weight_unit',
+      'weight_information',
+    ]) {
+      expect(patch.body.containsKey(key), isFalse, reason: key);
+    }
   });
 
   testWidgets('chicken offers only the supported breed choices', (
@@ -602,9 +795,14 @@ void main() {
     await tester.tap(find.text('Broiler').last);
     await tester.pumpAndSettle();
 
+    await tester.enterText(field('Age'), '15');
+    await selectAgeUnit(tester, 'Day');
+    await tester.enterText(field('Weight'), '0.5');
+    await selectWeightUnit(tester, 'Kilograms');
+    await tester.pump();
     await tapContinue(tester);
-    await tester.enterText(field('Quantity available'), '1');
-    await tester.enterText(field('Asking price'), '500');
+    await tester.enterText(field('Number of Animals Available'), '1');
+    await tester.enterText(field('Asking Price (₱) — Per Head'), '500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
     await tapContinue(tester);
@@ -634,7 +832,24 @@ void main() {
           }
           if (request.method == 'POST' &&
               request.apiPath == '/seller/listings/7/price-suggestion') {
-            return aiPriceSuggestionResponse();
+            return aiPriceSuggestionResponse(
+              estimate: aiPriceEstimateJson(
+                inputSnapshot: <String, dynamic>{
+                  'livestock_type': 'cattle',
+                  'breed': 'brahman',
+                  'sex': 'male',
+                  'age_months': 24,
+                  'weight_kg': 500,
+                  'source': <String, dynamic>{
+                    'breed_raw': 'Brahman',
+                    'age_value': 2,
+                    'age_unit': 'year',
+                    'weight_value': 500,
+                    'weight_unit': 'kg',
+                  },
+                },
+              ),
+            );
           }
           return emptyListHandler(request);
         },
@@ -644,8 +859,9 @@ void main() {
       expect(aiButton(), findsOneWidget);
       expect(
         find.text(
-          'Requesting AI assistance saves this draft first. The suggestion is '
-          'reference only; you still choose the final asking price.',
+          'AI uses type, breed, sex, age, and weight. Requesting AI saves '
+          'this draft first. The suggestion is a per-head reference only; '
+          'you still choose the final asking price.',
         ),
         findsOneWidget,
       );
@@ -654,7 +870,7 @@ void main() {
       await settleSellerListings(tester, frames: 20);
 
       expect(find.byType(SellerListingFormScreen), findsOneWidget);
-      expect(find.text('AI Price Suggestion'), findsOneWidget);
+      expect(find.text('AI Suggested Price per Head'), findsOneWidget);
       expect(find.text('₱9,798.00'), findsOneWidget);
       expect(
         find.text(
@@ -663,7 +879,11 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Model v3-targeted · synthetic data'), findsOneWidget);
-      expect(fieldText(tester, 'Asking price'), '42500');
+      expect(
+        find.text('Based on: Cattle · Brahman · Male · 2 year · 500 kg'),
+        findsOneWidget,
+      );
+      expect(fieldText(tester, 'Asking Price (₱) — Per Head'), '42500');
 
       expect(
         harness.recorded.where(
@@ -684,7 +904,7 @@ void main() {
   );
 
   testWidgets(
-    'Use This Price only changes the editable asking price when tapped',
+    'Use per-head price only changes the editable asking price when tapped',
     (WidgetTester tester) async {
       await openForm(
         tester,
@@ -707,16 +927,135 @@ void main() {
       await fillSuggestionInputs(tester);
       await tapAiButton(tester);
       await settleSellerListings(tester, frames: 20);
-      expect(fieldText(tester, 'Asking price'), '42500');
+      expect(fieldText(tester, 'Asking Price (₱) — Per Head'), '42500');
 
-      await tester.ensureVisible(find.text('Use This Price'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Use This Price'));
-      await tester.pump();
+      await tapFormControl(
+        tester,
+        find.widgetWithText(OutlinedButton, 'Use per-head price'),
+      );
 
-      expect(fieldText(tester, 'Asking price'), '9798.00');
+      expect(fieldText(tester, 'Asking Price (₱) — Per Head'), '9798.00');
     },
   );
+
+  testWidgets(
+    'per-head labels and live totals stay separate for multiple animals',
+    (WidgetTester tester) async {
+      final SellerListingsHarness harness = await openForm(
+        tester,
+        handler: (RecordedRequest request) async {
+          if (request.method == 'POST' &&
+              request.apiPath == '/seller/listings') {
+            return sellerListingResponse(
+              listing: listingJson(id: 7, status: 'draft'),
+              statusCode: 201,
+            );
+          }
+          if (request.method == 'POST' &&
+              request.apiPath == '/seller/listings/7/price-suggestion') {
+            return aiPriceSuggestionResponse();
+          }
+          return emptyListHandler(request);
+        },
+      );
+
+      await fillSuggestionInputs(tester, quantity: '2');
+      expect(find.text('Number of Animals Available'), findsWidgets);
+      expect(find.text('Asking Price (₱) — Per Head'), findsWidgets);
+      expect(
+        find.textContaining('Total listing value: ₱85,000.00'),
+        findsOneWidget,
+      );
+
+      await tapAiButton(tester);
+      await settleSellerListings(tester, frames: 20);
+
+      expect(find.text('AI Suggested Price per Head'), findsOneWidget);
+      expect(find.text('₱9,798.00'), findsOneWidget);
+      expect(find.text('per head'), findsOneWidget);
+      expect(
+        find.textContaining('For 2 animals: ₱19,596.00 total'),
+        findsOneWidget,
+      );
+
+      // Quantity is not a model input: changing it keeps the per-head estimate
+      // and only recalculates the informational totals.
+      await tester.ensureVisible(field('Number of Animals Available'));
+      await tester.enterText(field('Number of Animals Available'), '3');
+      await tester.pump();
+      expect(find.text('AI Suggested Price per Head'), findsOneWidget);
+      expect(
+        find.textContaining('For 3 animals: ₱29,394.00 total'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Total listing value: ₱127,500.00'),
+        findsOneWidget,
+      );
+
+      await tapFormControl(
+        tester,
+        find.widgetWithText(OutlinedButton, 'Use per-head price'),
+      );
+
+      expect(fieldText(tester, 'Asking Price (₱) — Per Head'), '9798.00');
+      expect(
+        find.textContaining('Total listing value: ₱29,394.00'),
+        findsOneWidget,
+      );
+      expect(
+        harness.recorded.where((RecordedRequest r) => r.method == 'POST'),
+        hasLength(2),
+      );
+    },
+  );
+
+  testWidgets('missing asking price prevents an unnecessary AI request', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await openForm(
+      tester,
+      handler: emptyListHandler,
+    );
+
+    await fillSuggestionInputs(tester, askingPrice: null);
+    await tapAiButton(tester);
+    await tester.pump();
+
+    expect(find.text('Enter the asking price.'), findsOneWidget);
+    expect(
+      harness.recorded.where((RecordedRequest r) => r.method == 'POST'),
+      isEmpty,
+    );
+  });
+
+  testWidgets('missing model input prevents an unnecessary AI request', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await openForm(
+      tester,
+      handler: emptyListHandler,
+    );
+
+    await selectLivestockType(tester, 'Cattle');
+    await tester.enterText(field('Age'), '2');
+    await selectAgeUnit(tester, 'Year');
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
+    await tester.pump();
+    await tapContinue(tester);
+    await tapAiButton(tester);
+    await tester.pump();
+
+    expect(
+      find.text('Choose a supported breed before requesting a price.'),
+      findsOneWidget,
+    );
+    expect(
+      harness.recorded.where((RecordedRequest r) => r.method == 'POST'),
+      isEmpty,
+    );
+  });
 
   testWidgets('editing a model input clears the previous suggestion', (
     WidgetTester tester,
@@ -741,14 +1080,14 @@ void main() {
     await fillSuggestionInputs(tester);
     await tapAiButton(tester);
     await settleSellerListings(tester, frames: 20);
-    expect(find.text('AI Price Suggestion'), findsOneWidget);
+    expect(find.text('AI Suggested Price per Head'), findsOneWidget);
 
     await tapFormControl(tester, find.widgetWithText(TextButton, 'Back'));
     await tester.enterText(field('Weight'), '600');
     await tester.pump();
     await tapContinue(tester);
 
-    expect(find.text('AI Price Suggestion'), findsNothing);
+    expect(find.text('AI Suggested Price per Head'), findsNothing);
   });
 
   testWidgets('a warning is shown with its server warning text', (
@@ -769,6 +1108,7 @@ void main() {
             estimate: aiPriceEstimateJson(
               status: 'warning',
               warnings: <String>['Outside the typical age-band range.'],
+              reasonCodes: <String>['outside_typical_age_weight'],
             ),
           );
         }
@@ -781,7 +1121,22 @@ void main() {
     await settleSellerListings(tester, frames: 20);
 
     expect(find.text('Review recommended'), findsOneWidget);
+    expect(
+      find.text(
+        "The estimate is usable, but the details are outside the model's "
+        'usual range. Check the age and weight before using it.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Outside the typical age-band range.'), findsNothing);
+
+    await tester.tap(find.text('Technical details'));
+    await tester.pumpAndSettle();
     expect(find.text('Outside the typical age-band range.'), findsOneWidget);
+    expect(
+      find.text('Reason codes: outside_typical_age_weight'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('withheld shows no price and no Use This Price action', (
@@ -813,10 +1168,36 @@ void main() {
     await settleSellerListings(tester, frames: 20);
 
     expect(find.text('Price suggestion withheld'), findsOneWidget);
+    expect(
+      find.text(
+        'The prototype model was trained on a limited synthetic range and '
+        'cannot estimate this animal. Your listing is still valid and can be '
+        'saved. Check the age and weight if they were entered incorrectly, or '
+        'continue without a suggestion.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Outside the supported model envelope.'), findsNothing);
+    expect(find.text('Reason codes: insufficient_model_support'), findsNothing);
+    expect(find.text('Use per-head price'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('ai-estimated-total')),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('Technical details'));
+    await tester.pumpAndSettle();
     expect(find.text('Outside the supported model envelope.'), findsOneWidget);
-    expect(find.text('Reason: insufficient_model_support'), findsOneWidget);
-    expect(find.text('Use This Price'), findsNothing);
-    expect(find.text('₱'), findsNothing);
+    expect(
+      find.text('Reason codes: insufficient_model_support'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'))
+          .onPressed,
+      isNotNull,
+    );
   });
 
   testWidgets('unavailable is displayed and Retry requests again', (
@@ -861,16 +1242,16 @@ void main() {
 
     expect(find.text('Price suggestion unavailable'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
-    expect(find.text('Use This Price'), findsNothing);
+    expect(find.text('Use per-head price'), findsNothing);
 
     await tester.ensureVisible(find.text('Retry'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Retry'));
     await settleSellerListings(tester, frames: 20);
 
-    expect(find.text('AI Price Suggestion'), findsOneWidget);
+    expect(find.text('AI Suggested Price per Head'), findsOneWidget);
     expect(find.text('₱9,798.00'), findsOneWidget);
-    expect(find.text('Use This Price'), findsOneWidget);
+    expect(find.text('Use per-head price'), findsOneWidget);
 
     expect(
       harness.recorded.where(
@@ -936,8 +1317,8 @@ void main() {
     await tapAiButton(tester);
     await settleSellerListings(tester, frames: 20);
 
-    expect(find.text('AI Price Suggestion'), findsOneWidget);
-    expect(find.text('Use This Price'), findsOneWidget);
+    expect(find.text('AI Suggested Price per Head'), findsOneWidget);
+    expect(find.text('Use per-head price'), findsOneWidget);
 
     final int patchIndex = recorded.indexWhere(
       (RecordedRequest request) =>
@@ -978,11 +1359,15 @@ void main() {
     );
 
     await selectLivestockType(tester, 'Cattle');
+    await tester.enterText(field('Age'), '2');
+    await selectAgeUnit(tester, 'Year');
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Quantity available'), '2');
-    await tester.enterText(field('Asking price'), '42500');
+    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
     await tapContinue(tester);
@@ -996,13 +1381,17 @@ void main() {
     );
     // The message belongs to a field on Details, so Details is reopened.
     expect(currentStep(tester), 1);
-    expect(fieldError(tester, 'Asking price'), serverMessage);
+    expect(fieldError(tester, 'Asking Price (₱) — Per Head'), serverMessage);
 
     // The server's message wins over the local one: clearing the field leaves
     // the server's wording on it, not the client's "Enter the asking price."
-    tester.widget<TextFormField>(field('Asking price')).controller!.text = '';
+    tester
+            .widget<TextFormField>(field('Asking Price (₱) — Per Head'))
+            .controller!
+            .text =
+        '';
     await tester.pump();
-    expect(fieldError(tester, 'Asking price'), serverMessage);
+    expect(fieldError(tester, 'Asking Price (₱) — Per Head'), serverMessage);
     expect(find.text('Enter the asking price.'), findsNothing);
   });
 
@@ -1026,11 +1415,15 @@ void main() {
     );
 
     await selectLivestockType(tester, 'Cattle');
+    await tester.enterText(field('Age'), '2');
+    await selectAgeUnit(tester, 'Year');
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Quantity available'), '2');
-    await tester.enterText(field('Asking price'), '42500');
+    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
     await tapContinue(tester);

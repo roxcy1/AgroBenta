@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\FulfillmentStatus;
 use App\Enums\ListingStatus;
 use App\Enums\SellerCapability;
 use App\Enums\TransactionStatus;
@@ -259,7 +260,14 @@ class TransactionSeeder extends Seeder
             return false;
         }
 
+        $fulfillment = match ($status) {
+            TransactionStatus::Completed => FulfillmentStatus::Completed,
+            TransactionStatus::Pending => FulfillmentStatus::Confirmed,
+            TransactionStatus::Cancelled => null,
+        };
+
         $transaction->forceFill([
+            'fulfillment_status' => $fulfillment,
             'created_at' => $createdAt,
             'updated_at' => $createdAt,
         ])->save();

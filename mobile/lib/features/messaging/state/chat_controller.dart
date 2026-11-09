@@ -30,6 +30,7 @@ class ChatController extends ChangeNotifier {
     required this.counterpartId,
     required this.currentUserId,
     this.listingId,
+    this.messageListingId,
   });
 
   final MessagingRepository _repository;
@@ -41,8 +42,14 @@ class ChatController extends ChangeNotifier {
   /// without a second call to `/auth/me`.
   final int currentUserId;
 
-  /// The listing this thread is about, if any.
+  /// The listing this thread is filtered to, if any.
   final int? listingId;
+
+  /// The listing to tag outgoing messages with, when the caller opened this
+  /// chat from a listing. Kept separate from [listingId] so the thread can show
+  /// the whole buyer–seller history even when the conversation started
+  /// elsewhere and a reply has no `listing_id` of its own.
+  final int? messageListingId;
 
   ChatState _state = const ChatState();
   ChatState get state => _state;
@@ -119,7 +126,7 @@ class ChatController extends ChangeNotifier {
       body: trimmed,
       senderId: currentUserId,
       receiverId: counterpartId,
-      listingId: listingId,
+      listingId: messageListingId ?? listingId,
       read: false,
       readAt: null,
       createdAt: DateTime.now(),
@@ -139,7 +146,7 @@ class ChatController extends ChangeNotifier {
       final Message sent = await _repository.send(
         receiverId: counterpartId,
         body: trimmed,
-        listingId: listingId,
+        listingId: messageListingId ?? listingId,
       );
       if (_disposed) {
         return false;

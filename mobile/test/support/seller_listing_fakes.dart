@@ -64,6 +64,7 @@ Map<String, dynamic> aiPriceEstimateJson({
   List<String> reasonCodes = const <String>[],
   String modelVersion = 'v3-targeted',
   String provenance = 'synthetic',
+  Map<String, dynamic>? inputSnapshot,
 }) {
   return <String, dynamic>{
     'listing_id': listingId,
@@ -71,13 +72,15 @@ Map<String, dynamic> aiPriceEstimateJson({
     'estimated_max': null,
     'estimated_value': estimatedValue,
     'basis': basis,
-    'input_snapshot': <String, dynamic>{
-      'livestock_type': 'chicken',
-      'breed': 'broiler',
-      'sex': 'male',
-      'age_months': 0.492813,
-      'weight_kg': 0.5,
-    },
+    'input_snapshot':
+        inputSnapshot ??
+        <String, dynamic>{
+          'livestock_type': 'chicken',
+          'breed': 'broiler',
+          'sex': 'male',
+          'age_months': 0.492813,
+          'weight_kg': 0.5,
+        },
     'estimated_at': '2026-11-06T11:49:04.000000Z',
     'status': status,
     'warnings': warnings,

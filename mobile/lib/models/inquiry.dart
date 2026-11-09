@@ -122,7 +122,7 @@ enum InquiryPaymentMethod {
     InquiryPaymentMethod.cash => 'Cash',
     InquiryPaymentMethod.gcash => 'GCash',
     InquiryPaymentMethod.maya => 'Maya',
-    InquiryPaymentMethod.other => 'Other / Discuss with seller',
+    InquiryPaymentMethod.other => 'Discuss with Seller',
   };
 
   static InquiryPaymentMethod fromValue(String value) {
@@ -141,11 +141,15 @@ enum InquiryPaymentMethod {
 /// Serialised by `backend/app/Enums/InquiryCollectionMethod.php` and surfaced
 /// verbatim by `MobileInquiryResource`. A preference only — selecting one does
 /// not book transportation, and AgroBenta does not provide, book, or track
-/// riders (design spec §3.6). `discussWithSeller` is "Discuss arrangements
-/// with the seller".
+/// riders (design spec §3.6).
+///
+/// [discussWithSeller] is retained only so historical inquiry records still
+/// parse and render. The current form does not offer it.
 enum InquiryCollectionMethod {
   farmPickup('farm_pickup'),
   buyerArrangedTransportation('buyer_arranged_transportation'),
+  sellerArrangedDelivery('seller_arranged_delivery'),
+  notSureYet('not_sure_yet'),
   discussWithSeller('discuss_with_seller');
 
   const InquiryCollectionMethod(this.value);
@@ -158,8 +162,11 @@ enum InquiryCollectionMethod {
     InquiryCollectionMethod.farmPickup => 'Pick up from the seller\'s farm',
     InquiryCollectionMethod.buyerArrangedTransportation =>
       'Arrange my own livestock transportation',
+    InquiryCollectionMethod.sellerArrangedDelivery =>
+      'Seller-arranged delivery',
+    InquiryCollectionMethod.notSureYet => 'Not sure yet',
     InquiryCollectionMethod.discussWithSeller =>
-      'Discuss arrangements with the seller',
+      'Discuss arrangements with the seller (legacy)',
   };
 
   static InquiryCollectionMethod fromValue(String value) {

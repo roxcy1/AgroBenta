@@ -35,6 +35,8 @@ class SellerActivityRepository
         ActivityAction::OfferWithdrawn,
         ActivityAction::ListingMarkedSold,
         ActivityAction::TransactionCancelled,
+        ActivityAction::TransactionFulfillmentUpdated,
+        ActivityAction::TransactionCompleted,
     ];
 
     /**
@@ -59,6 +61,8 @@ class SellerActivityRepository
         ],
         'transactions' => [
             ActivityAction::TransactionCancelled,
+            ActivityAction::TransactionFulfillmentUpdated,
+            ActivityAction::TransactionCompleted,
         ],
     ];
 

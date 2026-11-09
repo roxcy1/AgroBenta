@@ -7,9 +7,8 @@ import '../state/transactions_filter.dart';
 
 /// The empty state for one purchases or sales filter.
 ///
-/// Fixed copy per filter and viewer side. The Completed copy is honest about
-/// the dead end: no path in the app can reach `completed` today (OQ-15), so the
-/// filter is legitimately empty — that is correct, not a bug to work around.
+/// Fixed copy per filter and viewer side. Completed records reach this filter
+/// after the buyer confirms receipt on a delivered/picked-up transaction.
 class TransactionsEmptyState extends StatelessWidget {
   const TransactionsEmptyState({
     required this.filter,
@@ -49,11 +48,11 @@ class TransactionsEmptyState extends StatelessWidget {
         isSeller
             ? (
                 'No completed sales yet',
-                'Completion is not yet available in the app.',
+                'Sales completed after buyer receipt confirmation will appear here.',
               )
             : (
                 'No completed purchases yet',
-                'Completion is not yet available in the app.',
+                'Purchases completed after you confirm receipt will appear here.',
               ),
       TransactionsFilter.cancelled =>
         isSeller

@@ -235,18 +235,37 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                           if (listing.breed.trim().isNotEmpty)
                             DetailRow(label: 'Breed', value: listing.breed),
                           DetailRow(
-                            label: 'Quantity',
+                            label: 'Number of Animals Available',
                             value:
                                 '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
                           ),
                           if (listing.ageLabel != null)
-                            DetailRow(label: 'Age', value: listing.ageLabel!),
+                            DetailRow(
+                              label:
+                                  listing.ageInformationLabel ??
+                                  'Age (per animal)',
+                              value: listing.ageLabel!,
+                            ),
                           if (listing.gender != null)
                             DetailRow(label: 'Gender', value: listing.gender!),
                           if (listing.weightLabel != null)
                             DetailRow(
-                              label: 'Weight',
+                              label:
+                                  listing.weightInformationLabel ??
+                                  'Weight (per animal)',
                               value: listing.weightLabel!,
+                            ),
+                          if (listing.hasEstimatedMeasurement)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: AppSpacing.xs,
+                              ),
+                              child: Text(
+                                'Estimated age or weight is provided by the '
+                                'seller and is not independently verified.',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: AppColors.textSecondary),
+                              ),
                             ),
                         ],
                       ),
@@ -255,13 +274,19 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                         title: 'Price and location',
                         children: <Widget>[
                           DetailRow(
-                            label: 'Asking price',
+                            label: 'Asking Price (₱) — Per Head',
                             value:
                                 AppFormatters.formatMoney(
                                   listing.askingPrice,
                                 ) ??
                                 listing.askingPrice,
                           ),
+                          if (_totalListingValueFor(listing) != null)
+                            DetailRow(
+                              label: 'Total listing value',
+                              value:
+                                  '${_totalListingValueFor(listing)!} (informational only)',
+                            ),
                           DetailRow(label: 'Location', value: listing.location),
                         ],
                       ),
@@ -505,4 +530,15 @@ class _ActionBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The informational total for one listing, or `null` when either value is
+/// missing or invalid. This never replaces the server's transaction calculation.
+String? _totalListingValueFor(Listing listing) {
+  final double? unitPrice = AppFormatters.parseDecimal(listing.askingPrice);
+  if (unitPrice == null || unitPrice < 0 || listing.quantity < 1) {
+    return null;
+  }
+  final String raw = (unitPrice * listing.quantity).toStringAsFixed(2);
+  return AppFormatters.formatMoney(raw) ?? raw;
 }

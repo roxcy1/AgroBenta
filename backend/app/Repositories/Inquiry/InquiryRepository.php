@@ -143,7 +143,7 @@ class InquiryRepository
         User $buyer,
         int $sellerId,
         int $listingId,
-        string $message,
+        ?string $message,
         array $preferences,
     ): Inquiry {
         return Inquiry::query()->create([
@@ -151,7 +151,7 @@ class InquiryRepository
             'seller_id' => $sellerId,
             'listing_id' => $listingId,
             'subject' => $preferences['subject'] ?? null,
-            'message' => $message,
+            'message' => $message === null || trim($message) === '' ? null : trim($message),
             'purchase_interest' => $preferences['purchase_interest'] ?? null,
             'transaction_method' => isset($preferences['transaction_method'])
                 ? InquiryTransactionMethod::from($preferences['transaction_method'])

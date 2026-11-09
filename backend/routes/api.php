@@ -188,15 +188,30 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
 // write at a foreign row. `role` narrows to one side of the caller's own
 // records; `buyer_id` / `seller_id` are refused.
 //
-// The `complete` route exists only to answer 501 explicitly: [D-15] rule 4
-// leaves the confirming actor undecided (OQ-15), so the transition stays
-// unimplemented rather than guessed. The mobile client never calls it.
+// Fulfillment is a separate progression from `status`. The seller controls
+// preparation, pickup/dispatch and handover; the buyer alone confirms receipt,
+// which is the `complete` transition. Five named actions keep the state machine
+// explicit rather than accepting a client-named target status.
 Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->group(function (): void {
     Route::get('/', [MobileTransactionController::class, 'index']);
     Route::post('/', [MobileTransactionController::class, 'store']);
     Route::get('/{transaction}', [MobileTransactionController::class, 'show']);
     Route::post('/{transaction}/cancel', [MobileTransactionController::class, 'cancel']);
-    Route::post('/{transaction}/complete', [MobileTransactionController::class, 'complete']);
+    Route::post('/{transaction}/complete', [MobileTransactionController::class, 'complete'])
+        ->whereNumber('transaction');
+
+    Route::middleware('seller')->group(function (): void {
+        Route::post('/{transaction}/preparing', [MobileTransactionController::class, 'preparing'])
+            ->whereNumber('transaction');
+        Route::post('/{transaction}/ready-for-pickup', [MobileTransactionController::class, 'readyForPickup'])
+            ->whereNumber('transaction');
+        Route::post('/{transaction}/picked-up', [MobileTransactionController::class, 'pickedUp'])
+            ->whereNumber('transaction');
+        Route::post('/{transaction}/on-the-way', [MobileTransactionController::class, 'onTheWay'])
+            ->whereNumber('transaction');
+        Route::post('/{transaction}/delivered', [MobileTransactionController::class, 'delivered'])
+            ->whereNumber('transaction');
+    });
 });
 
 // Inquiries — the buyer's structured contact with a seller about a listing.

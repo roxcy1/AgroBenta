@@ -151,6 +151,39 @@ class PriceSuggestionTest extends TestCase
     }
 
     #[Test]
+    public function quantity_is_not_sent_to_the_provider_and_the_estimate_stays_per_head(): void
+    {
+        $listing = $this->createListing(['quantity' => 12]);
+        Http::fake([
+            'http://ml-service:8002/v1/predict' => Http::response($this->successPayload(), 200),
+        ]);
+
+        $response = $this->predict($listing);
+
+        $response->assertOk()
+            ->assertJsonPath('data.estimated_value', '50000.55');
+
+        Http::assertSent(function ($request): bool {
+            $payload = $request->data();
+
+            return $request->url() === 'http://ml-service:8002/v1/predict'
+                && ! array_key_exists('quantity', $payload)
+                && count($payload) === 5
+                && array_keys($payload) === [
+                    'livestock_type',
+                    'breed',
+                    'sex',
+                    'age_months',
+                    'weight_kg',
+                ];
+        });
+
+        $listing->refresh();
+        $this->assertSame('50000.00', $listing->asking_price);
+        $this->assertSame(ListingStatus::Draft, $listing->status);
+    }
+
+    #[Test]
     public function warning_is_returned_and_persisted(): void
     {
         $listing = $this->createListing();

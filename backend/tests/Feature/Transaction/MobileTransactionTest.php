@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Transaction;
 
+use App\Enums\FulfillmentStatus;
 use App\Enums\ListingStatus;
 use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
@@ -19,9 +20,9 @@ use Tests\TestCase;
  * Mobile transactions — contract §5.6 minus `complete`.
  *
  * A buyer may create a pending transaction against an active listing they do
- * not own; either party may cancel a pending one; terminal states are
- * immutable; and `complete` answers 501 because OQ-15 leaves the confirming
- * actor undecided.
+ * not own; either party may cancel a pending one before the fulfillment cutoff;
+ * terminal states are immutable; and only the buyer may confirm receipt after
+ * the seller reports pickup or delivery.
  */
 class MobileTransactionTest extends TestCase
 {
@@ -97,6 +98,7 @@ class MobileTransactionTest extends TestCase
             'quantity' => 1,
             'total_amount' => 50000.00,
             'status' => TransactionStatus::Pending,
+            'fulfillment_status' => FulfillmentStatus::Confirmed,
         ], $overrides));
     }
 
@@ -264,6 +266,95 @@ class MobileTransactionTest extends TestCase
         $this->assertSame('100000.00', $data['total_amount']);
         $this->assertSame(2, $data['quantity']);
         $this->assertSame('buyer', $data['role']);
+
+        // The quantity is taken out of the listing in the same transaction.
+        $this->assertSame(3, $listing->refresh()->quantity);
+        $this->assertTrue((bool) Transaction::query()->findOrFail($data['id'])->inventory_reserved);
+    }
+
+    #[Test]
+    public function cancelling_a_reserved_transaction_restores_stock_exactly_once(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 5]);
+        $token = $this->mobileToken($this->buyer);
+
+        $transactionId = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 2,
+            ])
+            ->assertStatus(201)
+            ->json('data.id');
+
+        $this->assertSame(3, $listing->refresh()->quantity);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/transactions/'.$transactionId.'/cancel')
+            ->assertStatus(200);
+
+        $this->assertSame(5, $listing->refresh()->quantity);
+        $this->assertFalse((bool) Transaction::query()->findOrFail($transactionId)->inventory_reserved);
+
+        // A second cancel is a state conflict, not a second release.
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/transactions/'.$transactionId.'/cancel')
+            ->assertStatus(409);
+
+        $this->assertSame(5, $listing->refresh()->quantity);
+    }
+
+    #[Test]
+    public function cancelling_a_legacy_pending_transaction_does_not_inflate_stock(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 5]);
+        $transaction = $this->createTransaction($listing, $this->buyer, [
+            'inventory_reserved' => false,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson('/api/transactions/'.$transaction->id.'/cancel')
+            ->assertStatus(200);
+
+        $this->assertSame(5, $listing->refresh()->quantity);
+    }
+
+    #[Test]
+    public function a_zero_stock_listing_cannot_accept_a_transaction(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 0]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(409);
+
+        $this->assertSame(0, $listing->refresh()->quantity);
+        $this->assertSame(0, Transaction::query()->count());
+    }
+
+    #[Test]
+    public function two_buyers_cannot_reserve_the_same_last_head(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 1]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(201);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->stranger))
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(409);
+
+        $this->assertSame(0, $listing->refresh()->quantity);
+        $this->assertSame(1, Transaction::query()->count());
     }
 
     #[Test]
@@ -435,16 +526,14 @@ class MobileTransactionTest extends TestCase
     }
 
     #[Test]
-    public function completion_is_explicitly_unavailable(): void
+    public function completion_requires_seller_reported_handover(): void
     {
         $listing = $this->createListing($this->seller);
         $transaction = $this->createTransaction($listing, $this->buyer);
 
-        // OQ-15: the confirming actor is undecided, so the transition stays
-        // unimplemented. An explicit 501 says so; the client never calls it.
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
             ->postJson('/api/transactions/'.$transaction->id.'/complete')
-            ->assertStatus(501);
+            ->assertStatus(409);
 
         $this->assertSame('pending', $transaction->refresh()->status->value);
     }

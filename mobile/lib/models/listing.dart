@@ -109,9 +109,11 @@ class Listing {
     required this.breed,
     required this.ageValue,
     required this.ageUnit,
+    required this.ageInformation,
     required this.gender,
     required this.weightValue,
     required this.weightUnit,
+    required this.weightInformation,
     required this.quantity,
     required this.askingPrice,
     required this.location,
@@ -134,9 +136,11 @@ class Listing {
       breed: readString(json, 'breed'),
       ageValue: _readNullableDecimal(json, 'age_value'),
       ageUnit: readNullableString(json, 'age_unit'),
+      ageInformation: readNullableString(json, 'age_information'),
       gender: readNullableString(json, 'gender'),
       weightValue: _readNullableDecimal(json, 'weight_value'),
       weightUnit: readString(json, 'weight_unit'),
+      weightInformation: readNullableString(json, 'weight_information'),
       quantity: readInt(json, 'quantity'),
       askingPrice: readDecimalString(json, 'asking_price'),
       location: readString(json, 'location'),
@@ -179,6 +183,10 @@ class Listing {
   /// `day`, `month` or `year`. Null when [ageValue] is null.
   final String? ageUnit;
 
+  /// `known` or `estimated`, or null for a legacy row that predates the
+  /// selector. The value is the seller's declaration, not a verification.
+  final String? ageInformation;
+
   /// `male` or `female`. Null when not recorded.
   final String? gender;
 
@@ -188,6 +196,10 @@ class Listing {
 
   /// `kg` or `lb`. Non-null in the schema (it defaults to `kg`).
   final String? weightUnit;
+
+  /// `measured` or `estimated`, or null for a legacy row that predates the
+  /// selector. The value is the seller's declaration, not a verification.
+  final String? weightInformation;
 
   /// Whole units available. Never negative.
   final int quantity;
@@ -261,6 +273,41 @@ class Listing {
       return null;
     }
     return unit == null ? _trimDecimal(value) : '${_trimDecimal(value)} $unit';
+  }
+
+  /// Whether the seller declared the age as estimated.
+  bool get ageIsEstimated => ageInformation == 'estimated';
+
+  /// Whether the seller declared the weight as estimated.
+  bool get weightIsEstimated => weightInformation == 'estimated';
+
+  /// Whether at least one physical measurement is seller-estimated.
+  bool get hasEstimatedMeasurement => ageIsEstimated || weightIsEstimated;
+
+  /// The buyer-facing age label, distinguishing known, estimated and legacy
+  /// seller-provided values. Null when the age is not recorded.
+  String? get ageInformationLabel {
+    if (ageValue == null || ageUnit == null) {
+      return null;
+    }
+    return switch (ageInformation) {
+      'estimated' => 'Estimated Age',
+      'known' => 'Known Age',
+      _ => 'Age (seller-provided)',
+    };
+  }
+
+  /// The buyer-facing weight label, distinguishing measured, estimated and
+  /// legacy seller-provided values. Null when the weight is not recorded.
+  String? get weightInformationLabel {
+    if (weightValue == null) {
+      return null;
+    }
+    return switch (weightInformation) {
+      'estimated' => 'Estimated Weight',
+      'measured' => 'Measured Weight',
+      _ => 'Weight (seller-provided)',
+    };
   }
 
   /// The gender as a buyer-facing label, e.g. `Female`, or `null`.

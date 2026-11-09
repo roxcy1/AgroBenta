@@ -34,6 +34,7 @@ class TransactionResource extends JsonResource
             'quantity' => $this->quantity,
             'total_amount' => $this->total_amount,
             'status' => $this->status?->value,
+            'fulfillment_status' => $this->fulfillment_status?->value,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
