@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use App\Http\Controllers\Api\Admin\ActivityController;
 use App\Http\Controllers\Api\Admin\AuthController;
@@ -22,7 +22,6 @@ use App\Http\Controllers\Api\Offer\OfferController;
 use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerActivity\SellerActivityController;
 use App\Http\Controllers\Api\SellerDashboard\SellerDashboardController;
-use App\Http\Controllers\Api\SellerInquiry\SellerInquiryController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
@@ -66,7 +65,7 @@ Route::prefix('auth')->group(function (): void {
 // `ability:mobile` is the authorisation boundary, so a mobile token reaches
 // this group and an admin token does not, in the same direction enforced for
 // the auth group above. Visibility is enforced in the query, and `status` is
-// not an accepted parameter — see IndexListingRequest.
+// not an accepted parameter â€” see IndexListingRequest.
 Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
     Route::get('/listings', [MarketplaceListingController::class, 'index']);
     Route::get('/listings/{listing}', [MarketplaceListingController::class, 'show']);
@@ -84,12 +83,12 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
 // Submission grants nothing. `seller_capability` is set only by the admin
 // approval endpoint above, and `SellerVerificationController` never writes it.
 //
-// No throttle here, deliberately. The contract's throttling inventory (§3.5)
+// No throttle here, deliberately. The contract's throttling inventory (Â§3.5)
 // lists only login, register and price-suggestion, and D-09 is still open, so a
 // limit on this route would be an undocumented behaviour change: it would turn
 // the sixth attempt in a minute into a 429 that the contract never promises. The
-// abuse ceiling that does exist is the open-record rule below — one application
-// per buyer per open state, refused with 409 — plus `auth:sanctum`. Revisit under
+// abuse ceiling that does exist is the open-record rule below â€” one application
+// per buyer per open state, refused with 409 â€” plus `auth:sanctum`. Revisit under
 // D-09 if a limit is decided.
 Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification')->group(function (): void {
     Route::get('/me', [MobileSellerVerificationController::class, 'me']);
@@ -104,7 +103,7 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification
     // farm photo's `{photo}` is only matched against the caller's own files. The file
     // rules live in UploadSellerVerificationDocumentRequest and are enforced on
     // the bytes, not the client's filename. The response never carries a path
-    // or URL — the file is on private storage and is read back only through
+    // or URL â€” the file is on private storage and is read back only through
     // GET /documents/{type} below, which resolves the record from the token.
     Route::post('/documents', [MobileSellerVerificationController::class, 'storeDocument']);
     Route::get('/documents/{type}', [MobileSellerVerificationController::class, 'showDocument']);
@@ -123,7 +122,7 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification
 //
 // `submit` and `destroy` are declared before `/seller/listings/{listing}` for the
 // same reason `/me` is declared before its group: a static segment must never be
-// swallowed by a parameter. Neither is a deactivation — `active -> inactive` is an
+// swallowed by a parameter. Neither is a deactivation â€” `active -> inactive` is an
 // administrator action [D-02 rule 4] and is not exposed to sellers.
 Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/listings')->group(function (): void {
     Route::get('/', [SellerListingController::class, 'index']);
@@ -133,27 +132,13 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     Route::patch('/{listing}', [SellerListingController::class, 'update']);
     Route::delete('/{listing}', [SellerListingController::class, 'destroy']);
 
-    // Listing photos (functional documentation §4.5, contract D-10). Multipart
+    // Listing photos (functional documentation Â§4.5, contract D-10). Multipart
     // upload and removal by the name the client was served, both scoped to the
-    // caller's own listings by the same ownership lookup as everything above —
+    // caller's own listings by the same ownership lookup as everything above â€”
     // another seller's id is a 404 here, never a 403 that confirms it exists.
     Route::post('/{listing}/photos', [SellerListingController::class, 'storePhotos']);
     Route::delete('/{listing}/photos', [SellerListingController::class, 'destroyPhoto']);
 });
-
-// Inquiries received by the caller as a seller. Read-only in this phase:
-// responding and declining are later work, and no status transition is exposed
-// here.
-//
-// No route takes a seller id. The scope is the token's user and is applied in
-// the repository, so a seller can see only inquiries about their own listings
-// (functional documentation section 8.2 rule 2). `buyer_id`, `seller_id` and `status`
-// are refused as query parameters: none of them is a filter this list supports.
-Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
-    ->prefix('seller/inquiries')
-    ->group(function (): void {
-        Route::get('/', [SellerInquiryController::class, 'index']);
-    });
 
 // The seller dashboard aggregates the caller's own listings, received
 // inquiries, and sales. The seller is the token's user. No route or query
@@ -173,7 +158,7 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
         Route::get('/', [SellerActivityController::class, 'index']);
     });
 
-// Transactions — the caller's own transactions as buyer or seller.
+// Transactions â€” the caller's own transactions as buyer or seller.
 //
 // No route here takes a user id. Both counterparties are resolved from the
 // token inside the repository, so there is no parameter that could widen a
@@ -192,17 +177,17 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
     Route::post('/{transaction}/complete', [MobileTransactionController::class, 'complete']);
 });
 
-// Inquiries — the buyer's structured contact with a seller about a listing.
+// Inquiries â€” the buyer's structured contact with a seller about a listing.
 //
 // The buyer's write path. Reading received inquiries is the seller route above.
 // There is no administrator inquiry route: an inquiry is between the buyer and
-// the seller only (functional documentation §8.2).
+// the seller only (functional documentation Â§8.2).
 //
 // No route here takes a user id. The buyer is resolved from the token and the
 // seller from `listing.seller_id` inside the service, so there is no parameter
 // or body field that could point an inquiry at a foreign account. Sending an
 // inquiry changes nothing else: the listing's status, the transaction
-// lifecycle and any payment state are untouched — an inquiry is a message of
+// lifecycle and any payment state are untouched â€” an inquiry is a message of
 // record, not a sale.
 //
 // No throttle, deliberately, matching `POST /seller-verification` (D-09 is
@@ -221,7 +206,7 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
     Route::get('/inquiries', [MobileInquiryController::class, 'index']);
 });
 
-// Profile — the caller's own account details and credentials.
+// Profile â€” the caller's own account details and credentials.
 //
 // No route here takes an id. The record is always resolved from the token, the
 // same design as the seller-verification group, so one account cannot read or
@@ -236,11 +221,11 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('profile')->group(fu
     Route::put('/password', [ProfileController::class, 'changePassword']);
 });
 
-// Messaging — the caller's own conversations and messages.
+// Messaging â€” the caller's own conversations and messages.
 //
 // A "conversation" is derived, not stored: it is the pair
 // (counterpart_id, listing_id) over the messages that touch the caller. That
-// is why there is no `/conversations/{id}` route — an id would require a row
+// is why there is no `/conversations/{id}` route â€” an id would require a row
 // that does not exist.
 //
 // `/conversations/{userId}/messages` is the thread with a counterpart;
@@ -269,7 +254,7 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
 //
 // Only creation and withdrawal sit behind the `seller` capability gate. The
 // buyer is not an approved seller by definition, so the read, accept and
-// decline routes must not require that capability — ownership is enforced by
+// decline routes must not require that capability â€” ownership is enforced by
 // the repository's party scope and the service's state checks instead.
 Route::middleware('auth:sanctum', 'ability:mobile')->prefix('offers')->group(function (): void {
     Route::get('/', [OfferController::class, 'index']);
@@ -283,7 +268,7 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('offers')->group(fun
     });
 });
 
-// Notifications — the caller's own notification feed.
+// Notifications â€” the caller's own notification feed.
 //
 // No route here takes a user id. The record is resolved from the token, so
 // one account cannot read or mark another account's notifications. The route
@@ -323,7 +308,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::get('/seller-verifications', [SellerVerificationController::class, 'index']);
     Route::get('/seller-verifications/{sellerVerification}', [SellerVerificationController::class, 'show']);
     // Documents. Streamed from the private disk with no-cache headers, guarded
-    // by this group's admin ability, and never by a public URL — the web server
+    // by this group's admin ability, and never by a public URL â€” the web server
     // has no route to the storage root.
     Route::get('/seller-verifications/{sellerVerification}/documents/{type}', [SellerVerificationController::class, 'document']);
     Route::get('/seller-verifications/{sellerVerification}/documents/farm_photo/{photo}', [SellerVerificationController::class, 'farmPhoto']);

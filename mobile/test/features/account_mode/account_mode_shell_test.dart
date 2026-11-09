@@ -1,6 +1,5 @@
 import 'package:agrobenta_mobile/features/account_mode/state/account_mode.dart';
 import 'package:agrobenta_mobile/features/buyer_shell/view/buyer_shell.dart';
-import 'package:agrobenta_mobile/features/inquiries/view/received_inquiries_screen.dart';
 import 'package:agrobenta_mobile/features/seller_shell/view/seller_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

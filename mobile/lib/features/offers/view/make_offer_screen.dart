@@ -5,7 +5,6 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/inquiry.dart';
 import '../../../models/offer.dart';
-import '../../../models/received_inquiry.dart';
 import '../state/make_offer_controller.dart';
 import '../state/offer_scope.dart';
 import '../state/offer_state.dart';
@@ -23,31 +22,11 @@ import '../state/offer_state.dart';
 /// every editable field is prefilled from the buyer's inquiry so "keep the
 /// buyer's preference" is the default.
 ///
-/// Two ways in, both from the server's own records:
-///
-///  * [MakeOfferScreen] — the seller's Received Inquiries list.
-///  * [MakeOfferScreen.forConversation] — a chat thread, using
-///    `ConversationResource.eligible_inquiry`.
+/// Opens from a chat thread, using the server's `eligible_inquiry`.
 ///
 /// The controller is owned by this route. Popping returns `true` when an offer
-/// was created so the inbox (or chat panel) can refresh.
+/// was created so the chat panel can refresh.
 class MakeOfferScreen extends StatefulWidget {
-  /// Opens the form from a received inquiry.
-  factory MakeOfferScreen({required ReceivedInquiry inquiry, Key? key}) {
-    return MakeOfferScreen._(
-      inquiryId: inquiry.id,
-      listingId: inquiry.listing?.id,
-      buyerName: inquiry.buyer?.name,
-      listingTitle: inquiry.listing?.title,
-      askingPrice: inquiry.listing?.askingPrice,
-      photoUrl: inquiry.listing?.photoUrl,
-      initialPaymentMethod: inquiry.paymentMethod,
-      initialCollectionMethod: inquiry.collectionMethod,
-      initialPickupDate: inquiry.preferredSchedule,
-      key: key,
-    );
-  }
-
   /// Opens the form from a conversation, using the server's eligible inquiry.
   factory MakeOfferScreen.forConversation({
     required int inquiryId,

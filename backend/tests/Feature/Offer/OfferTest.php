@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace Tests\Feature\Offer;
 
@@ -16,7 +16,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Purchase offers — `POST /api/offers`, `GET /api/offers/{offer}`,
+ * Purchase offers â€” `POST /api/offers`, `GET /api/offers/{offer}`,
  * `POST /api/offers/{offer}/accept`, `/decline`, `/withdraw`.
  *
  * Rules under test:
@@ -167,7 +167,7 @@ class OfferTest extends TestCase
         $listing = $this->createListing($this->seller);
         $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
 
-        // The caller is the buyer — not an approved seller.
+        // The caller is the buyer â€” not an approved seller.
         $this->postOffer([
             'inquiry_id' => $inquiry->id,
             'listing_id' => $listing->id,
@@ -367,7 +367,7 @@ class OfferTest extends TestCase
         ])->assertStatus(201)->json('data.id');
 
         // The seller is a party but not the buyer, so acceptance is refused
-        // with 409 (not 404 — 404 is only for a non-party).
+        // with 409 (not 404 â€” 404 is only for a non-party).
         $this->postOfferAction('accept', $offerId, $this->seller)
             ->assertStatus(409);
 
@@ -722,40 +722,6 @@ class OfferTest extends TestCase
             'listing_id' => $listing->id,
             'proposed_amount' => 47000.00,
         ])->assertStatus(201);
-    }
-
-    #[Test]
-    public function the_seller_inbox_reports_offer_eligibility(): void
-    {
-        $listing = $this->createListing($this->seller);
-        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
-
-        $inbox = fn () => $this->withHeader(
-            'Authorization',
-            'Bearer '.$this->mobileToken($this->seller),
-        )->getJson('/api/seller/inquiries')->assertOk()->json('data.inquiries.0');
-
-        $this->assertTrue($inbox()['can_make_offer']);
-
-        $offerId = $this->postOffer([
-            'inquiry_id' => $inquiry->id,
-            'listing_id' => $listing->id,
-            'proposed_amount' => 48000.00,
-        ])->assertStatus(201)->json('data.id');
-
-        $this->assertFalse($inbox()['can_make_offer'], 'a pending offer blocks another');
-
-        $this->postOfferAction('decline', $offerId, $this->buyer)->assertStatus(200);
-        $this->assertTrue($inbox()['can_make_offer'], 'a declined offer can be revised');
-
-        $offerId = $this->postOffer([
-            'inquiry_id' => $inquiry->id,
-            'listing_id' => $listing->id,
-            'proposed_amount' => 47000.00,
-        ])->assertStatus(201)->json('data.id');
-
-        $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(200);
-        $this->assertFalse($inbox()['can_make_offer'], 'acceptance is permanent');
     }
 
     #[Test]

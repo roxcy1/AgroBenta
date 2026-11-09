@@ -15,7 +15,6 @@ import '../widgets/seller_activity_tile.dart';
 /// safe destinations as Seller Home's latest-five feed.
 class AllActivitiesScreen extends StatefulWidget {
   const AllActivitiesScreen({
-    required this.onOpenInquiries,
     required this.onOpenListings,
     required this.onOpenTransactions,
     this.onOpenOffer,
@@ -23,7 +22,6 @@ class AllActivitiesScreen extends StatefulWidget {
     super.key,
   });
 
-  final VoidCallback onOpenInquiries;
   final VoidCallback onOpenListings;
   final VoidCallback onOpenTransactions;
   final void Function(int buyerId, int? transactionId)? onOpenOffer;
@@ -37,7 +35,6 @@ class _AllActivitiesScreenState extends State<AllActivitiesScreen> {
   static const List<(String?, String)> _categories = <(String?, String)>[
     (null, 'All'),
     ('listings', 'Listings'),
-    ('inquiries', 'Inquiries'),
     ('offers', 'Offers'),
     ('transactions', 'Transactions'),
   ];
@@ -223,14 +220,16 @@ class _AllActivitiesScreenState extends State<AllActivitiesScreen> {
     final String action = activity.action;
 
     if (action.startsWith('inquiry')) {
-      return widget.onOpenInquiries;
+      // Inquiries are delivered as messages now (§8.2): there is no seller
+      // inbox to open, so activity rows have nothing to navigate to here.
+      return null;
     }
     if (action.startsWith('offer')) {
       final int? buyerId = activity.buyerId;
       if (buyerId != null && widget.onOpenOffer != null) {
         return () => widget.onOpenOffer!(buyerId, activity.transactionId);
       }
-      return widget.onOpenInquiries;
+      return null;
     }
     if (action.startsWith('listing')) {
       return widget.onOpenListings;

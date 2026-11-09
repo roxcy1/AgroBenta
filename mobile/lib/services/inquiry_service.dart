@@ -1,24 +1,23 @@
-import '../core/constants/api_constants.dart';
+﻿import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
 import '../models/inquiry.dart';
 import '../models/inquiry_list_item.dart';
-import '../models/received_inquiry_page.dart';
 
-/// The inquiry API surface: the buyer's create path and the seller's inbox.
+/// The inquiry API surface: the buyer's create path.
 ///
 /// No token handling, no persistence, no error translation - those belong to
 /// `InquiryRepository` and `ApiClient`.
 ///
 /// ## What this service can and cannot send
 ///
-/// [create] builds its body from an explicit allow-list — exactly the fields
+/// [create] builds its body from an explicit allow-list â€” exactly the fields
 /// `StoreInquiryRequest` validates ([InquiryEndpoints.writableFields]).
 /// `buyer_id`, `seller_id` and `status` are not merely unused, they are
 /// **unreachable**: there is no parameter on this method that could become one
 /// of those keys. The buyer is the token, the seller is the listing's owner,
 /// and the status is `open` by construction, all server-side
-/// (functional documentation §10.1).
+/// (functional documentation Â§10.1).
 ///
 /// Blank optional values are omitted rather than sent empty: `""` is not the
 /// same thing as "not provided" when a human later reads the record, and the
@@ -28,7 +27,7 @@ class InquiryService {
 
   final ApiClient _apiClient;
 
-  /// `GET /inquiries` — the caller's active inquiries on one side.
+  /// `GET /inquiries` â€” the caller's active inquiries on one side.
   ///
   /// [role] is the active Account Mode; omitting it asks for both sides. The
   /// scope is always the token, and inquiries already accepted are excluded
@@ -54,30 +53,7 @@ class InquiryService {
     );
   }
 
-  /// `GET /seller/inquiries` — one page of the authenticated seller's inbox.
-  ///
-  /// [page] and [perPage] are the entire query allow-list;
-  /// `IndexSellerInquiryRequest` refuses `buyer_id`, `seller_id` and `status`.
-  /// The seller scope is the token, so there is no id to send.
-  Future<ReceivedInquiryPage> listReceived({
-    int page = 1,
-    int perPage = SellerInquiryEndpoints.defaultPerPage,
-  }) {
-    return _apiClient.get<ReceivedInquiryPage>(
-      SellerInquiryEndpoints.received,
-      query: <String, dynamic>{
-        // Explicit allow-list. Anything not named here has no path to the
-        // request, so a field added to the model can never become a filter.
-        'page': page,
-        'per_page': perPage,
-      },
-      parse: (Object? data) => ReceivedInquiryPage.fromJson(
-        _asObject(data, 'GET /seller/inquiries'),
-      ),
-    );
-  }
-
-  /// `GET /inquiries/listing/{listing}` — the caller's inquiry about one
+  /// `GET /inquiries/listing/{listing}` â€” the caller's inquiry about one
   /// listing, or `null`.
   ///
   /// The pre-check the Inquire screen runs before rendering the form. Buyer
@@ -101,14 +77,14 @@ class InquiryService {
     );
   }
 
-  /// `POST /inquiries` — send an inquiry about [listingId].
+  /// `POST /inquiries` â€” send an inquiry about [listingId].
   ///
   /// Throws [ApiException]:
-  ///  * [ApiErrorKind.conflict] on a `409` — the listing is not active, or it
+  ///  * [ApiErrorKind.conflict] on a `409` â€” the listing is not active, or it
   ///    is the caller's own. Not a validation problem; retrying cannot help
   ///    until the listing's state changes, so the screen must not present it
   ///    as one.
-  ///  * [ApiErrorKind.notFound] on a `404` — the listing no longer exists.
+  ///  * [ApiErrorKind.notFound] on a `404` â€” the listing no longer exists.
   ///  * [ApiErrorKind.validation] on a `422`, carrying per-field messages.
   ///  * [ApiErrorKind.unauthorized] on a `401`; the token has been cleared.
   Future<Inquiry> create({

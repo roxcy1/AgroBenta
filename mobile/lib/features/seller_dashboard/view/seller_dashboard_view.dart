@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../models/received_inquiry.dart';
 import '../../../models/seller_activity.dart';
 import '../../../models/seller_dashboard.dart';
-import '../../../repositories/inquiry_repository.dart';
 import '../../../repositories/seller_activity_repository.dart';
 import '../../../widgets/paged_list_state_views.dart';
-import '../../inquiries/state/received_inquiries_controller.dart';
-import '../../inquiries/state/received_inquiries_state.dart';
 import '../state/seller_activity_controller.dart';
 import '../state/seller_dashboard_controller.dart';
 import '../state/seller_dashboard_scope.dart';
@@ -18,18 +14,14 @@ import '../widgets/seller_activity_tile.dart';
 
 /// The seller dashboard shown on Seller Home.
 ///
-/// Every value comes from real seller-scoped endpoints:
-/// `GET /seller/dashboard` for the summary, and — when a repository is supplied
-/// — `GET /seller/inquiries` for the attention list. Loading, empty, error,
-/// refresh and zero-count states are rendered from those responses; nothing is
-/// estimated.
+/// Every value comes from `GET /seller/dashboard`, resolved from the token.
+/// Loading, empty, error and refresh states are rendered from that response;
+/// nothing is estimated.
 class SellerDashboardView extends StatefulWidget {
   const SellerDashboardView({
     required this.onOpenListings,
-    required this.onOpenInquiries,
     required this.onOpenTransactions,
     required this.onAddListing,
-    this.inquiriesRepository,
     this.activityRepository,
     this.onOpenOffer,
     this.onOpenTransaction,
@@ -38,17 +30,11 @@ class SellerDashboardView extends StatefulWidget {
   });
 
   final VoidCallback onOpenListings;
-  final VoidCallback onOpenInquiries;
   final VoidCallback onOpenTransactions;
 
   /// Opens the existing create-listing form; the dashboard refreshes when the
   /// returned future completes.
   final Future<void> Function() onAddListing;
-
-  /// Optional so the view can be mounted without the inquiry scope (tests, or
-  /// a future host that does not show attention items). When null the section
-  /// is omitted rather than showing invented rows.
-  final InquiryRepository? inquiriesRepository;
 
   /// Optional seller activity repository; the section is omitted when null.
   final SellerActivityRepository? activityRepository;
@@ -70,7 +56,6 @@ class SellerDashboardView extends StatefulWidget {
 
 class _SellerDashboardViewState extends State<SellerDashboardView> {
   late final SellerDashboardController _controller;
-  ReceivedInquiriesController? _attention;
   SellerActivityController? _activity;
 
   @override
@@ -81,11 +66,6 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
     );
     _controller.loadInitial();
 
-    final InquiryRepository? repository = widget.inquiriesRepository;
-    if (repository != null) {
-      _attention = ReceivedInquiriesController(repository)..loadInitial();
-    }
-
     final SellerActivityRepository? activities = widget.activityRepository;
     if (activities != null) {
       _activity = SellerActivityController(activities)..load();
@@ -95,7 +75,6 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
   @override
   void dispose() {
     _activity?.dispose();
-    _attention?.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -103,7 +82,6 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
   Future<void> _refresh() async {
     await Future.wait<void>(<Future<void>>[
       _controller.refresh(),
-      if (_attention != null) _attention!.refresh(),
       if (_activity != null) _activity!.refresh(),
     ]);
   }
@@ -122,7 +100,6 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
       child: ListenableBuilder(
         listenable: Listenable.merge(<Listenable?>[
           _controller,
-          _attention,
           _activity,
         ].whereType<Listenable>().toList(growable: false)),
         builder: (BuildContext context, Widget? child) {
@@ -196,7 +173,6 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
           _SummaryGrid(
             dashboard: dashboard,
             onOpenListings: widget.onOpenListings,
-            onOpenInquiries: widget.onOpenInquiries,
             onOpenTransactions: widget.onOpenTransactions,
           ),
           if (!dashboard.hasActivity) ...<Widget>[
@@ -209,18 +185,10 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
               ),
             ),
           ],
-          if (_attention != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.lg),
-            _AttentionSection(
-              controller: _attention!,
-              onOpenInquiries: widget.onOpenInquiries,
-            ),
-          ],
           if (_activity != null) ...<Widget>[
             const SizedBox(height: AppSpacing.lg),
             _RecentActivitySection(
               controller: _activity!,
-              onOpenInquiries: widget.onOpenInquiries,
               onOpenListings: widget.onOpenListings,
               onOpenTransactions: widget.onOpenTransactions,
               onOpenOffer: widget.onOpenOffer,
@@ -258,13 +226,11 @@ class _SummaryGrid extends StatelessWidget {
   const _SummaryGrid({
     required this.dashboard,
     required this.onOpenListings,
-    required this.onOpenInquiries,
     required this.onOpenTransactions,
   });
 
   final SellerDashboard dashboard;
   final VoidCallback onOpenListings;
-  final VoidCallback onOpenInquiries;
   final VoidCallback onOpenTransactions;
 
   @override
@@ -284,13 +250,6 @@ class _SummaryGrid extends StatelessWidget {
               value: dashboard.listings.active,
               icon: Icons.storefront_outlined,
               onTap: onOpenListings,
-            ),
-            _SummaryTile(
-              width: width,
-              label: 'Inquiries',
-              value: dashboard.inquiries.total,
-              icon: Icons.mark_email_unread_outlined,
-              onTap: onOpenInquiries,
             ),
             _SummaryTile(
               width: width,
@@ -370,158 +329,15 @@ class _SummaryTile extends StatelessWidget {
   }
 }
 
-/// Up to three genuinely actionable inquiries (`can_make_offer` is true, which
-/// the server defines as an open inquiry with no pending or accepted offer).
-///
-/// When nothing is actionable but inquiries exist, the same rows are shown
-/// under a "Recent inquiries" label with no claim that action is required.
-class _AttentionSection extends StatelessWidget {
-  const _AttentionSection({
-    required this.controller,
-    required this.onOpenInquiries,
-  });
-
-  final ReceivedInquiriesController controller;
-  final VoidCallback onOpenInquiries;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ReceivedInquiriesState state = controller.state;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text('Needs Your Attention', style: theme.textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.xs),
-        if (state.status == ReceivedInquiriesStatus.failed)
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  'Could not load inquiries.',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-              TextButton(
-                onPressed: controller.loadInitial,
-                child: const Text('Retry'),
-              ),
-            ],
-          )
-        else if (state.status == ReceivedInquiriesStatus.initial ||
-            state.status == ReceivedInquiriesStatus.loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            child: Center(
-              child: SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          )
-        else
-          _attentionBody(theme, state),
-      ],
-    );
-  }
-
-  Widget _attentionBody(ThemeData theme, ReceivedInquiriesState state) {
-    final List<ReceivedInquiry> actionable = state.inquiries
-        .where((ReceivedInquiry inquiry) => inquiry.canMakeOffer)
-        .take(3)
-        .toList(growable: false);
-    final bool isActionable = actionable.isNotEmpty;
-    final List<ReceivedInquiry> shown = isActionable
-        ? actionable
-        : state.inquiries.take(3).toList(growable: false);
-
-    if (shown.isEmpty) {
-      return Text(
-        'No inquiries yet.',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: AppColors.textSecondary,
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        for (final ReceivedInquiry inquiry in shown)
-          _AttentionTile(inquiry: inquiry, onTap: onOpenInquiries),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: onOpenInquiries,
-            child: Text(
-              isActionable ? 'View inquiries' : 'View recent inquiries',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AttentionTile extends StatelessWidget {
-  const _AttentionTile({required this.inquiry, required this.onTap});
-
-  final ReceivedInquiry inquiry;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final String buyer = inquiry.buyer?.name ?? 'Unknown buyer';
-    final String listing = inquiry.listing?.title ?? 'Listing no longer available';
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(buyer, style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 2),
-                    Text(
-                      listing,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, size: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// The latest genuine seller events, newest first, capped at five.
 ///
 /// Each row navigates only when its context identifies an existing record:
-/// inquiry events open the inbox, offers open the buyer conversation (or the
-/// inbox when the buyer id is missing), listing events open My Listings, and
-/// transaction events open the transaction detail (or the Transactions tab when
-/// the id is missing). No row is ever routed to a guessed record.
+/// listing events open My Listings, and transaction events open the
+/// transaction detail (or the Transactions tab when the id is missing). No row
+/// is ever routed to a guessed record.
 class _RecentActivitySection extends StatelessWidget {
   const _RecentActivitySection({
     required this.controller,
-    required this.onOpenInquiries,
     required this.onOpenListings,
     required this.onOpenTransactions,
     required this.onOpenOffer,
@@ -530,7 +346,6 @@ class _RecentActivitySection extends StatelessWidget {
   });
 
   final SellerActivityController controller;
-  final VoidCallback onOpenInquiries;
   final VoidCallback onOpenListings;
   final VoidCallback onOpenTransactions;
   final void Function(int buyerId, int? transactionId)? onOpenOffer;
@@ -614,7 +429,9 @@ class _RecentActivitySection extends StatelessWidget {
     final String action = activity.action;
 
     if (action.startsWith('inquiry')) {
-      return onOpenInquiries;
+      // Inquiries are delivered as messages now (§8.2): there is no seller
+      // inbox to open, so activity rows have nothing to navigate to here.
+      return null;
     }
 
     if (action.startsWith('offer')) {
@@ -622,7 +439,7 @@ class _RecentActivitySection extends StatelessWidget {
       if (buyerId != null && onOpenOffer != null) {
         return () => onOpenOffer!(buyerId, activity.transactionId);
       }
-      return onOpenInquiries;
+      return null;
     }
 
     if (action.startsWith('listing')) {

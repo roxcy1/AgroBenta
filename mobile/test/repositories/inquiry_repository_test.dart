@@ -12,45 +12,8 @@ void main() {
     recorded = <RecordedRequest>[];
   });
 
-  group('listReceived', () {
-    test('clamps per_page to the server maximum', () async {
-      await buildInquiryRepository(
-        tokenStore,
-        (_) async => sellerInquiryListResponse(),
-        recorded: recorded,
-      ).listReceived(perPage: 999);
-
-      expect(recorded.single.query['per_page'], '50');
-    });
-
-    test('clamps a per_page below one to one', () async {
-      await buildInquiryRepository(
-        tokenStore,
-        (_) async => sellerInquiryListResponse(),
-        recorded: recorded,
-      ).listReceived(perPage: 0);
-
-      expect(recorded.single.query['per_page'], '1');
-    });
-
-    test('normalises a page below one to page one', () async {
-      await buildInquiryRepository(
-        tokenStore,
-        (_) async => sellerInquiryListResponse(),
-        recorded: recorded,
-      ).listReceived(page: 0);
-
-      expect(recorded.single.query['page'], '1');
-    });
-
-    test('sends the default page size explicitly', () async {
-      await buildInquiryRepository(
-        tokenStore,
-        (_) async => sellerInquiryListResponse(),
-        recorded: recorded,
-      ).listReceived();
-
-      expect(recorded.single.query['per_page'], '15');
-    });
-  });
+  // Removed: `listReceived` / `GET /api/seller/inquiries` tests. These
+  // correspond to the pre-MS-18 seller inbox which was deleted (PM decision
+  // MS-18, 2026-10-29). The write path (`create`) and the buyer's own active
+  // inquiries (`listActive`, `findExistingForListing`) remain.
 }

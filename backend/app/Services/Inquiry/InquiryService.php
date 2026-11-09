@@ -56,18 +56,6 @@ class InquiryService
     }
 
     /**
-     * List the inquiries received by one seller, newest first.
-     *
-     * A seller may see only inquiries about their own listings (functional
-     * documentation section 8.2 rule 2). The scope comes from the authenticated
-     * user, so there is no request value that can widen it.
-     */
-    public function listForSeller(User $seller, int $perPage = 15): LengthAwarePaginator
-    {
-        return $this->inquiries->paginateForSeller($seller, $perPage);
-    }
-
-    /**
      * The caller's active inquiries on one side, for the Messages tab.
      *
      * @return Collection<int, Inquiry>

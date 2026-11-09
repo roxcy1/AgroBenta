@@ -8,8 +8,6 @@ import '../../../models/transaction.dart';
 import '../../../models/user.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../auth/state/auth_state.dart';
-import '../../inquiries/state/inquiry_scope.dart';
-import '../../inquiries/view/received_inquiries_screen.dart';
 import '../../messaging/state/messaging_scope.dart';
 import '../../messaging/view/chat_screen.dart';
 import '../../notifications/state/notifications_scope.dart';
@@ -31,8 +29,6 @@ import '../widgets/home_header.dart';
 /// conversion, and completed-transaction figures are deliberately not shown
 /// because the API does not expose them.
 ///
-/// Received Inquiries remains a pushed sub-screen rather than a sixth tab, and
-/// My Listings and Transactions switch to their existing shell tabs.
 class SellerHomeScreen extends StatefulWidget {
   const SellerHomeScreen({
     this.onOpenListings,
@@ -85,8 +81,8 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
     }
 
     /// Opens the buyer conversation behind an offer activity when the session
-    /// already knows that pair; otherwise falls back to the inquiry inbox,
-    /// where the Open Conversation action resolves it safely.
+    /// already knows that pair; when no conversation exists yet there is
+    /// nothing to open, so this is a no-op.
     void openOfferActivity(int buyerId, int? transactionId) {
       final conversations = MessagingScope.readOf(
         context,
@@ -100,11 +96,6 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       }
 
       if (match == null) {
-        Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (BuildContext context) => const ReceivedInquiriesScreen(),
-          ),
-        );
         return;
       }
 
@@ -126,14 +117,6 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
         MaterialPageRoute<void>(
           builder: (BuildContext context) =>
               TransactionDetailScreen(transactionId: transactionId),
-        ),
-      );
-    }
-
-    void openInquiries() {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) => const ReceivedInquiriesScreen(),
         ),
       );
     }
@@ -170,7 +153,6 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => AllActivitiesScreen(
-            onOpenInquiries: openInquiries,
             onOpenListings: openListings,
             onOpenTransactions: openTransactions,
             onOpenOffer: openOfferActivity,
@@ -239,12 +221,10 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: SellerDashboardView(
                     onAddListing: addListing,
-                    inquiriesRepository: InquiryScope.readOf(context),
                     activityRepository: SellerActivityScope.readOf(context),
                     onOpenOffer: openOfferActivity,
                     onOpenTransaction: openTransactionActivity,
                     onOpenListings: openListings,
-                    onOpenInquiries: openInquiries,
                     onOpenTransactions: openTransactions,
                     onSeeAllActivities: openAllActivities,
                   ),

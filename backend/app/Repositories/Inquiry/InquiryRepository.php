@@ -33,30 +33,6 @@ use Illuminate\Support\Collection;
 class InquiryRepository
 {
     /**
-     * Paginate the inquiries received by one seller, newest first.
-     *
-     * The scope is the token's user, never a client-supplied id. The buyer and
-     * listing projections are eager-loaded with only the columns the mobile
-     * response needs: no buyer email and no listing seller details are read
-     * into memory, let alone serialised.
-     */
-    public function paginateForSeller(User $seller, int $perPage = 15): LengthAwarePaginator
-    {
-        return Inquiry::query()
-            ->with([
-                'buyer:id,name',
-                'listing:id,livestock_type,breed,asking_price,photos',
-                'offers:id,inquiry_id,status',
-            ])
-            ->where('seller_id', $seller->getKey())
-            // A total order, so two inquiries written in the same second cannot
-            // appear on two pages at once.
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->paginate($perPage);
-    }
-
-    /**
      * The caller's active inquiries, on the side they are asking for.
      *
      * Used by the Messages "Inquiries" tab: individual inquiries that still

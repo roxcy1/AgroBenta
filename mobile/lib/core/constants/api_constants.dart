@@ -1,4 +1,4 @@
-/// Transport-level constants for API communication.
+﻿/// Transport-level constants for API communication.
 ///
 /// Endpoint paths live here, one group per feature, and only once the backend
 /// actually serves them. M0 deliberately carried no paths at all: the backend
@@ -6,7 +6,7 @@
 /// does not exist is how invented contracts start. The mobile authentication
 /// routes are implemented (`backend/routes/api.php`), and so are the buyer
 /// marketplace, seller verification, seller listing and profile routes, so
-/// those groups exist below — and nothing else.
+/// those groups exist below â€” and nothing else.
 library;
 
 abstract final class ApiConstants {
@@ -34,7 +34,7 @@ abstract final class ApiConstants {
   ///
   /// The Admin Web uses `localStorage['admin_token']`. Mobile uses a different
   /// store and a different key, because these are different clients with
-  /// different lifetimes — not because the token format differs.
+  /// different lifetimes â€” not because the token format differs.
   static const String tokenStorageKey = 'agrobenta_api_token';
 }
 
@@ -48,7 +48,7 @@ abstract final class ApiConstants {
 /// a separate group below ([SellerListingEndpoints]), and `/api/livestock` is
 /// **not** a path this app ever calls.
 abstract final class MarketplaceEndpoints {
-  /// `GET` — browse active listings. 200, paginated envelope.
+  /// `GET` â€” browse active listings. 200, paginated envelope.
   ///
   /// Query parameters are built by `MarketplaceService` from an explicit
   /// allow-list of the fields `IndexListingRequest` validates. `status` is
@@ -57,13 +57,13 @@ abstract final class MarketplaceEndpoints {
   /// client-selected filter.
   static const String browse = '/listings';
 
-  /// `GET` — Buyer Home's Popular Livestock ranking. 200, plain envelope.
+  /// `GET` â€” Buyer Home's Popular Livestock ranking. 200, plain envelope.
   ///
   /// Completed sales in the last 30 days, grouped over the canonical livestock
   /// categories. Read-only and token-scoped; no query parameters.
   static const String popularLivestock = '/marketplace/popular-livestock';
 
-  /// `GET` — one listing's detail. 200, plain envelope.
+  /// `GET` â€” one listing's detail. 200, plain envelope.
   ///
   /// [id] is appended to build the path. It is a selector, not proof of
   /// ownership: the server re-checks visibility and answers 404 for a listing
@@ -102,7 +102,7 @@ abstract final class LivestockTypeEndpoints {
 
 /// The approved locality catalog for the initial Trinidad, Bohol locale.
 abstract final class TrinidadLocationEndpoints {
-  /// `GET` — fixed region/province/municipality and the approved barangays.
+  /// `GET` â€” fixed region/province/municipality and the approved barangays.
   static const String catalog = '/locations/trinidad/barangays';
 }
 
@@ -118,37 +118,37 @@ abstract final class TrinidadLocationEndpoints {
 /// authenticated user, which is what makes "read your own verification" a path
 /// that cannot be pointed at somebody else's account.
 abstract final class SellerVerificationEndpoints {
-  /// `GET` — the caller's most recent verification. 200, plain envelope.
+  /// `GET` â€” the caller's most recent verification. 200, plain envelope.
   ///
   /// A `404` here means the user has never submitted, which is the normal first
   /// state and not an error to apologise for.
   static const String mine = '/seller-verification/me';
 
-  /// `POST` — submit a verification. 201, plain envelope.
+  /// `POST` â€” submit a verification. 201, plain envelope.
   ///
   /// Creates a new record; a rejected verification is resubmitted by filing
-  /// again, never by updating the rejected row (functional documentation §3.2).
+  /// again, never by updating the rejected row (functional documentation Â§3.2).
   /// Refused with a `409` while a verification is open, and with a `403` for an
   /// account that is already an approved seller.
   static const String submit = '/seller-verification';
 
-  /// `POST` — upload one evidence document (multipart). 201, plain envelope.
+  /// `POST` â€” upload one evidence document (multipart). 201, plain envelope.
   ///
   /// The `type` is a field in the multipart body, one of
   /// `VerificationDocumentType`'s values. Refused with a `403` for an approved
-  /// seller and a `409` while an application is already open — an upload is
+  /// seller and a `409` while an application is already open â€” an upload is
   /// only meaningful before submitting, to stage the documents the submission
   /// will require.
   static const String documents = '/seller-verification/documents';
 
-  /// `GET` — stream one uploaded document back. 200, raw bytes (not enveloped).
+  /// `GET` â€” stream one uploaded document back. 200, raw bytes (not enveloped).
   ///
   /// The response is the file itself, so it is fetched through [ApiClient]'s
   /// binary path rather than the JSON envelope machinery. `404` when no such
   /// document exists for the caller's record.
   static String document(String type) => '/seller-verification/documents/$type';
 
-  /// `DELETE` — remove a staged document by type. 200.
+  /// `DELETE` â€” remove a staged document by type. 200.
   static String deleteDocument(String type) =>
       '/seller-verification/documents/$type';
 
@@ -183,7 +183,7 @@ abstract final class SellerVerificationEndpoints {
 ///
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `seller` middleware group. Beyond the `mobile`-ability token they require
-/// `User::isApprovedSeller()`, so a buyer is answered `403` — which is why the
+/// `User::isApprovedSeller()`, so a buyer is answered `403` â€” which is why the
 /// entry point is gated on the caller's own capability rather than assumed.
 ///
 /// No path here takes a seller id. The scope is the token, resolved server-side,
@@ -191,7 +191,7 @@ abstract final class SellerVerificationEndpoints {
 /// also no `activate` path: `active` is an administrator decision. A seller may
 /// mark one of their own `active` listings as `sold` through `markSold`.
 abstract final class SellerListingEndpoints {
-  /// `GET` — the caller's own listings, in every status. 200, paginated
+  /// `GET` â€” the caller's own listings, in every status. 200, paginated
   /// envelope.
   ///
   /// Unlike [MarketplaceEndpoints.browse], `status` **is** a permitted filter: a
@@ -200,47 +200,47 @@ abstract final class SellerListingEndpoints {
   /// rejected server-side and is not built here.
   static const String mine = '/seller/listings';
 
-  /// `POST` — create a draft. 201, plain envelope.
+  /// `POST` â€” create a draft. 201, plain envelope.
   ///
   /// Creates a `draft` and nothing else. The response carries the stored listing
   /// so the client does not need a second request to populate its list.
   static const String create = '/seller/listings';
 
-  /// `PATCH` — edit a listing the caller owns. 200, plain envelope.
+  /// `PATCH` â€” edit a listing the caller owns. 200, plain envelope.
   ///
   /// A true PATCH: absent fields are left alone, and the server permits it only
   /// while the listing is a `draft` or `active`.
   static String update(int id) => '/seller/listings/$id';
 
-  /// `POST` — submit a draft for review. 200, plain envelope.
+  /// `POST` â€” submit a draft for review. 200, plain envelope.
   ///
   /// [id] is appended. This is the only lifecycle transition a seller can make,
   /// and it is one-way: the server answers `409` for a listing that is not a
   /// draft.
   static String submit(int id) => '/seller/listings/$id/submit';
 
-  /// `POST` — mark an active listing as sold. 200, plain envelope.
+  /// `POST` â€” mark an active listing as sold. 200, plain envelope.
   ///
   /// [id] is appended. Permitted only while the listing is `active`; the server
   /// answers `409` otherwise. Terminal for the listing: no new transactions can
   /// be created against it afterwards.
   static String markSold(int id) => '/seller/listings/$id/mark-sold';
 
-  /// `DELETE` — destroy a draft or withdrawn listing. 200.
+  /// `DELETE` â€” destroy a draft or withdrawn listing. 200.
   ///
   /// [id] is appended. Permitted by the server for a `draft` or `inactive`
   /// listing and `409` for anything else. It is a real deletion, not a
   /// deactivation: nothing here takes a live listing out of sale.
   static String destroy(int id) => '/seller/listings/$id';
 
-  /// `POST` — upload photos to a listing the caller owns. 201.
+  /// `POST` â€” upload photos to a listing the caller owns. 201.
   ///
   /// [id] is appended. Multipart `photos[]` field; max 10 files per request and
   /// a cumulative per-listing ceiling enforced server-side (422). Permitted only
   /// while the listing is `draft` or `active`.
   static String photos(int id) => '/seller/listings/$id/photos';
 
-  /// `DELETE` — remove one photo from a listing the caller owns. 200.
+  /// `DELETE` â€” remove one photo from a listing the caller owns. 200.
   ///
   /// [id] is appended. The photo is named by the value the client was served
   /// (URL or bare filename both work) and sent as the `photo` field. 404 when
@@ -256,10 +256,10 @@ abstract final class SellerListingEndpoints {
   /// no code path in this app can put them in a body.
   ///
   /// `photos` is deliberately absent from this JSON body because photos are
-  /// associated out of band — `SellerListingService.uploadPhotos` posts them as
+  /// associated out of band â€” `SellerListingService.uploadPhotos` posts them as
   /// multipart to `POST /seller/listings/{id}/photos`, and
   /// `SellerListingService.removePhoto` deletes one by its served URL or
-  /// filename — rather than being typed into a field. A draft is created
+  /// filename â€” rather than being typed into a field. A draft is created
   /// without photos; locally picked photos are uploaded once the draft has an
   /// id, and the server returns the listing with the absolute URLs it now
   /// serves. Keeping the array out of the create/update body means an unrelated
@@ -311,35 +311,35 @@ abstract final class SellerListingEndpoints {
 ///
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `transactions` prefix. Every one requires a `mobile`-ability Sanctum token
-/// and resolves the user from that token — no path takes a user id, and
+/// and resolves the user from that token â€” no path takes a user id, and
 /// `buyer_id` / `seller_id` are refused as filters.
 ///
 /// There is deliberately **no `complete` path** here. The backend answers
 /// `POST /transactions/{id}/complete` with an explicit 501 (OQ-15: the
-/// confirming actor is undecided), and the client never calls it — hiding the
+/// confirming actor is undecided), and the client never calls it â€” hiding the
 /// affordance is safer than a button that always errors.
 abstract final class TransactionEndpoints {
-  /// `GET` — the caller's transactions, newest first. 200, paginated.
+  /// `GET` â€” the caller's transactions, newest first. 200, paginated.
   ///
   /// Query allow-list: `role` (`buyer`|`seller`, one side of the caller's own
   /// records), `status` (`pending`|`completed`|`cancelled`, one tab),
   /// `page`, `per_page`. Anything else has no path to the request.
   static const String list = '/transactions';
 
-  /// `POST` — create a pending transaction. 201, plain envelope.
+  /// `POST` â€” create a pending transaction. 201, plain envelope.
   ///
   /// The caller is the buyer ([D-15] rule 1). Body allow-list is exactly
   /// `{ listing_id, quantity }`; `buyer_id`, `seller_id`, `total_amount` and
   /// `status` are server-derived and refused with 422.
   static const String create = '/transactions';
 
-  /// `GET` — one transaction the caller is party to. 200, plain envelope.
+  /// `GET` â€” one transaction the caller is party to. 200, plain envelope.
   ///
   /// [id] is a selector, not proof of party: the server re-checks and answers
   /// 404 for a transaction the caller is not party to.
   static String detail(int id) => '/transactions/$id';
 
-  /// `POST` — cancel a pending transaction. 200, plain envelope.
+  /// `POST` â€” cancel a pending transaction. 200, plain envelope.
   ///
   /// Either party may cancel ([D-15] rule 5), pending-only, irreversible.
   /// The body allow-list is empty; any field is 422.
@@ -356,7 +356,7 @@ abstract final class TransactionEndpoints {
 ///
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `conversations` and `messages` prefixes. Every one requires a
-/// `mobile`-ability Sanctum token and resolves the caller from that token —
+/// `mobile`-ability Sanctum token and resolves the caller from that token â€”
 /// no path takes a user id as proof of identity.
 ///
 /// ## Why there is no `conversation_id`
@@ -364,27 +364,27 @@ abstract final class TransactionEndpoints {
 /// There is no `conversations` table. A conversation is derived from the set
 /// of messages that touch the caller, identified by the pair
 /// `(counterpart_id, listing_id)`. So the paths are built on the *counterpart*
-/// id, never on a conversation id — the id the mobile client knows is the
+/// id, never on a conversation id â€” the id the mobile client knows is the
 /// user it wants to talk to, not a row that does not exist.
 abstract final class MessagingEndpoints {
-  /// `GET` — the caller's inbox. 200, plain envelope.
+  /// `GET` â€” the caller's inbox. 200, plain envelope.
   static const String conversations = '/conversations';
 
-  /// `GET` — the thread with one counterpart. 200, paginated.
+  /// `GET` â€” the thread with one counterpart. 200, paginated.
   static String thread(int counterpartId) =>
       '/conversations/$counterpartId/messages';
 
-  /// `POST` — mark every unread message from a counterpart as read. 200.
+  /// `POST` â€” mark every unread message from a counterpart as read. 200.
   static String markRead(int counterpartId) =>
       '/conversations/$counterpartId/read';
 
-  /// `POST` — send a message. 201, plain envelope.
+  /// `POST` â€” send a message. 201, plain envelope.
   ///
   /// The receiver id is in the body, not the path: the caller can start a
   /// thread with anybody, including a user they have never messaged before.
   static const String send = '/messages';
 
-  /// `PATCH` — mark one message as read. 200, plain envelope.
+  /// `PATCH` â€” mark one message as read. 200, plain envelope.
   static String markOneRead(int messageId) => '/messages/$messageId/read';
 
   /// Page size used when the caller does not ask for a specific one.
@@ -401,33 +401,33 @@ abstract final class MessagingEndpoints {
 ///
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `notifications` prefix. Every one requires a `mobile`-ability Sanctum
-/// token and resolves the caller from that token — no path takes a user id.
+/// token and resolves the caller from that token â€” no path takes a user id.
 ///
 /// ## Why `read-all` and `unread-count` are separate paths
 ///
 /// `read-all` is declared before `{id}` in the backend so a literal segment
 /// cannot be swallowed by the UUID parameter. `unread-count` exists as its
-/// own endpoint because the mobile badge must poll it cheaply — fetching a
+/// own endpoint because the mobile badge must poll it cheaply â€” fetching a
 /// full page of notifications just to read one integer would be wasteful.
 abstract final class NotificationEndpoints {
-  /// `GET` — the caller's notifications, newest first. 200, paginated.
+  /// `GET` â€” the caller's notifications, newest first. 200, paginated.
   ///
   /// Query allow-list: `type` (one of the four categories the filter chips
   /// map to), `unread` (`0`|`1`), `page`, `per_page`.
   static const String list = '/notifications';
 
-  /// `GET` — the caller's unread count. 200, plain envelope.
+  /// `GET` â€” the caller's unread count. 200, plain envelope.
   static const String unreadCount = '/notifications/unread-count';
 
-  /// `POST` — mark every unread notification as read. 200.
+  /// `POST` â€” mark every unread notification as read. 200.
   static const String readAll = '/notifications/read-all';
 
-  /// `PATCH` — mark one notification as read. 200, plain envelope.
+  /// `PATCH` â€” mark one notification as read. 200, plain envelope.
   static String read(String id) => '/notifications/$id/read';
 
-  /// `DELETE` — delete one notification. 200.
+  /// `DELETE` â€” delete one notification. 200.
   ///
-  /// Currently unused on mobile — no swipe-to-dismiss in the initial version.
+  /// Currently unused on mobile â€” no swipe-to-dismiss in the initial version.
   /// Kept here so a future feature can reach for it without adding a new
   /// constant group.
   static String destroy(String id) => '/notifications/$id';
@@ -444,7 +444,7 @@ abstract final class NotificationEndpoints {
   /// The four categories the client's filter chips send.
   ///
   /// Mirrors `IndexNotificationRequest::TYPES` on the backend. `All` is not
-  /// in the list — it is the absence of a `type` query parameter.
+  /// in the list â€” it is the absence of a `type` query parameter.
   static const List<String> filterTypes = <String>[
     'transactions',
     'inquiries',
@@ -464,17 +464,17 @@ abstract final class NotificationEndpoints {
 /// are the caller's own resource; `changePassword` proves the current password
 /// before accepting a new one.
 abstract final class ProfileEndpoints {
-  /// `GET` — the caller's own profile. 200, plain envelope.
+  /// `GET` â€” the caller's own profile. 200, plain envelope.
   static const String show = '/profile';
 
-  /// `PUT` — update the caller's own profile. 200, plain envelope.
+  /// `PUT` â€” update the caller's own profile. 200, plain envelope.
   ///
   /// The Form Request guards every field with `sometimes`, so a partial body
-  /// is already a patch in effect. An empty string is a real value — it clears
-  /// the column — while an absent key leaves it alone.
+  /// is already a patch in effect. An empty string is a real value â€” it clears
+  /// the column â€” while an absent key leaves it alone.
   static const String update = '/profile';
 
-  /// `PUT` — change the caller's password. 200, message-only envelope.
+  /// `PUT` â€” change the caller's password. 200, message-only envelope.
   ///
   /// Refused with a `422` when `current_password` does not match, and with a
   /// `422` when the new password fails the policy. The response carries no
@@ -486,7 +486,7 @@ abstract final class ProfileEndpoints {
   /// Listed as an explicit allow-list so a service body is visibly exactly this
   /// set. `role`, `seller_capability` and `id` are absent by construction: the
   /// server marks none of them `prohibited` in a way that would answer 422, but
-  /// they are not fillable on the model, so sending them is a no-op — which is
+  /// they are not fillable on the model, so sending them is a no-op â€” which is
   /// worse than a refusal. The allow-list is what keeps them out.
   static const List<String> writableFields = <String>[
     'name',
@@ -512,11 +512,11 @@ abstract final class ProfileEndpoints {
 /// `listing.seller_id`, resolved server-side, so there is no parameter or body
 /// field that could point an inquiry at a foreign account.
 abstract final class InquiryEndpoints {
-  /// `POST` — send an inquiry about a listing. 201, plain envelope.
+  /// `POST` â€” send an inquiry about a listing. 201, plain envelope.
   ///
   /// Body allow-list is exactly [writableFields]; `buyer_id`, `seller_id` and
   /// `status` are server-owned and refused with `422`. The inquiry is created
-  /// `open` and changes nothing else — not the listing's status, not a
+  /// `open` and changes nothing else â€” not the listing's status, not a
   /// transaction.
   static const String create = '/inquiries';
 
@@ -527,7 +527,7 @@ abstract final class InquiryEndpoints {
   /// converted to an accepted transaction are excluded.
   static const String list = '/inquiries';
 
-  /// `GET` — the authenticated buyer's inquiry about one listing, or
+  /// `GET` â€” the authenticated buyer's inquiry about one listing, or
   /// `data: null`. 200, plain envelope.
   ///
   /// The pre-check the Inquire screen runs before rendering the form. The
@@ -563,36 +563,6 @@ abstract final class InquiryEndpoints {
   ];
 }
 
-/// Seller received-inquiry endpoints, relative to the API root.
-///
-/// These are the routes implemented in `backend/routes/api.php` under the
-/// `seller` middleware group. Beyond the `mobile`-ability token they require
-/// `User::isApprovedSeller()`, so a buyer is answered `403` - the entry point is
-/// shown only on Seller Home, which already exists for approved sellers.
-///
-/// The path takes no seller id. The scope is the token, resolved server-side, so
-/// there is no parameter that could widen the list to another seller's inbox.
-abstract final class SellerInquiryEndpoints {
-  /// `GET` - the caller's received inquiries, newest first. 200, paginated.
-  ///
-  /// Query allow-list is `page` and `per_page` only. `buyer_id`, `seller_id`
-  /// and `status` are refused server-side with `422`: this list has no filters
-  /// in this phase, and the administrator-facing status is not shown to sellers.
-  static const String received = '/seller/inquiries';
-
-  /// Page size used when the caller does not ask for a specific one.
-  ///
-  /// Matches the server default, so the first request is an ordinary one rather
-  /// than a request that happens to agree with the default.
-  static const int defaultPerPage = 15;
-
-  /// Largest page the server will serve.
-  ///
-  /// `IndexSellerInquiryRequest` validates `per_page` with `between:1,50`, so
-  /// anything above this is rejected with a `422`. The repository clamps to this
-  /// rather than letting a screen discover the limit by provoking an error.
-  static const int maxPerPage = 50;
-}
 
 /// Seller dashboard endpoint, relative to the API root.
 ///
@@ -609,7 +579,7 @@ abstract final class SellerDashboardEndpoints {
 
 abstract final class SellerActivityEndpoints {
   /// `GET` - the seller's recent activity feed, newest first. 200, plain
-  /// envelope. Query allow-list is `limit` (1–20); ownership is the token.
+  /// envelope. Query allow-list is `limit` (1â€“20); ownership is the token.
   static const String list = '/seller/activities';
 
   /// Default number of events requested.
@@ -626,38 +596,38 @@ abstract final class SellerActivityEndpoints {
 /// require the `seller` capability gate server-side; reading, accepting and
 /// declining are open to the buyer who is party to the offer.
 ///
-/// An offer is tied to one inquiry (hence one listing) and one buyer–seller
+/// An offer is tied to one inquiry (hence one listing) and one buyerâ€“seller
 /// pair. Every route resolves the caller from the token, and the repository
 /// scopes the result to the caller's pair, so no path or query can widen it to
 /// another pair's offers.
 abstract final class OfferEndpoints {
-  /// `GET` — the caller's offers, newest first. 200, plain envelope.
+  /// `GET` â€” the caller's offers, newest first. 200, plain envelope.
   ///
   /// Query allow-list is `inquiry_id`, `listing_id`, `counterpart_id` and
   /// `status`; ownership-shaped filters (`buyer_id`, `seller_id`, `user_id`)
   /// are refused with a `422`. The list is not paginated.
   static const String list = '/offers';
 
-  /// `POST` — create a purchase offer as the listing's seller. 201.
+  /// `POST` â€” create a purchase offer as the listing's seller. 201.
   ///
   /// Body allow-list is exactly `inquiry_id`, `listing_id` and
   /// `proposed_amount`. `buyer_id`, `seller_id`, `status` and `responded_at`
   /// are server-owned and refused with `422`.
   static const String create = '/offers';
 
-  /// `GET` — one offer the caller is party to. 200, plain envelope.
+  /// `GET` â€” one offer the caller is party to. 200, plain envelope.
   static String detail(int id) => '/offers/$id';
 
-  /// `POST` — the buyer accepts a pending offer. 200.
+  /// `POST` â€” the buyer accepts a pending offer. 200.
   ///
   /// The response carries both the accepted offer and the `pending`
   /// transaction the acceptance created.
   static String accept(int id) => '/offers/$id/accept';
 
-  /// `POST` — the buyer declines a pending offer. 200, plain envelope.
+  /// `POST` â€” the buyer declines a pending offer. 200, plain envelope.
   static String decline(int id) => '/offers/$id/decline';
 
-  /// `POST` — the creating seller withdraws a pending offer. 200.
+  /// `POST` â€” the creating seller withdraws a pending offer. 200.
   static String withdraw(int id) => '/offers/$id/withdraw';
 }
 
@@ -670,23 +640,23 @@ abstract final class OfferEndpoints {
 /// `me` and `logout` require a `mobile`-ability Sanctum token; `register` and
 /// `login` are unauthenticated and are throttled server-side.
 abstract final class AuthEndpoints {
-  /// `POST` — creates a buyer account and returns a mobile token. 201.
+  /// `POST` â€” creates a buyer account and returns a mobile token. 201.
   static const String register = '/auth/register';
 
-  /// `POST` — exchanges credentials for a mobile token. 200.
+  /// `POST` â€” exchanges credentials for a mobile token. 200.
   static const String login = '/auth/login';
 
-  /// `GET` — the authenticated user's own resource. 200.
+  /// `GET` â€” the authenticated user's own resource. 200.
   static const String me = '/auth/me';
 
-  /// `POST` — revokes the caller's current mobile token. 200.
+  /// `POST` â€” revokes the caller's current mobile token. 200.
   static const String logout = '/auth/logout';
 
-  /// `POST` — emails a reset code. The same 200 whether or not the email is
+  /// `POST` â€” emails a reset code. The same 200 whether or not the email is
   /// registered.
   static const String forgotPassword = '/auth/forgot-password';
 
-  /// `POST` — sets a new password from a reset code. 200, or 422 for a wrong or
+  /// `POST` â€” sets a new password from a reset code. 200, or 422 for a wrong or
   /// expired code.
   static const String resetPassword = '/auth/reset-password';
 }

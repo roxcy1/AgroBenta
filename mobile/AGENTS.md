@@ -642,22 +642,19 @@ backend exposes the approved seller's own inbox behind the same
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/seller/inquiries` | One paginated page of inquiries whose listing belongs to the caller (`?page`, `?per_page`; `per_page` capped at 50). |
+| `POST /api/inquiries` | Creates a buyer inquiry about an `active` listing. Returns `201` with the `MobileInquiryResource` and the envelope message `Inquiry sent.`. |
+| `GET /api/inquiries/listing/{listing}` | Pre-check: the caller's own inquiry for that listing in `data`, or `data: null`. Buyer-scoped from the token; `404` only when the listing does not exist. |
 
-`IndexSellerInquiryRequest` accepts only `page` and `per_page`; `buyer_id`,
-`seller_id` and `status` are `422`. The scope is always the token, applied in
-the repository SQL, so no request can widen the result to another seller's
-inbox. `SellerInquiryResource` carries `id`, `buyer{id,name}` (or null),
-`listing{id,livestock_type,breed}` (or null after deletion), `subject`,
-`message`, `purchase_interest`, `transaction_method`, `delivery_method`,
-`delivery_fee`, `contact_method`, `preferred_schedule` and `created_at`. It
-deliberately omits `status`, the seller, and every buyer contact detail,
-including email.
+| IndexSellerInquiryRequest is no longer needed. The seller's received-inquiry
+// inbox has been removed (PM decision MS-18, 2026-10-29): inquiries are
+// delivered to the seller as messages. The `IndexSellerInquiryRequest` and
+// `SellerInquiryResource` types are preserved only for backward compatibility
+// with existing data; no mobile screen consumes them.
 
-Seller Home links to `ReceivedInquiriesScreen`; the shell still has exactly five
-destinations. The screen loads the first page, supports pull-to-refresh and
-load-more, and renders loading, empty, error/retry and refresh-failure states
-from real responses. It shows no status badge and no response control, because
+Seller Home shows five destinations (Home, My Listings, Messages, Transactions,
+Profile). Inquiries are delivered to the seller as messages; there is no
+separate seller inbox screen. See GAP-19 for the status of buyer-initiated
+read / seller-initiated detail/responses.
 no seller response or inquiry-detail endpoint exists. A null buyer is rendered
 as "Unknown buyer" and a null listing as "Listing no longer available"; neither
 is fabricated. The repository clamps `per_page` to `1..50` and normalises a page
