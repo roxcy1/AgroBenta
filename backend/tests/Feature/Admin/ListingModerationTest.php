@@ -946,8 +946,9 @@ class ListingModerationTest extends TestCase
             'message',
             'data' => [
                 'id', 'seller', 'livestock_type', 'breed', 'age_value', 'age_unit',
-                'gender', 'weight_value', 'weight_unit', 'quantity', 'asking_price',
-                'location', 'health_status', 'vaccination', 'short_description',
+                'age_information', 'gender', 'weight_value', 'weight_unit',
+                'weight_information', 'quantity', 'asking_price', 'location',
+                'health_status', 'vaccination', 'short_description',
                 'additional_notes', 'status', 'created_at', 'updated_at',
             ],
         ]);

@@ -32,13 +32,11 @@ Future<ListingFilters?> showMarketplaceFilterScreen({
 
 /// One Animal Type shortcut.
 ///
-/// **[value] is a plain string, not an enum.** `listings.livestock_type` is free
-/// text that the server matches exactly (functional documentation §4.1), and a
-/// controlled vocabulary is still an open question (**OQ-04**). These four tiles
-/// are therefore *shortcuts into the existing exact-match filter*, matching the
-/// filter reference's order and labels — they are not a backend enum, and a
-/// seller whose wording differs will not match. The "exact wording" field below
-/// the tiles keeps any seller's wording reachable, which is why it is kept.
+/// **[value] is a plain string, not an enum.** `listings.livestock_type` is
+/// matched exactly by the marketplace API. The tiles are built from the
+/// backend-owned catalog, so adding an approved category automatically adds
+/// its shortcut without a second client-side vocabulary. The "exact wording"
+/// field below the tiles keeps any historical seller wording reachable.
 class _AnimalType {
   const _AnimalType({
     required this.label,
@@ -66,6 +64,7 @@ class _AnimalType {
       'carabao' => FontAwesomeIcons.hippo,
       'goat' => FontAwesomeIcons.paw,
       'swine' => FontAwesomeIcons.bacon,
+      'chicken' => FontAwesomeIcons.egg,
       _ => FontAwesomeIcons.paw,
     },
   );
@@ -633,8 +632,9 @@ class _DisabledPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium
-            ?.copyWith(color: AppColors.textSecondary),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
       ),
     );
   }

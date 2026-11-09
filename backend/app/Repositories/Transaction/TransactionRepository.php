@@ -2,6 +2,7 @@
 
 namespace App\Repositories\Transaction;
 
+use App\Enums\FulfillmentStatus;
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Models\User;
@@ -87,17 +88,22 @@ class TransactionRepository
      */
     public function findForUser(int $transactionId, User $user): ?Transaction
     {
-        return Transaction::query()
-            ->with([
-                'buyer:id,name,email',
-                'seller:id,name,email',
-                'listing:id,livestock_type,breed,photos,seller_id',
-            ])
+        return $this->scopedQuery($user)
             ->where('id', $transactionId)
-            ->where(function (Builder $query) use ($user): void {
-                $query->where('buyer_id', $user->getKey())
-                    ->orWhere('seller_id', $user->getKey());
-            })
+            ->first();
+    }
+
+    /**
+     * Lock one transaction the caller is a party to.
+     *
+     * Used by the cancellation path so its status and inventory flag cannot
+     * change between the guard and the write.
+     */
+    public function lockForUser(int $transactionId, User $user): ?Transaction
+    {
+        return $this->scopedQuery($user)
+            ->where('id', $transactionId)
+            ->lockForUpdate()
             ->first();
     }
 
@@ -129,7 +135,9 @@ class TransactionRepository
             'payment_method' => $paymentMethod,
             'collection_method' => $collectionMethod,
             'pickup_date' => $pickupDate,
+            'inventory_reserved' => true,
             'status' => TransactionStatus::Pending,
+            'fulfillment_status' => FulfillmentStatus::Confirmed,
         ]);
     }
 
@@ -145,9 +153,75 @@ class TransactionRepository
     }
 
     /**
+     * Record that a transaction's reserved stock has been returned.
+     *
+     * Called under the transaction row lock, in the same database transaction
+     * as the stock increment, so a cancellation cannot release twice.
+     */
+    public function releaseInventory(Transaction $transaction): Transaction
+    {
+        $transaction->inventory_reserved = false;
+        $transaction->save();
+
+        return $transaction->refresh();
+    }
+
+    /**
+     * Persist a fulfillment-stage transition.
+     */
+    public function updateFulfillmentStatus(
+        Transaction $transaction,
+        FulfillmentStatus $status,
+    ): Transaction {
+        $transaction->fulfillment_status = $status;
+        $transaction->save();
+
+        return $transaction->refresh();
+    }
+
+    /**
+     * Mark a transaction completed after the buyer confirms receipt.
+     */
+    public function complete(Transaction $transaction): Transaction
+    {
+        $transaction->status = TransactionStatus::Completed;
+        $transaction->fulfillment_status = FulfillmentStatus::Completed;
+        $transaction->save();
+
+        return $transaction->refresh();
+    }
+
+    /**
+     * Record that a legacy transaction now holds a real stock reservation.
+     *
+     * Historical pending rows predate `inventory_reserved`; completing one
+     * without taking stock would allow it to be sold twice. The completion path
+     * reserves the quantity first and then flips this flag.
+     */
+    public function markInventoryReserved(Transaction $transaction): Transaction
+    {
+        $transaction->inventory_reserved = true;
+        $transaction->save();
+
+        return $transaction->refresh();
+    }
+
+    /**
+     * Whether a listing has pending transactions that still hold its stock.
+     */
+    public function hasActiveReservationsForListing(int $listingId): bool
+    {
+        return Transaction::query()
+            ->where('listing_id', $listingId)
+            ->where('status', TransactionStatus::Pending)
+            ->where('inventory_reserved', true)
+            ->exists();
+    }
+
+    /**
      * The caller's transactions, optionally narrowed to one side.
      */
-    private function scopedQuery(User $user, ?string $role): Builder
+    private function scopedQuery(User $user, ?string $role = null): Builder
     {
         $query = Transaction::query()
             ->with([

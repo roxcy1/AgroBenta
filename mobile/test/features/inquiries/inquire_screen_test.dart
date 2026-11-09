@@ -53,8 +53,8 @@ const Map<String, String> approvedTemplates = <String, String>{
 /// The exact approved copy of the already-sent state. A drift from this fails
 /// here rather than in review.
 const String alreadySentCopy =
-    "You've already sent an inquiry about this livestock. You can continue "
-    'the conversation in Messages.';
+    "You've already expressed interest in this livestock. Reopen the "
+    'conversation with the seller to continue.';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -168,7 +168,8 @@ void main() {
     await settle(tester);
   }
 
-  Finder messageField() => find.widgetWithText(TextFormField, 'Message *');
+  Finder messageField() =>
+      find.widgetWithText(TextFormField, 'Message (optional)');
 
   TextEditingController messageController(WidgetTester tester) =>
       tester.widget<TextFormField>(messageField()).controller!;
@@ -199,19 +200,17 @@ void main() {
   }
 
   Future<void> submit(WidgetTester tester) async {
-    final Finder send = find.widgetWithText(FilledButton, 'Send Inquiry');
+    final Finder send = find.widgetWithText(FilledButton, 'Send Interest');
     await tester.ensureVisible(send);
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tap(send);
     await settle(tester);
   }
 
-  /// Chooses both required preferences with the first option in each section,
-  /// plus a collection-date option (now required to submit).
+  /// Chooses the required preferences. The payment default already satisfies
+  /// the payment rule; the collection choice is still required.
   Future<void> chooseRequiredPreferences(WidgetTester tester) async {
-    await chooseOption(tester, 'Cash');
-    await chooseOption(tester, 'Farm Pickup');
-    await chooseOption(tester, 'Next few days');
+    await chooseOption(tester, 'Personal Pickup');
   }
 
   List<RecordedRequest> posts() => recorded
@@ -219,23 +218,11 @@ void main() {
       .toList(growable: false);
 
   group('validateInquiryMessage', () {
-    test('requires a message', () {
-      expect(
-        validateInquiryMessage(null),
-        'Please enter a message for the seller.',
-      );
-      expect(
-        validateInquiryMessage(''),
-        'Please enter a message for the seller.',
-      );
-    });
-
-    test('refuses whitespace-only text', () {
-      expect(validateInquiryMessage('   '), 'A message cannot be only spaces.');
-      expect(
-        validateInquiryMessage(' \n\t '),
-        'A message cannot be only spaces.',
-      );
+    test('accepts an empty or whitespace-only message', () {
+      expect(validateInquiryMessage(null), isNull);
+      expect(validateInquiryMessage(''), isNull);
+      expect(validateInquiryMessage('   '), isNull);
+      expect(validateInquiryMessage(' \n\t '), isNull);
     });
 
     test('accepts exactly the 500-character ceiling', () {
@@ -277,7 +264,7 @@ void main() {
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
 
-      expect(find.text('Inquire About Livestock'), findsOneWidget);
+      expect(find.text("I'm Interested"), findsOneWidget);
       expect(find.text('CATTLE'), findsOneWidget);
       expect(find.text('Holstein'), findsOneWidget);
       expect(find.text('₱42,500.00'), findsOneWidget);
@@ -304,9 +291,9 @@ void main() {
 
       // Additional Message: a visible field, the live counter and the four
       // templates the design spec names.
-      expect(find.text('Additional Message'), findsOneWidget);
-      expect(find.text('Message *'), findsOneWidget);
-      expect(find.text('Type your inquiry here...'), findsOneWidget);
+      expect(find.text('Additional Message (optional)'), findsOneWidget);
+      expect(find.text('Message (optional)'), findsOneWidget);
+      expect(find.text('Type your message here...'), findsOneWidget);
       expect(
         find.text(
           'Ask about availability, additional photos, or the asking price.',
@@ -332,7 +319,7 @@ void main() {
       expect(find.text('Cash'), findsOneWidget);
       expect(find.text('GCash'), findsOneWidget);
       expect(find.text('Maya'), findsOneWidget);
-      expect(find.text('Other / Discuss with seller'), findsOneWidget);
+      expect(find.text('Discuss with Seller'), findsOneWidget);
 
       // Collection preferences.
       expect(find.text('Preferred Livestock Collection *'), findsOneWidget);
@@ -340,12 +327,17 @@ void main() {
         find.text('How do you plan to receive the livestock?'),
         findsOneWidget,
       );
-      expect(find.text('Farm Pickup'), findsOneWidget);
-      expect(find.text('Arrange Transport'), findsOneWidget);
-      expect(find.text('Discuss'), findsOneWidget);
+      expect(find.text('Personal Pickup'), findsOneWidget);
+      expect(find.text('Buyer-Arranged'), findsOneWidget);
+      expect(find.text('Seller Delivery'), findsOneWidget);
+      expect(find.text('Not Sure Yet'), findsOneWidget);
+      expect(find.text('Preferred Collection Date (optional)'), findsOneWidget);
 
       expect(find.widgetWithText(OutlinedButton, 'Cancel'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Send Interest'),
+        findsOneWidget,
+      );
       expect(
         find.text('The seller will reply through AgroBenta messages.'),
         findsOneWidget,
@@ -411,15 +403,18 @@ void main() {
       // buyer must not start typing an inquiry they cannot submit.
       expect(find.text('Checking your inquiries...'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsNothing);
-      expect(find.text('Inquire About Livestock'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Send Interest'), findsNothing);
+      expect(find.text("I'm Interested"), findsOneWidget);
       expect(posts(), isEmpty);
 
       gate.complete(inquiryCheckResponse());
       await settle(tester);
 
       expect(find.text('Checking your inquiries...'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Send Interest'),
+        findsOneWidget,
+      );
       expect(posts(), isEmpty);
     });
 
@@ -446,23 +441,23 @@ void main() {
       expect(find.text(alreadySentCopy), findsOneWidget);
       expect(
         find.text(
-          'You\'ve already sent an inquiry about this livestock. '
-          'You can continue the conversation in Messages.',
+          'You\'ve already expressed interest in this livestock. Reopen '
+          'the conversation with the seller to continue.',
         ),
         findsOneWidget,
       );
 
       // No second form, and no send.
-      expect(find.text('Inquire About Livestock'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsNothing);
-      expect(find.text('Message *'), findsNothing);
+      expect(find.text("I'm Interested"), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Send Interest'), findsNothing);
+      expect(find.text('Message (optional)'), findsNothing);
       expect(posts(), isEmpty);
 
       // The real listing is still named, and both actions are offered.
       expect(find.text('CATTLE'), findsOneWidget);
       expect(find.text('Holstein'), findsOneWidget);
       expect(
-        find.widgetWithText(FilledButton, 'Go to Messages'),
+        find.widgetWithText(FilledButton, 'Open Conversation'),
         findsOneWidget,
       );
       expect(
@@ -483,7 +478,7 @@ void main() {
 
         final Finder goToMessages = find.widgetWithText(
           FilledButton,
-          'Go to Messages',
+          'Open Conversation',
         );
         await tester.ensureVisible(goToMessages);
         await tester.pump(const Duration(milliseconds: 50));
@@ -542,11 +537,14 @@ void main() {
       // must not make the screen unusable — it explains itself and shows the
       // form.
       expect(find.textContaining('Could not reach the server'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Send Inquiry'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Send Interest'),
+        findsOneWidget,
+      );
 
       await typeMessage(tester, 'Sent after a failed check');
       await chooseOption(tester, 'Cash');
-      await chooseOption(tester, 'Farm Pickup');
+      await chooseOption(tester, 'Personal Pickup');
       await chooseOption(tester, 'Next few days');
       await submit(tester);
 
@@ -615,42 +613,53 @@ void main() {
   });
 
   group('client validation', () {
-    testWidgets('refuses an empty message and sends nothing', (
-      WidgetTester tester,
-    ) async {
-      await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
-      await submit(tester);
+    testWidgets(
+      'accepts an empty message and reports only the missing collection',
+      (WidgetTester tester) async {
+        await pushInquire(
+          tester,
+          handler: (_) async => inquiryCreatedResponse(),
+        );
+        await submit(tester);
 
-      expect(
-        find.text('Please enter a message for the seller.'),
-        findsOneWidget,
-      );
-      expect(posts(), isEmpty);
-      expect(find.byType(InquireScreen), findsOneWidget);
-    });
+        expect(
+          find.text('Please enter a message for the seller.'),
+          findsNothing,
+        );
+        expect(
+          find.text('Please choose a preferred collection method.'),
+          findsOneWidget,
+        );
+        expect(posts(), isEmpty);
+        expect(find.byType(InquireScreen), findsOneWidget);
+      },
+    );
 
-    testWidgets('refuses a message of only spaces', (
+    testWidgets('accepts a whitespace-only message as no message', (
       WidgetTester tester,
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
       await typeMessage(tester, '     ');
       await submit(tester);
 
-      expect(find.text('A message cannot be only spaces.'), findsOneWidget);
+      expect(find.text('A message cannot be only spaces.'), findsNothing);
+      expect(
+        find.text('Please choose a preferred collection method.'),
+        findsOneWidget,
+      );
       expect(posts(), isEmpty);
     });
 
-    testWidgets('refuses a submission with no preferences chosen', (
+    testWidgets('requires a collection preference because payment defaults', (
       WidgetTester tester,
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
       await typeMessage(tester, 'A complete message');
       await submit(tester);
 
-      // Both missing answers are reported at once, beside their sections.
       expect(
         find.text('Please choose a preferred payment method.'),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.text('Please choose a preferred collection method.'),
@@ -660,25 +669,14 @@ void main() {
       expect(find.text(successHeading), findsNothing);
     });
 
-    testWidgets('choosing a preference clears its own error', (
+    testWidgets('choosing a collection preference clears its error', (
       WidgetTester tester,
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
       await typeMessage(tester, 'A complete message');
       await submit(tester);
 
-      await chooseOption(tester, 'Cash');
-      expect(
-        find.text('Please choose a preferred payment method.'),
-        findsNothing,
-      );
-      expect(
-        find.text('Please choose a preferred collection method.'),
-        findsOneWidget,
-        reason: 'the collection answer is still missing',
-      );
-
-      await chooseOption(tester, 'Farm Pickup');
+      await chooseOption(tester, 'Personal Pickup');
       expect(
         find.text('Please choose a preferred collection method.'),
         findsNothing,
@@ -686,30 +684,17 @@ void main() {
       expect(posts(), isEmpty, reason: 'choosing alone never submits');
     });
 
-    testWidgets('a template clears a stale required-message error', (
+    testWidgets('a template fills the optional message without submitting', (
       WidgetTester tester,
     ) async {
       await pushInquire(tester, handler: (_) async => inquiryCreatedResponse());
-      await submit(tester);
-      expect(
-        find.text('Please enter a message for the seller.'),
-        findsOneWidget,
-      );
 
       await tapTemplate(tester, 'Check availability');
-      // The field's error text fades out; let the decoration animation finish
-      // before asserting the stale message is gone.
-      await tester.pump(const Duration(milliseconds: 400));
 
       expect(
         messageController(tester).text,
         checkAvailabilityTemplate,
         reason: 'the template wrote its text into the field',
-      );
-      expect(
-        find.text('Please enter a message for the seller.'),
-        findsNothing,
-        reason: 'the template supplied the missing text',
       );
       expect(posts(), isEmpty);
     });
@@ -750,7 +735,7 @@ void main() {
       );
       await typeMessage(tester, 'Is this one still available?');
       await chooseOption(tester, 'Cash');
-      await chooseOption(tester, 'Farm Pickup');
+      await chooseOption(tester, 'Personal Pickup');
       await chooseOption(tester, 'Next few days');
       await submit(tester);
 
@@ -809,7 +794,7 @@ void main() {
       );
       await typeMessage(tester, 'Can we discuss arrangements?');
       await chooseOption(tester, 'GCash');
-      await chooseOption(tester, 'Arrange Transport');
+      await chooseOption(tester, 'Buyer-Arranged');
       await chooseOption(tester, 'Next few days');
       await submit(tester);
 
@@ -846,7 +831,7 @@ void main() {
       await typeMessage(tester, 'Kept while the request is in flight');
       await chooseRequiredPreferences(tester);
 
-      final Finder send = find.widgetWithText(FilledButton, 'Send Inquiry');
+      final Finder send = find.widgetWithText(FilledButton, 'Send Interest');
       await tester.ensureVisible(send);
       await tester.pump(const Duration(milliseconds: 50));
       await tester.tap(send);
@@ -885,7 +870,7 @@ void main() {
       await typeMessage(tester, 'Only once, please');
       await chooseRequiredPreferences(tester);
 
-      final Finder send = find.widgetWithText(FilledButton, 'Send Inquiry');
+      final Finder send = find.widgetWithText(FilledButton, 'Send Interest');
       await tester.ensureVisible(send);
       await tester.pump(const Duration(milliseconds: 50));
       await tester.tap(send);
@@ -966,7 +951,7 @@ void main() {
       expect(
         tester
             .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Send Inquiry'),
+              find.widgetWithText(FilledButton, 'Send Interest'),
             )
             .onPressed,
         isNotNull,
@@ -1012,7 +997,7 @@ void main() {
       await typeMessage(tester, 'Waiting for the answer');
       await chooseRequiredPreferences(tester);
 
-      final Finder send = find.widgetWithText(FilledButton, 'Send Inquiry');
+      final Finder send = find.widgetWithText(FilledButton, 'Send Interest');
       await tester.ensureVisible(send);
       await tester.pump(const Duration(milliseconds: 50));
       await tester.tap(send);
@@ -1062,7 +1047,7 @@ void main() {
         );
         await typeMessage(tester, 'Can I collect on the 25th?');
         await chooseOption(tester, 'Cash');
-        await chooseOption(tester, 'Farm Pickup');
+        await chooseOption(tester, 'Personal Pickup');
         await chooseOption(tester, 'Next few days');
         await submit(tester);
 
@@ -1083,8 +1068,8 @@ void main() {
         expect(find.text("Pick up from the seller's farm"), findsOneWidget);
 
         // The form is gone; only the confirmation remains.
-        expect(find.text('Inquire About Livestock'), findsNothing);
-        expect(find.text('Send Inquiry'), findsNothing);
+        expect(find.text("I'm Interested"), findsNothing);
+        expect(find.text('Send Interest'), findsNothing);
         expect(find.text(successHeading), findsOneWidget);
       },
     );
@@ -1107,7 +1092,7 @@ void main() {
       );
       await typeMessage(tester, 'Just asking about availability');
       await chooseOption(tester, 'Cash');
-      await chooseOption(tester, 'Farm Pickup');
+      await chooseOption(tester, 'Personal Pickup');
       await chooseOption(tester, 'Next few days');
       await submit(tester);
 
@@ -1144,13 +1129,13 @@ void main() {
         );
         await typeMessage(tester, 'Will the button work?');
         await chooseOption(tester, 'Cash');
-        await chooseOption(tester, 'Farm Pickup');
+        await chooseOption(tester, 'Personal Pickup');
         await chooseOption(tester, 'Next few days');
         await submit(tester);
 
         final Finder goToMessages = find.widgetWithText(
           FilledButton,
-          'Go to Messages',
+          'Open Conversation',
         );
         expect(goToMessages, findsOneWidget);
         expect(

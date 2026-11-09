@@ -114,8 +114,10 @@ class ListingCard extends StatelessWidget {
     final List<String> parts = <String>[
       if (listing.quantity > 0)
         '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
-      if (listing.weightLabel != null) listing.weightLabel!,
-      if (listing.ageLabel != null) listing.ageLabel!,
+      if (listing.weightLabel != null)
+        '${listing.weightIsEstimated ? 'Est. ' : ''}${listing.weightLabel!}',
+      if (listing.ageLabel != null)
+        '${listing.ageIsEstimated ? 'Est. ' : ''}${listing.ageLabel!}',
     ];
     return parts.isEmpty ? 'Details on request' : parts.join(' · ');
   }

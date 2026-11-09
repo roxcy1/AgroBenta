@@ -14,10 +14,16 @@ services:
     environment:
       - DB_HOST=mysql
       - REDIS_HOST=redis
+      # Internal, private FastAPI service. No host port is published.
+      - PRICE_PREDICTION_URL=http://ml-service:8002
+      - PRICE_PREDICTION_CONNECT_TIMEOUT=2
+      - PRICE_PREDICTION_TIMEOUT=5
     depends_on:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      ml-service:
         condition: service_healthy
     networks:
       - app_network
@@ -96,6 +102,32 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ── Private ML prediction service ───────────────────────────────────────
+  # Reached only as http://ml-service:8002 on app_network. No ports are
+  # published, so it is not reachable from the host or the internet.
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    environment:
+      # Optional explicit model selection. Empty uses models/active_model.json.
+      - MODEL_PATH=${ML_MODEL_PATH:-}
+    networks:
+      - app_network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/ready', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
   # ── Node (React + Vite) ─────────────────────────────────────────────────
   node:

@@ -66,9 +66,11 @@ http.Response sellerListingSingleResponse({
           'breed': listing.breed,
           'age_value': listing.ageValue,
           'age_unit': listing.ageUnit,
+          'age_information': listing.ageInformation,
           'gender': listing.gender,
           'weight_value': listing.weightValue,
           'weight_unit': listing.weightUnit,
+          'weight_information': listing.weightInformation,
           'quantity': listing.quantity,
           'asking_price': listing.askingPrice,
           'location': listing.location,
@@ -132,6 +134,84 @@ void main() {
     // Submit for review is present for drafts.
     expect(
       find.widgetWithText(FilledButton, 'Submit for review'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows per-head pricing and the informational listing total', (
+    WidgetTester tester,
+  ) async {
+    final Listing active = fixtureListing(id: 6, status: 'active');
+
+    await pumpDetailScreen(
+      tester,
+      listing: active,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath == '/seller/listings') {
+          return sellerListingSingleResponse(listing: active);
+        }
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'success': true,
+            'message': null,
+            'data': null,
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      },
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Asking Price (₱) — Per Head'), findsOneWidget);
+    expect(find.text('Number of Animals Available'), findsOneWidget);
+    expect(find.text('Total listing value'), findsOneWidget);
+    expect(find.text('₱170,000.00 (informational only)'), findsOneWidget);
+  });
+
+  testWidgets('estimated measurements are clearly labelled for the seller', (
+    WidgetTester tester,
+  ) async {
+    final Listing estimated = Listing.fromJson(
+      listingJson(
+        id: 7,
+        status: 'active',
+        ageInformation: 'estimated',
+        weightInformation: 'estimated',
+      ),
+    );
+
+    await pumpDetailScreen(
+      tester,
+      listing: estimated,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath == '/seller/listings') {
+          return sellerListingSingleResponse(listing: estimated);
+        }
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'success': true,
+            'message': null,
+            'data': null,
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      },
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Estimated Age'), findsOneWidget);
+    expect(find.text('Estimated Weight'), findsOneWidget);
+    expect(
+      find.text(
+        'Estimated age or weight is provided by the seller and is not '
+        'independently verified.',
+      ),
       findsOneWidget,
     );
   });

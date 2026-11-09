@@ -22,10 +22,8 @@ import 'transaction_tab.dart';
 /// is not shown — it is the same server state as "Ongoing" — see
 /// [TransactionsFilter].
 ///
-/// The Completed filter is honestly empty for a long time: no path in the app
-/// can reach `completed` today (the backend's complete endpoint answers 501,
-/// OQ-15), and that is correct rather than a bug to work around by faking a
-/// completion path.
+/// The Completed filter lists records completed by the buyer's receipt
+/// confirmation after the seller reports pickup or delivery.
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({
     required this.role,

@@ -20,9 +20,10 @@ import 'transaction_status_content.dart';
 /// `GET /transactions/{id}` call — there is no separate "status" endpoint, and
 /// none is invented.
 ///
-/// The tracker reflects the real workflow only. The backend keeps one current
-/// `status` and no per-step history, so a dated timeline is not available and
-/// is not faked; [TransactionStatusContent] states that plainly.
+/// The tracker reflects the real collection-specific fulfillment workflow. The
+/// backend keeps one current status and fulfillment stage with no per-step
+/// history, so a dated timeline is not available and is not faked;
+/// [TransactionStatusContent] states that plainly.
 class TransactionStatusScreen extends StatelessWidget {
   const TransactionStatusScreen({required this.transactionId, super.key});
 

@@ -823,10 +823,10 @@ to `active` from `inactive` (functional doc A-02 / OQ-16). Do not add one.
 | **Method** | `POST` |
 | **Authentication** | Required |
 | **Ability** | `mobile` |
-| **Request fields** | None — the listing already carries every input the estimate needs |
+| **Request fields** | None — the listing already carries every input the estimate needs; any body field is rejected |
 | **Validation** | N/A |
-| **Response** | `200`, §3.1. `data` = `{ listing_id, estimated_min, estimated_max, estimated_value, basis, input_snapshot, estimated_at }` |
-| **Errors** | `401`, `403`, `404` not yours, `422` insufficient comparable data, `429` |
+| **Response** | `200`, §3.1. `data` = `{ listing_id, estimated_min, estimated_max, estimated_value, basis, input_snapshot, estimated_at, status, warnings, reason_codes, provenance, model_version }`. `estimated_min` / `estimated_max` are currently `null` because the provider is point-only. |
+| **Errors** | `401`, `403`, `404` not yours; `422` with a structured body for `withheld` or `invalid`; `503` when the provider is unavailable; `500` for an unexpected failure. A structured failure carries top-level `success: false`, `message`, `status`, `warnings` and `reason_codes`. |
 | **Authorization** | `seller_capability = seller` |
 | **Ownership** | `listing.seller_id === $me->id`, else `404` |
 
@@ -842,9 +842,11 @@ to `active` from `inactive` (functional doc A-02 / OQ-16). Do not add one.
 * **MUST** be owner-only in this direction. Whether a buyer may *see* the range
   on a listing is **D-13**.
 
-The output surface is exactly four values: estimated minimum, estimated maximum,
-a suggested/reference value, and a basis/explanation **[D-03] rule 1**. Nothing
-beyond those four is to be returned.
+The core output is the suggested/reference value, optional minimum and maximum,
+and a basis/explanation **[D-03] rule 1**. The current implementation also
+returns `status`, `warnings`, `reason_codes`, `provenance` and `model_version`
+so the client can present a warning, a refusal, or synthetic provenance honestly
+without inventing any of them.
 
 ### 5.5.1 Implementation constraints **[D-03]**
 
@@ -863,24 +865,18 @@ beyond those four is to be returned.
 request, response shape, authorization, ownership, and persistence are all
 specified above and may be built.
 
-**Still blocked — the estimator's interior.** How `estimated_min`,
-`estimated_max` and `estimated_value` are actually computed is **not decided**
-(functional doc OQ-03). Until the method is explicitly documented:
-
-* The service may exist with a documented, clearly-labelled **unavailable**
-  path, or the endpoint may not be exposed at all.
-* It **must never return a fabricated number.** A plausible-looking invented
-  formula is explicitly prohibited by rule 7.
-
-`ai_price_estimates` has a schema and nothing writes to it, and no algorithm,
-model, or integration exists in the repository. That is unchanged by D-03, which
-mandates *how* the estimator must be built without deciding *what* it computes.
+**Implemented estimator.** The backend now calls a private FastAPI service and
+persists `ok`/`warning` point estimates. The current provider is the prototype
+CatBoost model; `estimated_min` / `estimated_max` remain `null`, so the client
+must not invent a range or a confidence score. `withheld` and `invalid`
+responses are returned without a price and are not persisted.
 
 **Structural note:** `ai_price_estimates.listing_id` is `NOT NULL` with a
 foreign key, so a suggestion can only exist **after** a listing is created. The
-flow is therefore *create draft → request suggestion → set `asking_price` →
-submit for review* — which is why the price must be chosen before `submit`, and
-why an `active` listing has no suggestion endpoint of its own.
+current listing-create contract also requires `asking_price`, so the seller
+enters an initial price, saves the draft, requests a suggestion, and may then
+edit the asking price before submitting for review. An `active` listing has no
+suggestion endpoint of its own; calling it for a non-draft is refused.
 
 ---
 

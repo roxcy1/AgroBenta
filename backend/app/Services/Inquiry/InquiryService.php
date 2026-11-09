@@ -3,6 +3,8 @@
 namespace App\Services\Inquiry;
 
 use App\Enums\ActivityAction;
+use App\Enums\InquiryCollectionMethod;
+use App\Enums\InquiryPaymentMethod;
 use App\Enums\ListingStatus;
 use App\Models\Inquiry;
 use App\Models\Listing;
@@ -99,7 +101,7 @@ class InquiryService
      *
      * @param  array<string, mixed>  $preferences  The allow-listed form fields from `StoreInquiryRequest`.
      */
-    public function create(User $buyer, Listing $listing, string $message, array $preferences): Inquiry
+    public function create(User $buyer, Listing $listing, ?string $message, array $preferences): Inquiry
     {
         if ($listing->status !== ListingStatus::Active) {
             abort(409, 'This listing is not available for inquiries.');
@@ -182,7 +184,7 @@ class InquiryService
     private function buildMessageBody(
         User $buyer,
         Listing $listing,
-        string $message,
+        ?string $message,
         array $preferences,
     ): string {
         $price = $listing->asking_price !== null
@@ -194,16 +196,25 @@ class InquiryService
             ? (string) $preferences['preferred_schedule']
             : 'not specified';
 
+        $payment = InquiryPaymentMethod::tryFrom((string) ($preferences['payment_method'] ?? ''));
+        $collection = InquiryCollectionMethod::tryFrom((string) ($preferences['collection_method'] ?? ''));
+
         $lines = [
             "New inquiry from {$buyer->name}.",
             "Listing: {$listing->displayLabel()}.",
             "Asking price: ₱{$price}.",
-            'Preferred payment: '.($preferences['payment_method'] ?? 'not specified'),
-            'Preferred collection: '.($preferences['collection_method'] ?? 'not specified'),
-            "Collection date option: $option ($date)",
+            'Preferred payment: '.($payment?->label() ?? 'not specified'),
+            'Preferred collection: '.($collection?->label() ?? 'not specified'),
+            'Collection date option: '.(
+                $option === null || $option === ''
+                    ? 'no preference'
+                    : "$option ($date)"
+            ),
             '',
             "Buyer's message:",
-            $message,
+            $message === null || trim($message) === ''
+                ? 'No additional message.'
+                : trim($message),
         ];
 
         return implode("\n", $lines);

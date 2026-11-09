@@ -310,7 +310,7 @@ class MobileInquiryTest extends TestCase
     }
 
     #[Test]
-    public function a_missing_message_is_refused(): void
+    public function a_missing_message_is_allowed(): void
     {
         $listing = $this->createListing($this->seller);
 
@@ -318,8 +318,12 @@ class MobileInquiryTest extends TestCase
         unset($body['message']);
 
         $this->postInquiry($body)
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['message']);
+            ->assertStatus(201)
+            ->assertJsonPath('data.message', null);
+
+        $this->assertNull(Inquiry::query()->sole()->message);
+        // The structured preferences still start the conversation.
+        $this->assertSame(1, Message::query()->count());
     }
 
     #[Test]
@@ -353,15 +357,15 @@ class MobileInquiryTest extends TestCase
     }
 
     #[Test]
-    public function a_whitespace_only_message_is_refused(): void
+    public function a_whitespace_only_message_is_stored_as_no_message(): void
     {
         $listing = $this->createListing($this->seller);
 
         $this->postInquiry($this->validInquiryBody($listing, [
             'message' => "   \n  ",
-        ]))->assertStatus(422)->assertJsonValidationErrors(['message']);
+        ]))->assertStatus(201)->assertJsonPath('data.message', null);
 
-        $this->assertSame(0, Inquiry::query()->count());
+        $this->assertNull(Inquiry::query()->sole()->message);
     }
 
     #[Test]
@@ -406,6 +410,27 @@ class MobileInquiryTest extends TestCase
         ]))->assertStatus(422)->assertJsonValidationErrors(['collection_method']);
 
         $this->assertSame(0, Inquiry::query()->count());
+    }
+
+    #[Test]
+    public function the_current_collection_choices_and_legacy_value_are_accepted(): void
+    {
+        foreach ([
+            'farm_pickup',
+            'buyer_arranged_transportation',
+            'seller_arranged_delivery',
+            'not_sure_yet',
+            'discuss_with_seller',
+        ] as $method) {
+            $listing = $this->createListing($this->seller);
+
+            $this->postInquiry($this->validInquiryBody($listing, [
+                'collection_method' => $method,
+            ]))->assertStatus(201)
+                ->assertJsonPath('data.collection_method', $method);
+        }
+
+        $this->assertSame(5, Inquiry::query()->count());
     }
 
     #[Test]
@@ -619,18 +644,19 @@ class MobileInquiryTest extends TestCase
     }
 
     #[Test]
-    public function collection_date_option_is_required(): void
+    public function collection_date_option_is_optional(): void
     {
         $listing = $this->createListing($this->seller);
 
         $body = $this->validInquiryBody($listing);
-        unset($body['collection_date_option']);
+        unset($body['collection_date_option'], $body['preferred_schedule']);
 
         $this->postInquiry($body)
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['collection_date_option']);
+            ->assertStatus(201)
+            ->assertJsonPath('data.collection_date_option', null)
+            ->assertJsonPath('data.preferred_schedule', null);
 
-        $this->assertSame(0, Inquiry::query()->count());
+        $this->assertSame(1, Inquiry::query()->count());
     }
 
     #[Test]

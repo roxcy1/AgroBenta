@@ -99,9 +99,11 @@ class ListingManagementTest extends TestCase
                         'breed',
                         'age_value',
                         'age_unit',
+                        'age_information',
                         'gender',
                         'weight_value',
                         'weight_unit',
+                        'weight_information',
                         'quantity',
                         'asking_price',
                         'location',
@@ -234,21 +236,21 @@ class ListingManagementTest extends TestCase
 
     public function test_legacy_unsupported_types_remain_visible_and_searchable(): void
     {
-        $this->createListing(['livestock_type' => 'chicken']);
+        $this->createListing(['livestock_type' => 'duck']);
 
         $token = $this->adminToken();
 
         $this->withHeader('Authorization', "Bearer {$token}")
-            ->getJson('/api/admin/listings?search=chicken')
+            ->getJson('/api/admin/listings?search=duck')
             ->assertOk()
             ->assertJsonPath('data.pagination.total', 1)
-            ->assertJsonPath('data.listings.0.livestock_type', 'chicken');
+            ->assertJsonPath('data.listings.0.livestock_type', 'duck');
 
         $this->withHeader('Authorization', "Bearer {$token}")
-            ->getJson('/api/admin/listings?livestock_type=chicken')
+            ->getJson('/api/admin/listings?livestock_type=duck')
             ->assertOk()
             ->assertJsonPath('data.pagination.total', 1)
-            ->assertJsonPath('data.listings.0.livestock_type', 'chicken');
+            ->assertJsonPath('data.listings.0.livestock_type', 'duck');
     }
 
     public function test_combined_search_and_filter(): void

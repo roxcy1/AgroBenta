@@ -10,8 +10,8 @@ import '../widgets/inquiry_listing_card.dart';
 ///
 /// The rule is one inquiry per buyer per listing, whatever its status, so the
 /// form is not rendered at all: offering it would only produce a `409`. The
-/// buyer is pointed at Messages, where any conversation with the seller lives,
-/// or back to Browse.
+/// primary action reopens the existing buyer–seller conversation; Back to
+/// Browse returns to the marketplace.
 ///
 /// This view claims nothing the pre-check did not prove. It shows the real
 /// [Listing] the screen was opened with and the exact approved copy; it does
@@ -69,8 +69,8 @@ class InquiryAlreadySentView extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                "You've already sent an inquiry about this livestock. You can "
-                'continue the conversation in Messages.',
+                "You've already expressed interest in this livestock. Reopen "
+                'the conversation with the seller to continue.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
@@ -82,7 +82,7 @@ class InquiryAlreadySentView extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onGoToMessages,
                 icon: const Icon(Icons.forum_outlined, size: 18),
-                label: const Text('Go to Messages'),
+                label: const Text('Open Conversation'),
               ),
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(

@@ -17,7 +17,7 @@ use Tests\TestCase;
  * `GET /api/marketplace/popular-livestock`.
  *
  * Popularity is completed sales only: the count is distinct completed
- * transactions inside the last 30 days, over the four canonical categories.
+ * transactions inside the last 30 days, over the canonical categories.
  * Pending, cancelled, older sales and non-canonical livestock types never
  * count.
  */

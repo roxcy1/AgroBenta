@@ -72,5 +72,6 @@ void main() {
       'Layer',
       'Improved Native Chicken',
     ]);
+    expect(types.last.breeds.contains('duck'), isFalse);
   });
 }

@@ -162,6 +162,11 @@ void main() {
     expect(find.text('Cattle'), findsOneWidget);
     expect(find.text('Breed'), findsOneWidget);
 
+    // Recorded collection preference: a term, not live logistics.
+    expect(find.text('Collection'), findsOneWidget);
+    expect(find.text('Personal Pickup'), findsOneWidget);
+    expect(find.textContaining('does not provide transport'), findsOneWidget);
+
     // Transaction terms.
     expect(find.text('Reference'), findsOneWidget);
     expect(find.text('Buyer'), findsOneWidget);
@@ -177,6 +182,24 @@ void main() {
     // OQ-15: no completion affordance reaches a user at all.
     expect(find.text('Mark complete'), findsNothing);
     expect(find.textContaining('Mark complete'), findsNothing);
+  });
+
+  testWidgets('shows the recorded pickup date and delivery arrangement', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(
+      tester,
+      (_) async => transactionDetailResponse(
+        transaction: transactionJson(
+          collectionMethod: 'seller_arranged_delivery',
+          pickupDate: '2026-11-20',
+        ),
+      ),
+    );
+
+    expect(find.text('Seller-Arranged Delivery'), findsOneWidget);
+    expect(find.text('Preferred date'), findsOneWidget);
+    expect(find.textContaining('does not provide tracking'), findsOneWidget);
   });
 
   testWidgets('a seller sees the buyer as counterparty and sale wording', (
@@ -441,6 +464,191 @@ void main() {
 
     expect(find.byType(TransactionStatusScreen), findsOneWidget);
     expect(find.text('Transaction Progress'), findsOneWidget);
+  });
+
+  testWidgets('a seller sees and confirms the next permitted action', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(tester, (RecordedRequest request) async {
+      if (request.apiPath == '/transactions/1/preparing') {
+        return transactionDetailResponse(
+          transaction: transactionJson(
+            id: 1,
+            role: 'seller',
+            fulfillmentStatus: 'preparing',
+            permittedActions: <String>['ready_for_pickup', 'cancel'],
+          ),
+        );
+      }
+      return transactionDetailResponse(
+        transaction: transactionJson(
+          id: 1,
+          role: 'seller',
+          fulfillmentStatus: 'confirmed',
+          permittedActions: <String>['preparing', 'cancel'],
+        ),
+      );
+    });
+
+    expect(find.text('Fulfillment: Confirmed'), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Start Preparing'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Start Preparing'));
+    await settle(tester);
+    expect(find.text('Start preparing?'), findsOneWidget);
+    expect(
+      recorded.where(
+        (RecordedRequest r) => r.apiPath == '/transactions/1/preparing',
+      ),
+      isEmpty,
+      reason: 'the action waits for explicit confirmation',
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, 'Start Preparing'));
+    await settle(tester, frames: 20);
+
+    expect(
+      recorded
+          .where(
+            (RecordedRequest r) => r.apiPath == '/transactions/1/preparing',
+          )
+          .length,
+      1,
+    );
+    expect(find.text('Fulfillment: Preparing'), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Mark Ready for Pickup'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(FilledButton, 'Start Preparing'), findsNothing);
+  });
+
+  testWidgets('a buyer confirms receipt only after handover/delivery', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(tester, (RecordedRequest request) async {
+      if (request.apiPath == '/transactions/1/complete') {
+        return transactionDetailResponse(
+          transaction: transactionJson(
+            id: 1,
+            status: 'completed',
+            fulfillmentStatus: 'completed',
+            permittedActions: const <String>[],
+          ),
+        );
+      }
+      return transactionDetailResponse(
+        transaction: transactionJson(
+          id: 1,
+          fulfillmentStatus: 'picked_up',
+          permittedActions: const <String>['confirm_received'],
+        ),
+      );
+    });
+
+    expect(find.text('Fulfillment: Picked Up'), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Confirm Received'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(OutlinedButton, 'Cancel request'),
+      findsNothing,
+      reason: 'the backend cutoff removes cancellation after handover',
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Received'));
+    await settle(tester);
+    expect(find.text('Confirm receipt?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Confirm Received'));
+    await settle(tester, frames: 20);
+
+    expect(
+      recorded
+          .where((RecordedRequest r) => r.apiPath == '/transactions/1/complete')
+          .length,
+      1,
+    );
+    expect(
+      find.text('You confirmed receipt. This sale is complete.'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(FilledButton, 'Confirm Received'), findsNothing);
+    expect(
+      find.text('Receipt confirmed. Transaction completed.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a 409 reloads and shows the updated authoritative stage', (
+    WidgetTester tester,
+  ) async {
+    int gets = 0;
+    await pumpDetail(tester, (RecordedRequest request) async {
+      if (request.apiPath == '/transactions/1/preparing') {
+        return transactionConflictResponse(
+          message: 'This fulfillment step is not available.',
+        );
+      }
+      gets++;
+      return transactionDetailResponse(
+        transaction: transactionJson(
+          id: 1,
+          role: 'seller',
+          fulfillmentStatus: gets == 1 ? 'confirmed' : 'preparing',
+          permittedActions: gets == 1
+              ? <String>['preparing', 'cancel']
+              : <String>['ready_for_pickup', 'cancel'],
+        ),
+      );
+    });
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Start Preparing'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Start Preparing'));
+    await settle(tester, frames: 20);
+
+    expect(gets, 2);
+    expect(find.text('Fulfillment: Preparing'), findsOneWidget);
+    expect(
+      find.text('This transaction changed. The latest state is shown.'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(FilledButton, 'Mark Ready for Pickup'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an unknown fulfillment stage shows a safe unavailable state', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(
+      tester,
+      (_) async => transactionDetailResponse(
+        transaction: transactionJson(
+          role: 'seller',
+          fulfillmentStatus: 'future_stage',
+          permittedActions: const <String>['preparing', 'cancel'],
+        ),
+      ),
+    );
+
+    expect(find.text('Status unavailable'), findsOneWidget);
+    expect(find.textContaining('does not recognize'), findsWidgets);
+    expect(find.text('Fulfillment: Confirmed'), findsNothing);
+    expect(find.text('Start Preparing'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Cancel sale'), findsNothing);
+    expect(
+      find.text(
+        'Fulfillment actions are unavailable until the app is updated.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a 404 is an honest unavailable state, not a guess', (

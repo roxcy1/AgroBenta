@@ -34,6 +34,7 @@ class ChatScreen extends StatefulWidget {
     required this.counterpart,
     required this.currentUserId,
     this.listingId,
+    this.messageListingId,
     this.offerInquiry,
     this.counterpartRole,
     super.key,
@@ -46,8 +47,12 @@ class ChatScreen extends StatefulWidget {
   /// caller because [AuthScope] cannot be reached from `initState`.
   final int currentUserId;
 
-  /// The listing this thread is about, if any.
+  /// The listing this thread is filtered to, if any.
   final int? listingId;
+
+  /// The listing to tag new messages with when opened from a listing's detail
+  /// screen. The thread itself still shows the whole buyer–seller history.
+  final int? messageListingId;
 
   /// The server-provided inquiry the seller can still answer with an offer.
   ///
@@ -80,6 +85,7 @@ class _ChatScreenState extends State<ChatScreen> {
       counterpartId: widget.counterpart.id,
       currentUserId: widget.currentUserId,
       listingId: widget.listingId,
+      messageListingId: widget.messageListingId,
     );
     _controller.load();
     // Mark read on open — the user is looking at the thread, so unread
@@ -378,8 +384,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (!mounted) {
                   return;
                 }
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(sendError)));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(sendError)));
                 _controller.clearSendError();
               });
             }
@@ -391,8 +398,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (!mounted) {
                   return;
                 }
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(offerError)));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(offerError)));
                 _offers.clearActionError();
               });
             }

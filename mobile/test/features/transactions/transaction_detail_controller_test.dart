@@ -128,6 +128,189 @@ void main() {
     });
   });
 
+  group('fulfillment actions', () {
+    test(
+      'performs a permitted action and publishes the updated record',
+      () async {
+        final (:controller, :states) = build((RecordedRequest request) async {
+          if (request.method == 'POST') {
+            return transactionDetailResponse(
+              transaction: transactionJson(
+                id: 1,
+                role: 'seller',
+                fulfillmentStatus: 'preparing',
+                permittedActions: <String>['ready_for_pickup', 'cancel'],
+              ),
+            );
+          }
+          return transactionDetailResponse(
+            transaction: transactionJson(
+              id: 1,
+              role: 'seller',
+              fulfillmentStatus: 'confirmed',
+              permittedActions: <String>['preparing', 'cancel'],
+            ),
+          );
+        });
+        await controller.load();
+
+        final bool updated = await controller.performAction(
+          TransactionFulfillmentAction.preparing,
+        );
+
+        expect(updated, isTrue);
+        expect(controller.state.status, TransactionDetailStatus.ready);
+        expect(
+          controller.state.transaction!.fulfillmentStatus,
+          TransactionFulfillmentStatus.preparing,
+        );
+        expect(
+          controller.state.nextSellerAction,
+          TransactionFulfillmentAction.readyForPickup,
+        );
+        expect(
+          states.map((TransactionDetailState s) => s.status),
+          containsAllInOrder(<TransactionDetailStatus>[
+            TransactionDetailStatus.loading,
+            TransactionDetailStatus.ready,
+            TransactionDetailStatus.updating,
+            TransactionDetailStatus.ready,
+          ]),
+        );
+
+        final RecordedRequest post = recorded.last;
+        expect(post.method, 'POST');
+        expect(post.apiPath, '/transactions/1/preparing');
+        expect(post.query, isEmpty, reason: 'fulfillment actions take no body');
+      },
+    );
+
+    test('refuses an action the server did not permit', () async {
+      final (:controller, :states) = build(
+        (_) async => transactionDetailResponse(
+          transaction: transactionJson(
+            id: 1,
+            fulfillmentStatus: 'confirmed',
+            permittedActions: <String>['cancel'],
+          ),
+        ),
+      );
+      await controller.load();
+
+      final bool updated = await controller.performAction(
+        TransactionFulfillmentAction.preparing,
+      );
+
+      expect(updated, isFalse);
+      expect(recorded, hasLength(1), reason: 'no request is sent');
+      expect(controller.state.actionErrorMessage, isNull);
+    });
+
+    test('reloads the authoritative state on a 409', () async {
+      int gets = 0;
+      final (:controller, :states) = build((RecordedRequest request) async {
+        if (request.method == 'POST') {
+          return transactionConflictResponse(
+            message: 'This fulfillment step is not available.',
+          );
+        }
+        gets++;
+        return transactionDetailResponse(
+          transaction: transactionJson(
+            id: 1,
+            role: 'seller',
+            fulfillmentStatus: gets == 1 ? 'confirmed' : 'preparing',
+            permittedActions: gets == 1
+                ? <String>['preparing', 'cancel']
+                : <String>['ready_for_pickup', 'cancel'],
+          ),
+        );
+      });
+      await controller.load();
+
+      final bool updated = await controller.performAction(
+        TransactionFulfillmentAction.preparing,
+      );
+
+      expect(updated, isFalse);
+      expect(gets, 2);
+      expect(
+        controller.state.transaction!.fulfillmentStatus,
+        TransactionFulfillmentStatus.preparing,
+      );
+      expect(controller.state.actionErrorMessage, contains('latest state'));
+    });
+
+    test('keeps the record and shows the server message on a 403', () async {
+      final (:controller, :states) = build((RecordedRequest request) async {
+        if (request.method == 'POST') {
+          return http.Response(
+            '{"message":"This action is unauthorized."}',
+            403,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        }
+        return transactionDetailResponse(
+          transaction: transactionJson(
+            id: 1,
+            role: 'seller',
+            permittedActions: <String>['preparing', 'cancel'],
+          ),
+        );
+      });
+      await controller.load();
+
+      final bool updated = await controller.performAction(
+        TransactionFulfillmentAction.preparing,
+      );
+
+      expect(updated, isFalse);
+      expect(controller.state.transaction!.id, 1);
+      expect(controller.state.actionErrorMessage, isNotNull);
+      expect(controller.state.status, TransactionDetailStatus.ready);
+    });
+
+    test('hides cancellation after the server cutoff', () async {
+      final (:controller, :states) = build(
+        (_) async => transactionDetailResponse(
+          transaction: transactionJson(
+            id: 1,
+            fulfillmentStatus: 'picked_up',
+            permittedActions: <String>['confirm_received'],
+          ),
+        ),
+      );
+      await controller.load();
+
+      expect(controller.state.canCancel, isFalse);
+      expect(controller.state.canConfirmReceived, isTrue);
+    });
+
+    test('clearActionError drops only the action notice', () async {
+      final (:controller, :states) = build((RecordedRequest request) async {
+        if (request.method == 'POST') {
+          return transactionServerErrorResponse();
+        }
+        return transactionDetailResponse(
+          transaction: transactionJson(
+            id: 1,
+            role: 'seller',
+            permittedActions: <String>['preparing', 'cancel'],
+          ),
+        );
+      });
+      await controller.load();
+      await controller.performAction(TransactionFulfillmentAction.preparing);
+      expect(controller.state.actionErrorMessage, isNotNull);
+
+      controller.clearActionError();
+
+      expect(controller.state.actionErrorMessage, isNull);
+      expect(controller.state.status, TransactionDetailStatus.ready);
+      expect(controller.state.transaction!.id, 1);
+    });
+  });
+
   group('cancel', () {
     /// A handler where the record is pending on read and cancelled on cancel.
     Future<http.Response> pendingThenCancelled(RecordedRequest request) async {

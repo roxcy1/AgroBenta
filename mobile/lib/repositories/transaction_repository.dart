@@ -50,6 +50,12 @@ class TransactionRepository {
   /// Cancels a pending transaction. Either party, irreversible.
   Future<Transaction> cancel(int id) => _service.cancel(id);
 
+  /// Performs one server-permitted fulfillment action.
+  Future<Transaction> performFulfillmentAction(
+    int id,
+    TransactionFulfillmentAction action,
+  ) => _service.performFulfillmentAction(id, action);
+
   static int _clampPerPage(int? perPage) {
     final int requested = perPage ?? TransactionEndpoints.defaultPerPage;
     if (requested < 1) {

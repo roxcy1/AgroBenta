@@ -1,0 +1,20 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# CatBoost generated files
+catboost_info/
+
+# Environment and logs
+.env
+*.log
+
+# Private local training data
+data/*.csv
+
+# Generated ML reports
+reports/

@@ -114,7 +114,7 @@ class InquiryService {
   Future<Inquiry> create({
     required int listingId,
     required String message,
-    required InquiryCollectionDateOption collectionDateOption,
+    InquiryCollectionDateOption? collectionDateOption,
     DateTime? preferredSchedule,
     String? subject,
     bool? purchaseInterest,
@@ -131,8 +131,9 @@ class InquiryService {
         // Explicit allow-list, in the order the contract lists them. Anything
         // a form adds later has to be named here to be sent.
         'listing_id': listingId,
-        'message': message.trim(),
-        'collection_date_option': collectionDateOption.value,
+        if (_present(message)) 'message': message.trim(),
+        if (collectionDateOption != null)
+          'collection_date_option': collectionDateOption.value,
         if (_present(subject)) 'subject': subject!.trim(),
         'purchase_interest': ?purchaseInterest,
         if (transactionMethod != null)

@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\SellerListing;
 
+use App\Enums\AgeInformation;
 use App\Enums\ListingStatus;
 use App\Enums\LivestockType;
+use App\Enums\WeightInformation;
 use App\Models\Listing;
 use App\Rules\MaximumAgeForUnit;
 use App\Rules\TrinidadLocationAddressRule;
@@ -60,6 +62,9 @@ trait SellerListingRules
             // selected (25 years / 300 months / 9,125 days) [DEC-01].
             'age_value' => ['integer', 'min:0', 'max:9125', new MaximumAgeForUnit],
             'age_unit' => ['in:day,month,year'],
+            // Nullable for a legacy PATCH; the required measurement rules below
+            // make both fields mandatory on create and submission.
+            'age_information' => ['nullable', Rule::enum(AgeInformation::class)],
 
             'gender' => ['in:male,female'],
 
@@ -70,6 +75,7 @@ trait SellerListingRules
             // the seller typed is the amount stored [DEC-02].
             'weight_value' => ['numeric', 'decimal:0,2', 'min:0', 'max:99999999.99'],
             'weight_unit' => ['in:kg,lb'],
+            'weight_information' => ['nullable', Rule::enum(WeightInformation::class)],
 
             'quantity' => ['integer', 'min:1'],
 
@@ -145,6 +151,29 @@ trait SellerListingRules
     }
 
     /**
+     * The two physical measurements a listing cannot be created or submitted
+     * without.
+     *
+     * The columns remain nullable for historical rows, so this is deliberately
+     * separate from [contentRules()]: an update request can omit an untouched
+     * legacy measurement, while create and submission require the complete
+     * value, unit and information type.
+     *
+     * @return array<string, list<string>>
+     */
+    protected function requiredMeasurementRules(): array
+    {
+        return [
+            'age_value' => ['required'],
+            'age_unit' => ['required'],
+            'age_information' => ['required'],
+            'weight_value' => ['required'],
+            'weight_unit' => ['required'],
+            'weight_information' => ['required'],
+        ];
+    }
+
+    /**
      * The rules for the two value/unit pairs, which are meaningless apart.
      *
      * `age_value` without `age_unit` (or the reverse) is not a listing anybody
@@ -185,6 +214,7 @@ trait SellerListingRules
             $this->contentRules(),
             $this->pairRules(),
             $this->requiredFieldRules(),
+            $this->requiredMeasurementRules(),
         );
     }
 

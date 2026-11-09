@@ -13,7 +13,7 @@ use Illuminate\Http\JsonResponse;
  *
  * Read-only and token-scoped like the rest of the mobile marketplace. The
  * ranking is a count of genuinely completed transactions in the last 30 days,
- * grouped over the four canonical categories; it never looks at views,
+ * grouped over the canonical categories; it never looks at views,
  * inquiries or pending/cancelled records.
  */
 class PopularLivestockController extends Controller

@@ -87,7 +87,7 @@ abstract final class MarketplaceEndpoints {
 
 /// The approved livestock-type catalog, relative to the API root.
 ///
-/// This is the backend enum's public projection. The four values are the only
+/// This is the backend enum's public projection. The catalog values are the only
 /// ones a seller may write; historical rows may still hold values outside the
 /// catalog, and those remain readable everywhere.
 abstract final class LivestockTypeEndpoints {
@@ -219,6 +219,16 @@ abstract final class SellerListingEndpoints {
   /// draft.
   static String submit(int id) => '/seller/listings/$id/submit';
 
+  /// `POST` — request an AI price suggestion for a draft. 200, plain envelope.
+  ///
+  /// [id] is appended. The endpoint accepts no request body. It is owner-scoped
+  /// and draft-only; the server answers `422` for another state. A successful
+  /// response is an `AiPriceEstimateResource`; `withheld` and `invalid` refusals
+  /// arrive as structured `422` bodies with `status`, `warnings` and
+  /// `reason_codes`.
+  static String priceSuggestion(int id) =>
+      '/seller/listings/$id/price-suggestion';
+
   /// `POST` — mark an active listing as sold. 200, plain envelope.
   ///
   /// [id] is appended. Permitted only while the listing is `active`; the server
@@ -269,9 +279,11 @@ abstract final class SellerListingEndpoints {
     'breed',
     'age_value',
     'age_unit',
+    'age_information',
     'gender',
     'weight_value',
     'weight_unit',
+    'weight_information',
     'quantity',
     'asking_price',
     'location',
@@ -283,13 +295,20 @@ abstract final class SellerListingEndpoints {
 
   /// The fields the create request requires.
   ///
-  /// A subset of [writableFields]. The contract requires these four, so a draft
-  /// is a complete-but-unpublished record rather than a half-filled one.
+  /// A subset of [writableFields]. Age and weight are required with their
+  /// units and information types, so a draft is a complete-but-unpublished
+  /// record rather than a half-filled one.
   static const List<String> requiredFields = <String>[
     'livestock_type',
     'location',
     'asking_price',
     'quantity',
+    'age_value',
+    'age_unit',
+    'age_information',
+    'weight_value',
+    'weight_unit',
+    'weight_information',
   ];
 
   /// Page size used when the caller does not ask for a specific one.
@@ -314,10 +333,9 @@ abstract final class SellerListingEndpoints {
 /// and resolves the user from that token — no path takes a user id, and
 /// `buyer_id` / `seller_id` are refused as filters.
 ///
-/// There is deliberately **no `complete` path** here. The backend answers
-/// `POST /transactions/{id}/complete` with an explicit 501 (OQ-15: the
-/// confirming actor is undecided), and the client never calls it — hiding the
-/// affordance is safer than a button that always errors.
+/// Fulfillment and receipt-confirmation paths are listed below. The client
+/// calls them only when the same record's server-provided `permitted_actions`
+/// contains the matching action.
 abstract final class TransactionEndpoints {
   /// `GET` — the caller's transactions, newest first. 200, paginated.
   ///
@@ -339,11 +357,29 @@ abstract final class TransactionEndpoints {
   /// 404 for a transaction the caller is not party to.
   static String detail(int id) => '/transactions/$id';
 
-  /// `POST` — cancel a pending transaction. 200, plain envelope.
+  /// `POST` - cancel a pending transaction. 200, plain envelope.
   ///
-  /// Either party may cancel ([D-15] rule 5), pending-only, irreversible.
+  /// Either party may cancel before handover/dispatch, irreversible.
   /// The body allow-list is empty; any field is 422.
   static String cancel(int id) => '/transactions/$id/cancel';
+
+  /// Seller starts preparing the livestock.
+  static String preparing(int id) => '/transactions/$id/preparing';
+
+  /// Seller marks a pickup-flow transaction ready for pickup.
+  static String readyForPickup(int id) => '/transactions/$id/ready-for-pickup';
+
+  /// Seller confirms a pickup-flow handover.
+  static String pickedUp(int id) => '/transactions/$id/picked-up';
+
+  /// Seller marks a delivery-flow transaction on the way.
+  static String onTheWay(int id) => '/transactions/$id/on-the-way';
+
+  /// Seller marks a delivery-flow transaction delivered.
+  static String delivered(int id) => '/transactions/$id/delivered';
+
+  /// Buyer confirms receipt after pickup or delivery. Completes the sale.
+  static String complete(int id) => '/transactions/$id/complete';
 
   /// Page size used when the caller does not ask for a specific one.
   static const int defaultPerPage = 15;

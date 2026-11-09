@@ -123,9 +123,9 @@ String? validateQuantity(String? value) {
 /// Validates the age magnitude, which the contract holds to `integer, min:0`
 /// and DEC-01 caps in the **selected unit**: 25 years / 300 months / 9,125 days.
 ///
-/// A whole number even though the column is `decimal(5,1)`: the contract is what
-/// a client is held to, and a fractional age in months is not something the
-/// field can express meaningfully.
+/// Age is required on every listing. A whole number is required even though the
+/// column is `decimal(5,1)`: the contract is what a client is held to, and a
+/// fractional age in months is not something the field can express meaningfully.
 ///
 /// [unit] is the value of the age-unit control. Without a unit the magnitude
 /// cannot be bounded, so only the non-negative check applies here and
@@ -133,7 +133,7 @@ String? validateQuantity(String? value) {
 String? validateAgeValue(String? value, {String? unit}) {
   final String trimmed = (value ?? '').trim();
   if (trimmed.isEmpty) {
-    return null; // Optional, and only together with a unit.
+    return 'Enter the age.';
   }
   final int? amount = int.tryParse(trimmed);
   if (amount == null) {
@@ -156,15 +156,8 @@ String _ageLimitText(String unit) => switch (unit) {
   _ => '25 years',
 };
 
-/// Validates the age unit, which is required whenever an age is given.
-///
-/// The counterpart to [validateAgeValue]: a magnitude with no unit is not
-/// something anybody can read, so the pair is checked in the form as well as
-/// server-side.
-String? validateAgeUnit(String? value, {required bool hasValue}) {
-  if (!hasValue) {
-    return null;
-  }
+/// Validates the age unit, which is required for every listing.
+String? validateAgeUnit(String? value) {
   if (value == null || value.isEmpty) {
     return 'Choose a unit for the age.';
   }
@@ -173,10 +166,12 @@ String? validateAgeUnit(String? value, {required bool hasValue}) {
 
 /// Validates the weight magnitude, which the contract holds to `numeric,
 /// min:0`, with at most two decimal places (DEC-02).
+///
+/// Weight is required on every listing.
 String? validateWeightValue(String? value) {
   final String trimmed = (value ?? '').trim();
   if (trimmed.isEmpty) {
-    return null; // Optional, and only together with a unit.
+    return 'Enter the weight.';
   }
   if (!_isPlainDecimal(trimmed)) {
     return 'Enter a number with at most two decimal places, for example '
@@ -191,11 +186,8 @@ String? validateWeightValue(String? value) {
   return null;
 }
 
-/// Validates the weight unit, which is required whenever a weight is given.
-String? validateWeightUnit(String? value, {required bool hasValue}) {
-  if (!hasValue) {
-    return null;
-  }
+/// Validates the weight unit, which is required for every listing.
+String? validateWeightUnit(String? value) {
   if (value == null || value.isEmpty) {
     return 'Choose a unit for the weight.';
   }
@@ -232,6 +224,7 @@ String? validateAdditionalNotes(String? value) {
 /// A trailing decimal point (`12.`) is rejected: it is a half-typed number, not
 /// a value the seller means to store.
 bool _isPlainDecimal(String value) {
-  return RegExp('^\\d+(\\.\\d{1,$kListingMaxDecimalPlaces})?\$')
-      .hasMatch(value);
+  return RegExp(
+    '^\\d+(\\.\\d{1,$kListingMaxDecimalPlaces})?\$',
+  ).hasMatch(value);
 }

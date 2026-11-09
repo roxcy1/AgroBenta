@@ -96,6 +96,8 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
                 return;
             }
 
+            $this->requireCompleteMeasurementSets($validator);
+
             $hasLivestockType = $this->exists('livestock_type');
             $livestockType = (string) $this->input(
                 'livestock_type',
@@ -140,6 +142,68 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
                 'Choose a breed from the selected livestock type.',
             );
         });
+    }
+
+    /**
+     * If a PATCH touches a measurement, all of its parts must be present.
+     *
+     * A legacy draft whose age/weight was never recorded can still be edited
+     * without backfilling it; submission is where completeness is enforced.
+     * But a request that starts changing one half of a pair must not store a
+     * half-filled measurement.
+     */
+    private function requireCompleteMeasurementSets(Validator $validator): void
+    {
+        $this->requireCompleteMeasurementSet(
+            $validator,
+            ['age_value', 'age_unit', 'age_information'],
+            [
+                'age_value' => 'Enter the age.',
+                'age_unit' => 'Choose an age unit.',
+                'age_information' => 'Choose whether the age is known or estimated.',
+            ],
+        );
+        $this->requireCompleteMeasurementSet(
+            $validator,
+            ['weight_value', 'weight_unit', 'weight_information'],
+            [
+                'weight_value' => 'Enter the weight.',
+                'weight_unit' => 'Choose a weight unit.',
+                'weight_information' => 'Choose whether the weight is measured or estimated.',
+            ],
+        );
+    }
+
+    /**
+     * @param  list<string>  $fields
+     * @param  array<string, string>  $messages
+     */
+    private function requireCompleteMeasurementSet(
+        Validator $validator,
+        array $fields,
+        array $messages,
+    ): void {
+        $touched = false;
+        foreach ($fields as $field) {
+            if ($this->exists($field)) {
+                $touched = true;
+                break;
+            }
+        }
+
+        if (! $touched) {
+            return;
+        }
+
+        foreach ($fields as $field) {
+            if ($validator->errors()->has($field)) {
+                continue;
+            }
+
+            if (! $this->exists($field) || $this->input($field) === null || $this->input($field) === '') {
+                $validator->errors()->add($field, $messages[$field]);
+            }
+        }
     }
 
     /**
