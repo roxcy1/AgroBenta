@@ -239,7 +239,7 @@ export function ListingsTab() {
             ) : (
               <>
                 <div className="lv-table-container">
-                  <table className="lv-table">
+                  <table className="lv-table lv-table--listings">
                     <thead>
                       <tr>
                         <th>Photo</th>
@@ -267,12 +267,14 @@ export function ListingsTab() {
                           <td className="lv-photo-cell">
                             <ListingPhotoThumb url={listing.photos[0]} />
                           </td>
-                          <td className="lv-name-cell">{livestockTypeLabel(listing.livestock_type, livestockTypes)}</td>
-                          <td>{listing.breed}</td>
+                          <td className="lv-name-cell" title={livestockTypeLabel(listing.livestock_type, livestockTypes)}>
+                            {livestockTypeLabel(listing.livestock_type, livestockTypes)}
+                          </td>
+                          <td title={listing.breed}>{listing.breed}</td>
                           <td>{listing.quantity}</td>
                           <td className="lv-price-cell">{formatPeso(listing.asking_price)}</td>
-                          <td>{listing.location}</td>
-                          <td className="lv-seller-cell">{listing.seller.name}</td>
+                          <td title={listing.location}>{listing.location}</td>
+                          <td className="lv-seller-cell" title={listing.seller.name}>{listing.seller.name}</td>
                           <td>
                             <StatusBadge status={listing.status} />
                           </td>

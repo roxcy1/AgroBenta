@@ -1,9 +1,11 @@
-import { ArrowLeftRight, Package, Store, Users as UsersIcon } from 'lucide-react';
+import { ArrowLeftRight, Download, Package, Store, Users as UsersIcon } from 'lucide-react';
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
 import { useReports } from '../api/useReports';
+import { buildReportsCsv, buildReportsFilename } from '../csv';
 import { livestockTypeLabel, useLivestockTypes } from '../../livestock/api/useLivestockTypes';
 import { formatNumber, formatPeso } from '../../../../lib/format';
+import { downloadCsv } from '../../../../lib/csv';
 import { statusChartColor } from '../../../../lib/status';
 import { CHART_AXIS, CHART_BAR, CHART_BAR_SECONDARY, CHART_GRID, CHART_LINE_ACCENT, CHART_PIE_COLORS, CHART_TICK, CHART_TICK_SMALL, CHART_TOOLTIP_STYLE } from '../../../../lib/chartTheme';
 
@@ -46,6 +48,12 @@ export function ReportsPage() {
     setAppliedFilters({});
   };
 
+  const handleExportCsv = () => {
+    if (!data || isLoading || isFetching || error) return;
+
+    downloadCsv(buildReportsFilename(appliedFilters), buildReportsCsv(data, appliedFilters));
+  };
+
   const hasActiveFilter = Boolean(appliedFilters.date_from || appliedFilters.date_to);
   const appliedRangeText = appliedFilters.date_from && appliedFilters.date_to
     ? `Showing ${appliedFilters.date_from} to ${appliedFilters.date_to}`
@@ -54,6 +62,7 @@ export function ReportsPage() {
       : appliedFilters.date_to
         ? `Showing up to ${appliedFilters.date_to}`
         : 'Showing all-time data';
+  const reportRangeLabel = hasActiveFilter ? 'the selected date range' : 'all-time';
 
   const filtersPanel = (
     <div className="reports-filters">
@@ -89,6 +98,16 @@ export function ReportsPage() {
               Clear
             </button>
           )}
+          <button
+            type="button"
+            className="reports-clear-button reports-export-button"
+            onClick={handleExportCsv}
+            disabled={!data || isLoading || isFetching || Boolean(error)}
+            aria-label="Export report data as CSV"
+          >
+            <Download aria-hidden="true" />
+            Export CSV
+          </button>
         </div>
       </div>
 
@@ -150,49 +169,55 @@ export function ReportsPage() {
 
   return (
     <div className="dashboard-content">
-      {filtersPanel}
-
       <div className="dashboard-section">
         <h2 className="dashboard-section-title">Marketplace Overview</h2>
         <div className="dashboard-stats-grid">
-          <div className="dashboard-stat-card">
+          <div className="dashboard-stat-card dashboard-stat-card--tone-users">
             <div className="dashboard-stat-icon dashboard-stat-icon--users">
               <UsersIcon className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
             <div className="dashboard-stat-info">
               <span className="dashboard-stat-value">{formatNumber(overview.total_users)}</span>
               <span className="dashboard-stat-label">Total Users</span>
+              <span className="dashboard-stat-sublabel">All-time</span>
             </div>
           </div>
-          <div className="dashboard-stat-card">
+          <div className="dashboard-stat-card dashboard-stat-card--tone-sellers">
             <div className="dashboard-stat-icon dashboard-stat-icon--sellers">
               <Store className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
             <div className="dashboard-stat-info">
               <span className="dashboard-stat-value">{formatNumber(overview.approved_sellers)}</span>
               <span className="dashboard-stat-label">Approved Sellers</span>
+              <span className="dashboard-stat-sublabel">All-time</span>
             </div>
           </div>
-          <div className="dashboard-stat-card">
+          <div className="dashboard-stat-card dashboard-stat-card--tone-listings">
             <div className="dashboard-stat-icon dashboard-stat-icon--listings">
               <Package className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
             <div className="dashboard-stat-info">
               <span className="dashboard-stat-value">{formatNumber(overview.active_listings)}</span>
               <span className="dashboard-stat-label">Active Listings</span>
+              <span className="dashboard-stat-sublabel">All-time</span>
             </div>
           </div>
-          <div className="dashboard-stat-card">
+          <div className="dashboard-stat-card dashboard-stat-card--tone-transactions">
             <div className="dashboard-stat-icon dashboard-stat-icon--transactions">
               <ArrowLeftRight className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
             <div className="dashboard-stat-info">
               <span className="dashboard-stat-value">{formatNumber(overview.total_transactions)}</span>
-              <span className="dashboard-stat-label">Total Transactions</span>
+              <span className="dashboard-stat-label">Transactions</span>
+              <span className="dashboard-stat-sublabel">
+                {hasActiveFilter ? 'Selected period' : 'All-time'}
+              </span>
             </div>
           </div>
         </div>
       </div>
+
+      {filtersPanel}
 
       <div className="dashboard-section">
         <h2 className="dashboard-section-title">Users &amp; Sellers</h2>
@@ -225,6 +250,7 @@ export function ReportsPage() {
             ) : (
               <div className="dashboard-chart-empty"><p>No user data available.</p></div>
             )}
+            <p className="dashboard-chart-caption">Current buyer and seller capability counts (all-time).</p>
           </div>
 
           <div className="dashboard-chart-card">
@@ -269,6 +295,7 @@ export function ReportsPage() {
             ) : (
               <div className="dashboard-chart-empty"><p>No listing data available.</p></div>
             )}
+            <p className="dashboard-chart-caption">Listing counts by livestock type for {reportRangeLabel}.</p>
           </div>
 
           <div className="dashboard-chart-card">
@@ -299,6 +326,7 @@ export function ReportsPage() {
             ) : (
               <div className="dashboard-chart-empty"><p>No listing data available.</p></div>
             )}
+            <p className="dashboard-chart-caption">Current listing status totals (all-time).</p>
           </div>
         </div>
 
@@ -384,6 +412,7 @@ export function ReportsPage() {
             ) : (
               <div className="dashboard-chart-empty"><p>No transaction data available.</p></div>
             )}
+            <p className="dashboard-chart-caption">Monthly transaction counts for {reportRangeLabel}.</p>
           </div>
 
           <div className="dashboard-chart-card">
@@ -414,6 +443,7 @@ export function ReportsPage() {
             ) : (
               <div className="dashboard-chart-empty"><p>No transaction data available.</p></div>
             )}
+            <p className="dashboard-chart-caption">Transaction status counts for {reportRangeLabel}.</p>
           </div>
         </div>
 
@@ -495,7 +525,7 @@ export function ReportsPage() {
           </div>
 
           <div className="dashboard-chart-card">
-            <h3 className="dashboard-chart-title">Status Distribution</h3>
+            <h3 className="dashboard-chart-title">Verification Records by Status</h3>
             {seller_verifications.status_distribution.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
@@ -522,6 +552,9 @@ export function ReportsPage() {
             ) : (
               <div className="dashboard-chart-empty"><p>No verification data available.</p></div>
             )}
+            <p className="dashboard-chart-caption">
+              Submission records by status for {reportRangeLabel}; applicants may have multiple records over time.
+            </p>
           </div>
         </div>
 
@@ -550,13 +583,16 @@ export function ReportsPage() {
                 <span className="dashboard-breakdown-value">{formatNumber(seller_verifications.rejected)}</span>
               </li>
             </ul>
+            <p className="dashboard-chart-caption">
+              Counts are submission records; one applicant may have multiple records over time.
+            </p>
           </div>
 
           <div className="dashboard-breakdown-card">
-            <h4 className="dashboard-breakdown-title">Approval Rate</h4>
+            <h4 className="dashboard-breakdown-title">Decision Share of All Records</h4>
             <ul className="dashboard-breakdown-list">
               <li>
-                <span className="dashboard-breakdown-label">Approved</span>
+                <span className="dashboard-breakdown-label">Approved / all records</span>
                 <span className="dashboard-breakdown-value">
                   {seller_verifications.total > 0
                     ? `${((seller_verifications.approved / seller_verifications.total) * 100).toFixed(1)}%`
@@ -564,7 +600,7 @@ export function ReportsPage() {
                 </span>
               </li>
               <li>
-                <span className="dashboard-breakdown-label">Rejected</span>
+                <span className="dashboard-breakdown-label">Rejected / all records</span>
                 <span className="dashboard-breakdown-value">
                   {seller_verifications.total > 0
                     ? `${((seller_verifications.rejected / seller_verifications.total) * 100).toFixed(1)}%`
@@ -594,6 +630,7 @@ export function ReportsPage() {
             ) : (
               <div className="dashboard-chart-empty"><p>No activity data available.</p></div>
             )}
+            <p className="dashboard-chart-caption">Recorded activity counts for {reportRangeLabel}.</p>
           </div>
 
           <div className="dashboard-chart-card">
@@ -611,6 +648,7 @@ export function ReportsPage() {
             ) : (
               <div className="dashboard-chart-empty"><p>No activity data available.</p></div>
             )}
+            <p className="dashboard-chart-caption">Recorded activity events grouped by action for {reportRangeLabel}.</p>
           </div>
         </div>
 

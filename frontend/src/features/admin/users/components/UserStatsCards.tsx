@@ -39,7 +39,7 @@ export default function UserStatsCards({
           <button
             key={key}
             type="button"
-            className={`lv-stat-card${isActive ? ' lv-stat-card--active' : ''}`}
+            className={`lv-stat-card lv-stat-card--tone-${variant}${isActive ? ' lv-stat-card--active' : ''}`}
             aria-pressed={isActive}
             onClick={() => onSelect(key)}
           >

@@ -10,6 +10,7 @@ import TransactionsPage from './pages/TransactionsPage'
 import ActivitiesPage from './pages/ActivitiesPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
+import './features/admin/components/AdminVisualSystem.css'
 
 export default function App() {
   return (
