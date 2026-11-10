@@ -259,6 +259,16 @@ abstract final class AppConfig {
     return 'ws://${base.host}:8083';
   }
 
+  /// The backend's Google OAuth "Web application" client ID, passed to Google
+  /// Sign-In as `serverClientId` so the ID token's audience is the one Laravel
+  /// checks (`GOOGLE_CLIENT_ID` in `backend/.env`). Not a secret.
+  ///
+  /// Passed per build with `--dart-define=GOOGLE_SERVER_CLIENT_ID=...`. When
+  /// empty, the Google button is not shown.
+  static const String googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+  );
+
   /// The Reverb application key, used in the WebSocket path `/app/{key}` and
   /// by the server to sign private-channel auth. It is not a secret — the
   /// matching `REVERB_APP_SECRET` never leaves the server — but it must match

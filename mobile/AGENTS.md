@@ -375,7 +375,8 @@ disagree. Signing out, changing accounts or losing capability clears the mode.
 | `flutter_secure_storage` | Sanctum bearer token in the Android Keystore / iOS Keychain. | `shared_preferences` (unencrypted). |
 | `flutter_lints` | Analyzer baseline, via `analysis_options.yaml`. | — |
 | `intl` | Peso, date and relative-date formatting in `AppFormatters`, added in M2 as the first screen that displays money. `main()` calls `initializeDateFormatting('en_PH')` before the first frame; **any locale other than `en_US` must be initialised or `DateFormat` throws**, and `test/flutter_test_config.dart` does the equivalent for the suite. | Hand-rolled month names or a second date library. |
-| `font_awesome_flutter` | Provider brand marks for the registration and login screens' (disabled) Google and Facebook buttons. Material has no Google glyph and the project ships no brand assets, so `FaIcon(FontAwesomeIcons.google/facebook)` is the only accurate source. Pin `^11.0.0`: earlier 10.x versions extend `IconData`, which this SDK declares `final`, and fail to compile. | A hand-drawn `CustomPainter`, an SVG asset, or a second icon-font package. |
+| `font_awesome_flutter` | The Google brand mark on the registration and login screens' "Continue with Google" button (Facebook was removed, MS-11). Material has no Google glyph and the project ships no brand assets, so `FaIcon(FontAwesomeIcons.google/facebook)` is the only accurate source. Pin `^11.0.0`: earlier 10.x versions extend `IconData`, which this SDK declares `final`, and fail to compile. | A hand-drawn `CustomPainter`, an SVG asset, or a second icon-font package. |
+| `google_sign_in` | Android Google sign-in: obtains the ID token sent to `POST /api/auth/google`, behind `GoogleSignInService`. | A WebView OAuth flow, or a client secret in the app. |
 | `cupertino_icons` | Scaffold default. Currently unused by app code; remove it if it stays unused when real iOS-styled widgets land. | — |
 
 **Deliberately not added** in M0, and the phase that should justify each:
@@ -507,6 +508,7 @@ behind `auth:sanctum` + `ability:mobile`:
 |---|---|
 | `POST /api/auth/register` | Creates a buyer and returns a mobile token. |
 | `POST /api/auth/login` | Returns a mobile token. `403` for administrators. |
+| `POST /api/auth/google` | Exchanges a Google ID token (`id_token`) for a mobile token. Signs in an existing account with the same email, or creates a buyer account. `401` for a rejected token, `403` for administrators. |
 | `GET /api/auth/me` | The current user, as a `UserResource`. |
 | `POST /api/auth/logout` | Revokes the calling mobile token. |
 

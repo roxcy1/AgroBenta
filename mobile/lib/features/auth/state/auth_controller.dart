@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../models/user.dart';
 import '../../../repositories/auth_repository.dart';
+import '../../../services/google_sign_in_service.dart';
 import 'auth_state.dart';
 
 /// Presentation logic for authentication.
@@ -15,9 +16,14 @@ import 'auth_state.dart';
 /// up as a message the user can act on, because [ApiException.message] is
 /// already curated to be displayable.
 class AuthController extends ChangeNotifier {
-  AuthController(this._repository);
+  AuthController(this._repository, {GoogleSignInService? googleSignIn})
+    : _googleSignIn = googleSignIn ?? GoogleSignInService();
 
   final AuthRepository _repository;
+  final GoogleSignInService _googleSignIn;
+
+  /// True while Google's account picker is open, before [_submit] takes over.
+  bool _choosingGoogleAccount = false;
 
   AuthState _state = const AuthState.initial();
   AuthState get state => _state;
@@ -69,10 +75,66 @@ class AuthController extends ChangeNotifier {
   /// Signs in with [email] and [password].
   ///
   /// Returns `true` on success. On failure the error is left in [state] for
-  /// the form to render, and `false` is returned.
-  Future<bool> signIn({required String email, required String password}) {
-    return _submit(() => _repository.login(email: email, password: password));
+  /// the form to render, and `false` is returned. With [remember] false
+  /// ("Remember me" unticked) the session ends when the app is closed.
+  Future<bool> signIn({
+    required String email,
+    required String password,
+    bool remember = true,
+  }) {
+    return _submit(
+      () => _repository.login(
+        email: email,
+        password: password,
+        remember: remember,
+      ),
+    );
   }
+
+  /// Whether the Google button should be offered on this device and build.
+  bool get isGoogleSignInAvailable => _googleSignIn.isAvailable;
+
+  /// Signs in with Google. An unknown email gets a new buyer account; an
+  /// existing account with the same email is signed in.
+  ///
+  /// Returns `true` on success. Cancelling Google's account picker returns
+  /// `false` without an error message. [remember] works as in [signIn].
+  Future<bool> signInWithGoogle({bool remember = true}) async {
+    if (_choosingGoogleAccount || _state.isSubmitting || _state.isSigningOut) {
+      return false;
+    }
+
+    final String? idToken;
+    _choosingGoogleAccount = true;
+    try {
+      idToken = await _googleSignIn.obtainIdToken();
+    } on Object catch (error) {
+      // Google's own reason (e.g. a SHA-1 / OAuth client mismatch) is only
+      // useful to a developer, so it goes to the debug console, not the UI.
+      debugPrint('Google sign-in failed: $error');
+      _set(
+        AuthState(
+          status: AuthStatus.signedOut,
+          errorMessage: googleSignInErrorMessage,
+        ),
+      );
+      return false;
+    } finally {
+      _choosingGoogleAccount = false;
+    }
+
+    if (idToken == null || idToken.isEmpty) {
+      return false;
+    }
+
+    return _submit(
+      () => _repository.loginWithGoogle(idToken: idToken!, remember: remember),
+    );
+  }
+
+  /// Shown when Google itself could not provide an account.
+  static const String googleSignInErrorMessage =
+      'Google sign-in could not be completed. Please try again.';
 
   /// Registers a buyer account and signs the new user in.
   Future<bool> register({

@@ -712,6 +712,11 @@ abstract final class AuthEndpoints {
   /// `POST` — exchanges credentials for a mobile token. 200.
   static const String login = '/auth/login';
 
+  /// `POST` — exchanges a Google ID token for a mobile token, creating a buyer
+  /// account for an unknown email. 200, 401 for a rejected token, 403 for an
+  /// administrator.
+  static const String google = '/auth/google';
+
   /// `GET` — the authenticated user's own resource. 200.
   static const String me = '/auth/me';
 

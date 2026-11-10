@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ForgotPasswordRequest;
+use App\Http\Requests\Auth\GoogleLoginRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
@@ -51,6 +52,32 @@ class AuthController extends Controller
 
         if ($result['result'] === MobileAuthService::RESULT_INVALID_CREDENTIALS) {
             abort(401, 'Invalid credentials.');
+        }
+
+        if ($result['result'] === MobileAuthService::RESULT_NOT_PERMITTED) {
+            abort(403, 'This account may not sign in to the mobile application.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Logged in successfully.',
+            'data' => [
+                'token' => $result['token'],
+                'token_type' => 'Bearer',
+                'user' => new UserResource($result['user']),
+            ],
+        ], 200);
+    }
+
+    /**
+     * Sign in with a Google ID token and issue a mobile-scoped bearer token.
+     */
+    public function google(GoogleLoginRequest $request): JsonResponse
+    {
+        $result = $this->auth->loginWithGoogle($request->validated('id_token'));
+
+        if ($result['result'] === MobileAuthService::RESULT_INVALID_CREDENTIALS) {
+            abort(401, 'Google sign-in failed.');
         }
 
         if ($result['result'] === MobileAuthService::RESULT_NOT_PERMITTED) {

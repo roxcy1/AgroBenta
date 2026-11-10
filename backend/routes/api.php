@@ -49,6 +49,8 @@ Route::prefix('auth')->group(function (): void {
         ->middleware('throttle:5,1');
     Route::post('/login', [MobileAuthController::class, 'login'])
         ->middleware('throttle:10,1');
+    Route::post('/google', [MobileAuthController::class, 'google'])
+        ->middleware('throttle:10,1,google-login');
 
     // Password recovery, for a signed-out user. Each route names its throttle
     // bucket, because `throttle:5,1` alone is shared with `/register`.
