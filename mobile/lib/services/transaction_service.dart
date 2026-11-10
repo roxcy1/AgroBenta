@@ -2,6 +2,7 @@ import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../models/transaction.dart';
 import '../models/transaction_page.dart';
+import '../models/transaction_receipt.dart';
 
 /// The transaction API surface.
 ///
@@ -114,6 +115,20 @@ class TransactionService {
       path,
       parse: (Object? data) =>
           Transaction.fromJson(_asObject(data, 'POST $path')),
+    );
+  }
+
+  /// `GET /transactions/{id}/receipt` — the completed sale's receipt.
+  ///
+  /// A `404` means the transaction is missing or the caller is not a party; a
+  /// `409` means it is not completed yet. Both are normal outcomes the screen
+  /// renders without guessing.
+  Future<TransactionReceipt> receipt(int id) {
+    return _apiClient.get<TransactionReceipt>(
+      TransactionEndpoints.receipt(id),
+      parse: (Object? data) => TransactionReceipt.fromJson(
+        _asObject(data, 'GET /transactions/$id/receipt'),
+      ),
     );
   }
 

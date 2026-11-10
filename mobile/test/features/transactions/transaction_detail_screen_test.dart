@@ -524,6 +524,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.widgetWithText(FilledButton, 'Start Preparing'), findsNothing);
+    expect(find.text('Purchase Receipt'), findsNothing);
   });
 
   testWidgets('a buyer confirms receipt only after handover/delivery', (
@@ -539,6 +540,9 @@ void main() {
             permittedActions: const <String>[],
           ),
         );
+      }
+      if (request.apiPath == '/transactions/1/receipt') {
+        return transactionReceiptResponse();
       }
       return transactionDetailResponse(
         transaction: transactionJson(
@@ -573,13 +577,56 @@ void main() {
           .length,
       1,
     );
+
+    // The confirmation is the receipt: it opens automatically, without the old
+    // success snackbar.
+    expect(find.text('Purchase Receipt'), findsOneWidget);
+    expect(find.text('TRX-001'), findsOneWidget);
+    expect(find.text('Receipt confirmed. Transaction completed.'), findsNothing);
+
+    // Returning shows the completed record on the detail screen.
+    await tester.pageBack();
+    await settle(tester);
+
     expect(
       find.text('You confirmed receipt. This sale is complete.'),
       findsOneWidget,
     );
     expect(find.widgetWithText(FilledButton, 'Confirm Received'), findsNothing);
+  });
+
+  testWidgets('a failed buyer confirmation never opens a receipt', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(tester, (RecordedRequest request) async {
+      if (request.apiPath == '/transactions/1/complete') {
+        return transactionConflictResponse(
+          message: 'Receipt can only be confirmed after pickup or delivery.',
+        );
+      }
+      return transactionDetailResponse(
+        transaction: transactionJson(
+          id: 1,
+          fulfillmentStatus: 'picked_up',
+          permittedActions: const <String>['confirm_received'],
+        ),
+      );
+    });
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Received'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Confirm Received'));
+    await settle(tester, frames: 20);
+
     expect(
-      find.text('Receipt confirmed. Transaction completed.'),
+      recorded
+          .where((RecordedRequest r) => r.apiPath == '/transactions/1/complete')
+          .length,
+      1,
+    );
+    expect(find.text('Purchase Receipt'), findsNothing);
+    expect(
+      find.text('This transaction changed. The latest state is shown.'),
       findsOneWidget,
     );
   });

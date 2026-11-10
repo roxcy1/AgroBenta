@@ -9,9 +9,11 @@ use App\Http\Requests\Transaction\FulfillmentActionRequest;
 use App\Http\Requests\Transaction\IndexTransactionRequest;
 use App\Http\Requests\Transaction\StoreTransactionRequest;
 use App\Http\Resources\MobileTransactionResource;
+use App\Http\Resources\TransactionReceiptResource;
 use App\Models\Listing;
 use App\Models\Transaction;
 use App\Services\Transaction\TransactionFulfillmentService;
+use App\Services\Transaction\TransactionReceiptService;
 use App\Services\Transaction\TransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,6 +36,7 @@ class TransactionController extends Controller
     public function __construct(
         private readonly TransactionService $transactions,
         private readonly TransactionFulfillmentService $fulfillment,
+        private readonly TransactionReceiptService $receipts,
     ) {
         //
     }
@@ -218,6 +221,22 @@ class TransactionController extends Controller
             ),
             'Transaction completed.',
         );
+    }
+
+    /**
+     * The receipt of a completed transaction the caller is a party to.
+     *
+     * This is the mobile receipt projection, not the admin transaction: it
+     * contains both party names but no emails, and it is completed-only.
+     */
+    public function receipt(Request $request, string $transaction): JsonResponse
+    {
+        $found = $this->receipts->forUser((int) $transaction, $request->user());
+
+        return response()->json([
+            'success' => true,
+            'data' => new TransactionReceiptResource($found),
+        ], 200);
     }
 
     private function fulfillmentResponse(Transaction $transaction, string $message): JsonResponse

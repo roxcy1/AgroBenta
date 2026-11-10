@@ -43,6 +43,7 @@ dependencies:
   # Custom host/port, bearer-token channel auth, and automatic reconnection.
   pusher_reverb_flutter: ^0.0.10
   google_sign_in: ^7.2.0
+  gal: ^2.3.3
 
 dev_dependencies:
   flutter_test:

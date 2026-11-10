@@ -46,6 +46,7 @@ class TransactionDetailContent extends StatelessWidget {
     required this.onAction,
     required this.onMessageCounterparty,
     required this.onViewStatus,
+    required this.onViewReceipt,
     super.key,
   });
 
@@ -69,6 +70,10 @@ class TransactionDetailContent extends StatelessWidget {
   /// Opens the dedicated Transaction Status screen for this same record.
   final VoidCallback onViewStatus;
 
+  /// Opens the completed sale's receipt. The caller only offers this to the
+  /// buyer of a completed transaction.
+  final VoidCallback onViewReceipt;
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -87,6 +92,9 @@ class TransactionDetailContent extends StatelessWidget {
         : transaction.nextSellerAction;
     final bool canConfirmReceived =
         !hasUnknownStage && transaction.canConfirmReceived;
+    final bool canViewReceipt =
+        transaction.role == TransactionRole.buyer &&
+        transaction.status == TransactionStatus.completed;
 
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -199,6 +207,17 @@ class TransactionDetailContent extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               _StatusCard(transaction: transaction, onViewStatus: onViewStatus),
+              if (canViewReceipt) ...<Widget>[
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onViewReceipt,
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: const Text('View receipt'),
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
               _InquiryCard(isSeller: isSeller),
               const SizedBox(height: AppSpacing.lg),

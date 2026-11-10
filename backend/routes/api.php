@@ -198,6 +198,8 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
     Route::get('/', [MobileTransactionController::class, 'index']);
     Route::post('/', [MobileTransactionController::class, 'store']);
     Route::get('/{transaction}', [MobileTransactionController::class, 'show']);
+    Route::get('/{transaction}/receipt', [MobileTransactionController::class, 'receipt'])
+        ->whereNumber('transaction');
     Route::post('/{transaction}/cancel', [MobileTransactionController::class, 'cancel']);
     Route::post('/{transaction}/complete', [MobileTransactionController::class, 'complete'])
         ->whereNumber('transaction');

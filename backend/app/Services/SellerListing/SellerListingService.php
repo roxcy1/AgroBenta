@@ -328,6 +328,13 @@ class SellerListingService
     {
         $this->ensureStatusIs($listing, self::DELETABLE_STATUSES, 'Only a draft or an inactive listing can be deleted.');
 
+        // Completed sales are historical records. Deleting the listing would
+        // cascade the transaction away, taking its receipt with it, so the
+        // delete is refused while a completed transaction references it.
+        if ($this->transactions->hasCompletedForListing((int) $listing->getKey())) {
+            abort(409, 'This listing cannot be deleted because it has a completed transaction.');
+        }
+
         DB::transaction(function () use ($listing): void {
             $targetId = $listing->getKey();
             $sellerId = $listing->seller_id;
