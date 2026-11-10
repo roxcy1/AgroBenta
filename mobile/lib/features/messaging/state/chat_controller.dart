@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/message.dart';
 import '../../../repositories/messaging_repository.dart';
 import 'messaging_state.dart';
@@ -31,9 +34,24 @@ class ChatController extends ChangeNotifier {
     required this.currentUserId,
     this.listingId,
     this.messageListingId,
-  });
+    this.realtimeEvents,
+    this.connection,
+  }) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _connectionSubscription = connection?.listen(_onConnectionChanged);
+  }
 
   final MessagingRepository _repository;
+
+  /// The session's decoded events. When supplied, a message from the
+  /// counterpart refreshes this open thread without a manual pull.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  /// Connection changes; a reconnect re-fetches to recover missed messages.
+  final Stream<bool>? connection;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
 
   /// The other user in the thread.
   final int counterpartId;
@@ -105,6 +123,22 @@ class ChatController extends ChangeNotifier {
 
   /// Refreshes the thread — used after marking read.
   Future<void> refresh() => load();
+
+  /// A new message from the counterpart refreshes the open thread. Scoped to
+  /// the counterpart so an unrelated conversation's event does not re-fetch it.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name == 'message.sent' &&
+        event.data['sender_id'] == counterpartId) {
+      refresh();
+    }
+  }
+
+  /// A reconnect may have missed messages while the socket was down.
+  void _onConnectionChanged(bool connected) {
+    if (connected) {
+      refresh();
+    }
+  }
 
   /// Sends a message. Returns `true` on success.
   ///
@@ -246,6 +280,10 @@ class ChatController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
     _disposed = true;
     super.dispose();
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
@@ -106,7 +107,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             ?.repository;
         final InquiryRepository? repository = _inquiryRepository;
         if (repository != null) {
-          _inquiries ??= ActiveInquiriesController(repository, role: _role);
+          _inquiries ??= ActiveInquiriesController(
+            repository,
+            role: _role,
+            realtimeEvents: RealtimeScope.maybeOf(context)?.events,
+            connection: RealtimeScope.maybeOf(context)?.connected,
+          );
         }
       }
 
@@ -122,6 +128,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             role: widget.sellerMode
                 ? TransactionRole.seller
                 : TransactionRole.buyer,
+            realtimeEvents: RealtimeScope.maybeOf(context)?.events,
+            connection: RealtimeScope.maybeOf(context)?.connected,
           );
         }
       }

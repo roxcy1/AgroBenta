@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/transaction.dart';
 import '../../../models/transaction_page.dart';
 import '../../../repositories/transaction_repository.dart';
@@ -19,9 +22,28 @@ import 'transactions_state.dart';
 /// The differences are ruled by the lifecycle: there is no search, no filter,
 /// and no re-sort — the server order is the order.
 class TransactionsController extends ChangeNotifier {
-  TransactionsController(this._repository, this.status, {this.role});
+  TransactionsController(
+    this._repository,
+    this.status, {
+    this.role,
+    this.realtimeEvents,
+    this.connection,
+  }) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _connectionSubscription = connection?.listen(_onConnectionChanged);
+  }
 
   final TransactionRepository _repository;
+
+  /// The session's decoded events. A transaction event refreshes the list so a
+  /// new sale/purchase appears without a manual pull.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  /// Connection changes; a reconnect re-fetches to recover missed updates.
+  final Stream<bool>? connection;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
 
   /// The lifecycle state this filter shows; `null` means all of them.
   /// Fixed for the controller's life.
@@ -183,8 +205,28 @@ class TransactionsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Any transaction change (created, cancelled, completed, fulfillment) can
+  /// move this filtered page, so re-query it.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name == 'transaction.created' ||
+        event.name == 'transaction.updated') {
+      unawaited(refresh());
+    }
+  }
+
+  /// A reconnect may have missed transaction events while the socket was down.
+  void _onConnectionChanged(bool connected) {
+    if (connected) {
+      unawaited(refresh());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
     _disposed = true;
     super.dispose();
   }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/ai_price_estimate.dart';
 import '../../../models/listing.dart';
 import '../../../models/marketplace_page.dart';
@@ -46,7 +47,9 @@ import 'seller_listing_state.dart';
 ///    than as an empty list, because an empty list would imply "you have no
 ///    listings" when the truth is "you may not ask".
 class SellerListingController extends ChangeNotifier {
-  SellerListingController(this._repository);
+  SellerListingController(this._repository, {this.realtimeEvents}) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+  }
 
   /// How long typing must pause before the list is re-queried.
   static const Duration searchDebounce = Duration(milliseconds: 350);
@@ -57,6 +60,12 @@ class SellerListingController extends ChangeNotifier {
   static const int maxListingPhotos = 10;
 
   final SellerListingRepository _repository;
+
+  /// The session's decoded events. When supplied, an approval/rejection
+  /// notification reloads the seller's own listings so the status is current.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
 
   SellerListingState _state = const SellerListingState();
   SellerListingState get state => _state;
@@ -1101,8 +1110,19 @@ class SellerListingController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// An approval/rejection notification reloads the seller's own listings so
+  /// `pending` reflects the decision. Scoped to the `listing` notification type.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name == 'notification.created' &&
+        event.data['type'] == 'listing') {
+      unawaited(refresh());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
     _disposed = true;
     _searchDebounce?.cancel();
     _searchDebounce = null;

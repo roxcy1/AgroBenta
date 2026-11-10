@@ -5,6 +5,9 @@ namespace App\Services\Offer;
 use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Enums\OfferStatus;
+use App\Events\OfferCreated;
+use App\Events\OfferUpdated;
+use App\Events\TransactionCreated as TransactionCreatedEvent;
 use App\Models\Offer;
 use App\Models\Transaction;
 use App\Models\User;
@@ -148,6 +151,8 @@ class OfferService
                 ],
             );
 
+            OfferCreated::dispatch($offer);
+
             return $offer->load(['inquiry', 'listing']);
         });
     }
@@ -233,6 +238,15 @@ class OfferService
                         'seller_id' => (int) $accepted->seller_id,
                     ],
                 ],
+            );
+
+            // The seller learns of both the new sale and the accepted offer.
+            TransactionCreatedEvent::dispatch($transaction);
+            OfferUpdated::dispatch(
+                $accepted,
+                OfferStatus::Accepted->value,
+                (int) $accepted->seller_id,
+                $transaction->getKey(),
             );
 
             return [
@@ -356,6 +370,13 @@ class OfferService
                     ],
                 ],
             );
+
+            // The counterparty (not the actor) needs to learn of the change.
+            $recipientId = $requiredParty === 'buyer'
+                ? (int) $transitioned->seller_id
+                : (int) $transitioned->buyer_id;
+
+            OfferUpdated::dispatch($transitioned, $status->value, $recipientId);
 
             return $transitioned;
         });

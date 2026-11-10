@@ -6,6 +6,7 @@ use App\Enums\ActivityAction;
 use App\Enums\InquiryCollectionMethod;
 use App\Enums\InquiryPaymentMethod;
 use App\Enums\ListingStatus;
+use App\Events\InquiryCreated;
 use App\Models\Inquiry;
 use App\Models\Listing;
 use App\Models\User;
@@ -157,6 +158,9 @@ class InquiryService
                         ],
                     ],
                 );
+
+                // Notify the seller's connected client (queued + after-commit).
+                InquiryCreated::dispatch($inquiry);
 
                 return $inquiry;
             });

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/inquiry_list_item.dart';
 import '../../../repositories/inquiry_repository.dart';
 
@@ -45,12 +48,30 @@ class ActiveInquiriesState {
 /// The server already excludes inquiries converted to an accepted
 /// transaction, so the tab never re-filters or hides records on its own.
 class ActiveInquiriesController extends ChangeNotifier {
-  ActiveInquiriesController(this._repository, {required this.role});
+  ActiveInquiriesController(
+    this._repository, {
+    required this.role,
+    this.realtimeEvents,
+    this.connection,
+  }) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _connectionSubscription = connection?.listen(_onConnectionChanged);
+  }
 
   final InquiryRepository _repository;
 
   /// `buyer` or `seller` — the side the inbox is showing.
   final String role;
+
+  /// The session's decoded events. A new inquiry or an offer update changes
+  /// this tab (including `latest_offer`), so it re-loads.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  /// Connection changes; a reconnect re-fetches to recover missed inquiries.
+  final Stream<bool>? connection;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
 
   ActiveInquiriesState _state = const ActiveInquiriesState();
   ActiveInquiriesState get state => _state;
@@ -110,8 +131,28 @@ class ActiveInquiriesController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A new inquiry or an offer update moves this side's inquiry list.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name == 'inquiry.created' ||
+        event.name == 'offer.created' ||
+        event.name == 'offer.updated') {
+      unawaited(refresh());
+    }
+  }
+
+  /// A reconnect may have missed inquiries while the socket was down.
+  void _onConnectionChanged(bool connected) {
+    if (connected) {
+      unawaited(refresh());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
     _disposed = true;
     super.dispose();
   }

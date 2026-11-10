@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/received_inquiry.dart';
 import '../../../models/received_inquiry_page.dart';
 import '../../../repositories/inquiry_repository.dart';
@@ -18,9 +21,22 @@ import 'received_inquiries_state.dart';
 /// from the token, so this controller has no id to carry and no way to point
 /// the list at another account.
 class ReceivedInquiriesController extends ChangeNotifier {
-  ReceivedInquiriesController(this._repository);
+  ReceivedInquiriesController(this._repository, {this.realtimeEvents, this.connection}) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _connectionSubscription = connection?.listen(_onConnectionChanged);
+  }
 
   final InquiryRepository _repository;
+
+  /// The session's decoded events. A new inquiry (or an offer update, which
+  /// changes `can_make_offer`) re-loads the seller inbox.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  /// Connection changes; a reconnect re-fetches to recover missed inquiries.
+  final Stream<bool>? connection;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
 
   ReceivedInquiriesState _state = const ReceivedInquiriesState();
   ReceivedInquiriesState get state => _state;
@@ -166,8 +182,29 @@ class ReceivedInquiriesController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A new inquiry or an offer update changes this inbox (including
+  /// `can_make_offer`), so re-load the first page.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name == 'inquiry.created' ||
+        event.name == 'offer.created' ||
+        event.name == 'offer.updated') {
+      unawaited(refresh());
+    }
+  }
+
+  /// A reconnect may have missed inquiries while the socket was down.
+  void _onConnectionChanged(bool connected) {
+    if (connected) {
+      unawaited(refresh());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
     _disposed = true;
     super.dispose();
   }

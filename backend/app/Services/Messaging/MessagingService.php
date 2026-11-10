@@ -2,6 +2,7 @@
 
 namespace App\Services\Messaging;
 
+use App\Events\MessageSent;
 use App\Models\Inquiry;
 use App\Models\Message;
 use App\Models\User;
@@ -184,6 +185,11 @@ class MessagingService
         if ($shouldNotify) {
             $receiver->notify(new NewInquiry($sender, $message, $listingId));
         }
+
+        // Notify the receiver's connected client. Queued and dispatched after
+        // commit (see MessageSent), so a broadcast failure cannot fail the send
+        // and a rolled-back transaction cannot broadcast a phantom message.
+        MessageSent::dispatch($message);
 
         return $message->fresh(['sender:id,name,avatar_url', 'receiver:id,name,avatar_url']);
     }

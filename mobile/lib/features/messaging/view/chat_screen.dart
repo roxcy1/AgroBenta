@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
@@ -80,12 +81,18 @@ class _ChatScreenState extends State<ChatScreen> {
     // is registered, so it is safe from `initState`.
     final repository = MessagingScope.readRepositoryOf(context);
 
+    // Real-time is optional: the controllers subscribe only when a scope is
+    // installed (always in the app; absent in some widget tests).
+    final realtime = RealtimeScope.maybeOf(context);
+
     _controller = ChatController(
       repository,
       counterpartId: widget.counterpart.id,
       currentUserId: widget.currentUserId,
       listingId: widget.listingId,
       messageListingId: widget.messageListingId,
+      realtimeEvents: realtime?.events,
+      connection: realtime?.connected,
     );
     _controller.load();
     // Mark read on open — the user is looking at the thread, so unread
@@ -97,6 +104,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _offers = ChatOffersController(
       OfferScope.readOf(context),
       counterpartId: widget.counterpart.id,
+      realtimeEvents: realtime?.events,
+      connection: realtime?.connected,
     );
     _offers.load();
   }

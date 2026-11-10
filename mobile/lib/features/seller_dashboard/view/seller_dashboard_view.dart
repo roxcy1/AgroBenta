@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/received_inquiry.dart';
@@ -76,14 +77,21 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
   @override
   void initState() {
     super.initState();
+    final realtime = RealtimeScope.maybeOf(context);
     _controller = SellerDashboardController(
       SellerDashboardScope.readOf(context),
+      realtimeEvents: realtime?.events,
+      connection: realtime?.connected,
     );
     _controller.loadInitial();
 
     final InquiryRepository? repository = widget.inquiriesRepository;
     if (repository != null) {
-      _attention = ReceivedInquiriesController(repository)..loadInitial();
+      _attention = ReceivedInquiriesController(
+        repository,
+        realtimeEvents: realtime?.events,
+        connection: realtime?.connected,
+      )..loadInitial();
     }
 
     final SellerActivityRepository? activities = widget.activityRepository;

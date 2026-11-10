@@ -207,15 +207,13 @@ Backs Laravel's cache, session, and queue drivers. Required by Reverb if you use
 ### `node` — required for React + Vite development
 Runs Vite's dev server with hot reload on `localhost:5174`. The anonymous `node_modules` volume in `compose.yaml` keeps native binaries consistent and avoids slow cross-filesystem syncing on Windows.
 
-### `reverb` — optional, for real-time features
-Laravel Reverb WebSocket server. Reuses the same PHP image but runs a different process. Won't do anything until you run:
+### `reverb` — real-time WebSocket server
+Laravel Reverb. Reuses the same PHP image but runs a different process. It listens on `0.0.0.0:8080` inside Docker and is published as `${REVERB_PORT:-8083}` on the host, so clients connect to `ws://localhost:8083` (Flutter Web/iOS), `ws://10.0.2.2:8083` (Android emulator) or `ws://<LAN-IP>:8083` (physical device). Production must terminate `wss://` (TLS) in front of it.
 
-```bash
-docker compose exec php composer require laravel/reverb
-docker compose exec php php artisan install:broadcasting
-```
+Configuration lives in `backend/config/reverb.php` and `backend/.env` (`REVERB_APP_ID/KEY/SECRET`, `REVERB_HOST/PORT/SCHEME`, `REVERB_SERVER_HOST/PORT`). `BROADCAST_CONNECTION=reverb`; channel authorization is in `backend/routes/channels.php` and `/broadcasting/auth` uses `auth:sanctum`.
 
-Leave the service defined so the network wiring exists when you're ready.
+### `queue` — Redis queue worker
+Drains the Redis queue (`QUEUE_CONNECTION=redis`) for queued jobs, including broadcast events. Broadcasts are queued + after-commit, so a Reverb outage never fails the HTTP request and a rolled-back transaction never broadcasts a phantom record.
 
 ### Supervisor — NOT used, kept as reference only
 `docker/supervisor/supervisord.conf` shows how you *could* combine php-fpm, queue worker, and Reverb into one container. The default setup avoids this in favor of one process per container.
