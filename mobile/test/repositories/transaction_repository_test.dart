@@ -1,4 +1,5 @@
 import 'package:agrobenta_mobile/models/transaction.dart';
+import 'package:agrobenta_mobile/models/transaction_receipt.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/auth_fakes.dart';
@@ -50,5 +51,21 @@ void main() {
     await repository.list(perPage: 500);
 
     expect(recorded.single.query['per_page'], '50');
+  });
+
+  test('delegates the receipt request and returns the parsed snapshot', () async {
+    final repository = buildTransactionRepository(
+      tokenStore,
+      (_) async => transactionReceiptResponse(
+        receipt: transactionReceiptJson(reference: 'TRX-042'),
+      ),
+      recorded: recorded,
+    );
+
+    final TransactionReceipt receipt = await repository.receipt(42);
+
+    expect(receipt.reference, 'TRX-042');
+    expect(recorded.single.apiPath, '/transactions/42/receipt');
+    expect(recorded.single.method, 'GET');
   });
 }

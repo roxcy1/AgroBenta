@@ -39,6 +39,7 @@ class TransactionFulfillmentService
     public function __construct(
         private readonly TransactionRepository $transactions,
         private readonly ListingReservationService $reservations,
+        private readonly TransactionReceiptService $receipts,
         private readonly ActivityLogger $activity,
     ) {
         //
@@ -122,7 +123,12 @@ class TransactionFulfillmentService
                 $locked = $this->transactions->markInventoryReserved($locked);
             }
 
-            $completed = $this->transactions->complete($locked);
+            // Completion and the receipt snapshot are written in this same
+            // database transaction: a completed row can never exist without the
+            // values the receipt will show.
+            $completedAt = now();
+            $snapshot = $this->receipts->snapshot($locked, $completedAt);
+            $completed = $this->transactions->complete($locked, $snapshot, $completedAt);
 
             $this->activity->log(
                 $buyer,

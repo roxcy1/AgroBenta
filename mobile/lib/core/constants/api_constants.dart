@@ -381,6 +381,13 @@ abstract final class TransactionEndpoints {
   /// Buyer confirms receipt after pickup or delivery. Completes the sale.
   static String complete(int id) => '/transactions/$id/complete';
 
+  /// The receipt of a completed transaction the caller is a party to.
+  ///
+  /// 200 for a completed record; 404 for a non-party/missing record; 409 while
+  /// the transaction is still pending or cancelled. The payload is the
+  /// server-owned historical snapshot, never client-assembled values.
+  static String receipt(int id) => '/transactions/$id/receipt';
+
   /// Page size used when the caller does not ask for a specific one.
   static const int defaultPerPage = 15;
 

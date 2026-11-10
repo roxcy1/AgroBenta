@@ -8,6 +8,7 @@ import '../../../models/transaction.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../marketplace/widgets/marketplace_state_views.dart';
 import '../../messaging/view/chat_screen.dart';
+import '../../receipts/view/transaction_receipt_screen.dart';
 import '../state/transaction_detail_controller.dart';
 import '../state/transaction_detail_state.dart';
 import '../state/transaction_scope.dart';
@@ -119,6 +120,7 @@ class _DetailBodyState extends State<_DetailBody> {
           onAction: _confirmAction,
           onMessageCounterparty: () => _openThread(context, transaction),
           onViewStatus: () => _openStatus(context, transaction),
+          onViewReceipt: () => _openReceipt(context, transaction.id),
         );
       },
     );
@@ -130,6 +132,19 @@ class _DetailBodyState extends State<_DetailBody> {
       MaterialPageRoute<void>(
         builder: (BuildContext context) =>
             TransactionStatusScreen(transactionId: transaction.id),
+      ),
+    );
+  }
+
+  /// Opens the completed sale's receipt, by id.
+  ///
+  /// The screen re-fetches the server-owned snapshot; it is never seeded from
+  /// the transaction object, so a receipt cannot drift from the record.
+  void _openReceipt(BuildContext context, int transactionId) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            TransactionReceiptScreen(transactionId: transactionId),
       ),
     );
   }
@@ -265,11 +280,22 @@ class _DetailBodyState extends State<_DetailBody> {
     if (!mounted) {
       return;
     }
-    if (succeeded) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(action.successMessage)));
+    if (!succeeded) {
+      return;
     }
+
+    // The buyer's confirmation produces the sale's receipt, so it opens
+    // immediately and is the confirmation. Every other action keeps the
+    // existing snackbar. A second navigation cannot happen: the button is
+    // disabled while the request is in flight and the server refuses a repeat.
+    if (action == TransactionFulfillmentAction.confirmReceived) {
+      _openReceipt(context, widget.transactionId);
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(action.successMessage)));
   }
 }
 
