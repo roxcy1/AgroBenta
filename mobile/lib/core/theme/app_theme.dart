@@ -16,6 +16,9 @@ import 'app_spacing.dart';
 abstract final class AppTheme {
   /// Build the light theme. The app is light-only for now; a dark theme is a
   /// separate decision and should not be introduced incidentally.
+  /// The bundled UI typeface, registered in `pubspec.yaml`.
+  static const String fontFamily = 'PublicSans';
+
   static ThemeData light() {
     final ColorScheme colorScheme =
         ColorScheme.fromSeed(seedColor: AppColors.primary).copyWith(
@@ -35,22 +38,28 @@ abstract final class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      // Public Sans, bundled in assets/fonts (mobile/DESIGN.md §4).
+      fontFamily: fontFamily,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.background,
       textTheme: textTheme,
       dividerColor: AppColors.border,
       splashFactory: InkSparkle.splashFactory,
 
+      // White app bars with a hairline underneath. Brand green is kept for
+      // actions, the selected tab and prices, so a solid green bar on every
+      // screen no longer competes with them.
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.text,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         toolbarHeight: AppSizes.appBarHeight,
+        shape: const Border(bottom: BorderSide(color: AppColors.border)),
         titleTextStyle: textTheme.titleLarge?.copyWith(
-          color: Colors.white,
+          color: AppColors.text,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -61,7 +70,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           side: const BorderSide(color: AppColors.border),
         ),
       ),
@@ -200,23 +209,24 @@ abstract final class AppTheme {
 
       // The bottom navigation bar, introduced with the buyer shell.
       //
-      // The indicator defaults to the seed colour's `secondaryContainer`, which
-      // renders as a pale sage and fights the brand green, so it is pinned to
-      // [AppColors.primary]. That fixes the icon colours too: in Material 3 the
-      // selected icon sits *inside* the indicator pill and its label sits
-      // outside it, so the icon must be white-on-green while the label is
-      // green-on-surface. Making the selected icon the same green as the pill
-      // would hide it completely.
+      // The selected tab is marked by a thin green line and green icon and
+      // label, so it reads clearly without being the loudest thing on screen.
+      // The seed's default `secondaryContainer` (a pale sage) is not used.
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primary,
+        // No filled pill: the selected tab gets a short brand-green line
+        // above its icon and a green icon and label.
+        indicatorColor: Colors.transparent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+        indicatorShape: const Border(
+          top: BorderSide(color: AppColors.primary, width: 3),
         ),
         labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>(
           (Set<WidgetState> states) => _textTheme.labelMedium?.copyWith(
+            // 11, not the 12 of labelMedium: with five tabs on a 375-wide
+            // phone, a semibold "Transactions" at 12 wraps mid-word.
+            fontSize: 11,
             color: states.contains(WidgetState.selected)
                 ? AppColors.primary
                 : AppColors.textSecondary,
@@ -227,9 +237,9 @@ abstract final class AppTheme {
         ),
         iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
           (Set<WidgetState> states) => IconThemeData(
-            // On the indicator: white. Off it: the secondary text colour.
+            // Selected: brand green. Otherwise: secondary text.
             color: states.contains(WidgetState.selected)
-                ? Colors.white
+                ? AppColors.primary
                 : AppColors.textSecondary,
           ),
         ),
@@ -245,10 +255,8 @@ abstract final class AppTheme {
   /// most of the screen; the prototype keeps titles restrained so content and
   /// livestock imagery stay dominant.
   ///
-  /// Font family is deliberately unset: Flutter uses the platform UI font
-  /// (Roboto on Android, SF on iOS), which is the mobile equivalent of the
-  /// "conventional professional system font" the root `DESIGN.md` requires. Do
-  /// not add a bundled or downloaded display font.
+  /// The family is applied once, on [ThemeData.fontFamily]: Public Sans, the
+  /// single approved UI typeface. Do not add a second, display font.
   static const TextTheme _textTheme = TextTheme(
     // Brand title - the AgroBenta wordmark on the sign-in and register headers.
     // The only large style; no screen title uses it.

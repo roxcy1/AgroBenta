@@ -34,6 +34,8 @@ class ChatScreen extends StatefulWidget {
     required this.counterpart,
     required this.currentUserId,
     this.listingId,
+    this.listingTitle,
+    this.listingPrice,
     this.offerInquiry,
     this.counterpartRole,
     super.key,
@@ -48,6 +50,12 @@ class ChatScreen extends StatefulWidget {
 
   /// The listing this thread is about, if any.
   final int? listingId;
+
+  /// The thread's listing name and asking price, as the conversation list
+  /// already knows them. When given, a strip under the app bar names the
+  /// livestock the conversation is about.
+  final String? listingTitle;
+  final String? listingPrice;
 
   /// The server-provided inquiry the seller can still answer with an offer.
   ///
@@ -378,8 +386,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (!mounted) {
                   return;
                 }
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(sendError)));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(sendError)));
                 _controller.clearSendError();
               });
             }
@@ -391,14 +400,20 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (!mounted) {
                   return;
                 }
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(offerError)));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(offerError)));
                 _offers.clearActionError();
               });
             }
 
             return Column(
               children: <Widget>[
+                if (widget.listingTitle != null)
+                  _ListingStrip(
+                    title: widget.listingTitle!,
+                    price: widget.listingPrice,
+                  ),
                 Expanded(
                   child: switch (state.status) {
                     ChatStatus.initial || ChatStatus.loading => const Center(
@@ -611,6 +626,73 @@ class _MakeOfferBar extends StatelessWidget {
             onPressed: onPressed,
             icon: const Icon(Icons.local_offer_outlined, size: 18),
             label: const Text('Make an Offer'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The livestock this conversation is about: name and asking price, on a
+/// light strip under the app bar.
+class _ListingStrip extends StatelessWidget {
+  const _ListingStrip({required this.title, this.price});
+
+  final String title;
+  final String? price;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String? formatted = price == null
+        ? null
+        : AppFormatters.formatMoney(price);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.screenGutter,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.primarySurface,
+              borderRadius: BorderRadius.circular(AppRadius.sm - 2),
+            ),
+            child: const Icon(
+              Icons.pets_outlined,
+              size: 20,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (formatted != null)
+                  Text(
+                    formatted,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
+import '../../../widgets/livestock_type_icon.dart';
 
 /// A listing photo, or an honest placeholder when there is not one to show.
 ///
@@ -61,7 +62,10 @@ class ListingPhoto extends StatelessWidget {
       height: height,
       width: width,
       child: url == null
-          ? _Placeholder(hasPhotos: listing.photos.isNotEmpty)
+          ? _Placeholder(
+              hasPhotos: listing.photos.isNotEmpty,
+              type: listing.livestockType,
+            )
           : ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.md),
               child: Image.network(
@@ -72,11 +76,12 @@ class ListingPhoto extends StatelessWidget {
                 // A failed load must not leave a broken-image glyph. Falling back
                 // to the same placeholder is indistinguishable from "no photo",
                 // which is the truth from the buyer's point of view.
-                errorBuilder: (
-                  BuildContext context,
-                  Object error,
-                  StackTrace? _,
-                ) => _Placeholder(hasPhotos: true),
+                errorBuilder:
+                    (BuildContext context, Object error, StackTrace? _) =>
+                        _Placeholder(
+                          hasPhotos: true,
+                          type: listing.livestockType,
+                        ),
                 loadingBuilder:
                     (
                       BuildContext context,
@@ -84,7 +89,11 @@ class ListingPhoto extends StatelessWidget {
                       ImageChunkEvent? progress,
                     ) => progress == null
                     ? child
-                    : _Placeholder(hasPhotos: true, showSpinner: true),
+                    : _Placeholder(
+                        hasPhotos: true,
+                        type: listing.livestockType,
+                        showSpinner: true,
+                      ),
                 // A decorative, redundant image: the livestock type and breed are
                 // already rendered as text beside it, so announcing the picture
                 // too would just repeat them to a screen reader.
@@ -103,7 +112,14 @@ class ListingPhoto extends StatelessWidget {
 /// "no photo" in words as well as shape, so the state does not depend on
 /// recognising the icon.
 class _Placeholder extends StatelessWidget {
-  const _Placeholder({required this.hasPhotos, this.showSpinner = false});
+  const _Placeholder({
+    required this.hasPhotos,
+    this.type = '',
+    this.showSpinner = false,
+  });
+
+  /// The listing's livestock type, drawn as a silhouette.
+  final String type;
 
   /// Whether photos exist but cannot be displayed, as opposed to there being
   /// none at all. Changes the label so the two are not conflated.
@@ -117,10 +133,7 @@ class _Placeholder extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
 
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: const BoxDecoration(color: AppColors.primarySurface),
       child: Center(
         child: showSpinner
             ? const SizedBox.square(
@@ -134,10 +147,10 @@ class _Placeholder extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      Icon(
-                        Icons.image_not_supported_outlined,
-                        size: 20,
-                        color: AppColors.textSecondary,
+                      LivestockTypeIcon(
+                        type: type,
+                        size: 32,
+                        color: AppColors.primary.withValues(alpha: 0.55),
                       ),
                       const SizedBox(height: AppSpacing.xxs),
                       Text(

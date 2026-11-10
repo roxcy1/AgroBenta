@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+
 import '../../../models/transaction.dart';
 import '../../home/view/buyer_home_screen.dart';
 import '../../marketplace/views/marketplace_screen.dart';
@@ -65,50 +67,56 @@ class _BuyerShellState extends State<BuyerShell> {
           const ProfileScreen(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (int index) => setState(() => _index = index),
-        destinations: <NavigationDestination>[
-          const NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.search_outlined),
-            selectedIcon: Icon(Icons.search),
-            label: 'Browse',
-          ),
-          // Messages, with the unread count as an icon badge. The count is
-          // read from the ConversationsController watched above; the badge
-          // uses Material 3's built-in `Badge` widget rather than a custom
-          // one because it handles RTL, sizing and semantics correctly.
-          NavigationDestination(
-            icon: unread > 0
-                ? Badge(
-                    label: Text(unread > 99 ? '99+' : '$unread'),
-                    child: const Icon(Icons.chat_bubble_outline),
-                  )
-                : const Icon(Icons.chat_bubble_outline),
-            selectedIcon: unread > 0
-                ? Badge(
-                    label: Text(unread > 99 ? '99+' : '$unread'),
-                    child: const Icon(Icons.chat_bubble),
-                  )
-                : const Icon(Icons.chat_bubble),
-            label: 'Messages',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.swap_horiz_outlined),
-            selectedIcon: Icon(Icons.swap_horiz),
-            label: 'Transactions',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+      // A hairline separates the bar from the content, as on the app bar.
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (int index) => setState(() => _index = index),
+          destinations: <NavigationDestination>[
+            const NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.search_outlined),
+              selectedIcon: Icon(Icons.search),
+              label: 'Browse',
+            ),
+            // Messages, with the unread count as an icon badge. The count is
+            // read from the ConversationsController watched above; the badge
+            // uses Material 3's built-in `Badge` widget rather than a custom
+            // one because it handles RTL, sizing and semantics correctly.
+            NavigationDestination(
+              icon: unread > 0
+                  ? Badge(
+                      label: Text(unread > 99 ? '99+' : '$unread'),
+                      child: const Icon(Icons.chat_bubble_outline),
+                    )
+                  : const Icon(Icons.chat_bubble_outline),
+              selectedIcon: unread > 0
+                  ? Badge(
+                      label: Text(unread > 99 ? '99+' : '$unread'),
+                      child: const Icon(Icons.chat_bubble),
+                    )
+                  : const Icon(Icons.chat_bubble),
+              label: 'Messages',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.swap_horiz_outlined),
+              selectedIcon: Icon(Icons.swap_horiz),
+              label: 'Transactions',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }

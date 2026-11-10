@@ -77,10 +77,13 @@ class SellerListingCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  SizedBox(
-                    width: 88,
-                    height: 88,
-                    child: ListingPhoto(listing: listing),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.sm - 2),
+                    child: SizedBox(
+                      width: 84,
+                      height: 84,
+                      child: ListingPhoto(listing: listing),
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
@@ -88,16 +91,16 @@ class SellerListingCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
+                        // Name and status on one line, then what and
+                        // where, then the price, as in the approved design.
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Expanded(
                               child: Text(
-                                listing.livestockType,
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                                maxLines: 1,
+                                listing.title,
+                                style: theme.textTheme.titleSmall,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -108,12 +111,22 @@ class SellerListingCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: AppSpacing.xxs),
-                        Text(
-                          listing.title,
-                          style: theme.textTheme.titleSmall,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: AppSpacing.xxxs),
+                        _MetaRow(
+                          icon: Icons.place_outlined,
+                          text: <String>[
+                            // Sentence case, as on the buyer's listing card.
+                            if (listing.livestockType.trim().isNotEmpty)
+                              '${listing.livestockType.trim()[0].toUpperCase()}'
+                                  '${listing.livestockType.trim().substring(1)}',
+                            if (listing.location.trim().isNotEmpty)
+                              listing.location.trim(),
+                          ].join(' · '),
+                        ),
+                        const SizedBox(height: AppSpacing.xxxs),
+                        _MetaRow(
+                          icon: Icons.scale_outlined,
+                          text: _physicalSummary(),
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
@@ -121,21 +134,12 @@ class SellerListingCard extends StatelessWidget {
                                 listing.askingPrice,
                               ) ??
                               listing.askingPrice,
-                          style: theme.textTheme.titleSmall?.copyWith(
+                          style: theme.textTheme.titleMedium?.copyWith(
                             color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        _MetaRow(
-                          icon: Icons.place_outlined,
-                          text: listing.location,
-                        ),
-                        const SizedBox(height: AppSpacing.xxs),
-                        _MetaRow(
-                          icon: Icons.scale_outlined,
-                          text: _physicalSummary(),
                         ),
                       ],
                     ),
@@ -210,50 +214,62 @@ class _ActionBar extends StatelessWidget {
     final List<Widget> actions = <Widget>[];
     switch (listing.status) {
       case ListingStatus.draft:
-        actions.add(_compactAction(
-          icon: Icons.edit_outlined,
-          label: 'Edit',
-          onPressed: onEdit,
-        ));
-        actions.add(_compactAction(
-          icon: Icons.send_outlined,
-          label: 'Submit',
-          onPressed: hasPhotos ? onSubmit : null,
-        ));
+        actions.add(
+          _compactAction(
+            icon: Icons.edit_outlined,
+            label: 'Edit',
+            onPressed: onEdit,
+          ),
+        );
+        actions.add(
+          _compactAction(
+            icon: Icons.send_outlined,
+            label: 'Submit',
+            onPressed: hasPhotos ? onSubmit : null,
+          ),
+        );
         break;
       case ListingStatus.active:
-        actions.add(_compactAction(
-          icon: Icons.edit_outlined,
-          label: 'Edit',
-          onPressed: onEdit,
-        ));
-        actions.add(_compactAction(
-          icon: Icons.done_outline,
-          label: 'Mark sold',
-          onPressed: canMarkSold ? onMarkSold : null,
-          color: AppColors.sold,
-        ));
+        actions.add(
+          _compactAction(
+            icon: Icons.edit_outlined,
+            label: 'Edit',
+            onPressed: onEdit,
+          ),
+        );
+        actions.add(
+          _compactAction(
+            icon: Icons.done_outline,
+            label: 'Mark sold',
+            onPressed: canMarkSold ? onMarkSold : null,
+            color: AppColors.sold,
+          ),
+        );
         break;
       case ListingStatus.pending:
       case ListingStatus.sold:
-        actions.add(_compactAction(
-          icon: Icons.visibility_outlined,
-          label: 'View',
-          onPressed: onView,
-        ));
+        actions.add(
+          _compactAction(
+            icon: Icons.visibility_outlined,
+            label: 'View',
+            onPressed: onView,
+          ),
+        );
         break;
       case ListingStatus.inactive:
-        actions.add(_compactAction(
-          icon: Icons.delete_outline,
-          label: 'Delete',
-          onPressed: onDelete,
-          color: AppColors.error,
-        ));
+        actions.add(
+          _compactAction(
+            icon: Icons.delete_outline,
+            label: 'Delete',
+            onPressed: onDelete,
+            color: AppColors.error,
+          ),
+        );
         break;
     }
 
-    final bool showExplanation = !canSubmit && !canMarkSold &&
-        listing.status != ListingStatus.inactive;
+    final bool showExplanation =
+        !canSubmit && !canMarkSold && listing.status != ListingStatus.inactive;
 
     return Container(
       decoration: const BoxDecoration(

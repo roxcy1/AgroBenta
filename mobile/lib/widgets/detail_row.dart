@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 
 /// A labelled detail row — the compact record row used across the app's detail
@@ -32,14 +33,32 @@ class DetailRow extends StatelessWidget {
       return Text(paragraph, style: theme.textTheme.bodyMedium);
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Column(
+    // Label on the left, value on the right, on a hairline: a compact
+    // key-value table, as in the approved design.
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label!, style: theme.textTheme.labelMedium),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(value!, style: theme.textTheme.bodyLarge),
+          Text(
+            label!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              value!,
+              textAlign: TextAlign.right,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );

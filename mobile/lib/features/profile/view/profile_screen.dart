@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/temporary_logo.dart';
 import '../../../models/seller_verification.dart';
 import '../../../models/user.dart';
 import '../../account_mode/state/account_mode.dart';
 import '../../account_mode/state/account_mode_controller.dart';
 import '../../account_mode/state/account_mode_scope.dart';
 import '../../auth/state/auth_scope.dart';
-import '../../auth/widgets/auth_scenic_header.dart';
 import '../../seller_verification/state/seller_verification_controller.dart';
 import '../../seller_verification/state/seller_verification_scope.dart';
 import '../../seller_verification/state/seller_verification_state.dart';
@@ -82,8 +82,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (!mounted) {
                 return;
               }
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text(success)));
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(success)));
               _controller.consumeSuccess();
             });
           }
@@ -121,63 +122,58 @@ class _ProfileBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The header carries the same painted landscape, temporary logo and tagline
-    // as the auth screens, so the brand treatment stays in one place. It grows
-    // with the text scale and is capped, like the auth screens, so an enlarged
-    // wordmark cannot overflow.
-    final double textScale = MediaQuery.textScalerOf(context)
-        .scale(1)
-        .clamp(1.0, 1.8)
-        .toDouble();
-    final double heroHeight =
-        (MediaQuery.sizeOf(context).height * 0.26 * textScale)
-            .clamp(180.0, 260.0)
-            .toDouble();
-
-    // How far the summary card rides up over the header's lower edge.
-    const double overlap = 24;
-
     return SafeArea(
       bottom: false,
-      child: SingleChildScrollView(
-        child: Column(
-          children: <Widget>[
-            Stack(
-              clipBehavior: Clip.none,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          // A compact white header: the logo (which carries the wordmark) and
+          // the screen title, like every other tab.
+          Container(
+            height: AppSizes.appBarHeight,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenGutter,
+            ),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
+            child: Row(
               children: <Widget>[
-                AuthScenicHeader(height: heroHeight),
-                Padding(
-                  padding: EdgeInsets.only(top: heroHeight - overlap),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenGutter,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        _ProfileSummaryCard(user: user, onEdit: onEdit),
-                        const SizedBox(height: AppSpacing.md),
-                        const _AccountModeCard(),
-                        const SizedBox(height: AppSpacing.md),
-                        _BecomeSellerCard(user: user),
-                        const SizedBox(height: AppSpacing.lg),
-                        _AccountSettingsSection(
-                          onEdit: onEdit,
-                          onChangePassword: onChangePassword,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        const _OtherSection(),
-                      ],
-                    ),
-                  ),
-                ),
+                const TemporaryLogo(size: 30),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Profile', style: Theme.of(context).textTheme.titleLarge),
               ],
             ),
-            SizedBox(
-              height: MediaQuery.paddingOf(context).bottom + AppSpacing.xl,
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.screenGutter,
+                AppSpacing.md,
+                AppSpacing.screenGutter,
+                MediaQuery.paddingOf(context).bottom + AppSpacing.xl,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _ProfileSummaryCard(user: user, onEdit: onEdit),
+                  const SizedBox(height: AppSpacing.md),
+                  const _AccountModeCard(),
+                  const SizedBox(height: AppSpacing.md),
+                  _BecomeSellerCard(user: user),
+                  const SizedBox(height: AppSpacing.lg),
+                  _AccountSettingsSection(
+                    onEdit: onEdit,
+                    onChangePassword: onChangePassword,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const _OtherSection(),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -261,7 +257,6 @@ class _AccountModeCard extends StatelessWidget {
     final AccountMode mode = controller.mode;
 
     return Card(
-      color: AppColors.primary.withValues(alpha: 0.08),
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -374,7 +369,7 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
           // A pale amber tint derived from the existing warning token, the same
           // way the account-mode card derives its pale green — no new colour is
           // introduced for this one card.
-          color: AppColors.warning.withValues(alpha: 0.10),
+          color: AppColors.primarySurface,
           margin: EdgeInsets.zero,
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),

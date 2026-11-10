@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/livestock_type.dart';
+import '../../../widgets/livestock_type_icon.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
 import '../../livestock_types/state/livestock_types_state.dart';
 
@@ -31,7 +31,6 @@ class HomeCategory {
     required this.id,
     required this.label,
     required this.livestockType,
-    required this.icon,
   });
 
   /// Stable identifier, independent of the label text.
@@ -43,24 +42,10 @@ class HomeCategory {
   /// The exact `livestock_type` string sent to the marketplace filter.
   final String livestockType;
 
-  /// The tile's glyph. Font Awesome Free, no emoji.
-  ///
-  /// Typed [FaIconData] rather than `IconData`: `font_awesome_flutter` 11.x
-  /// made `IconData` a `final` class, so `FaIconData` is no longer a subtype
-  /// of it and cannot be assigned to an `IconData` field.
-  final FaIconData icon;
-
   factory HomeCategory.fromCatalog(LivestockType type) => HomeCategory(
     id: type.value,
     label: type.label,
     livestockType: type.value,
-    icon: switch (type.value) {
-      'cattle' => FontAwesomeIcons.cow,
-      'carabao' => FontAwesomeIcons.hippo,
-      'goat' => FontAwesomeIcons.paw,
-      'swine' => FontAwesomeIcons.bacon,
-      _ => FontAwesomeIcons.paw,
-    },
   );
 }
 
@@ -126,9 +111,12 @@ class HomeCategories extends StatelessWidget {
               return LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints constraints) {
                   const double spacing = AppSpacing.sm;
-                  final int columns = (constraints.maxWidth / 116)
-                      .floor()
-                      .clamp(3, 5);
+                  // Four to a row on a phone, matching the approved design;
+                  // more on wider screens.
+                  final int columns = (constraints.maxWidth / 80).floor().clamp(
+                    4,
+                    6,
+                  );
                   final double tileWidth =
                       (constraints.maxWidth - (columns - 1) * spacing) /
                       columns;
@@ -173,23 +161,37 @@ class _CategoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Material(
-      color: AppColors.primarySurface,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      clipBehavior: Clip.antiAlias,
+    // A square icon tile with the label underneath it. The whole column is
+    // one tap target.
+    return SizedBox(
+      width: width,
       child: InkWell(
         onTap: onTap,
-        child: SizedBox(
-          width: width,
-          height: 84,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              FaIcon(category.icon, size: 22, color: AppColors.primary),
-              const SizedBox(height: AppSpacing.xs),
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                alignment: Alignment.center,
+                child: LivestockTypeIcon(
+                  type: category.livestockType,
+                  size: 34,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
               Text(
                 category.label,
-                style: theme.textTheme.labelMedium,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: AppColors.text,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

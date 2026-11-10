@@ -120,11 +120,13 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListenableBuilder(
-        listenable: Listenable.merge(<Listenable?>[
-          _controller,
-          _attention,
-          _activity,
-        ].whereType<Listenable>().toList(growable: false)),
+        listenable: Listenable.merge(
+          <Listenable?>[
+            _controller,
+            _attention,
+            _activity,
+          ].whereType<Listenable>().toList(growable: false),
+        ),
         builder: (BuildContext context, Widget? child) {
           return _buildBody(context, _controller.state);
         },
@@ -184,6 +186,13 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
             ),
             const SizedBox(height: AppSpacing.md),
           ],
+          _SummaryGrid(
+            dashboard: dashboard,
+            onOpenListings: widget.onOpenListings,
+            onOpenInquiries: widget.onOpenInquiries,
+            onOpenTransactions: widget.onOpenTransactions,
+          ),
+          const SizedBox(height: AppSpacing.md),
           SizedBox(
             height: AppSizes.controlHeight,
             child: FilledButton.icon(
@@ -191,13 +200,6 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add listing'),
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _SummaryGrid(
-            dashboard: dashboard,
-            onOpenListings: widget.onOpenListings,
-            onOpenInquiries: widget.onOpenInquiries,
-            onOpenTransactions: widget.onOpenTransactions,
           ),
           if (!dashboard.hasActivity) ...<Widget>[
             const SizedBox(height: AppSpacing.sm),
@@ -254,6 +256,8 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
 ///
 /// Two columns at every width, per the approved layout: the cards stay equal
 /// sized and readable on a phone and on a tablet.
+/// The four counts in one bordered two-by-two grid. Each cell opens the
+/// screen behind its number.
 class _SummaryGrid extends StatelessWidget {
   const _SummaryGrid({
     required this.dashboard,
@@ -269,112 +273,121 @@ class _SummaryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        const double spacing = AppSpacing.sm;
-        final double width = (constraints.maxWidth - spacing) / 2;
+    const VerticalDivider vertical = VerticalDivider(
+      width: 1,
+      thickness: 1,
+      color: AppColors.border,
+    );
 
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: <Widget>[
-            _SummaryTile(
-              width: width,
-              label: 'Active Listings',
-              value: dashboard.listings.active,
-              icon: Icons.storefront_outlined,
-              onTap: onOpenListings,
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        children: <Widget>[
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _SummaryTile(
+                    label: 'Active Listings',
+                    value: dashboard.listings.active,
+                    onTap: onOpenListings,
+                  ),
+                ),
+                vertical,
+                Expanded(
+                  child: _SummaryTile(
+                    label: 'Inquiries',
+                    value: dashboard.inquiries.total,
+                    onTap: onOpenInquiries,
+                  ),
+                ),
+              ],
             ),
-            _SummaryTile(
-              width: width,
-              label: 'Inquiries',
-              value: dashboard.inquiries.total,
-              icon: Icons.mark_email_unread_outlined,
-              onTap: onOpenInquiries,
+          ),
+          const Divider(height: 1, thickness: 1, color: AppColors.border),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _SummaryTile(
+                    label: 'Ongoing Transactions',
+                    value: dashboard.transactions.pending,
+                    onTap: onOpenTransactions,
+                  ),
+                ),
+                vertical,
+                Expanded(
+                  child: _SummaryTile(
+                    label: 'Completed Sales',
+                    value: dashboard.transactions.completed,
+                    onTap: onOpenTransactions,
+                  ),
+                ),
+              ],
             ),
-            _SummaryTile(
-              width: width,
-              label: 'Ongoing Transactions',
-              value: dashboard.transactions.pending,
-              icon: Icons.swap_horiz_outlined,
-              onTap: onOpenTransactions,
-            ),
-            _SummaryTile(
-              width: width,
-              label: 'Completed Sales',
-              value: dashboard.transactions.completed,
-              icon: Icons.task_alt_outlined,
-              onTap: onOpenTransactions,
-            ),
-          ],
-        );
-      },
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _SummaryTile extends StatelessWidget {
   const _SummaryTile({
-    required this.width,
     required this.label,
     required this.value,
-    required this.icon,
     required this.onTap,
   });
 
-  final double width;
   final String label;
   final int value;
-  final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return SizedBox(
-      width: width,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(icon, size: 20, color: AppColors.primary),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '$value',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.sm,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              '$value',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+              ),
             ),
-          ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Up to three genuinely actionable inquiries (`can_make_offer` is true, which
-/// the server defines as an open inquiry with no pending or accepted offer).
-///
-/// When nothing is actionable but inquiries exist, the same rows are shown
-/// under a "Recent inquiries" label with no claim that action is required.
 class _AttentionSection extends StatelessWidget {
   const _AttentionSection({
     required this.controller,
@@ -474,7 +487,8 @@ class _AttentionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final String buyer = inquiry.buyer?.name ?? 'Unknown buyer';
-    final String listing = inquiry.listing?.title ?? 'Listing no longer available';
+    final String listing =
+        inquiry.listing?.title ?? 'Listing no longer available';
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -484,6 +498,18 @@ class _AttentionTile extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.sm),
           child: Row(
             children: <Widget>[
+              // The buyer's initial, as in the approved design.
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.primary,
+                child: Text(
+                  buyer.isEmpty ? '?' : buyer.substring(0, 1).toUpperCase(),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -547,7 +573,10 @@ class _RecentActivitySection extends StatelessWidget {
         Row(
           children: <Widget>[
             Expanded(
-              child: Text('Recent Activity', style: theme.textTheme.titleMedium),
+              child: Text(
+                'Recent Activity',
+                style: theme.textTheme.titleMedium,
+              ),
             ),
             if (onSeeAll != null)
               TextButton(onPressed: onSeeAll, child: const Text('See All')),

@@ -50,7 +50,20 @@ class SellerActivityTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(iconFor(activity.action), size: 18, color: AppColors.primary),
+          // The event's icon on a pale tile, as in the approved design.
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primarySurface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(
+              iconFor(activity.action),
+              size: 19,
+              color: AppColors.primary,
+            ),
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -65,7 +78,8 @@ class SellerActivityTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (description != null && description.trim().isNotEmpty) ...<Widget>[
+                if (description != null &&
+                    description.trim().isNotEmpty) ...<Widget>[
                   const SizedBox(height: 2),
                   Text(
                     description,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/popular_livestock_category.dart';
+import '../../../widgets/livestock_type_icon.dart';
 import '../state/popular_livestock_controller.dart';
 
 /// Buyer Home's "Popular Livestock" section, above Recent Listings.
@@ -118,6 +119,19 @@ class _PopularCategoryCard extends StatelessWidget {
   final double width;
   final VoidCallback onTap;
 
+  /// The type's silhouette on a white tile, shown when there is no photo.
+  static Widget _glyph(String livestockType) {
+    return Container(
+      color: AppColors.surface,
+      alignment: Alignment.center,
+      child: LivestockTypeIcon(
+        type: livestockType,
+        size: 24,
+        color: AppColors.primary,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -138,28 +152,15 @@ class _PopularCategoryCard extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   child: SizedBox(
-                    width: 56,
-                    height: 56,
+                    width: 44,
+                    height: 44,
                     child: photo == null || photo.isEmpty
-                        ? Container(
-                            color: AppColors.surface,
-                            child: const Icon(
-                              Icons.pets_outlined,
-                              color: AppColors.textSecondary,
-                              size: 24,
-                            ),
-                          )
+                        ? _glyph(category.livestockType)
                         : Image.network(
                             photo,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Container(
-                              color: AppColors.surface,
-                              child: const Icon(
-                                Icons.pets_outlined,
-                                color: AppColors.textSecondary,
-                                size: 24,
-                              ),
-                            ),
+                            errorBuilder: (_, _, _) =>
+                                _glyph(category.livestockType),
                           ),
                   ),
                 ),
@@ -181,7 +182,7 @@ class _PopularCategoryCard extends StatelessWidget {
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: AppColors.textSecondary,
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),

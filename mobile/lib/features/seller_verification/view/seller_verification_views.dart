@@ -122,31 +122,25 @@ class SellerApplicationProgressIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
+    // Every step shares the width equally, so four labels fit a narrow phone
+    // without clipping; the connector runs through the marker centres.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        for (int i = 0; i < steps.length; i++) ...<Widget>[
-          if (i > 0)
-            Expanded(
-              child: Padding(
-                // Aligns the connector with the centre of the 28dp marker.
-                padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: Container(
-                  height: 2,
-                  color: i <= currentStep
-                      ? AppColors.primary
-                      : AppColors.border,
-                ),
-              ),
+        for (int i = 0; i < steps.length; i++)
+          Expanded(
+            child: _StepMarker(
+              index: i,
+              label: steps[i],
+              isComplete: i < currentStep,
+              isActive: i == currentStep,
+              hasPrevious: i > 0,
+              hasNext: i < steps.length - 1,
+              lineBeforeReached: i <= currentStep,
+              lineAfterReached: i < currentStep,
+              theme: theme,
             ),
-          _StepMarker(
-            index: i,
-            label: steps[i],
-            isComplete: i < currentStep,
-            isActive: i == currentStep,
-            theme: theme,
           ),
-        ],
       ],
     );
   }
@@ -158,6 +152,10 @@ class _StepMarker extends StatelessWidget {
     required this.label,
     required this.isComplete,
     required this.isActive,
+    required this.hasPrevious,
+    required this.hasNext,
+    required this.lineBeforeReached,
+    required this.lineAfterReached,
     required this.theme,
   });
 
@@ -165,43 +163,76 @@ class _StepMarker extends StatelessWidget {
   final String label;
   final bool isComplete;
   final bool isActive;
+  final bool hasPrevious;
+  final bool hasNext;
+  final bool lineBeforeReached;
+  final bool lineAfterReached;
   final ThemeData theme;
 
   @override
   Widget build(BuildContext context) {
     final bool reached = isComplete || isActive;
-    final Color color = reached ? AppColors.primary : AppColors.border;
 
-    return SizedBox(
-      width: 96,
-      child: Column(
-        children: <Widget>[
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: isComplete
-                ? const Icon(Icons.check, size: 16, color: AppColors.surface)
-                : Text(
-                    '${index + 1}',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: isActive
-                          ? AppColors.surface
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: reached ? AppColors.text : AppColors.textSecondary,
-            ),
-          ),
-        ],
+    Widget line({required bool visible, required bool reached}) => Expanded(
+      child: Container(
+        height: 2,
+        color: !visible
+            ? Colors.transparent
+            : reached
+            ? AppColors.primary
+            : AppColors.border,
       ),
+    );
+
+    // Done: pale tile with a green tick. Current: solid green with its number.
+    // Ahead: an outlined grey circle.
+    return Column(
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            line(visible: hasPrevious, reached: lineBeforeReached),
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isActive
+                    ? AppColors.primary
+                    : isComplete
+                    ? AppColors.primarySurface
+                    : AppColors.surface,
+                border: Border.all(
+                  color: reached ? AppColors.primary : AppColors.border,
+                  width: 1.5,
+                ),
+              ),
+              child: isComplete
+                  ? const Icon(Icons.check, size: 15, color: AppColors.primary)
+                  : Text(
+                      '${index + 1}',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: isActive
+                            ? AppColors.surface
+                            : AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+            line(visible: hasNext, reached: lineAfterReached),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: reached ? AppColors.primary : AppColors.textSecondary,
+            fontWeight: reached ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -254,11 +285,14 @@ class SellerVerificationIntroView extends StatelessWidget {
             ),
           ),
         const SizedBox(height: AppSpacing.xs),
-        Image.asset(
-          'assets/images/AgroBentaLogo.png',
-          height: 48,
-          fit: BoxFit.contain,
+        Center(
+          child: Image.asset(
+            'assets/images/AgroBentaLogo.png',
+            height: 56,
+            fit: BoxFit.contain,
+          ),
         ),
+        const SizedBox(height: AppSpacing.md),
         FilledButton(onPressed: onStart, child: const Text('Get Started')),
       ],
     );
@@ -358,9 +392,9 @@ class SellerVerificationRejectedView extends StatelessWidget {
       ),
       children: <Widget>[
         DetailRow(
-              label: 'Business',
-              value: verification.businessName ?? 'Not provided',
-            ),
+          label: 'Business',
+          value: verification.businessName ?? 'Not provided',
+        ),
         if (verification.adminNote != null &&
             verification.adminNote!.trim().isNotEmpty)
           NoticeBanner(

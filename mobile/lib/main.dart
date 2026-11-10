@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
+import 'dart:ui' as ui;
 
 import 'core/network/api_client.dart';
 import 'core/storage/account_mode_preference_store.dart';
@@ -76,7 +78,72 @@ Future<void> main() async {
   // frame — there is no safe lazy point.
   await initializeDateFormatting('en_PH');
 
-  runApp(const AgroBentaApp());
+  // Rendering the root widget must match how the engine attached to this
+  // browser context. Cutting-edge Chromium-based hosts (Electron 44 /
+  // Chromium 152-era embedded panes) boot the web engine in multi-view mode,
+  // where no implicit view exists and a plain `runApp` aborts the boot with
+  // "the platform has multi-view mode enabled". `runWidget` plus a view
+  // observer is the engine's documented remedy there; everywhere else the
+  // classic `runApp` is kept unchanged.
+  if (kIsWeb) {
+    runWidget(const MultiViewApp(child: AgroBentaApp()));
+  } else {
+    runApp(const AgroBentaApp());
+  }
+}
+
+/// Renders [child] into every Flutter view attached to the app.
+///
+/// This is the pattern from the Flutter web embedding documentation
+/// (flutter.dev/go/web-multiview): the root is a [ViewCollection] rebuilt
+/// from `platformDispatcher.views` whenever the metric change that follows
+/// a view attach/detach fires. On single-view platforms it is unused.
+class MultiViewApp extends StatefulWidget {
+  const MultiViewApp({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<MultiViewApp> createState() => _MultiViewAppState();
+}
+
+class _MultiViewAppState extends State<MultiViewApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _updateViews();
+  }
+
+  @override
+  void didChangeMetrics() {
+    _updateViews();
+  }
+
+  Map<Object, Widget> _views = <Object, Widget>{};
+
+  void _updateViews() {
+    final Map<Object, Widget> newViews = <Object, Widget>{};
+    for (final ui.FlutterView view
+        in WidgetsBinding.instance.platformDispatcher.views) {
+      newViews[view.viewId] = View(view: view, child: widget.child);
+    }
+    setState(() {
+      _views = newViews;
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ViewCollection(views: _views.values.toList(growable: false));
+  }
 }
 
 class AgroBentaApp extends StatefulWidget {

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/livestock_type.dart';
+import '../../../widgets/livestock_type_icon.dart';
 import '../../livestock_types/state/livestock_types_controller.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
 import '../../livestock_types/state/livestock_types_state.dart';
@@ -40,35 +40,13 @@ Future<ListingFilters?> showMarketplaceFilterScreen({
 /// seller whose wording differs will not match. The "exact wording" field below
 /// the tiles keeps any seller's wording reachable, which is why it is kept.
 class _AnimalType {
-  const _AnimalType({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
+  const _AnimalType({required this.label, required this.value});
 
   final String label;
   final String value;
 
-  /// A brand-font livestock glyph.
-  ///
-  /// [FaIconData] rather than [IconData]: `font_awesome_flutter` 11 makes
-  /// `IconData` final, so the two are not interchangeable. Icons are the closest
-  /// Font Awesome **Free** provides — it has no goat or buffalo glyph, so `paw`
-  /// and `hippo` stand in. That is a reported visual compromise, not an approved
-  /// icon mapping.
-  final FaIconData icon;
-
-  factory _AnimalType.fromCatalog(LivestockType type) => _AnimalType(
-    label: type.label,
-    value: type.value,
-    icon: switch (type.value) {
-      'cattle' => FontAwesomeIcons.cow,
-      'carabao' => FontAwesomeIcons.hippo,
-      'goat' => FontAwesomeIcons.paw,
-      'swine' => FontAwesomeIcons.bacon,
-      _ => FontAwesomeIcons.paw,
-    },
-  );
+  factory _AnimalType.fromCatalog(LivestockType type) =>
+      _AnimalType(label: type.label, value: type.value);
 }
 
 /// The Filter Livestock screen, over the existing marketplace filter state.
@@ -220,7 +198,7 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
         actions: <Widget>[
           TextButton(
             onPressed: _reset,
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
             child: const Text('Reset'),
           ),
           const SizedBox(width: AppSpacing.xs),
@@ -540,7 +518,11 @@ class _AnimalTile extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                FaIcon(animal.icon, size: 22, color: foreground),
+                LivestockTypeIcon(
+                  type: animal.value,
+                  size: 30,
+                  color: foreground,
+                ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   animal.label,
@@ -633,8 +615,9 @@ class _DisabledPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium
-            ?.copyWith(color: AppColors.textSecondary),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
       ),
     );
   }

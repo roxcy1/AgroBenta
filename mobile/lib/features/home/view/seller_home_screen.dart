@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/conversation.dart';
 import '../../../models/listing.dart';
@@ -88,9 +87,7 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
     /// already knows that pair; otherwise falls back to the inquiry inbox,
     /// where the Open Conversation action resolves it safely.
     void openOfferActivity(int buyerId, int? transactionId) {
-      final conversations = MessagingScope.readOf(
-        context,
-      ).state.conversations;
+      final conversations = MessagingScope.readOf(context).state.conversations;
       Conversation? match;
       for (final Conversation conversation in conversations) {
         if (conversation.counterpart.id == buyerId) {
@@ -159,9 +156,8 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       }
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) => const TransactionsScreen(
-            role: TransactionRole.seller,
-          ),
+          builder: (BuildContext context) =>
+              const TransactionsScreen(role: TransactionRole.seller),
         ),
       );
     }
@@ -195,46 +191,18 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            HomeHeader(user: user, onOpenProfile: widget.onOpenProfile),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenGutter,
-                AppSpacing.xs,
-                AppSpacing.screenGutter,
-                AppSpacing.sm,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'Seller Mode',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        'Hello, ${user.name}!',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        'Manage your livestock listings and sales.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            HomeHeader(
+              user: user,
+              eyebrow: 'Seller Mode',
+              onOpenProfile: widget.onOpenProfile,
             ),
+            const SizedBox(height: AppSpacing.sm),
             Expanded(
-              child: Center(
+              // Top-centred, not `Center`: the dashboard shrinks to its content
+              // when it is shorter than the screen, and `Center` would float it
+              // down from the header with a blank band above the counts.
+              child: Align(
+                alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: SellerDashboardView(

@@ -137,17 +137,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // The hero scales with the text scale so an enlarged brand block can never
     // overflow a fixed-height decoration, and is capped so it cannot swallow
     // the screen on a short device.
-    final double textScale = MediaQuery.textScalerOf(context)
-        .scale(1)
-        .clamp(1.0, 1.8)
-        .toDouble();
+    final double textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, 1.8).toDouble();
     final double heroHeight =
-        (MediaQuery.sizeOf(context).height * 0.30 * textScale)
-            .clamp(200.0, 300.0)
+        // Just tall enough for the logo and tagline, so the brand sits close
+        // to the form instead of floating above an empty band.
+        (MediaQuery.sizeOf(context).height * 0.22 * textScale)
+            .clamp(160.0, 240.0)
             .toDouble();
 
     // How far the white panel rides up over the hero's bottom edge.
-    const double overlap = 28;
+    // The form panel sits directly under the white brand band.
+    const double overlap = 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -184,17 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: AppColors.surface),
       child: Center(
         child: ConstrainedBox(
           // A phone is narrower than this, so the constraint only matters on a

@@ -383,13 +383,15 @@ class _InquireScreenState extends State<InquireScreen> {
                         ],
                         InquiryListingCard(listing: widget.listing),
                         const SizedBox(height: AppSpacing.md),
-                        ..._paymentMethodSection(isSubmitting),
+                        // Message first, then collection, date and payment, as in
+                        // the approved proposal.
+                        ..._messageSection(isSubmitting),
                         const SizedBox(height: AppSpacing.md),
                         ..._collectionMethodSection(isSubmitting),
                         const SizedBox(height: AppSpacing.md),
                         ..._collectionDateSection(isSubmitting),
                         const SizedBox(height: AppSpacing.md),
-                        ..._messageSection(isSubmitting),
+                        ..._paymentMethodSection(isSubmitting),
                         const SizedBox(height: AppSpacing.lg),
                         Row(
                           children: <Widget>[
@@ -504,10 +506,18 @@ class _InquireScreenState extends State<InquireScreen> {
             runSpacing: AppSpacing.xs,
             children: <Widget>[
               for (final _MessageTemplate template in _messageTemplates)
+                // Compact chips rather than full-width buttons.
                 OutlinedButton(
                   onPressed: isSubmitting
                       ? null
                       : () => _applyTemplate(template),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
+                    textStyle: theme.textTheme.labelLarge,
+                  ),
                   child: Text(template.label),
                 ),
             ],
@@ -531,74 +541,52 @@ class _InquireScreenState extends State<InquireScreen> {
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: AppSpacing.sm),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Expanded(
-                  child: _PreferenceCard(
-                    selected: _paymentMethod == InquiryPaymentMethod.cash,
-                    icon: Icons.money_outlined,
-                    title: 'Cash',
-                    subtitle: 'Pay with cash.',
-                    enabled: !isSubmitting,
-                    onTap: () => setState(() {
-                      _paymentMethod = InquiryPaymentMethod.cash;
-                      _paymentError = null;
-                    }),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _PreferenceCard(
-                    selected: _paymentMethod == InquiryPaymentMethod.gcash,
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'GCash',
-                    subtitle: 'Pay with GCash.',
-                    enabled: !isSubmitting,
-                    onTap: () => setState(() {
-                      _paymentMethod = InquiryPaymentMethod.gcash;
-                      _paymentError = null;
-                    }),
-                  ),
-                ),
-              ],
-            ),
+          _PreferenceCard(
+            selected: _paymentMethod == InquiryPaymentMethod.cash,
+            icon: Icons.money_outlined,
+            title: 'Cash',
+            subtitle: 'Pay with cash.',
+            enabled: !isSubmitting,
+            onTap: () => setState(() {
+              _paymentMethod = InquiryPaymentMethod.cash;
+              _paymentError = null;
+            }),
           ),
           const SizedBox(height: AppSpacing.sm),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Expanded(
-                  child: _PreferenceCard(
-                    selected: _paymentMethod == InquiryPaymentMethod.maya,
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'Maya',
-                    subtitle: 'Pay with Maya.',
-                    enabled: !isSubmitting,
-                    onTap: () => setState(() {
-                      _paymentMethod = InquiryPaymentMethod.maya;
-                      _paymentError = null;
-                    }),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _PreferenceCard(
-                    selected: _paymentMethod == InquiryPaymentMethod.other,
-                    icon: Icons.help_outline,
-                    title: 'Other / Discuss with seller',
-                    subtitle: 'Agree payment with the seller.',
-                    enabled: !isSubmitting,
-                    onTap: () => setState(() {
-                      _paymentMethod = InquiryPaymentMethod.other;
-                      _paymentError = null;
-                    }),
-                  ),
-                ),
-              ],
-            ),
+          _PreferenceCard(
+            selected: _paymentMethod == InquiryPaymentMethod.gcash,
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'GCash',
+            subtitle: 'Pay with GCash.',
+            enabled: !isSubmitting,
+            onTap: () => setState(() {
+              _paymentMethod = InquiryPaymentMethod.gcash;
+              _paymentError = null;
+            }),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _PreferenceCard(
+            selected: _paymentMethod == InquiryPaymentMethod.maya,
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Maya',
+            subtitle: 'Pay with Maya.',
+            enabled: !isSubmitting,
+            onTap: () => setState(() {
+              _paymentMethod = InquiryPaymentMethod.maya;
+              _paymentError = null;
+            }),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _PreferenceCard(
+            selected: _paymentMethod == InquiryPaymentMethod.other,
+            icon: Icons.help_outline,
+            title: 'Other / Discuss with seller',
+            subtitle: 'Agree payment with the seller.',
+            enabled: !isSubmitting,
+            onTap: () => setState(() {
+              _paymentMethod = InquiryPaymentMethod.other;
+              _paymentError = null;
+            }),
           ),
           const SizedBox(height: AppSpacing.xs),
           if (error != null)
@@ -627,67 +615,44 @@ class _InquireScreenState extends State<InquireScreen> {
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: AppSpacing.sm),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Expanded(
-                  child: _PreferenceCard(
-                    selected:
-                        _collectionMethod == InquiryCollectionMethod.farmPickup,
-                    icon: Icons.location_on_outlined,
-                    title: 'Farm Pickup',
-                    subtitle: 'Pick up from the seller\'s farm.',
-                    enabled: !isSubmitting,
-                    onTap: () => setState(() {
-                      _collectionMethod = InquiryCollectionMethod.farmPickup;
-                      _collectionError = null;
-                    }),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _PreferenceCard(
-                    selected:
-                        _collectionMethod ==
-                        InquiryCollectionMethod.buyerArrangedTransportation,
-                    icon: Icons.directions_car_outlined,
-                    title: 'Arrange Transport',
-                    subtitle: 'Arrange my own livestock transportation.',
-                    enabled: !isSubmitting,
-                    onTap: () => setState(() {
-                      _collectionMethod =
-                          InquiryCollectionMethod.buyerArrangedTransportation;
-                      _collectionError = null;
-                    }),
-                  ),
-                ),
-              ],
-            ),
+          _PreferenceCard(
+            selected: _collectionMethod == InquiryCollectionMethod.farmPickup,
+            icon: Icons.location_on_outlined,
+            title: 'Farm Pickup',
+            subtitle: 'Pick up from the seller\'s farm.',
+            enabled: !isSubmitting,
+            onTap: () => setState(() {
+              _collectionMethod = InquiryCollectionMethod.farmPickup;
+              _collectionError = null;
+            }),
           ),
           const SizedBox(height: AppSpacing.sm),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Expanded(
-                  child: _PreferenceCard(
-                    selected:
-                        _collectionMethod ==
-                        InquiryCollectionMethod.discussWithSeller,
-                    icon: Icons.chat_bubble_outline,
-                    title: 'Discuss',
-                    subtitle: 'Discuss arrangements with the seller.',
-                    enabled: !isSubmitting,
-                    onTap: () => setState(() {
-                      _collectionMethod =
-                          InquiryCollectionMethod.discussWithSeller;
-                      _collectionError = null;
-                    }),
-                  ),
-                ),
-              ],
-            ),
+          _PreferenceCard(
+            selected:
+                _collectionMethod ==
+                InquiryCollectionMethod.buyerArrangedTransportation,
+            icon: Icons.directions_car_outlined,
+            title: 'Arrange Transport',
+            subtitle: 'Arrange my own livestock transportation.',
+            enabled: !isSubmitting,
+            onTap: () => setState(() {
+              _collectionMethod =
+                  InquiryCollectionMethod.buyerArrangedTransportation;
+              _collectionError = null;
+            }),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _PreferenceCard(
+            selected:
+                _collectionMethod == InquiryCollectionMethod.discussWithSeller,
+            icon: Icons.chat_bubble_outline,
+            title: 'Discuss',
+            subtitle: 'Discuss arrangements with the seller.',
+            enabled: !isSubmitting,
+            onTap: () => setState(() {
+              _collectionMethod = InquiryCollectionMethod.discussWithSeller;
+              _collectionError = null;
+            }),
           ),
           const SizedBox(height: AppSpacing.xs),
           if (error != null)
@@ -934,28 +899,48 @@ class _PreferenceCard extends StatelessWidget {
                 width: selected ? 2 : 1,
               ),
             ),
-            child: Column(
+            // A radio mark beside the title and hint, as in the approved
+            // design, rather than a large centred icon.
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                Container(
+                  width: 18,
+                  height: 18,
+                  margin: const EdgeInsets.only(top: 1),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? AppColors.primary : AppColors.border,
+                      width: selected ? 5 : 2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: AppColors.text,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xxxs),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 Icon(
                   icon,
-                  size: 24,
+                  size: 18,
                   color: selected ? AppColors.primary : AppColors.textSecondary,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: selected ? AppColors.primary : AppColors.text,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
                 ),
               ],
             ),

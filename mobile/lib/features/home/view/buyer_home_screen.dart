@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
 import '../../../models/user.dart';
@@ -220,7 +219,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            HomeHeader(user: user, onOpenProfile: widget.onOpenProfile),
+            HomeHeader(
+              user: user,
+              eyebrow: _eyebrow(user),
+              onOpenProfile: widget.onOpenProfile,
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -230,7 +233,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        _Greeting(user: user),
                         const SizedBox(height: AppSpacing.sm),
                         ListenableBuilder(
                           listenable: _marketplace,
@@ -283,49 +285,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// The greeting above the search bar. Uses the real account name — never a
-/// placeholder — and stays small so the marketplace hierarchy leads.
-class _Greeting extends StatelessWidget {
-  const _Greeting({required this.user});
-
-  final User user;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenGutter,
-        AppSpacing.xs,
-        AppSpacing.screenGutter,
-        0,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'Buyer Mode',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text('Hello, ${user.name}!', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            'Happy trading!',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -392,4 +351,13 @@ class _SearchBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The line above the greeting: where the buyer shops, from their profile,
+/// or simply the mode when no location is set.
+String _eyebrow(User user) {
+  final String? location = user.location?.trim();
+  return location == null || location.isEmpty
+      ? 'Buyer Mode'
+      : 'Buying near $location';
 }

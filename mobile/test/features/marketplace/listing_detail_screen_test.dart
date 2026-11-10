@@ -118,10 +118,10 @@ void main() {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
       // Summary: species, title, price, availability, location.
-      expect(find.text('CATTLE'), findsOneWidget);
+      expect(find.text('Cattle'), findsOneWidget);
       expect(find.text('Holstein'), findsOneWidget);
       expect(find.text('₱42,500.00'), findsOneWidget);
-      expect(find.text('4 heads available'), findsOneWidget);
+      expect(find.text('4 heads'), findsOneWidget);
       expect(find.text('Mabalacat, Pampanga'), findsOneWidget);
 
       // Attributes.
@@ -140,14 +140,11 @@ void main() {
       expect(find.text('Rizal Farms'), findsOneWidget);
     });
 
-    testWidgets('shows completed sales and the placeholder rating', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('shows no placeholder rating', (WidgetTester tester) async {
       await pumpDetail(tester, sellerId: 3, viewerId: 7, completedSales: 3);
 
-      expect(find.text('3 completed sales'), findsOneWidget);
-      expect(find.text('4.8 · 24 reviews'), findsOneWidget);
-      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+      expect(find.text('4.8 · 24 reviews'), findsNothing);
+      expect(find.byIcon(Icons.star_rounded), findsNothing);
     });
 
     testWidgets('shows a neutral placeholder when there is no photo', (

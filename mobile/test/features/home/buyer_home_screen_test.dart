@@ -4,6 +4,7 @@ import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
+import 'package:agrobenta_mobile/features/home/widgets/home_categories.dart';
 import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
 import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/home/widgets/popular_livestock_section.dart';
@@ -20,9 +21,9 @@ import 'package:agrobenta_mobile/repositories/notification_repository.dart';
 import 'package:agrobenta_mobile/services/livestock_type_service.dart';
 import 'package:agrobenta_mobile/services/notification_service.dart';
 import 'package:agrobenta_mobile/widgets/temporary_logo.dart';
+import 'package:agrobenta_mobile/widgets/livestock_type_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -36,12 +37,15 @@ void main() {
 
   setUp(() => tokenStore = FakeTokenStore());
 
-  /// Finds a rendered Font Awesome glyph. [Finder.byIcon] cannot be used:
-  /// `font_awesome_flutter` 11.x types the stored glyph as [FaIconData], while
-  /// the inherited [Icon.icon] getter exposes only its `.data` (an `IconData`).
-  Finder faIcon(FaIconData icon) => find.byWidgetPredicate(
-    (Widget widget) => widget is FaIcon && widget.icon == icon.data,
-    description: 'FaIcon $icon',
+  /// Finds the livestock silhouette for a catalogue type.
+  /// Listing photo placeholders draw the same silhouettes, so the search is
+  /// limited to the category grid.
+  Finder livestockIcon(String type) => find.descendant(
+    of: find.byType(HomeCategories),
+    matching: find.byWidgetPredicate(
+      (Widget widget) => widget is LivestockTypeIcon && widget.type == type,
+      description: 'LivestockTypeIcon $type',
+    ),
   );
 
   /// Pumps the home screen with an already-restored session, which is the only
@@ -180,7 +184,8 @@ void main() {
     await pumpSignedIn(tester);
 
     expect(find.text('Hello, Ana Reyes!'), findsOneWidget);
-    expect(find.text('Happy trading!'), findsOneWidget);
+    // No profile location in the fixture, so the line above says the mode.
+    expect(find.text('Buyer Mode'), findsOneWidget);
   });
 
   testWidgets('leads with the brand, using the centralized logo placeholder', (
@@ -188,9 +193,8 @@ void main() {
   ) async {
     await pumpSignedIn(tester);
 
+    // The logo artwork carries the AgroBenta wordmark itself.
     expect(find.byType(TemporaryLogo), findsOneWidget);
-    expect(find.text('AgroBenta'), findsOneWidget);
-    expect(find.text('Buy. Sell. Grow. Together.'), findsOneWidget);
   });
 
   group('recent listings', () {
@@ -204,7 +208,7 @@ void main() {
       // the compact peso price and the location, on the shared ListingCard.
       expect(find.text('Holstein'), findsOneWidget);
       expect(find.text('₱42,500'), findsOneWidget);
-      expect(find.text('Mabalacat, Pampanga'), findsOneWidget);
+      expect(find.text('Cattle · Mabalacat, Pampanga'), findsOneWidget);
       expect(find.text('Cattle'), findsWidgets);
 
       // The design forbids a "featured" claim the backend cannot back, and the
@@ -264,8 +268,8 @@ void main() {
         onBrowseMarketplace: () => followedToMarketplace = true,
       );
 
-      await tester.ensureVisible(faIcon(FontAwesomeIcons.cow));
-      await tester.tap(faIcon(FontAwesomeIcons.cow));
+      await tester.ensureVisible(livestockIcon('cattle'));
+      await tester.tap(livestockIcon('cattle'));
       await settleAuth(tester, frames: 12);
 
       expect(followedToMarketplace, isTrue);
@@ -295,10 +299,14 @@ void main() {
       ]) {
         expect(find.text(label), findsWidgets, reason: 'missing $label');
       }
-      expect(faIcon(FontAwesomeIcons.cow), findsOneWidget);
-      expect(faIcon(FontAwesomeIcons.paw), findsOneWidget);
-      expect(faIcon(FontAwesomeIcons.bacon), findsOneWidget);
-      expect(faIcon(FontAwesomeIcons.hippo), findsOneWidget);
+      for (final String type in <String>[
+        'cattle',
+        'carabao',
+        'goat',
+        'swine',
+      ]) {
+        expect(livestockIcon(type), findsOneWidget, reason: 'no $type icon');
+      }
     });
   });
 

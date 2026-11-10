@@ -77,8 +77,11 @@ class ConversationTile extends StatelessWidget {
                         Expanded(
                           child: Text(
                             _listingLabel(conversation),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppColors.textSecondary,
+                            // The livestock the thread is about, in brand
+                            // green so it reads apart from the message.
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -265,7 +268,7 @@ class _StatusChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: emphasised ? AppColors.primary : AppColors.border,
         ),
