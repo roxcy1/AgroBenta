@@ -19,11 +19,12 @@ import '../widgets/transaction_status_badge.dart';
 ///    pair is shown — inventing the reference side would misrepresent the
 ///    record;
 ///  * there is **no status history** and no per-step timestamps in the backend,
-///    so the progress tracker is a summary of the real state machine (see
-///    [TransactionTimeline]) and an explicit note says a dated history is not
-///    recorded. No step date is fabricated;
-///  * there is no location, no seller-verification flag and no delivery field
-///    on the record, so none is rendered.
+///    so the progress tracker is a summary of the real collection-specific
+///    fulfillment state machine (see [TransactionTimeline]) and an explicit
+///    note says a dated history is not recorded. No step date is fabricated;
+///  * there is no location, no rider, no tracking and no seller-verification
+///    flag on the record, so none is rendered. The recorded collection method
+///    and preferred date are shown because the terms snapshot carries them.
 class TransactionStatusContent extends StatelessWidget {
   const TransactionStatusContent({
     required this.transaction,
@@ -41,9 +42,8 @@ class TransactionStatusContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final bool isSeller = transaction.role == TransactionRole.seller;
-    final List<TimelineStep> steps = TransactionTimeline.stepsFor(
-      transaction.status,
-      role: transaction.role,
+    final List<TimelineStep> steps = TransactionTimeline.fulfillmentStepsFor(
+      transaction,
     );
 
     return ListView(
@@ -59,7 +59,18 @@ class TransactionStatusContent extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
               Text('Transaction Progress', style: theme.textTheme.titleMedium),
               const SizedBox(height: AppSpacing.xs),
-              TransactionProgressTimeline(steps: steps),
+              if (transaction.hasUnknownFulfillmentStatus)
+                const _UnknownFulfillmentNotice()
+              else
+                TransactionProgressTimeline(steps: steps),
+              if (transaction.hasLegacyFulfillment) ...<Widget>[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'This older transaction has no recorded fulfillment stage. '
+                  'The tracker starts at Confirmed.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
               const _HistoryUnavailableNote(),
               const SizedBox(height: AppSpacing.lg),
@@ -180,6 +191,20 @@ class _MetadataCard extends StatelessWidget {
             label: isSeller ? 'Recorded' : 'Requested',
             value: AppFormatters.formatDateTime(transaction.createdAt),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          _MetadataRow(
+            icon: Icons.local_shipping_outlined,
+            label: 'Collection',
+            value: transaction.terms.collectionMethodLabel,
+          ),
+          if (transaction.terms.pickupDate != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            _MetadataRow(
+              icon: Icons.event_available_outlined,
+              label: 'Preferred date',
+              value: AppFormatters.formatDate(transaction.terms.pickupDate),
+            ),
+          ],
           const SizedBox(height: AppSpacing.xxs),
           Text(
             isSeller
@@ -230,6 +255,48 @@ class _MetadataRow extends StatelessWidget {
   }
 }
 
+/// A safe state for a fulfillment stage this app version does not know.
+class _UnknownFulfillmentNotice extends StatelessWidget {
+  const _UnknownFulfillmentNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.warningSurface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(Icons.info_outline, size: 18, color: AppColors.warning),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Status unavailable', style: theme.textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'The server returned a fulfillment status this version of '
+                  'the app does not recognize. Update the app to see the '
+                  'current stage.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The honest statement about the missing history.
 ///
 /// The design's reference shows five dated steps. The backend records one
@@ -256,9 +323,10 @@ class _HistoryUnavailableNote extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'This tracker summarises the record\'s current status. The '
-              'system records only the current status, not a dated history of '
-              'each step, so no per-step dates are shown.',
+              'This tracker summarises the record\'s current status and '
+              'fulfillment stage. The system records only the current status, '
+              'not a dated history of each step, so no per-step dates are '
+              'shown.',
               style: theme.textTheme.bodySmall?.copyWith(color: AppColors.text),
             ),
           ),

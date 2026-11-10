@@ -402,6 +402,25 @@ void main() {
       ]);
     });
 
+    test('422 preserves structured top-level details', () async {
+      final ApiException error = await captureStatus(422, <String, dynamic>{
+        'success': false,
+        'message': 'A price suggestion cannot be generated for this listing.',
+        'status': 'withheld',
+        'warnings': <String>['Outside the supported model envelope.'],
+        'reason_codes': <String>['insufficient_model_support'],
+      });
+
+      expect(error.kind, ApiErrorKind.validation);
+      expect(error.details['status'], 'withheld');
+      expect(error.details['warnings'], <String>[
+        'Outside the supported model envelope.',
+      ]);
+      expect(error.details['reason_codes'], <String>[
+        'insufficient_model_support',
+      ]);
+    });
+
     test('429 is rateLimited', () async {
       expect(
         (await captureStatus(429, <String, dynamic>{})).kind,

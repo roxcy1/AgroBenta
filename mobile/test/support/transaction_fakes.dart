@@ -21,6 +21,8 @@ import 'auth_fakes.dart';
 /// [totalAmount] is a decimal **string** exactly as `decimal(14,2)` columns
 /// serialise over the API; it is display-only and must never be parsed for
 /// arithmetic in the client.
+const Object _unsetFulfillment = Object();
+
 Map<String, dynamic> transactionJson({
   Object? id = 1,
   String role = 'buyer',
@@ -29,9 +31,31 @@ Map<String, dynamic> transactionJson({
   Object? quantity = 1,
   Object? totalAmount = '42500.00',
   String status = 'pending',
+  Object? fulfillmentStatus = _unsetFulfillment,
+  List<String>? permittedActions,
+  String? collectionMethod = 'farm_pickup',
+  Object? pickupDate,
+  String? paymentMethod = 'cash',
   Object? createdAt = '2026-10-01T08:15:00.000000Z',
   Object? updatedAt = '2026-10-01T08:15:00.000000Z',
 }) {
+  final Object? resolvedFulfillment =
+      identical(fulfillmentStatus, _unsetFulfillment)
+      ? switch (status) {
+          'completed' => 'completed',
+          'cancelled' => null,
+          _ => 'confirmed',
+        }
+      : fulfillmentStatus;
+
+  final List<String> resolvedActions =
+      permittedActions ??
+      switch (status) {
+        'pending' when role == 'seller' => <String>['preparing', 'cancel'],
+        'pending' => <String>['cancel'],
+        _ => <String>[],
+      };
+
   return <String, dynamic>{
     'id': id,
     'role': role,
@@ -40,6 +64,14 @@ Map<String, dynamic> transactionJson({
     'quantity': quantity,
     'total_amount': totalAmount,
     'status': status,
+    'terms': <String, dynamic>{
+      'offer_id': null,
+      'pickup_date': pickupDate,
+      'payment_method': paymentMethod,
+      'collection_method': collectionMethod,
+    },
+    'fulfillment_status': resolvedFulfillment,
+    'permitted_actions': resolvedActions,
     'created_at': createdAt,
     'updated_at': updatedAt,
   };

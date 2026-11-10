@@ -35,4 +35,21 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Private price-prediction service
+    |--------------------------------------------------------------------------
+    |
+    | Laravel depends only on the versioned HTTP contract. It never reads a
+    | model filename or CatBoost internals.
+    |
+    */
+
+    'price_prediction' => [
+        'url' => env('PRICE_PREDICTION_URL', 'http://ml-service:8002'),
+        'connect_timeout' => (int) env('PRICE_PREDICTION_CONNECT_TIMEOUT', 2),
+        'timeout' => (int) env('PRICE_PREDICTION_TIMEOUT', 5),
+        'contract_version' => env('PRICE_PREDICTION_CONTRACT_VERSION', '1.0'),
+    ],
+
 ];

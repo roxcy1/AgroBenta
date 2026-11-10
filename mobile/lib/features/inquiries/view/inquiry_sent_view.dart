@@ -28,13 +28,11 @@ import '../widgets/inquiry_listing_card.dart';
 /// It is never driven by, and must never grow, a server status field
 /// (mobile/AGENTS.md §B; GAP-19).
 ///
-/// ## Go to Messages opens the existing inbox
+/// ## Open Conversation opens the existing thread
 ///
-/// The confirmation's primary action is the app's real Messages destination,
-/// [ConversationsScreen] — not an inquiry-details screen, which still has no
-/// buyer endpoint (GAP-19). The button is live because the destination exists;
-/// it does not create a conversation or send an initial message, because
-/// messaging integration belongs to another branch.
+/// The confirmation's primary action opens the buyer–seller conversation that
+/// the inquiry's initial message already started. It does not create a
+/// conversation or send another message.
 class InquirySentView extends StatelessWidget {
   const InquirySentView({
     required this.listing,
@@ -83,7 +81,7 @@ class InquirySentView extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onGoToMessages,
                 icon: const Icon(Icons.forum_outlined, size: 18),
-                label: const Text('Go to Messages'),
+                label: const Text('Open Conversation'),
               ),
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(
@@ -160,11 +158,12 @@ class _YourInquiryCard extends StatelessWidget {
     return SectionCard(
       title: 'Your Inquiry',
       children: <Widget>[
-        _SummaryRow(
-          icon: Icons.forum_outlined,
-          label: 'Message',
-          value: inquiry.message,
-        ),
+        if (inquiry.message.trim().isNotEmpty)
+          _SummaryRow(
+            icon: Icons.forum_outlined,
+            label: 'Message',
+            value: inquiry.message,
+          ),
         if (inquiry.paymentMethod != null)
           _SummaryRow(
             icon: Icons.account_balance_wallet_outlined,

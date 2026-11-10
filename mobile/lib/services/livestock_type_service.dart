@@ -13,7 +13,7 @@ class LivestockTypeService {
 
   final ApiClient _client;
 
-  /// `GET /livestock-types` - the backend enum's four approved values.
+  /// `GET /livestock-types` - the backend enum's approved values and breeds.
   Future<List<LivestockType>> catalog() async {
     final Object? body = await _client.getRawJson(
       LivestockTypeEndpoints.catalog,

@@ -59,6 +59,102 @@ class TimelineStep {
 /// throws on anything else, so this switch is exhaustive and cannot silently
 /// drop a future status.
 abstract final class TransactionTimeline {
+  /// The collection-specific fulfillment tracker.
+  ///
+  /// Pickup and buyer-arranged transportation use
+  /// Confirmed → Preparing → Ready for Pickup → Picked Up → Completed.
+  /// Seller-arranged delivery uses
+  /// Confirmed → Preparing → On the Way → Delivered → Completed.
+  ///
+  /// Cancelled records keep the existing terminal three-marker outcome so a
+  /// cancelled sale never renders a completion as reached.
+  static List<TimelineStep> fulfillmentStepsFor(Transaction transaction) {
+    if (transaction.status == TransactionStatus.cancelled) {
+      return stepsFor(transaction.status, role: transaction.role);
+    }
+
+    // An unknown non-null stage is not evidence of Confirmed. The screens show
+    // an explicit unavailable state and do not call this method for it.
+    if (transaction.hasUnknownFulfillmentStatus) {
+      return const <TimelineStep>[];
+    }
+
+    final TransactionFulfillmentStatus? current =
+        transaction.effectiveFulfillmentStatus;
+    if (current == null) {
+      return stepsFor(transaction.status, role: transaction.role);
+    }
+
+    final bool isSeller = transaction.role == TransactionRole.seller;
+    final bool isDelivery = transaction.terms.isDelivery;
+    final List<TransactionFulfillmentStatus> stages = isDelivery
+        ? const <TransactionFulfillmentStatus>[
+            TransactionFulfillmentStatus.confirmed,
+            TransactionFulfillmentStatus.preparing,
+            TransactionFulfillmentStatus.onTheWay,
+            TransactionFulfillmentStatus.delivered,
+            TransactionFulfillmentStatus.completed,
+          ]
+        : const <TransactionFulfillmentStatus>[
+            TransactionFulfillmentStatus.confirmed,
+            TransactionFulfillmentStatus.preparing,
+            TransactionFulfillmentStatus.readyForPickup,
+            TransactionFulfillmentStatus.pickedUp,
+            TransactionFulfillmentStatus.completed,
+          ];
+
+    final int currentIndex = stages.indexOf(current);
+
+    return <TimelineStep>[
+      for (int i = 0; i < stages.length; i++)
+        TimelineStep(
+          title: stages[i].label,
+          detail: _fulfillmentDetail(stages[i], isSeller: isSeller),
+          state: i < currentIndex
+              ? TimelineStepState.completed
+              : i == currentIndex
+              ? TimelineStepState.current
+              : TimelineStepState.upcoming,
+        ),
+    ];
+  }
+
+  static String _fulfillmentDetail(
+    TransactionFulfillmentStatus stage, {
+    required bool isSeller,
+  }) {
+    return switch (stage) {
+      TransactionFulfillmentStatus.confirmed =>
+        isSeller
+            ? 'The sale is confirmed and the livestock is reserved.'
+            : 'Your purchase is confirmed and the livestock is reserved.',
+      TransactionFulfillmentStatus.preparing =>
+        isSeller
+            ? 'Prepare the livestock for pickup or delivery.'
+            : 'The seller is preparing the livestock.',
+      TransactionFulfillmentStatus.readyForPickup =>
+        isSeller
+            ? 'Marked ready for pickup. Confirm handover when the buyer collects it.'
+            : 'The livestock is ready. Arrange the handover with the seller.',
+      TransactionFulfillmentStatus.pickedUp =>
+        isSeller
+            ? 'Handover reported. Waiting for the buyer to confirm receipt.'
+            : 'The seller reported the handover. Confirm receipt when you have the livestock.',
+      TransactionFulfillmentStatus.onTheWay =>
+        isSeller
+            ? 'The livestock is on the way to the buyer.'
+            : 'The seller has dispatched the livestock.',
+      TransactionFulfillmentStatus.delivered =>
+        isSeller
+            ? 'Delivery reported. Waiting for the buyer to confirm receipt.'
+            : 'The seller reported delivery. Confirm receipt when you have the livestock.',
+      TransactionFulfillmentStatus.completed =>
+        isSeller
+            ? 'The buyer confirmed receipt. This sale is complete.'
+            : 'You confirmed receipt. This sale is complete.',
+    };
+  }
+
   static List<TimelineStep> stepsFor(
     TransactionStatus status, {
     TransactionRole role = TransactionRole.buyer,

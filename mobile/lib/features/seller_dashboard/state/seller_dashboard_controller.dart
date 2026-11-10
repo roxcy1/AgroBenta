@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/seller_dashboard.dart';
 import '../../../repositories/seller_dashboard_repository.dart';
 import 'seller_dashboard_state.dart';
@@ -11,9 +14,22 @@ import 'seller_dashboard_state.dart';
 /// received-inquiry list. A refresh keeps the previous dashboard on screen and
 /// reports failure as a notice rather than replacing real data with an error.
 class SellerDashboardController extends ChangeNotifier {
-  SellerDashboardController(this._repository);
+  SellerDashboardController(this._repository, {this.realtimeEvents, this.connection}) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _connectionSubscription = connection?.listen(_onConnectionChanged);
+  }
 
   final SellerDashboardRepository _repository;
+
+  /// The session's decoded events. Inquiry, transaction and listing-decision
+  /// events change at least one summary count, so the dashboard re-loads.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  /// Connection changes; a reconnect re-fetches to recover missed updates.
+  final Stream<bool>? connection;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
 
   SellerDashboardState _state = const SellerDashboardState();
   SellerDashboardState get state => _state;
@@ -121,8 +137,33 @@ class SellerDashboardController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The summary counts change on a new inquiry, a transaction change, or a
+  /// listing decision (`notification.created` with type `listing`).
+  void _onRealtimeEvent(RealtimeEvent event) {
+    final bool listingDecision =
+        event.name == 'notification.created' && event.data['type'] == 'listing';
+
+    if (event.name == 'inquiry.created' ||
+        event.name == 'transaction.created' ||
+        event.name == 'transaction.updated' ||
+        listingDecision) {
+      unawaited(refresh());
+    }
+  }
+
+  /// A reconnect may have missed an event that changed a count.
+  void _onConnectionChanged(bool connected) {
+    if (connected) {
+      unawaited(refresh());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
     _disposed = true;
     super.dispose();
   }

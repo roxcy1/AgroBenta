@@ -206,11 +206,11 @@ void main() {
 
     expect(find.text('No completed purchases yet'), findsOneWidget);
     expect(
-      find.text('Completion is not yet available in the app.'),
+      find.text(
+        'Purchases completed after you confirm receipt will appear here.',
+      ),
       findsOneWidget,
-      reason:
-          'no path in the app can reach completed today (OQ-15); the empty '
-          'state says so rather than pretending',
+      reason: 'completion is available after seller-reported handover/delivery',
     );
     expect(recorded.last.query['role'], 'buyer');
     expect(recorded.last.query['status'], 'completed');

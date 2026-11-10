@@ -596,45 +596,65 @@ but these records do not prove that payment or delivery happened. User-facing
 text must say so (as in the prototype: *"Payment and receipt are handled
 directly between buyer and seller."*).
 
+Payment handling is unchanged by DEC-09: the system stores the buyer's
+`payment_method` preference and the offer/transaction snapshots of it. There is
+no payment gateway, no payment-status field, and no claim that a recorded
+method proves payment.
+
 ### 6.4 Flow **[MS-P Figures 13–18, 26]**
 
 ```text
- 1. Purchase request submitted     (buyer)
- 2. Seller accepts                 (seller)
- 3. Livestock delivered / picked up (arranged by the parties, outside the app)
- 4. Buyer confirms receipt         (buyer)   ──> COMPLETED
-       any point before 4 ──cancel──> CANCELLED
+ 1. Buyer expresses interest        (buyer inquiry)
+ 2. Seller sends a formal offer     (seller)
+ 3. Buyer accepts                   ──> transaction PENDING, stock reserved
+ 4. Seller reports preparation / pickup or delivery
+ 5. Buyer confirms receipt          ──> COMPLETED
+       before handover/dispatch ──cancel──> CANCELLED, stock released
 ```
 
-Rules:
+Rules (DEC-09, 2026-11-09):
 
-1. **The buyer initiates a transaction** by sending a purchase request on an
-   active listing. A seller does not create transactions.
-2. A new transaction starts as `pending` and awaits the seller.
-3. **The seller accepts** the request.
-4. **The buyer confirms receipt** of the livestock. This completes the
-   transaction. *(Closes the earlier open question A-03 / OQ-15.)*
-5. `completed` and `cancelled` are terminal.
-6. A seller sees and manages only transactions on their own listings; scoping
+1. **The buyer initiates a transaction** by accepting the seller's formal
+   offer. A seller does not create transactions.
+2. A new transaction starts as `pending` and reserves the agreed quantity of
+   the listing's stock atomically. The one-head-per-offer rule remains in
+   force; multi-head offers are not introduced by this decision.
+3. **The seller accepts** is represented by the seller's offer; the buyer's
+   acceptance creates the transaction.
+4. **The seller reports preparation, dispatch and handover.** These fulfillment
+   stages are recorded separately from `transactions.status`; they do not
+   change the three transaction status values (`pending`, `completed`,
+   `cancelled`). Pickup flows use `confirmed → preparing → ready_for_pickup →
+   picked_up`; seller-arranged delivery uses `confirmed → preparing →
+   on_the_way → delivered`.
+5. **The buyer confirms receipt** after `picked_up` or `delivered`. That action
+   completes the transaction and moves the fulfillment stage to `completed`.
+6. `completed` and `cancelled` are terminal.
+7. A seller sees and manages only transactions on their own listings; scoping
    is by `transactions.seller_id`, derived from the listing.
-7. Both parties may cancel while the transaction is not yet completed. The
-   exact cut-off is **[OPEN]**, §13, MS-14.
+8. Either party may cancel **before livestock handover or seller dispatch**.
+   After handover or dispatch, cancellation is blocked pending a future
+   resolution process. A valid cancellation restores the reserved quantity
+   exactly once.
 
-> **[OPEN] MS-12 — intermediate statuses.** The prototype shows "Pending Seller
-> Confirmation", "Seller Accepted", "In Delivery"/"On the way", and seller tabs
-> "Inquiry", "Negotiating", "Confirmed", "In Delivery", "Completed". The ERD
-> only has `pending`, `completed`, `cancelled`. How "seller accepted" and "in
-> delivery" are stored needs a decision before implementation.
+> **DEC-09 — intermediate statuses (MS-12).** The prototype's seller-accepted
+> and in-delivery stages are approved as a fulfillment progression kept
+> logically separate from the transaction status. They do not expand the ERD's
+> three status values.
 
-> **[OPEN] MS-13 — delivery fee and agreed price.** The prototype shows
-> "Agreed Price", "Reference Price", "Delivery Fee" and "Total Amount". Whether
-> these are recorded, and whether they conflict with Limitation 5, needs a
-> decision.
+> **DEC-09 — delivery fee and agreed price (MS-13).** The agreed price is the
+> seller's offer amount, snapshotted onto the transaction. No delivery fee is
+> added by the system. "Seller-Arranged Delivery" records a preference and
+> fulfillment stage only; AgroBenta still does not provide or book transport
+> (§6.3).
 
 ### 6.5 Nothing after completion
 
 There is no refund, reversal, payout, shipment tracking or dispute state. A
 completed transaction is a record of an agreed sale and nothing more.
+Disputes remain out of scope under DEC-09. Blocking cancellation after
+handover/dispatch is a safety rule for this phase; any later resolution process
+requires a new approved decision.
 
 ---
 
@@ -701,17 +721,20 @@ in Messages, so Inquiries and Messages are not two overlapping features.
 > requires the separate flow. Whether the existing `inquiries` table is kept as
 > a record of the structured fields is part of MS-18.
 
-**The buyer fills in** (Figure 10), and the fields are included in the message:
+**The buyer fills in** (Figure 10), and the fields are included in the message.
+The current form is the shorter "I'm Interested" version approved by DEC-09:
 
 | Field | Required |
 |---|---|
-| Subject | yes |
-| Message (up to 500 characters) | yes |
-| Interested in purchasing? (yes / no) | yes |
-| Preferred transaction method: direct deal / arrange delivery | yes |
-| Delivery method and delivery fee | when relevant — see §13, MS-13 |
-| Preferred contact method (in-app message) | yes |
-| Preferred schedule | no |
+| Message (up to 500 characters) | no |
+| Preferred payment method: Cash / GCash / Maya / Discuss with Seller | yes; defaults to **Discuss with Seller** |
+| Preferred collection: Personal Pickup / Buyer-Arranged Transportation / Seller-Arranged Delivery / Not Sure Yet | yes |
+| Preferred collection date | no |
+
+The historical `discuss_with_seller` collection value is preserved for existing
+records but is not offered by the current form. Subject, purchase-interest,
+transaction-method, delivery-fee and contact-method columns remain in the
+database for compatibility; the current form does not collect them.
 
 After sending, the buyer sees the "Inquiry Sent" confirmation (Figure 11) and
 the conversation continues in Messages. **The seller replies in Messages**; the
@@ -946,9 +969,9 @@ for the manuscript's author.
 | **MS-09** | **AI service:** which external provider, who pays, who holds the key? Correct the Definition of Terms (p.20) to say "external AI service" rather than an in-house model. |
 | **MS-10** | **Forgot password:** ~~email code or email link?~~ Six-digit email code (project decision, 2026-11-03; see §2.8). Which email service? |
 | **MS-11** | **Remember me and Google/Facebook sign-in:** build them or remove them from the prototype? |
-| **MS-12** | **Transaction statuses:** how are "seller accepted" and "in delivery" stored, given the ERD has only `pending`, `completed`, `cancelled`? Do the seller tabs "Inquiry" and "Negotiating" belong to transactions or to inquiries? |
-| **MS-13** | **Agreed price and delivery fee:** can the agreed price differ from the asking price? Is a delivery fee recorded and added to the total, given Limitation 5? |
-| **MS-14** | **Cancellation:** who may cancel, and up to which step? |
+| **MS-12** | **Transaction statuses:** how are "seller accepted" and "in delivery" stored, given the ERD has only `pending`, `completed`, `cancelled`? Do the seller tabs "Inquiry" and "Negotiating" belong to transactions or to inquiries? **Implementation decision (DEC-09):** a separate fulfillment progression, not new transaction statuses; manuscript wording still to be updated. |
+| **MS-13** | **Agreed price and delivery fee:** can the agreed price differ from the asking price? Is a delivery fee recorded and added to the total, given Limitation 5? **Implementation decision (DEC-09):** agreed price is the offer amount; no delivery fee is added. |
+| **MS-14** | **Cancellation:** who may cancel, and up to which step? **Implementation decision (DEC-09):** either party before handover or seller dispatch; later cancellation is blocked pending a future resolution process. |
 | **MS-15** | **Notifications:** the full list of events, and whether phone push notifications are required. |
 | **MS-16** | **"Verified Buyer"** appears in the seller transaction prototype (Figure 26). Is there a buyer verification, or is this label a mistake? |
 | **MS-17** | **Hosting for evaluation:** where will the system run for the 15 evaluators, and how will they install the app? |
@@ -987,19 +1010,25 @@ available (§0.1).
 
 MS-08 (listing title) remains open in §13.2. No title field or column is added.
 
-<<<<<<< Updated upstream
 ### 13.6 Closed by project-owner decision (2026-11-07)
 
 | ID | Item | Resolution |
 |---|---|---|
 | **DEC-07** | Trinidad addresses | Use the backend-owned 20-barangay catalog; new values use the canonical format in §3.3. Seller verification and listing locations are required, while profile location remains optional. Preserve unmatched legacy values until explicitly replaced; they must be corrected before listing submission for review. Existing string fields are reused without a schema change. |
-=======
-### 13.5 Closed by project-owner decision (2026-11-07)
-
-| ID | Item | Resolution |
-|---|---|---|
 | **DEC-08** | Admin user actions | Admins may edit only name/email and deactivate accounts through soft deletion. Self-deletion and removal of the last active administrator are refused. The email remains reserved, credentials are revoked, and associated business history is retained. Active listings from deactivated sellers are hidden from the marketplace without changing stored status (§9.2). |
->>>>>>> Stashed changes
+
+### 13.7 Closed by project-owner decision (2026-11-09)
+
+| ID | Decision | Resolution |
+|---|---|---|
+| **DEC-09** | Buyer inquiry UX | Listing Details offers **Ask Seller** (reuses the buyer–seller conversation, creates nothing) and **I'm Interested** (reuses the inquiry backend). The interest form's message and preferred date are optional; payment and collection remain required. |
+| **DEC-09** | Collection choices | Personal Pickup (`farm_pickup`), Buyer-Arranged Transportation (`buyer_arranged_transportation`), Seller-Arranged Delivery (`seller_arranged_delivery`) and Not Sure Yet (`not_sure_yet`). Legacy `discuss_with_seller` records are preserved but no longer offered. |
+| **DEC-09** | Stock reservation | A transaction reserves its quantity atomically at creation. Overselling is refused, and a valid cancellation restores the reserved quantity exactly once. |
+| **DEC-09** | Cancellation | Either party may cancel before handover or seller dispatch. After that point cancellation is blocked pending a future resolution process. |
+| **DEC-09** | Completion | The buyer confirms receipt after the seller reports pickup or delivery. The backend and mobile transaction detail/status screens implement the fulfillment progression and completion. |
+| **DEC-09** | Payments | Existing payment-method recording is retained. No gateway and no payment-status system are introduced. |
+| **DEC-09** | Disputes | Out of scope. |
+| **DEC-09** | Offers | One head per offer remains. Multi-head offer support is not introduced. |
 
 ---
 
@@ -1029,8 +1058,11 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-03 | Part of MS-10 decided: password recovery uses a six-digit email code (§2.8). The manuscript does not specify the method. The email service remains open. |
 | 2026-11-03 | Part of MS-05 decided: the farm/business name is optional, and Proof of Address and Farm photos are implemented (§3.3, Figure 19). Whether to remove the selfie remains open, and MS-07 is unchanged. |
 | 2026-11-05 | **[DEC-05]** Per-user Account Mode preference is retained across logout and restored for the same authenticated user. This replaces the earlier logout-clear behavior in §2.7 rule 6; preferences are keyed by user ID and permission-checked on restoration. |
-| 2026-11-07 | **[DEC-08]** Approved Admin Web user editing and account deactivation rules (§9.2, §13.5): name/email only, soft deletion, session revocation, retained business history, inactive-seller listing suppression, and self/last-administrator protection. |
+| 2026-11-07 | **[DEC-08]** Approved Admin Web user editing and account deactivation rules (§9.2, §13.6): name/email only, soft deletion, session revocation, retained business history, inactive-seller listing suppression, and self/last-administrator protection. |
 | 2026-11-04 | **[DEC-04]** Government ID type selection and two-sided image capture, including the applicant's explicit no-back declaration, were specified by the project owner. This does not change the existing selfie, Proof of Address, privacy, review, or resubmission rules (§3.3). |
 | 2026-11-05 | **[DEC-06]** Resolved MS-03 by adopting Chicken alongside Cattle, Carabao, Goat and Swine, and approved the optional type-dependent breed catalog (§4.1). The manuscript remains to be updated. |
 | 2026-11-07 | **[DEC-07]** Adopted a backend-owned Trinidad barangay catalog and canonical address format (§2.8, §3.3, §4, §13.6). Profile location remains optional; seller verification and listing locations require a catalog barangay. Legacy values are preserved until replaced, with listing values corrected before submission. No PSGC codes or schema changes are introduced. |
+| 2026-11-09 | **[DEC-09]** Approved the two-action Listing Details UX (Ask Seller / I'm Interested), the shortened optional-message interest form, the four current collection choices, atomic stock reservation with cancellation release, the pre-handover cancellation cutoff, buyer receipt confirmation as the later completion actor, unchanged payment-method recording, disputes out of scope, and one-head-per-offer (§6.3–§6.5, §8.2, §13.7). |
+| 2026-11-09 | Fulfillment implemented for DEC-09: separate fulfillment stages, seller-controlled preparation/pickup/delivery actions, buyer receipt confirmation, cancellation cutoffs, the legacy-stock completion policy, and the mobile collection-specific tracker and action buttons (§6.4, §6.5). |
+| 2026-11-10 | Resolved the merge's duplicate decision identifier by retaining DEC-08 for the 2026-11-07 Admin Web account-action decision and renumbering the 2026-11-09 transaction decisions to DEC-09. No decision text or business rule changed. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

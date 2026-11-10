@@ -5,9 +5,9 @@
 /// screen (`validateInquiryMessage(v) ?? state.errorFor('message')`) instead of
 /// the two sources being entangled in a closure.
 ///
-/// The rule mirrors `StoreInquiryRequest` on the backend: `message` required,
-/// at most 500 characters, never whitespace-only, and both
-/// `payment_method` and `collection_method` required.
+/// The rule mirrors `StoreInquiryRequest` on the backend: `message` is
+/// optional and at most 500 characters, while `payment_method` and
+/// `collection_method` remain required.
 library;
 
 import '../../../models/inquiry.dart';
@@ -16,19 +16,13 @@ import '../../../models/inquiry.dart';
 /// its validator agree with the rule that will actually reject the request.
 const int kInquiryMessageMax = 500;
 
-/// Required, non-blank, at most [kInquiryMessageMax] characters.
+/// Optional, at most [kInquiryMessageMax] characters.
 ///
-/// The whitespace-only check is separate from the emptiness check because
-/// `"   "` passes a `isEmpty` test and is still a blank inquiry — the server
-/// rejects it with `not_regex`, and a buyer who typed only spaces deserves the
-/// same answer locally instead of a round trip to learn it.
+/// An empty field is valid: the interest form records the structured
+/// preferences and does not require prose. Whitespace-only input is treated as
+/// empty by the service layer rather than shown as an error.
 String? validateInquiryMessage(String? value) {
   final String text = value ?? '';
-  if (text.trim().isEmpty) {
-    return text.isEmpty
-        ? 'Please enter a message for the seller.'
-        : 'A message cannot be only spaces.';
-  }
   if (text.length > kInquiryMessageMax) {
     return 'A message may be at most $kInquiryMessageMax characters.';
   }
@@ -56,13 +50,10 @@ String? validateInquiryCollectionMethod(InquiryCollectionMethod? value) {
   return null;
 }
 
-/// Required: the buyer must choose a collection-date option.
+/// Optional: the buyer may leave the collection date unanswered.
 String? validateInquiryCollectionDateOption(
   InquiryCollectionDateOption? value,
 ) {
-  if (value == null) {
-    return 'Please choose a preferred collection date.';
-  }
   return null;
 }
 

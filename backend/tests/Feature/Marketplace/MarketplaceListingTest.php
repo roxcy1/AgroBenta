@@ -610,8 +610,9 @@ class MarketplaceListingTest extends TestCase
                     'listings' => [
                         '*' => [
                             'id', 'seller', 'livestock_type', 'breed', 'age_value',
-                            'age_unit', 'gender', 'weight_value', 'weight_unit',
-                            'quantity', 'asking_price', 'location', 'health_status',
+                            'age_unit', 'age_information', 'gender', 'weight_value',
+                            'weight_unit', 'weight_information', 'quantity',
+                            'asking_price', 'location', 'health_status',
                             'vaccination', 'short_description', 'additional_notes',
                             'photos', 'status', 'created_at', 'updated_at',
                         ],
@@ -826,8 +827,10 @@ class MarketplaceListingTest extends TestCase
         $this->createListing($this->seller, [
             'age_value' => null,
             'age_unit' => null,
+            'age_information' => null,
             'gender' => null,
             'weight_value' => null,
+            'weight_information' => null,
             'health_status' => null,
             'vaccination' => null,
             'additional_notes' => null,
@@ -835,7 +838,7 @@ class MarketplaceListingTest extends TestCase
 
         $listing = $this->browse()->assertOk()->json('data.listings.0');
 
-        foreach (['age_value', 'age_unit', 'gender', 'weight_value', 'health_status', 'vaccination', 'additional_notes'] as $key) {
+        foreach (['age_value', 'age_unit', 'age_information', 'gender', 'weight_value', 'weight_information', 'health_status', 'vaccination', 'additional_notes'] as $key) {
             $this->assertArrayHasKey($key, $listing);
             $this->assertNull($listing[$key]);
         }

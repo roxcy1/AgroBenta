@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/transaction.dart';
 import '../../../repositories/transaction_repository.dart';
 import 'transaction_detail_state.dart';
@@ -8,16 +11,32 @@ import 'transaction_detail_state.dart';
 /// Presentation logic for one transaction's detail screen.
 ///
 /// Scoped to a single transaction: the screen owns an instance and disposes
-/// it. [load] is idempotent and re-entrant-safe; [cancel] guards on the
-/// pending state and keeps the loaded record on screen while in flight.
-///
-/// There is deliberately **no `complete` method**. The backend answers that
-/// transition with 501 (OQ-15) and the client hides the affordance entirely.
+/// it. [load] is idempotent and re-entrant-safe; [cancel] and
+/// [performAction] guard on the server-permitted actions and keep the loaded
+/// record on screen while in flight.
 class TransactionDetailController extends ChangeNotifier {
-  TransactionDetailController(this._repository, this.transactionId);
+  TransactionDetailController(
+    this._repository,
+    this.transactionId, {
+    this.realtimeEvents,
+    this.connection,
+  }) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _connectionSubscription = connection?.listen(_onConnectionChanged);
+  }
 
   final TransactionRepository _repository;
   final int transactionId;
+
+  /// The session's decoded events. A change to *this* transaction re-loads the
+  /// detail; another transaction's event is ignored.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  /// Connection changes; a reconnect re-fetches to recover a missed change.
+  final Stream<bool>? connection;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
 
   TransactionDetailState _state = const TransactionDetailState();
   TransactionDetailState get state => _state;
@@ -25,6 +44,7 @@ class TransactionDetailController extends ChangeNotifier {
   bool _disposed = false;
   bool _inFlight = false;
   bool _cancelling = false;
+  bool _actionInFlight = false;
 
   /// Fetches the transaction from `GET /transactions/{id}`.
   Future<void> load() async {
@@ -84,7 +104,10 @@ class TransactionDetailController extends ChangeNotifier {
   /// irreversible, so the screen confirms before calling this.
   Future<bool> cancel() async {
     final Transaction? current = _state.transaction;
-    if (_cancelling || current == null || !current.isPending) {
+    if (_cancelling ||
+        _actionInFlight ||
+        current == null ||
+        !current.canCancel) {
       return false;
     }
 
@@ -143,6 +166,104 @@ class TransactionDetailController extends ChangeNotifier {
     }
   }
 
+  /// Performs one server-permitted fulfillment action.
+  ///
+  /// The action is re-checked against the loaded record's `permitted_actions`
+  /// so a stale button cannot send a request the server no longer allows. The
+  /// updated record returned by the server replaces the current one, which is
+  /// what refreshes the available next action.
+  Future<bool> performAction(TransactionFulfillmentAction action) async {
+    final Transaction? current = _state.transaction;
+    if (_actionInFlight ||
+        _cancelling ||
+        current == null ||
+        !current.permits(action.value)) {
+      return false;
+    }
+
+    _actionInFlight = true;
+    _set(
+      TransactionDetailState(
+        status: TransactionDetailStatus.updating,
+        transaction: current,
+        activeAction: action,
+      ),
+    );
+
+    try {
+      final Transaction updated = await _repository.performFulfillmentAction(
+        transactionId,
+        action,
+      );
+      if (_disposed) {
+        return false;
+      }
+      _set(
+        TransactionDetailState(
+          status: TransactionDetailStatus.ready,
+          transaction: updated,
+        ),
+      );
+      return true;
+    } on ApiException catch (error) {
+      if (_disposed) {
+        return false;
+      }
+
+      // A 409 means another party changed the record or the stage is stale.
+      // Reload first, then surface a notice beside the authoritative state.
+      if (error.kind == ApiErrorKind.conflict) {
+        await load();
+        _showActionNotice(
+          'This transaction changed. The latest state is shown.',
+        );
+        return false;
+      }
+
+      if (error.kind == ApiErrorKind.notFound) {
+        await load();
+        return false;
+      }
+
+      _set(
+        TransactionDetailState(
+          status: TransactionDetailStatus.ready,
+          transaction: current,
+          actionErrorMessage: error.message,
+        ),
+      );
+      return false;
+    } on Object {
+      if (_disposed) {
+        return false;
+      }
+      _set(
+        TransactionDetailState(
+          status: TransactionDetailStatus.ready,
+          transaction: current,
+          actionErrorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
+      return false;
+    } finally {
+      _actionInFlight = false;
+    }
+  }
+
+  /// Discards the fulfillment-action notice after it has been shown.
+  void clearActionError() {
+    final Transaction? current = _state.transaction;
+    if (_state.actionErrorMessage == null || current == null) {
+      return;
+    }
+    _set(
+      TransactionDetailState(
+        status: TransactionDetailStatus.ready,
+        transaction: current,
+      ),
+    );
+  }
+
   /// Discards the cancel notice after it has been shown.
   void clearCancelError() {
     final Transaction? current = _state.transaction;
@@ -157,6 +278,21 @@ class TransactionDetailController extends ChangeNotifier {
     );
   }
 
+  /// Shows a notice over the current ready record after a conflicting action.
+  void _showActionNotice(String message) {
+    final Transaction? current = _state.transaction;
+    if (_disposed || current == null) {
+      return;
+    }
+    _set(
+      TransactionDetailState(
+        status: TransactionDetailStatus.ready,
+        transaction: current,
+        actionErrorMessage: message,
+      ),
+    );
+  }
+
   void _set(TransactionDetailState next) {
     if (_disposed) {
       return;
@@ -165,8 +301,31 @@ class TransactionDetailController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Re-load only when the event names this transaction, so another record's
+  /// update does not re-fetch the open detail.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name != 'transaction.created' &&
+        event.name != 'transaction.updated') {
+      return;
+    }
+    if (event.data['transaction_id'] == transactionId) {
+      unawaited(load());
+    }
+  }
+
+  /// A reconnect may have missed a change to this transaction.
+  void _onConnectionChanged(bool connected) {
+    if (connected) {
+      unawaited(load());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
     _disposed = true;
     super.dispose();
   }

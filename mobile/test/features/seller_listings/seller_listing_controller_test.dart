@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:agrobenta_mobile/features/seller_listings/state/listing_photo_item.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_controller.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_draft.dart';
+import 'package:agrobenta_mobile/models/ai_price_estimate.dart';
 import 'package:agrobenta_mobile/models/listing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -465,6 +466,147 @@ void main() {
       );
       expect(harness.controller.state.actionErrorMessage, isNotNull);
       expect(harness.controller.state.action.name, 'none');
+    });
+  });
+
+  group('price suggestion', () {
+    test('publishes an ok estimate and never changes asking_price', () async {
+      final harness = buildRecordedController((RecordedRequest request) async {
+        if (request.method == 'GET') {
+          return sellerListingListResponse(
+            listings: <Map<String, dynamic>>[
+              listingJson(id: 42, status: 'draft', askingPrice: '42500.00'),
+            ],
+          );
+        }
+        return aiPriceSuggestionResponse(
+          estimate: aiPriceEstimateJson(listingId: 42),
+        );
+      });
+      addTearDown(harness.controller.dispose);
+      await harness.controller.loadInitial();
+
+      final PriceSuggestionResult? result = await harness.controller
+          .requestPriceSuggestion(42);
+
+      expect(result?.outcome, PriceSuggestionOutcome.ok);
+      expect(result?.estimate?.estimatedValue, '9798.00');
+      expect(result?.estimate?.modelVersion, 'v3-targeted');
+      expect(result?.estimate?.provenance, 'synthetic');
+      expect(
+        harness.controller.state.priceSuggestion?.outcome,
+        PriceSuggestionOutcome.ok,
+      );
+      expect(harness.controller.state.findListing(42)?.askingPrice, '42500.00');
+
+      final RecordedRequest sent = harness.recorded.last;
+      expect(sent.method, 'POST');
+      expect(sent.apiPath, '/seller/listings/42/price-suggestion');
+      expect(sent.request.body, isEmpty);
+    });
+
+    test('publishes a warning with its warnings', () async {
+      final harness = buildRecordedController(
+        (_) async => aiPriceSuggestionResponse(
+          estimate: aiPriceEstimateJson(
+            status: 'warning',
+            warnings: <String>['Outside the typical age-band range.'],
+            reasonCodes: <String>['outside_typical_age_weight'],
+          ),
+        ),
+      );
+      addTearDown(harness.controller.dispose);
+
+      final PriceSuggestionResult? result = await harness.controller
+          .requestPriceSuggestion(7);
+
+      expect(result?.outcome, PriceSuggestionOutcome.warning);
+      expect(result?.warnings, <String>['Outside the typical age-band range.']);
+      expect(result?.reasonCodes, <String>['outside_typical_age_weight']);
+    });
+
+    test('surfaces withheld metadata from a structured 422', () async {
+      final harness = buildRecordedController(
+        (_) async => aiPriceSuggestionErrorResponse(
+          status: 'withheld',
+          warnings: <String>['Outside the supported model envelope.'],
+          reasonCodes: <String>['insufficient_model_support'],
+        ),
+      );
+      addTearDown(harness.controller.dispose);
+
+      final PriceSuggestionResult? result = await harness.controller
+          .requestPriceSuggestion(7);
+
+      expect(result?.outcome, PriceSuggestionOutcome.withheld);
+      expect(result?.hasEstimate, isFalse);
+      expect(result?.warnings, <String>[
+        'Outside the supported model envelope.',
+      ]);
+      expect(result?.reasonCodes, <String>['insufficient_model_support']);
+    });
+
+    test(
+      'surfaces unavailable as retryable and never invents a price',
+      () async {
+        final harness = buildRecordedController(
+          (_) async => aiPriceSuggestionErrorResponse(
+            status: 'unavailable',
+            reasonCodes: <String>['provider_unavailable'],
+            message: 'The price suggestion service is unavailable.',
+            statusCode: 503,
+          ),
+        );
+        addTearDown(harness.controller.dispose);
+
+        final PriceSuggestionResult? result = await harness.controller
+            .requestPriceSuggestion(7);
+
+        expect(result?.outcome, PriceSuggestionOutcome.unavailable);
+        expect(result?.canRetry, isTrue);
+        expect(result?.hasEstimate, isFalse);
+        expect(result?.reasonCodes, <String>['provider_unavailable']);
+      },
+    );
+
+    test(
+      'a second request while one is in flight is refused locally',
+      () async {
+        final Completer<http.Response> completion = Completer<http.Response>();
+        final harness = buildRecordedController((_) => completion.future);
+        addTearDown(harness.controller.dispose);
+
+        final Future<PriceSuggestionResult?> first = harness.controller
+            .requestPriceSuggestion(7);
+        final PriceSuggestionResult? second = await harness.controller
+            .requestPriceSuggestion(7);
+
+        expect(second, isNull);
+        completion.complete(aiPriceSuggestionResponse());
+        await first;
+
+        expect(
+          harness.recorded.where(
+            (RecordedRequest request) =>
+                request.apiPath == '/seller/listings/7/price-suggestion',
+          ),
+          hasLength(1),
+        );
+      },
+    );
+
+    test('clearPriceSuggestion removes the current result', () async {
+      final harness = buildRecordedController(
+        (_) async => aiPriceSuggestionResponse(),
+      );
+      addTearDown(harness.controller.dispose);
+
+      await harness.controller.requestPriceSuggestion(7);
+      expect(harness.controller.state.priceSuggestion, isNotNull);
+
+      harness.controller.clearPriceSuggestion();
+
+      expect(harness.controller.state.priceSuggestion, isNull);
     });
   });
 
@@ -958,24 +1100,21 @@ void main() {
   });
 
   group('lifecycle rules', () {
-    test(
-      'the draft list is immutable, so a repeat save sends the same body',
-      () {
-        // A draft is a value. If it were mutable, a body could be built from fields
-        // that have since changed on screen.
-        const SellerListingDraft first = SellerListingDraft(
-          livestockType: 'cattle',
-          quantity: '4',
-        );
-        final SellerListingDraft second = SellerListingDraft(
-          livestockType: 'goat',
-          quantity: '9',
-        );
+    test('the draft list is immutable, so a repeat save sends the same body', () {
+      // A draft is a value. If it were mutable, a body could be built from fields
+      // that have since changed on screen.
+      const SellerListingDraft first = SellerListingDraft(
+        livestockType: 'cattle',
+        quantity: '4',
+      );
+      final SellerListingDraft second = SellerListingDraft(
+        livestockType: 'goat',
+        quantity: '9',
+      );
 
-        expect(first.toRequestBody()['livestock_type'], 'cattle');
-        expect(second.toRequestBody()['livestock_type'], 'goat');
-      },
-    );
+      expect(first.toRequestBody()['livestock_type'], 'cattle');
+      expect(second.toRequestBody()['livestock_type'], 'goat');
+    });
   });
 }
 

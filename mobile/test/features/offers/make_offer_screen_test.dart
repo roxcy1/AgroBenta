@@ -11,6 +11,21 @@ import 'package:http/http.dart' as http;
 import '../../support/auth_fakes.dart';
 import '../../support/offer_fakes.dart';
 
+/// A date that is always after the form's "tomorrow" floor, so the
+/// expired-preference fallback never fires. Built from the wall clock rather
+/// than a literal, so the test cannot go stale as time passes.
+DateTime futurePickupDate() {
+  final DateTime now = DateTime.now();
+  return DateTime(now.year, now.month, now.day + 30);
+}
+
+/// The `yyyy-MM-dd` shape the API validates and `OfferService` sends.
+String isoDate(DateTime date) {
+  final String month = date.month.toString().padLeft(2, '0');
+  final String day = date.day.toString().padLeft(2, '0');
+  return '${date.year.toString().padLeft(4, '0')}-$month-$day';
+}
+
 void main() {
   late FakeTokenStore tokenStore;
   late List<RecordedRequest> recorded;
@@ -48,7 +63,7 @@ void main() {
             askingPrice: '50000.00',
             paymentMethod: InquiryPaymentMethod.gcash,
             collectionMethod: InquiryCollectionMethod.farmPickup,
-            preferredSchedule: preferredSchedule ?? DateTime(2026, 11, 10),
+            preferredSchedule: preferredSchedule ?? futurePickupDate(),
           ),
         ),
       ),
@@ -100,8 +115,10 @@ void main() {
   testWidgets('sends the editable terms with the offer', (
     WidgetTester tester,
   ) async {
+    final DateTime pickup = futurePickupDate();
     await pumpForm(
       tester,
+      preferredSchedule: pickup,
       handler: (_) async => offerCreatedResponse(
         offer: offerJson(id: 9, proposedAmount: '47000.00'),
       ),
@@ -122,7 +139,7 @@ void main() {
     // Prefilled terms travel unchanged because the seller kept them.
     expect(post.body['payment_method'], 'gcash');
     expect(post.body['collection_method'], 'farm_pickup');
-    expect(post.body['proposed_pickup_date'], '2026-11-10');
+    expect(post.body['proposed_pickup_date'], isoDate(pickup));
 
     expect(find.text('Offer sent'), findsOneWidget);
   });

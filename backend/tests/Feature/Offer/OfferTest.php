@@ -9,7 +9,9 @@ use App\Models\Listing;
 use App\Models\Offer;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Notifications\TransactionCreated;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -375,6 +377,57 @@ class OfferTest extends TestCase
         $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(200);
 
         $this->assertSame(1, Transaction::query()->count());
+        $this->assertSame(0, $listing->refresh()->quantity);
+        $this->assertTrue((bool) Transaction::query()->sole()->inventory_reserved);
+    }
+
+    #[Test]
+    public function two_accepted_offers_cannot_reserve_the_same_last_head(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 1]);
+        $firstInquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+        $secondInquiry = $this->createInquiry($this->stranger, $this->seller, $listing);
+
+        $firstOfferId = $this->postOffer([
+            'inquiry_id' => $firstInquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $secondOfferId = $this->postOffer([
+            'inquiry_id' => $secondInquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 49000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->postOfferAction('accept', $firstOfferId, $this->buyer)
+            ->assertStatus(200);
+
+        $this->postOfferAction('accept', $secondOfferId, $this->stranger)
+            ->assertStatus(409);
+
+        $this->assertSame(1, Transaction::query()->count());
+        $this->assertSame(0, $listing->refresh()->quantity);
+    }
+
+    #[Test]
+    public function accepting_an_offer_notifies_the_seller(): void
+    {
+        Notification::fake();
+
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->postOfferAction('accept', $offerId, $this->buyer)
+            ->assertStatus(200);
+
+        Notification::assertSentTo($this->seller, TransactionCreated::class);
     }
 
     #[Test]

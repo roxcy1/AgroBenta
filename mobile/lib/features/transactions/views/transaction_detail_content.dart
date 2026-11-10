@@ -8,6 +8,8 @@ import '../../../models/transaction.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
+import '../state/transaction_timeline.dart';
+import '../widgets/transaction_progress_timeline.dart';
 import '../widgets/transaction_status_badge.dart';
 
 /// What the detail screen shows once the transaction is confirmed visible.
@@ -33,10 +35,15 @@ class TransactionDetailContent extends StatelessWidget {
   const TransactionDetailContent({
     required this.transaction,
     required this.isCancelling,
+    required this.isUpdating,
+    required this.activeAction,
     required this.cancelErrorMessage,
+    required this.actionErrorMessage,
     required this.canCancel,
     required this.onCancel,
     required this.onDismissCancelError,
+    required this.onDismissActionError,
+    required this.onAction,
     required this.onMessageCounterparty,
     required this.onViewStatus,
     super.key,
@@ -44,10 +51,15 @@ class TransactionDetailContent extends StatelessWidget {
 
   final Transaction transaction;
   final bool isCancelling;
+  final bool isUpdating;
+  final TransactionFulfillmentAction? activeAction;
   final String? cancelErrorMessage;
+  final String? actionErrorMessage;
   final bool canCancel;
   final VoidCallback onCancel;
   final VoidCallback onDismissCancelError;
+  final VoidCallback onDismissActionError;
+  final ValueChanged<TransactionFulfillmentAction> onAction;
 
   /// Opens the existing conversation with the counterparty. The counterparty
   /// id comes from the payload, so this routes to a real, server-identifiable
@@ -68,6 +80,13 @@ class TransactionDetailContent extends StatelessWidget {
         ? 'Message buyer'
         : 'Message seller';
     final String recordNoun = isSeller ? 'sale' : 'request';
+    final bool isBusy = isCancelling || isUpdating;
+    final bool hasUnknownStage = transaction.hasUnknownFulfillmentStatus;
+    final TransactionFulfillmentAction? nextSellerAction = hasUnknownStage
+        ? null
+        : transaction.nextSellerAction;
+    final bool canConfirmReceived =
+        !hasUnknownStage && transaction.canConfirmReceived;
 
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -91,13 +110,22 @@ class TransactionDetailContent extends StatelessWidget {
               _RequestHeader(transaction: transaction),
               if (cancelErrorMessage != null) ...<Widget>[
                 const SizedBox(height: AppSpacing.md),
-                _CancelErrorNotice(
+                _ActionErrorNotice(
                   message: cancelErrorMessage!,
                   onDismiss: onDismissCancelError,
                 ),
               ],
+              if (actionErrorMessage != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                _ActionErrorNotice(
+                  message: actionErrorMessage!,
+                  onDismiss: onDismissActionError,
+                ),
+              ],
               const SizedBox(height: AppSpacing.lg),
               _AmountCard(total: total, transaction: transaction),
+              const SizedBox(height: AppSpacing.md),
+              _CollectionCard(transaction: transaction),
               const SizedBox(height: AppSpacing.md),
               SectionCard(
                 title: counterpartyLabel,
@@ -174,14 +202,51 @@ class TransactionDetailContent extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               _InquiryCard(isSeller: isSeller),
               const SizedBox(height: AppSpacing.lg),
-              // Cancel is offered to buyer and seller alike, pending-only.
-              // Terminal records get an immutable notice, never a button.
-              // There is no "Mark complete" anywhere (OQ-15).
+              if (nextSellerAction != null) ...<Widget>[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: isBusy ? null : () => onAction(nextSellerAction),
+                    child: activeAction == nextSellerAction
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(nextSellerAction.label),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              if (canConfirmReceived) ...<Widget>[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: isBusy
+                        ? null
+                        : () => onAction(
+                            TransactionFulfillmentAction.confirmReceived,
+                          ),
+                    icon:
+                        activeAction ==
+                            TransactionFulfillmentAction.confirmReceived
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text('Confirm Received'),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
               if (canCancel)
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: isCancelling ? null : onCancel,
+                    onPressed: isBusy ? null : onCancel,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
                       side: const BorderSide(color: AppColors.error),
@@ -194,7 +259,21 @@ class TransactionDetailContent extends StatelessWidget {
                         : Text('Cancel $recordNoun'),
                   ),
                 )
-              else
+              else if (hasUnknownStage)
+                Text(
+                  'Fulfillment actions are unavailable until the app is updated.',
+                  style: theme.textTheme.bodySmall,
+                )
+              else if (transaction.isPending &&
+                  nextSellerAction == null &&
+                  !canConfirmReceived)
+                Text(
+                  isSeller
+                      ? 'Waiting for the buyer to confirm receipt.'
+                      : 'Waiting for the seller to update the next fulfillment step.',
+                  style: theme.textTheme.bodySmall,
+                )
+              else if (!transaction.isPending)
                 Text(
                   'This $recordNoun is ${_statusWord(transaction.status)} and '
                   'cannot be changed.',
@@ -282,6 +361,87 @@ class _AmountCard extends StatelessWidget {
   }
 }
 
+/// The recorded collection arrangement and preferred date.
+///
+/// These are the snapshotted preferences, not live logistics. No location,
+/// rider, tracking or delivery fee is invented because the transaction record
+/// does not carry them.
+class _CollectionCard extends StatelessWidget {
+  const _CollectionCard({required this.transaction});
+
+  final Transaction transaction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final TransactionTerms terms = transaction.terms;
+    final DateTime? pickupDate = terms.pickupDate;
+
+    return SectionCard(
+      title: 'Collection',
+      children: <Widget>[
+        DetailRow(label: 'Method', value: terms.collectionMethodLabel),
+        if (pickupDate != null)
+          DetailRow(
+            label: 'Preferred date',
+            value: AppFormatters.formatDate(pickupDate),
+          ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          terms.isDelivery
+              ? 'Delivery is arranged directly between the buyer and seller. '
+                    'AgroBenta does not provide tracking or a rider.'
+              : 'Pickup and transport are arranged directly between the buyer '
+                    'and seller. AgroBenta does not provide transport.',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+}
+
+/// A safe state for a fulfillment stage this app version does not know.
+class _UnknownFulfillmentNotice extends StatelessWidget {
+  const _UnknownFulfillmentNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.warningSurface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(Icons.info_outline, size: 18, color: AppColors.warning),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Status unavailable', style: theme.textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'The server returned a fulfillment status this version of '
+                  'the app does not recognize. Update the app to see the '
+                  'current stage. No action is shown until then.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The real lifecycle state, with a next step that is true of the workflow.
 class _StatusCard extends StatelessWidget {
   const _StatusCard({required this.transaction, required this.onViewStatus});
@@ -293,20 +453,26 @@ class _StatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final bool isSeller = transaction.role == TransactionRole.seller;
+    final bool hasUnknownStage = transaction.hasUnknownFulfillmentStatus;
+    final TransactionFulfillmentStatus? stage =
+        transaction.effectiveFulfillmentStatus;
 
-    final String explanation = switch (transaction.status) {
-      TransactionStatus.pending =>
-        isSeller
-            ? 'A sale is not yet complete. Either party can still cancel it.'
-            : 'A purchase request is not yet a completed sale. Either party can '
-                  'still cancel it.',
-      TransactionStatus.completed =>
-        'This sale is complete. The record can no longer change.',
-      TransactionStatus.cancelled =>
-        isSeller
-            ? 'This sale was cancelled. The record can no longer change.'
-            : 'This request was cancelled. The record can no longer change.',
-    };
+    final String explanation = hasUnknownStage
+        ? 'The server returned a fulfillment status this version of the app '
+              'does not recognize. The current stage cannot be displayed '
+              'safely until the app is updated.'
+        : switch (transaction.status) {
+            TransactionStatus.pending =>
+              isSeller
+                  ? _pendingExplanationForSeller(stage)
+                  : _pendingExplanationForBuyer(stage),
+            TransactionStatus.completed =>
+              'This sale is complete. The record can no longer change.',
+            TransactionStatus.cancelled =>
+              isSeller
+                  ? 'This sale was cancelled. The record can no longer change.'
+                  : 'This request was cancelled. The record can no longer change.',
+          };
 
     return Container(
       width: double.infinity,
@@ -326,8 +492,35 @@ class _StatusCard extends StatelessWidget {
               TransactionStatusBadge(status: transaction.status),
             ],
           ),
+          if (transaction.isPending &&
+              stage != null &&
+              !hasUnknownStage) ...<Widget>[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Fulfillment: ${stage.label}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.xs),
           Text(explanation, style: theme.textTheme.bodySmall),
+          const SizedBox(height: AppSpacing.md),
+          if (hasUnknownStage)
+            const _UnknownFulfillmentNotice()
+          else
+            TransactionProgressTimeline(
+              steps: TransactionTimeline.fulfillmentStepsFor(transaction),
+            ),
+          if (transaction.hasLegacyFulfillment) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'This older transaction has no recorded fulfillment stage. The '
+              'tracker starts at Confirmed.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
             width: double.infinity,
@@ -340,6 +533,50 @@ class _StatusCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _pendingExplanationForBuyer(
+    TransactionFulfillmentStatus? stage,
+  ) {
+    return switch (stage) {
+      TransactionFulfillmentStatus.confirmed =>
+        'The sale is confirmed. Waiting for the seller to start preparing.',
+      TransactionFulfillmentStatus.preparing =>
+        'The seller is preparing the livestock.',
+      TransactionFulfillmentStatus.readyForPickup =>
+        'The livestock is ready. Arrange the handover with the seller.',
+      TransactionFulfillmentStatus.pickedUp =>
+        'The seller reported the handover. Confirm receipt when you have the livestock.',
+      TransactionFulfillmentStatus.onTheWay =>
+        'The seller has dispatched the livestock.',
+      TransactionFulfillmentStatus.delivered =>
+        'The seller reported delivery. Confirm receipt when you have the livestock.',
+      TransactionFulfillmentStatus.completed =>
+        'Waiting for the final record update.',
+      null => 'The fulfillment stage is not recorded for this transaction.',
+    };
+  }
+
+  static String _pendingExplanationForSeller(
+    TransactionFulfillmentStatus? stage,
+  ) {
+    return switch (stage) {
+      TransactionFulfillmentStatus.confirmed =>
+        'The sale is confirmed. Start preparing when you are ready.',
+      TransactionFulfillmentStatus.preparing =>
+        'Prepare the livestock for pickup or delivery.',
+      TransactionFulfillmentStatus.readyForPickup =>
+        'Marked ready for pickup. Confirm handover when the buyer collects it.',
+      TransactionFulfillmentStatus.pickedUp =>
+        'Handover reported. Waiting for the buyer to confirm receipt.',
+      TransactionFulfillmentStatus.onTheWay =>
+        'The livestock is on the way to the buyer.',
+      TransactionFulfillmentStatus.delivered =>
+        'Delivery reported. Waiting for the buyer to confirm receipt.',
+      TransactionFulfillmentStatus.completed =>
+        'Waiting for the final record update.',
+      null => 'The fulfillment stage is not recorded for this transaction.',
+    };
   }
 }
 
@@ -375,9 +612,9 @@ class _InquiryCard extends StatelessWidget {
   }
 }
 
-/// A cancel failure above the record, which stays on screen.
-class _CancelErrorNotice extends StatelessWidget {
-  const _CancelErrorNotice({required this.message, required this.onDismiss});
+/// A cancel/action failure above the record, which stays on screen.
+class _ActionErrorNotice extends StatelessWidget {
+  const _ActionErrorNotice({required this.message, required this.onDismiss});
 
   final String message;
   final VoidCallback onDismiss;

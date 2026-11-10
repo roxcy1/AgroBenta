@@ -80,9 +80,11 @@ class SellerListingPhotoTest extends TestCase
             'breed' => 'Angus',
             'age_value' => 2,
             'age_unit' => 'year',
+            'age_information' => 'known',
             'gender' => 'male',
             'weight_value' => 500,
             'weight_unit' => 'kg',
+            'weight_information' => 'measured',
             'quantity' => 1,
             'asking_price' => 50000.00,
             'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
@@ -349,6 +351,12 @@ class SellerListingPhotoTest extends TestCase
                 'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'asking_price' => 50000,
                 'quantity' => 1,
+                'age_value' => 2,
+                'age_unit' => 'year',
+                'age_information' => 'known',
+                'weight_value' => 500,
+                'weight_unit' => 'kg',
+                'weight_information' => 'measured',
                 'photos' => array_fill(0, 11, 'photo.jpg'),
             ])
             ->assertStatus(422)
@@ -366,6 +374,12 @@ class SellerListingPhotoTest extends TestCase
                 'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'asking_price' => 50000,
                 'quantity' => 1,
+                'age_value' => 2,
+                'age_unit' => 'year',
+                'age_information' => 'known',
+                'weight_value' => 500,
+                'weight_unit' => 'kg',
+                'weight_information' => 'measured',
                 'photos' => [],
             ])
             ->assertCreated()
@@ -379,6 +393,12 @@ class SellerListingPhotoTest extends TestCase
                 'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'asking_price' => 50000,
                 'quantity' => 1,
+                'age_value' => 2,
+                'age_unit' => 'year',
+                'age_information' => 'known',
+                'weight_value' => 500,
+                'weight_unit' => 'kg',
+                'weight_information' => 'measured',
                 'photos' => ['photo.jpg'],
             ])
             ->assertStatus(422)
@@ -564,6 +584,12 @@ class SellerListingPhotoTest extends TestCase
                 'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'asking_price' => 50000,
                 'quantity' => 1,
+                'age_value' => 2,
+                'age_unit' => 'year',
+                'age_information' => 'known',
+                'weight_value' => 500,
+                'weight_unit' => 'kg',
+                'weight_information' => 'measured',
                 'photos' => ['photo1.jpg', 'photo2.jpg'],
             ])
             ->assertStatus(422)
