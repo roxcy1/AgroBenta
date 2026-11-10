@@ -6,6 +6,7 @@ use App\Enums\FulfillmentStatus;
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -180,12 +181,21 @@ class TransactionRepository
     }
 
     /**
-     * Mark a transaction completed after the buyer confirms receipt.
+     * Mark a transaction completed after the buyer confirms receipt, recording
+     * the completion time and the historical receipt snapshot in the same
+     * write.
+     *
+     * @param  array<string, mixed>  $snapshot
      */
-    public function complete(Transaction $transaction): Transaction
-    {
+    public function complete(
+        Transaction $transaction,
+        array $snapshot,
+        CarbonInterface $completedAt,
+    ): Transaction {
         $transaction->status = TransactionStatus::Completed;
         $transaction->fulfillment_status = FulfillmentStatus::Completed;
+        $transaction->completed_at = $completedAt;
+        $transaction->receipt_snapshot = $snapshot;
         $transaction->save();
 
         return $transaction->refresh();
@@ -215,6 +225,21 @@ class TransactionRepository
             ->where('listing_id', $listingId)
             ->where('status', TransactionStatus::Pending)
             ->where('inventory_reserved', true)
+            ->exists();
+    }
+
+    /**
+     * Whether a listing has a completed transaction.
+     *
+     * Completed sales are historical records and must not disappear with the
+     * listing. The seller-listing delete path asks this before destroying a
+     * row, so the database's cascade cannot take a receipt with it.
+     */
+    public function hasCompletedForListing(int $listingId): bool
+    {
+        return Transaction::query()
+            ->where('listing_id', $listingId)
+            ->where('status', TransactionStatus::Completed)
             ->exists();
     }
 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
+import 'package:agrobenta_mobile/features/receipts/state/transaction_receipt_controller.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transaction_detail_controller.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transactions_controller.dart';
 import 'package:agrobenta_mobile/models/transaction.dart';
@@ -125,6 +126,54 @@ Map<String, dynamic> transactionPageJson({
 const Map<String, String> _jsonHeaders = <String, String>{
   'content-type': 'application/json',
 };
+
+/// A `TransactionReceiptResource` payload exactly as the backend serialises one.
+///
+/// Field names and shapes copy `backend/app/Http/Resources/
+/// TransactionReceiptResource.php`. No emails are present by design.
+Map<String, dynamic> transactionReceiptJson({
+  int version = 1,
+  String reference = 'TRX-001',
+  Object? completedAt = '2026-11-10T08:15:00.000000Z',
+  String buyerName = 'Pedro Reyes',
+  String sellerName = 'Rizal Farms',
+  String livestockType = 'cattle',
+  String breed = 'Angus',
+  int quantity = 1,
+  String totalAmount = '42500.00',
+  String? paymentMethod = 'cash',
+  String? collectionMethod = 'farm_pickup',
+  String status = 'completed',
+}) {
+  return <String, dynamic>{
+    'version': version,
+    'reference': reference,
+    'completed_at': completedAt,
+    'buyer': <String, dynamic>{'name': buyerName},
+    'seller': <String, dynamic>{'name': sellerName},
+    'listing': <String, dynamic>{
+      'livestock_type': livestockType,
+      'breed': breed,
+    },
+    'quantity': quantity,
+    'total_amount': totalAmount,
+    'payment_method': paymentMethod,
+    'collection_method': collectionMethod,
+    'status': status,
+  };
+}
+
+/// A successful `GET /api/transactions/{id}/receipt` HTTP response.
+http.Response transactionReceiptResponse({
+  Map<String, dynamic>? receipt,
+  int statusCode = 200,
+}) {
+  return http.Response(
+    jsonEncode(successEnvelope(data: receipt ?? transactionReceiptJson())),
+    statusCode,
+    headers: _jsonHeaders,
+  );
+}
 
 /// A successful `GET /api/transactions` HTTP response.
 http.Response transactionListResponse({
@@ -256,6 +305,19 @@ TransactionDetailController buildTransactionDetailController(
   List<RecordedRequest>? recorded,
 }) {
   return TransactionDetailController(
+    buildTransactionRepository(tokenStore, handler, recorded: recorded),
+    transactionId,
+  );
+}
+
+/// A receipt controller over a mock transport.
+TransactionReceiptController buildTransactionReceiptController(
+  FakeTokenStore tokenStore,
+  Future<http.Response> Function(RecordedRequest request) handler, {
+  int transactionId = 1,
+  List<RecordedRequest>? recorded,
+}) {
+  return TransactionReceiptController(
     buildTransactionRepository(tokenStore, handler, recorded: recorded),
     transactionId,
   );

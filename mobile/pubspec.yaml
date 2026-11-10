@@ -42,6 +42,7 @@ dependencies:
   # Laravel Reverb (Pusher protocol) WebSocket client for real-time updates.
   # Custom host/port, bearer-token channel auth, and automatic reconnection.
   pusher_reverb_flutter: ^0.0.10
+  gal: ^2.3.3
 
 dev_dependencies:
   flutter_test:

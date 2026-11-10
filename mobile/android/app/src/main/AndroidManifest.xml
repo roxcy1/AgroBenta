@@ -3,6 +3,11 @@
          network request at all. The debug and profile manifests also declare
          it, but those are not merged into a release build. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Saving a receipt on Android API <= 29 needs legacy external storage.
+         API 30+ writes through MediaStore and needs no broad permission. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
     <application
         android:label="AgroBenta"
         android:name="${applicationName}"

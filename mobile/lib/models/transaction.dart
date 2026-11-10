@@ -238,15 +238,38 @@ class TransactionTerms {
   bool get isDelivery => collectionMethod == 'seller_arranged_delivery';
 
   /// The buyer-facing label for the recorded collection preference.
-  String get collectionMethodLabel => switch (collectionMethod) {
-    'farm_pickup' => 'Personal Pickup',
-    'buyer_arranged_transportation' => 'Buyer-Arranged Transportation',
-    'seller_arranged_delivery' => 'Seller-Arranged Delivery',
-    'not_sure_yet' => 'Not Sure Yet',
-    'discuss_with_seller' => 'Discuss with seller',
-    _ => 'Not specified',
-  };
+  String get collectionMethodLabel =>
+      collectionMethodLabelFor(collectionMethod);
+
+  /// The buyer-facing label for the recorded payment preference.
+  String get paymentMethodLabel => paymentMethodLabelFor(paymentMethod);
 }
+
+/// The display label for a stored `collection_method` value.
+///
+/// Shared by the transaction terms and the receipt so the two surfaces cannot
+/// describe the same value differently. Unknown/null values are honest rather
+/// than guessed.
+String collectionMethodLabelFor(String? value) => switch (value) {
+  'farm_pickup' => 'Personal Pickup',
+  'buyer_arranged_transportation' => 'Buyer-Arranged Transportation',
+  'seller_arranged_delivery' => 'Seller-Arranged Delivery',
+  'not_sure_yet' => 'Not Sure Yet',
+  'discuss_with_seller' => 'Discuss with seller',
+  _ => 'Not specified',
+};
+
+/// The display label for a stored `payment_method` preference.
+///
+/// This is a preference, never a payment fact. A missing value is shown as
+/// "Not recorded" rather than assumed cash.
+String paymentMethodLabelFor(String? value) => switch (value) {
+  'cash' => 'Cash',
+  'gcash' => 'GCash',
+  'maya' => 'Maya',
+  'other' => 'Other / Discuss with seller',
+  _ => 'Not recorded',
+};
 
 /// One transaction, as the mobile surface returns it.
 ///

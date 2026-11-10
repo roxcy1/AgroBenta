@@ -1,6 +1,7 @@
 import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/services/transaction_service.dart';
 import 'package:agrobenta_mobile/models/transaction.dart';
+import 'package:agrobenta_mobile/models/transaction_receipt.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -73,4 +74,23 @@ void main() {
       expect(TransactionFulfillmentAction.tryFromValue('teleport'), isNull);
     },
   );
+
+  test('gets the receipt from its exact endpoint and parses it', () async {
+    final ApiClient client = ApiClient(
+      tokenStorage: tokenStore,
+      httpClient: MockClient((http.Request request) async {
+        recorded.add(RecordedRequest(request));
+        return transactionReceiptResponse(receipt: transactionReceiptJson());
+      }),
+    );
+
+    final TransactionReceipt receipt = await TransactionService(
+      client,
+    ).receipt(9);
+
+    expect(receipt.reference, 'TRX-001');
+    expect(recorded.single.method, 'GET');
+    expect(recorded.single.apiPath, '/transactions/9/receipt');
+    expect(recorded.single.query, isEmpty);
+  });
 }

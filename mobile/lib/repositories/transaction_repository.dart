@@ -1,6 +1,7 @@
 import '../core/constants/api_constants.dart';
 import '../models/transaction.dart';
 import '../models/transaction_page.dart';
+import '../models/transaction_receipt.dart';
 import '../services/transaction_service.dart';
 
 /// Orchestration for the caller's transactions.
@@ -46,6 +47,9 @@ class TransactionRepository {
 
   /// Fetches one transaction the caller is party to.
   Future<Transaction> detail(int id) => _service.detail(id);
+
+  /// Fetches the receipt of a completed transaction the caller is party to.
+  Future<TransactionReceipt> receipt(int id) => _service.receipt(id);
 
   /// Cancels a pending transaction. Either party, irreversible.
   Future<Transaction> cancel(int id) => _service.cancel(id);
