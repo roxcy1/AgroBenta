@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/conversation.dart';
 import '../../../repositories/messaging_repository.dart';
 import 'messaging_state.dart';
@@ -20,9 +23,17 @@ import 'messaging_state.dart';
 /// everything. If the list ever grows past a threshold, this controller is
 /// the one place that changes.
 class ConversationsController extends ChangeNotifier {
-  ConversationsController(this._repository);
+  ConversationsController(this._repository, {this.realtimeEvents}) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+  }
 
   final MessagingRepository _repository;
+
+  /// The session's decoded events. Message/inquiry/offer events move a
+  /// conversation preview (last message, unread count, latest offer).
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
 
   ConversationsState _state = const ConversationsState();
   ConversationsState get state => _state;
@@ -174,8 +185,21 @@ class ConversationsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Message/inquiry/offer events move a conversation preview, so re-fetch the
+  /// inbox. Other events (transactions, notifications) leave it unchanged.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name == 'message.sent' ||
+        event.name == 'inquiry.created' ||
+        event.name == 'offer.created' ||
+        event.name == 'offer.updated') {
+      unawaited(refresh());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
     _disposed = true;
     super.dispose();
   }

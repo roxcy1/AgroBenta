@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/inquiry.dart';
 import '../../../models/received_inquiry.dart';
@@ -41,7 +42,12 @@ class _ReceivedInquiriesScreenState extends State<ReceivedInquiriesScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = ReceivedInquiriesController(InquiryScope.readOf(context));
+    final realtime = RealtimeScope.maybeOf(context);
+    _controller = ReceivedInquiriesController(
+      InquiryScope.readOf(context),
+      realtimeEvents: realtime?.events,
+      connection: realtime?.connected,
+    );
     _scroll = ScrollController()..addListener(_onScroll);
     _controller.loadInitial();
   }

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/transaction.dart';
 import '../../../repositories/transaction_repository.dart';
 import 'transaction_detail_state.dart';
@@ -12,10 +15,28 @@ import 'transaction_detail_state.dart';
 /// [performAction] guard on the server-permitted actions and keep the loaded
 /// record on screen while in flight.
 class TransactionDetailController extends ChangeNotifier {
-  TransactionDetailController(this._repository, this.transactionId);
+  TransactionDetailController(
+    this._repository,
+    this.transactionId, {
+    this.realtimeEvents,
+    this.connection,
+  }) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _connectionSubscription = connection?.listen(_onConnectionChanged);
+  }
 
   final TransactionRepository _repository;
   final int transactionId;
+
+  /// The session's decoded events. A change to *this* transaction re-loads the
+  /// detail; another transaction's event is ignored.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  /// Connection changes; a reconnect re-fetches to recover a missed change.
+  final Stream<bool>? connection;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
 
   TransactionDetailState _state = const TransactionDetailState();
   TransactionDetailState get state => _state;
@@ -280,8 +301,31 @@ class TransactionDetailController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Re-load only when the event names this transaction, so another record's
+  /// update does not re-fetch the open detail.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name != 'transaction.created' &&
+        event.name != 'transaction.updated') {
+      return;
+    }
+    if (event.data['transaction_id'] == transactionId) {
+      unawaited(load());
+    }
+  }
+
+  /// A reconnect may have missed a change to this transaction.
+  void _onConnectionChanged(bool connected) {
+    if (connected) {
+      unawaited(load());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
     _disposed = true;
     super.dispose();
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/transaction.dart';
 import '../../../repositories/transaction_repository.dart';
@@ -58,12 +59,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     super.initState();
     // Read once: the repository identity never changes for the session.
     final TransactionRepository repository = TransactionScope.readOf(context);
+    final realtime = RealtimeScope.maybeOf(context);
     _controllers = <TransactionsFilter, TransactionsController>{
       for (final TransactionsFilter filter in TransactionsFilter.values)
         filter: TransactionsController(
           repository,
           filter.status,
           role: widget.role,
+          realtimeEvents: realtime?.events,
+          connection: realtime?.connected,
         ),
     };
     _controllers[TransactionsFilter.all]!.loadInitial();

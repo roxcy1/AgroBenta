@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/offer.dart';
 import '../../../repositories/offer_repository.dart';
 import 'offer_state.dart';
@@ -19,13 +22,31 @@ import 'offer_state.dart';
 /// updates the badge in place instead of requiring a second fetch, and a
 /// duplicate tap is prevented by [ChatOffersState.busyOfferId].
 class ChatOffersController extends ChangeNotifier {
-  ChatOffersController(this._repository, {required this.counterpartId});
+  ChatOffersController(
+    this._repository, {
+    required this.counterpartId,
+    this.realtimeEvents,
+    this.connection,
+  }) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _connectionSubscription = connection?.listen(_onConnectionChanged);
+  }
 
   final OfferRepository _repository;
 
   /// The other user in the thread. The list endpoint filters by counterpart,
   /// so this never widens to another buyer–seller pair.
   final int counterpartId;
+
+  /// The session's decoded events. When supplied, an offer created or updated
+  /// with this counterpart refreshes the open panel.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  /// Connection changes; a reconnect re-fetches to recover missed offers.
+  final Stream<bool>? connection;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
 
   ChatOffersState _state = const ChatOffersState();
   ChatOffersState get state => _state;
@@ -174,6 +195,27 @@ class ChatOffersController extends ChangeNotifier {
     _set(_state.copyWith(clearActionError: true));
   }
 
+  /// An offer created/updated in this buyer–seller pair refreshes the panel.
+  /// Scoped to the counterpart so another pair's offer never re-fetches it.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name != 'offer.created' && event.name != 'offer.updated') {
+      return;
+    }
+
+    final Object? buyerId = event.data['buyer_id'];
+    final Object? sellerId = event.data['seller_id'];
+    if (buyerId == counterpartId || sellerId == counterpartId) {
+      load();
+    }
+  }
+
+  /// A reconnect may have missed offers while the socket was down.
+  void _onConnectionChanged(bool connected) {
+    if (connected) {
+      load();
+    }
+  }
+
   void _begin(int offerId) {
     _set(_state.copyWith(busyOfferId: offerId, clearActionError: true));
   }
@@ -203,6 +245,10 @@ class ChatOffersController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
     _disposed = true;
     super.dispose();
   }

@@ -5,6 +5,7 @@ namespace App\Services\Transaction;
 use App\Enums\ActivityAction;
 use App\Enums\FulfillmentStatus;
 use App\Enums\TransactionStatus;
+use App\Events\TransactionUpdated;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\TransactionFulfillmentChanged;
@@ -158,6 +159,13 @@ class TransactionFulfillmentService
                 ));
             }
 
+            TransactionUpdated::dispatch(
+                $completed,
+                TransactionStatus::Completed->value,
+                FulfillmentStatus::Completed->value,
+                (int) $completed->seller_id,
+            );
+
             return $completed;
         });
     }
@@ -228,6 +236,13 @@ class TransactionFulfillmentService
                     $target,
                 ));
             }
+
+            TransactionUpdated::dispatch(
+                $updated,
+                TransactionStatus::Pending->value,
+                $target->value,
+                (int) $updated->buyer_id,
+            );
 
             return $updated;
         });

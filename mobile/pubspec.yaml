@@ -39,6 +39,9 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   intl: ^0.20.3
   font_awesome_flutter: ^11.0.0
+  # Laravel Reverb (Pusher protocol) WebSocket client for real-time updates.
+  # Custom host/port, bearer-token channel auth, and automatic reconnection.
+  pusher_reverb_flutter: ^0.0.10
 
 dev_dependencies:
   flutter_test:

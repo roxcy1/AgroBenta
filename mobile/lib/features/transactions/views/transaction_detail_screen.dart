@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/message.dart';
@@ -55,6 +56,8 @@ class _DetailBodyState extends State<_DetailBody> {
     _controller = TransactionDetailController(
       TransactionScope.readOf(context),
       widget.transactionId,
+      realtimeEvents: RealtimeScope.maybeOf(context)?.events,
+      connection: RealtimeScope.maybeOf(context)?.connected,
     );
     _controller.load();
   }

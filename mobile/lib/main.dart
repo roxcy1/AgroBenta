@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/network/api_client.dart';
+import 'core/realtime/realtime_client.dart';
+import 'core/realtime/realtime_controller.dart';
+import 'core/realtime/realtime_event.dart';
+import 'core/realtime/realtime_scope.dart';
 import 'core/storage/account_mode_preference_store.dart';
 import 'core/storage/token_store.dart';
 import 'core/storage/token_storage.dart';
@@ -151,6 +157,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final TrinidadLocationService _trinidadLocationService;
   late final TrinidadLocationRepository _trinidadLocationRepository;
   late final TrinidadLocationController _trinidadLocationController;
+  late final PusherReverbClient _realtimeClient;
+  late final RealtimeController _realtimeController;
+  StreamSubscription<bool>? _realtimeConnectionSubscription;
   int? _sessionUserId;
   bool _sessionControllersCreated = false;
 
@@ -262,11 +271,22 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
       _trinidadLocationRepository,
     );
 
+    // Real-time: the WebSocket client is created once; the controller connects
+    // and disconnects as the session changes (see _handleAuthSessionChanged).
+    // Created before the session controllers because they subscribe to its
+    // decoded events themselves.
+    _realtimeClient = PusherReverbClient(_tokenStore);
+    _realtimeController = RealtimeController(_realtimeClient);
+
     // These controllers hold responses scoped to the bearer token. Recreate
     // them when the authenticated identity changes so their caches, loading
     // guards, and generations cannot cross account boundaries. Screen-owned
     // controllers are disposed with the authenticated shell itself.
     _createSessionControllers();
+
+    _realtimeConnectionSubscription =
+        _realtimeController.connected.listen(_handleRealtimeConnection);
+
     _authController.addListener(_handleAuthSessionChanged);
   }
 
@@ -280,9 +300,33 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
 
     _sessionUserId = userId;
     _createSessionControllers(replaceExisting: true);
+
+    // Real-time follows the session: connect the user's private channel, or
+    // disconnect when signed out.
+    if (userId == null) {
+      _realtimeController.stop();
+    } else {
+      _realtimeController.start(userId);
+    }
+
     if (mounted) {
       setState(() {});
     }
+  }
+
+  /// A (re)connection is the point where events may have been missed while the
+  /// socket was down. Re-fetch the authoritative state so nothing is lost;
+  /// duplicate events from the overlap are harmless because the screens
+  /// replace their data from the REST response.
+  void _handleRealtimeConnection(bool connected) {
+    if (!connected) {
+      return;
+    }
+
+    _notificationsController.refreshUnreadCount();
+    _conversationsController.refresh();
+    _sellerVerificationController.load();
+    _sellerListingController.refresh();
   }
 
   void _createSessionControllers({bool replaceExisting = false}) {
@@ -295,9 +339,14 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
       _notificationsController.dispose();
     }
 
+    // Each session controller subscribes to the decoded events and refreshes
+    // only the surface it owns (see `_onRealtimeEvent` in each controller).
+    final Stream<RealtimeEvent> realtimeEvents = _realtimeController.events;
+
     _marketplaceController = MarketplaceController(_marketplaceRepository);
     _sellerVerificationController = SellerVerificationController(
       _sellerVerificationRepository,
+      realtimeEvents: realtimeEvents,
       // Approval moves `seller_capability` on the account, so the session's user
       // is re-read from `/auth/me` when a verification comes back approved. The
       // capability is server-owned: this is the app asking, not deciding.
@@ -305,10 +354,17 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     );
     _sellerListingController = SellerListingController(
       _sellerListingRepository,
+      realtimeEvents: realtimeEvents,
     );
     _profileController = ProfileController(_profileRepository);
-    _conversationsController = ConversationsController(_messagingRepository);
-    _notificationsController = NotificationsController(_notificationRepository);
+    _conversationsController = ConversationsController(
+      _messagingRepository,
+      realtimeEvents: realtimeEvents,
+    );
+    _notificationsController = NotificationsController(
+      _notificationRepository,
+      realtimeEvents: realtimeEvents,
+    );
     _sessionControllersCreated = true;
   }
 
@@ -327,6 +383,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _notificationsController.dispose();
     _livestockTypesController.dispose();
     _trinidadLocationController.dispose();
+    _realtimeConnectionSubscription?.cancel();
+    _realtimeController.dispose();
     _apiClient.close();
     super.dispose();
   }
@@ -415,12 +473,19 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                                 repository: _sellerDashboardRepository,
                                 child: SellerActivityScope(
                                   repository: _sellerActivityRepository,
-                                  child: MaterialApp(
-                                    title: 'AgroBenta',
-                                    debugShowCheckedModeBanner: false,
-                                    theme: AppTheme.light(),
-                                    home: AuthGate(
-                                      authenticatedView: _buildAccountModeShell,
+                                  // Real-time sits closest to `MaterialApp` so
+                                  // every pushed route can subscribe to the
+                                  // session's events without constructor
+                                  // threading.
+                                  child: RealtimeScope(
+                                    controller: _realtimeController,
+                                    child: MaterialApp(
+                                      title: 'AgroBenta',
+                                      debugShowCheckedModeBanner: false,
+                                      theme: AppTheme.light(),
+                                      home: AuthGate(
+                                        authenticatedView: _buildAccountModeShell,
+                                      ),
                                     ),
                                   ),
                                 ),

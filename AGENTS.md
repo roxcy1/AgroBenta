@@ -186,6 +186,38 @@ Do not make the interface look like a generic AI-generated SaaS dashboard.
 
 Maintain a practical, professional, restrained administrative-system design.
 
+## Reverb Integration Workflow
+
+Real-time (WebSocket) work is implemented in six ordered phases. The
+authoritative phase-by-phase plan, acceptance criteria, progress log, stop
+conditions, and resume instructions live in
+`docs/features/reverb-integration.md`. Read that file before starting, and
+update its progress log after every phase.
+
+Rules for this work (in addition to the general rules above):
+
+* Execute phases strictly in order. Do not start a phase until the previous one
+  is verified complete and recorded in the progress log.
+* Inspect the existing Laravel, Flutter, React, and Docker code before editing.
+  Follow established patterns; do not add a parallel client, event system, or
+  configuration.
+* Preserve Sanctum authentication, token abilities, route authorization, API
+  contracts, database transactions, and existing business behavior. Real-time
+  is additive only.
+* Keep changes minimal and scoped to the current phase. No unrelated refactors,
+  dependency upgrades, or cross-phase work.
+* Broadcast only after a successful database commit; never make a real-time
+  event part of a write path's correctness.
+* Add tests matching the existing test style. Never weaken or delete a test to
+  make it pass.
+* Run the documented validation and report actual results. Do not claim a check
+  passed unless it actually ran.
+* Never commit, push, merge, rebase, or run destructive operations without
+  explicit approval.
+* Stop at any boundary defined in the integration doc (missing requirements,
+  architectural decisions, security/contract changes, data-loss risk,
+  unresolved failures, or out-of-scope work).
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

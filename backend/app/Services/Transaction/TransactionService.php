@@ -5,6 +5,8 @@ namespace App\Services\Transaction;
 use App\Enums\ActivityAction;
 use App\Enums\FulfillmentStatus;
 use App\Enums\TransactionStatus;
+use App\Events\TransactionCreated as TransactionCreatedEvent;
+use App\Events\TransactionUpdated;
 use App\Models\Listing;
 use App\Models\Transaction;
 use App\Models\User;
@@ -145,6 +147,8 @@ class TransactionService
                 $seller->notify(new TransactionCreated($transaction->fresh(['listing', 'buyer'])));
             }
 
+            TransactionCreatedEvent::dispatch($transaction);
+
             return $transaction;
         });
     }
@@ -235,6 +239,13 @@ class TransactionService
                     TransactionStatus::Cancelled->value,
                 ));
             }
+
+            TransactionUpdated::dispatch(
+                $cancelled,
+                TransactionStatus::Cancelled->value,
+                null,
+                (int) $counterpartyId,
+            );
 
             return $cancelled;
         });
