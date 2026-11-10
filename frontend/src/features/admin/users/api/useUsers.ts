@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 
 export interface AdminUser {
@@ -42,6 +42,20 @@ export interface UsersParams {
   per_page?: number;
 }
 
+export interface UpdateAdminUserInput {
+  id: number;
+  name: string;
+  email: string;
+}
+
+interface UserMutationResponse {
+  success: boolean;
+  message: string;
+  data: AdminUser;
+}
+
+export const ADMIN_USERS_QUERY_KEY = ['admin', 'users'] as const;
+
 export async function fetchUsers(params: UsersParams): Promise<UsersData> {
   const query = new URLSearchParams();
   if (params.search) query.set('search', params.search);
@@ -59,7 +73,7 @@ export async function fetchUsers(params: UsersParams): Promise<UsersData> {
 
 export function useUsers(params: UsersParams) {
   return useQuery({
-    queryKey: ['admin', 'users', params],
+    queryKey: [...ADMIN_USERS_QUERY_KEY, params],
     queryFn: () => fetchUsers(params),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
@@ -128,5 +142,46 @@ export function useUserCounts() {
       };
     },
     staleTime: 30_000,
+  });
+}
+
+export async function updateAdminUser(input: UpdateAdminUserInput): Promise<AdminUser> {
+  const response = await api.put<UserMutationResponse>(`/admin/users/${input.id}`, {
+    name: input.name,
+    email: input.email,
+  });
+
+  return response.data.data;
+}
+
+export async function deleteAdminUser(id: number): Promise<AdminUser> {
+  const response = await api.delete<UserMutationResponse>(`/admin/users/${id}`);
+
+  return response.data.data;
+}
+
+function useInvalidateAdminUsers() {
+  const queryClient = useQueryClient();
+
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ADMIN_USERS_QUERY_KEY });
+  };
+}
+
+export function useUpdateAdminUser() {
+  const invalidateUsers = useInvalidateAdminUsers();
+
+  return useMutation({
+    mutationFn: updateAdminUser,
+    onSuccess: invalidateUsers,
+  });
+}
+
+export function useDeleteAdminUser() {
+  const invalidateUsers = useInvalidateAdminUsers();
+
+  return useMutation({
+    mutationFn: deleteAdminUser,
+    onSuccess: invalidateUsers,
   });
 }

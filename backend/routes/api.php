@@ -329,6 +329,8 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{user}', [UserController::class, 'show']);
+    Route::put('/users/{user}', [UserController::class, 'update']);
+    Route::delete('/users/{user}', [UserController::class, 'destroy']);
     Route::get('/listings', [ListingController::class, 'index']);
     // Listing moderation. [D-02 rule 8] makes administrator approval the only
     // route to `active`, and the transition table reserves `pending -> inactive`

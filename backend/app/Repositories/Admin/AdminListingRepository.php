@@ -16,7 +16,11 @@ class AdminListingRepository
         ?string $status = null,
         int $perPage = 15,
     ): LengthAwarePaginator {
-        $query = Listing::with('seller:id,name,email');
+        $query = Listing::query()->with([
+            'seller' => fn ($seller) => $seller
+                ->withTrashed()
+                ->select(['id', 'name', 'email']),
+        ]);
 
         $this->applySearch($query, $search);
         $this->applyFilters($query, $livestockType, $status);
@@ -58,7 +62,11 @@ class AdminListingRepository
     ): ?Listing {
         return DB::transaction(function () use ($listing, $from, $to, $adminNote): ?Listing {
             $current = Listing::query()
-                ->with('seller:id,name,email')
+                ->with([
+                    'seller' => fn ($seller) => $seller
+                        ->withTrashed()
+                        ->select(['id', 'name', 'email']),
+                ])
                 ->whereKey($listing->getKey())
                 ->lockForUpdate()
                 ->first();

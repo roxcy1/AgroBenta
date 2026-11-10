@@ -97,6 +97,13 @@ class TransactionService
                 $quantity,
             );
 
+            // A soft-deleted seller has no active account to fulfil the sale.
+            // The listing row and its status remain as history, but a stale
+            // client must not create new business against it.
+            if ($locked->seller === null) {
+                abort(409, 'This listing is not available for new transactions.');
+            }
+
             if ((int) $locked->seller_id === (int) $buyer->getKey()) {
                 abort(409, 'You cannot transact on your own listing.');
             }
@@ -179,9 +186,11 @@ class TransactionService
                 abort(404, 'Transaction not found.');
             }
 
-            if ($locked->status !== TransactionStatus::Pending) {
-                abort(409, 'Only a pending transaction can be cancelled.');
-            }
+            $this->ensureStatusIs(
+                $locked,
+                [TransactionStatus::Pending],
+                'Only a pending transaction can be cancelled.',
+            );
 
             $flow = FulfillmentStatus::flowFor($locked->collection_method);
             $fulfillment = $locked->fulfillment_status ?? FulfillmentStatus::Confirmed;
@@ -249,5 +258,21 @@ class TransactionService
 
             return $cancelled;
         });
+    }
+
+    /**
+     * Guard a lifecycle transition on the freshly locked transaction state.
+     *
+     * @param  list<TransactionStatus>  $allowed
+     */
+    private function ensureStatusIs(Transaction $transaction, array $allowed, string $message): void
+    {
+        if (in_array($transaction->status, $allowed, true)) {
+            return;
+        }
+
+        // 409, not 422: nothing about the request is malformed, the
+        // transaction is simply in a state where this action has no meaning.
+        abort(409, $message);
     }
 }

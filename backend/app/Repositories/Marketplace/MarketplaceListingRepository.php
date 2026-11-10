@@ -161,7 +161,10 @@ class MarketplaceListingRepository
             ])
             ->where('id', $listingId)
             ->where(function (Builder $query) use ($viewerId): void {
-                $query->where('status', ListingStatus::Active)
+                $query->where(function (Builder $active): void {
+                    $active->where('status', ListingStatus::Active)
+                        ->whereHas('seller');
+                })
                     ->orWhere('seller_id', $viewerId);
             })
             ->first();
@@ -175,7 +178,10 @@ class MarketplaceListingRepository
     {
         return Listing::query()
             ->with('seller:id,name')
-            ->where('status', ListingStatus::Active);
+            ->where('status', ListingStatus::Active)
+            // Preserve the listing row and status, but keep its live inventory
+            // hidden when the owning account has been deactivated.
+            ->whereHas('seller');
     }
 
     /**

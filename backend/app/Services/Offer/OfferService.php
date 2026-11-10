@@ -186,12 +186,14 @@ class OfferService
                 abort(409, 'This offer is no longer pending.');
             }
 
-            // The offer may be days old. Reserve one head under the same
-            // listing-row lock a direct purchase uses, so an offer cannot
-            // become a transaction on a listing that has since been sold,
-            // deactivated or run out of stock. The offer stays pending when
-            // this refuses, so the seller can still withdraw it.
-            $this->reservations->reserve((int) $offer->listing_id, 1);
+            // Use the same listing lock and stock reservation as a direct
+            // purchase. If the seller was deactivated after the offer was
+            // created, throwing here rolls the reservation back and leaves the
+            // offer pending so the seller can still withdraw it.
+            $listing = $this->reservations->reserve((int) $offer->listing_id, 1);
+            if ($listing->seller === null) {
+                abort(409, 'This listing is not available for new transactions.');
+            }
 
             $accepted = $this->offers->updateStatus(
                 $offer,

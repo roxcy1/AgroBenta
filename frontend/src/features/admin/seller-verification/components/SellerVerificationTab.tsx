@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { CheckCircle2, Clock3, FileText, XCircle } from 'lucide-react';
 import { parsePositiveInt } from '../../../../lib/queryParams';
 import type { SellerVerification } from '../api/useSellerVerifications';
 import {
@@ -94,6 +95,12 @@ export function SellerVerificationTab() {
         {VERIFICATION_TABS.map((tab) => {
           const isActive = tab.value === activeStatus;
           const count = counts?.[tab.value];
+          const StatusIcon = {
+            submitted: FileText,
+            pending_review: Clock3,
+            approved: CheckCircle2,
+            rejected: XCircle,
+          }[tab.value];
 
           return (
             <button
@@ -101,11 +108,19 @@ export function SellerVerificationTab() {
               type="button"
               role="tab"
               aria-selected={isActive}
-              className={`lv-tab${isActive ? ' lv-tab--active' : ''}`}
+              aria-label={`${tab.label}: ${count ?? 'count loading'}`}
+              className={`lv-tab verification-status-card verification-status-card--${tab.value}${isActive ? ' lv-tab--active' : ''}`}
               onClick={() => handleTabSelect(tab.value)}
             >
-              {tab.label}
-              {count !== undefined && <span className="lv-tab-count">{count}</span>}
+              <span className="verification-status-card__icon" aria-hidden="true">
+                <StatusIcon />
+              </span>
+              <span className="verification-status-card__copy">
+                <span className="verification-status-card__count" aria-hidden="true">
+                  {count ?? '—'}
+                </span>
+                <span className="verification-status-card__label">{tab.label}</span>
+              </span>
             </button>
           );
         })}
@@ -149,7 +164,7 @@ export function SellerVerificationTab() {
       ) : (
         <>
           <div className="lv-table-container">
-            <table className="lv-table">
+            <table className="lv-table lv-table--verification">
               <thead>
                 <tr>
                   <th>Applicant</th>
@@ -171,9 +186,13 @@ export function SellerVerificationTab() {
                     onClick={() => setDetailsId(verification.id)}
                     onKeyDown={(event) => handleRowKeyDown(event, verification)}
                   >
-                    <td className="lv-name-cell">{verification.seller?.name ?? '\u2014'}</td>
-                    <td>{verification.business_name ?? '—'}</td>
-                    <td>{verification.business_location ?? '\u2014'}</td>
+                    <td className="lv-name-cell" title={verification.seller?.name ?? '\u2014'}>
+                      {verification.seller?.name ?? '\u2014'}
+                    </td>
+                    <td title={verification.business_name ?? '—'}>{verification.business_name ?? '—'}</td>
+                    <td title={verification.business_location ?? '\u2014'}>
+                      {verification.business_location ?? '\u2014'}
+                    </td>
                     <td>
                       <StatusBadge status={verification.status} />
                     </td>
