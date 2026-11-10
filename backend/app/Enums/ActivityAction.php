@@ -46,6 +46,8 @@ enum ActivityAction: string
     case OfferWithdrawn = 'offer_withdrawn';
 
     case SettingsUpdated = 'settings_updated';
+    case AdminUserUpdated = 'admin_user_updated';
+    case AdminUserDeleted = 'admin_user_deleted';
 
     public function label(): string
     {
@@ -75,6 +77,8 @@ enum ActivityAction: string
             self::OfferDeclined => 'Offer declined',
             self::OfferWithdrawn => 'Offer withdrawn',
             self::SettingsUpdated => 'Settings updated',
+            self::AdminUserUpdated => 'User account updated by an administrator',
+            self::AdminUserDeleted => 'User account deactivated by an administrator',
         };
     }
 }

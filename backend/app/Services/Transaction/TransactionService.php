@@ -98,6 +98,13 @@ class TransactionService
                 abort(409, 'This listing is not available for new transactions.');
             }
 
+            // A soft-deleted seller has no active account to fulfil the sale.
+            // The listing row and its status remain as history, but a stale
+            // client must not create new business against it.
+            if ($locked->seller === null) {
+                abort(409, 'This listing is not available for new transactions.');
+            }
+
             if ((int) $locked->seller_id === (int) $buyer->getKey()) {
                 abort(409, 'You cannot transact on your own listing.');
             }

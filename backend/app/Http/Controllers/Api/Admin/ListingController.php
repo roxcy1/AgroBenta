@@ -61,7 +61,11 @@ class ListingController extends Controller
      */
     public function show(Listing $listing): JsonResponse
     {
-        $listing->load('seller:id,name,email');
+        $listing->load([
+            'seller' => fn ($seller) => $seller
+                ->withTrashed()
+                ->select(['id', 'name', 'email']),
+        ]);
 
         return response()->json([
             'success' => true,

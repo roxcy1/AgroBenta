@@ -36,12 +36,12 @@ class SellerVerification extends Model
 
     public function seller(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'user_id');
+        return $this->belongsTo(User::class, 'user_id')->withTrashed();
     }
 
     public function reviewer(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'reviewed_by');
+        return $this->belongsTo(User::class, 'reviewed_by')->withTrashed();
     }
 
     public function isOpen(): bool

@@ -338,6 +338,29 @@ class OfferTest extends TestCase
     }
 
     #[Test]
+    public function an_offer_cannot_be_accepted_after_its_seller_account_is_deactivated(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 1]);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ], $this->seller)->assertStatus(201)->json('data.id');
+        $admin = User::factory()->admin()->create();
+        $adminToken = $admin->createToken('admin_token', ['admin'])->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$adminToken}")
+            ->deleteJson('/api/admin/users/'.$this->seller->id)
+            ->assertOk();
+
+        $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(409);
+
+        $this->assertSame(0, Transaction::query()->count());
+        $this->assertSame('pending', Offer::query()->findOrFail($offerId)->status->value);
+    }
+
+    #[Test]
     public function the_last_unit_can_still_be_accepted(): void
     {
         $listing = $this->createListing($this->seller, ['quantity' => 1]);

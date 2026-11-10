@@ -1,0 +1,1433 @@
+/* Shared admin values are taken from the Dashboard's current visual treatment. */
+.admin-layout {
+  --admin-page-bg: #f0fdf4;
+  --admin-card-bg: #fff;
+  --admin-border: #e5ebe7;
+  --admin-heading: #183324;
+  --admin-text: #293d31;
+  --admin-muted: #718078;
+  --admin-primary: #15803d;
+  --admin-primary-hover: #166534;
+  --admin-radius: 10px;
+  --admin-shadow: 0 1px 3px rgba(11, 39, 24, 0.045);
+  --admin-shadow-hover: 0 3px 10px rgba(11, 39, 24, 0.07);
+  --admin-control-height: 40px;
+}
+
+.admin-layout .admin-main {
+  min-width: 0;
+  background: var(--admin-page-bg);
+  color: #1a1a1a;
+  font-family: var(--font-sans);
+}
+
+.admin-main .users-page-shell,
+.admin-main .reports-page-shell,
+.admin-main .settings-page-shell {
+  min-height: 100vh;
+  color: #1a1a1a;
+  background: var(--admin-page-bg);
+  font-family: var(--font-sans);
+}
+
+.admin-main .reports-page-shell::before,
+.admin-main .settings-page-shell::before,
+.admin-main .users-page-shell::before {
+  display: none;
+  content: none;
+  background: none;
+}
+
+/* A single title/profile rhythm for every route, including Dashboard. */
+.admin-main .admin-header {
+  min-height: 76px;
+  gap: 20px;
+  padding: 12px 30px;
+  background: var(--admin-card-bg);
+  border-bottom: 1px solid var(--admin-border);
+  box-shadow: 0 1px 3px rgba(11, 39, 24, 0.04);
+}
+
+.admin-main .admin-header-left {
+  min-width: 0;
+}
+
+.admin-main .admin-header-heading--icon {
+  gap: 13px;
+}
+
+.admin-main .admin-header-page-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-primary);
+  background: #e8f5ec;
+  border: 0;
+  border-radius: var(--admin-radius);
+}
+
+.admin-main .admin-header-page-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+}
+
+.admin-main .admin-header-title {
+  color: var(--admin-heading);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.admin-main .admin-header-subtitle {
+  margin-top: 2px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.admin-main .admin-header-right {
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.admin-main .admin-header-profile {
+  gap: 10px;
+}
+
+.admin-main .admin-header-avatar {
+  width: 36px;
+  height: 36px;
+  color: #fff;
+  background: #187743;
+  font-size: 13px;
+}
+
+.admin-main .admin-header-profile-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.admin-main .admin-header-name {
+  display: block;
+  color: #24382c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-main .admin-header-role {
+  color: #7d8b82;
+  font-size: 11px;
+}
+
+.admin-main .admin-header-profile-chevron {
+  width: 15px;
+  height: 15px;
+  color: #76857b;
+}
+
+/* Shared content gutters and neutral application surface. */
+.admin-main .dashboard-content,
+.admin-main .lv-content,
+.admin-main .users-content,
+.admin-main .settings-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 22px 30px 32px;
+  background: transparent;
+}
+
+.admin-main .reports-page-shell .dashboard-content,
+.admin-main .settings-page-shell .settings-content,
+.admin-main .users-page-shell .users-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Summary cards share the Dashboard's restrained surface and density. */
+.admin-main .dashboard-stat-card,
+.admin-main .lv-stat-card,
+.admin-main .activity-summary-card,
+.admin-main .settings-card,
+.admin-main .reports-filters,
+.admin-main .users-controls {
+  color: #1a1a1a;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-main .dashboard-stat-card,
+.admin-main .lv-stat-card {
+  min-width: 0;
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.admin-main .dashboard-stat-card,
+.admin-main .lv-stat-card,
+.admin-main .activity-summary-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.admin-main .dashboard-stat-card::before,
+.admin-main .dashboard-stat-card::after,
+.admin-main .lv-stat-card::before,
+.admin-main .lv-stat-card::after,
+.admin-main .activity-summary-card::before,
+.admin-main .activity-summary-card::after {
+  position: absolute;
+  z-index: 0;
+  right: -3px;
+  bottom: -10px;
+  width: 58%;
+  height: 29px;
+  content: '';
+  background: var(--metric-wave, rgba(42, 191, 75, 0.24));
+  border: 0;
+  border-radius: 0;
+  transform: none;
+  clip-path: polygon(0 67%, 18% 56%, 39% 60%, 61% 26%, 82% 18%, 100% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+
+.admin-main .dashboard-stat-card::after,
+.admin-main .lv-stat-card::after,
+.admin-main .activity-summary-card::after {
+  right: -7px;
+  bottom: -13px;
+  width: 48%;
+  height: 23px;
+  background: var(--metric-wave-secondary, rgba(42, 191, 75, 0.13));
+  clip-path: polygon(0 74%, 22% 42%, 45% 48%, 67% 20%, 100% 12%, 100% 100%, 0 100%);
+}
+
+.admin-main .dashboard-stat-card > *,
+.admin-main .lv-stat-card > *,
+.admin-main .activity-summary-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-main .dashboard-stat-card--tone-users,
+.admin-main .dashboard-stat-card--tone-sellers,
+.admin-main .lv-stat-card--tone-total,
+.admin-main .lv-stat-card--tone-active,
+.admin-main .lv-stat-card--tone-completed,
+.admin-main .lv-stat-card--tone-seller,
+.admin-main .activity-summary-card--total,
+.admin-main .activity-summary-card--actors,
+.admin-main .activity-summary-card--moderation {
+  --metric-wave: rgba(42, 191, 75, 0.28);
+  --metric-wave-secondary: rgba(68, 208, 87, 0.16);
+}
+
+.admin-main .dashboard-stat-card--tone-listings,
+.admin-main .dashboard-stat-card--tone-pending,
+.admin-main .lv-stat-card--tone-pending,
+.admin-main .activity-summary-card--configuration {
+  --metric-wave: rgba(245, 190, 44, 0.34);
+  --metric-wave-secondary: rgba(255, 218, 106, 0.23);
+}
+
+.admin-main .dashboard-stat-card--tone-transactions,
+.admin-main .lv-stat-card--tone-buyer,
+.admin-main .lv-stat-card--tone-admin {
+  --metric-wave: rgba(67, 145, 216, 0.25);
+  --metric-wave-secondary: rgba(115, 174, 228, 0.17);
+}
+
+.admin-main .lv-stat-card--tone-inactive {
+  --metric-wave: rgba(164, 178, 168, 0.28);
+  --metric-wave-secondary: rgba(193, 203, 196, 0.21);
+}
+
+.admin-main .lv-stat-card--tone-cancelled {
+  --metric-wave: rgba(244, 104, 104, 0.28);
+  --metric-wave-secondary: rgba(255, 153, 153, 0.21);
+}
+
+.admin-main .dashboard-stat-card:hover,
+.admin-main .lv-stat-card:hover,
+.admin-main .activity-summary-card:hover {
+  border-color: #cbd8cf;
+  box-shadow: var(--admin-shadow-hover);
+}
+
+.admin-main .dashboard-stat-icon,
+.admin-main .lv-stat-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 8px;
+}
+
+.admin-main .activity-summary-card__icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.admin-main .activity-summary-card__icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.admin-main .activity-summary-card__icon--total,
+.admin-main .activity-summary-card__icon--moderation {
+  color: #197344;
+  background: #e6f4eb;
+}
+
+.admin-main .activity-summary-card__icon--actors {
+  color: #3478b8;
+  background: #e8f2fb;
+}
+
+.admin-main .activity-summary-card__icon--configuration {
+  color: #a96b0b;
+  background: #fff3d8;
+}
+
+.admin-main .dashboard-stat-icon-svg,
+.admin-main .lv-stat-icon-svg {
+  width: 17px;
+  height: 17px;
+}
+
+.admin-main .dashboard-stat-value,
+.admin-main .lv-stat-value,
+.admin-main .activity-summary-card__value {
+  color: #172f21;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-main .dashboard-stat-label,
+.admin-main .lv-stat-label {
+  color: #6b7b71;
+  font-size: 10px;
+}
+
+.admin-main .lv-stat-card {
+  min-height: 68px;
+}
+
+.admin-main .activity-summary-card {
+  display: grid;
+  min-width: 0;
+  min-height: 68px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 0;
+  padding: 10px 12px;
+}
+
+.admin-main .activity-summary-card__icon {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.admin-main .activity-summary-card__body {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  align-items: flex-end;
+}
+
+.admin-main .activity-summary-card__header {
+  grid-column: 2;
+  grid-row: 2;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+}
+
+.admin-main .activity-summary-card__title {
+  color: #6b7b71;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.admin-main .activity-summary-card__window {
+  color: #87938a;
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.admin-main .activity-summary-card__value {
+  font-size: 20px;
+}
+
+.admin-main .activity-summary-card__value--muted {
+  font-size: 13px;
+}
+
+.admin-main .lv-stat-card--active,
+.admin-main .activity-summary-card[aria-pressed='true'] {
+  color: #fff;
+  background: #075d31;
+  border-color: #075d31;
+  box-shadow: 0 2px 5px rgba(11, 74, 39, 0.16);
+}
+
+.admin-main .lv-stat-card--active:hover,
+.admin-main .activity-summary-card[aria-pressed='true']:hover {
+  color: #fff;
+  background: #075d31;
+  border-color: #075d31;
+}
+
+.admin-main .lv-stat-card--active .lv-stat-value,
+.admin-main .lv-stat-card--active .lv-stat-label,
+.admin-main .activity-summary-card[aria-pressed='true'] .activity-summary-card__value,
+.admin-main .activity-summary-card[aria-pressed='true'] .activity-summary-card__title,
+.admin-main .activity-summary-card[aria-pressed='true'] .activity-summary-card__window {
+  color: #fff;
+}
+
+.admin-main .lv-stat-card--active .lv-stat-icon,
+.admin-main .activity-summary-card[aria-pressed='true'] .activity-summary-card__icon {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.admin-main .dashboard-stat-icon--users,
+.admin-main .dashboard-stat-icon--sellers,
+.admin-main .lv-stat-icon--total,
+.admin-main .lv-stat-icon--seller {
+  color: #197344;
+  background: #e6f4eb;
+}
+
+.admin-main .dashboard-stat-icon--listings,
+.admin-main .lv-stat-icon--pending {
+  color: #a96b0b;
+  background: #fff3d8;
+}
+
+.admin-main .dashboard-stat-icon--transactions,
+.admin-main .lv-stat-icon--buyer {
+  color: #3478b8;
+  background: #e8f2fb;
+}
+
+.admin-main .dashboard-stat-card--pending {
+  --metric-wave: rgba(245, 190, 44, 0.34);
+  --metric-wave-secondary: rgba(255, 218, 106, 0.23);
+  background: #fffaf0;
+  border-color: #f1d795;
+}
+
+.admin-main .reports-page-shell .dashboard-stat-card {
+  min-height: 68px;
+  padding: 10px 12px;
+}
+
+/* Verification status filters styled as compact, selectable summary cards. */
+.admin-main .verification-panel .lv-tabs {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  margin-bottom: 18px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.admin-main .verification-panel .verification-status-card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 64px;
+  align-items: center;
+  gap: 11px;
+  overflow: hidden;
+  padding: 8px 12px;
+  color: #183324;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  box-shadow: var(--admin-shadow);
+  isolation: isolate;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.admin-main .verification-panel .verification-status-card::before,
+.admin-main .verification-panel .verification-status-card::after {
+  position: absolute;
+  z-index: -1;
+  right: -3px;
+  bottom: -10px;
+  width: 58%;
+  height: 29px;
+  content: '';
+  background: var(--verification-wave, rgba(34, 197, 94, 0.2));
+  clip-path: polygon(0 67%, 18% 56%, 39% 60%, 61% 26%, 82% 18%, 100% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+
+.admin-main .verification-panel .verification-status-card::after {
+  right: -7px;
+  bottom: -13px;
+  width: 48%;
+  height: 23px;
+  background: var(--verification-wave-secondary, rgba(34, 197, 94, 0.12));
+  clip-path: polygon(0 74%, 22% 42%, 45% 48%, 67% 20%, 100% 12%, 100% 100%, 0 100%);
+}
+
+.admin-main .verification-panel .verification-status-card:hover {
+  border-color: #cbd8cf;
+  box-shadow: var(--admin-shadow-hover);
+  transform: translateY(-1px);
+}
+
+.admin-main .verification-panel .verification-status-card:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 2px;
+}
+
+.admin-main .verification-panel .verification-status-card--submitted {
+  --verification-wave: rgba(42, 191, 75, 0.65);
+  --verification-wave-secondary: rgba(68, 208, 87, 0.32);
+  --verification-icon: #168344;
+  --verification-icon-bg: #e7f5ec;
+}
+
+.admin-main .verification-panel .verification-status-card--pending_review {
+  --verification-wave: rgba(245, 190, 44, 0.32);
+  --verification-wave-secondary: rgba(255, 218, 106, 0.25);
+  --verification-icon: #bf820b;
+  --verification-icon-bg: #fff5dc;
+}
+
+.admin-main .verification-panel .verification-status-card--approved {
+  --verification-wave: rgba(91, 206, 95, 0.28);
+  --verification-wave-secondary: rgba(126, 220, 127, 0.22);
+  --verification-icon: #338849;
+  --verification-icon-bg: #eaf6eb;
+}
+
+.admin-main .verification-panel .verification-status-card--rejected {
+  --verification-wave: rgba(244, 104, 104, 0.28);
+  --verification-wave-secondary: rgba(255, 153, 153, 0.22);
+  --verification-icon: #d33d3d;
+  --verification-icon-bg: #ffeded;
+}
+
+.admin-main .verification-panel .verification-status-card.lv-tab--active {
+  color: #fff;
+  background: #075d31;
+  border-color: #075d31;
+  box-shadow: 0 2px 5px rgba(11, 74, 39, 0.16);
+}
+
+.admin-main .verification-panel .verification-status-card.lv-tab--active:hover {
+  color: #fff;
+  background: #075d31;
+  border-color: #075d31;
+}
+
+.admin-main .verification-panel .verification-status-card__icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  color: var(--verification-icon, #168344);
+  background: var(--verification-icon-bg, #e7f5ec);
+  border-radius: 8px;
+}
+
+.admin-main .verification-panel .verification-status-card__icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.9;
+}
+
+.admin-main .verification-panel .verification-status-card__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.admin-main .verification-panel .verification-status-card__count {
+  color: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.admin-main .verification-panel .verification-status-card__label {
+  overflow: hidden;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.78;
+}
+
+.admin-main .verification-panel .verification-status-card.lv-tab--active .verification-status-card__icon {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.admin-main .verification-panel .verification-status-card.lv-tab--active .verification-status-card__label {
+  opacity: 0.88;
+}
+
+/* One chart/card language across Dashboard and Reports. */
+.admin-main .dashboard-chart-card,
+.admin-main .dashboard-breakdown-card,
+.admin-main .settings-card {
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-main .dashboard-chart-card,
+.admin-main .dashboard-breakdown-card {
+  min-width: 0;
+  padding: 15px 16px 13px;
+}
+
+.admin-main .dashboard-section-title,
+.admin-main .dashboard-chart-title,
+.admin-main .dashboard-breakdown-title,
+.admin-main .settings-group-title {
+  color: var(--admin-heading);
+}
+
+.admin-main .dashboard-section-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.admin-main .dashboard-chart-title,
+.admin-main .dashboard-breakdown-title {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+/* Tables retain their data and behaviors while sharing borders, density and hover. */
+.admin-main .lv-table-container,
+.admin-main .users-table-container {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+  scrollbar-width: thin;
+}
+
+.admin-main .lv-table,
+.admin-main .users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-main .lv-table th,
+.admin-main .users-table th {
+  padding: 11px 14px;
+  color: #68796e;
+  background: #f7f9f7;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-main .lv-table td,
+.admin-main .users-table td {
+  padding: 11px 14px;
+  color: #293d31;
+  border-bottom: 1px solid #edf1ee;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.admin-main .lv-table tbody tr:last-child td,
+.admin-main .users-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-main .lv-table tbody tr:hover td,
+.admin-main .users-table tbody tr:hover td {
+  background: #f6fbf7;
+}
+
+.admin-main .lv-table {
+  min-width: 720px;
+  table-layout: auto;
+}
+
+.admin-main .lv-table--listings {
+  min-width: 960px;
+}
+
+.admin-main .lv-table--transactions {
+  min-width: 1020px;
+}
+
+.admin-main .lv-table--verification {
+  min-width: 850px;
+}
+
+.admin-main .lv-table--activities {
+  min-width: 1120px;
+}
+
+.admin-main .lv-table--listings td:nth-child(6),
+.admin-main .lv-table--transactions td:nth-child(4),
+.admin-main .lv-table--verification td:nth-child(2),
+.admin-main .lv-table--verification td:nth-child(3) {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-main .users-table {
+  min-width: 780px;
+  table-layout: auto;
+}
+
+.admin-main .lv-table td,
+.admin-main .users-table td {
+  overflow-wrap: normal;
+}
+
+.admin-main .lv-name-cell,
+.admin-main .lv-seller-cell,
+.admin-main .users-name-cell,
+.admin-main .users-email-cell {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-main .activity-description-cell,
+.admin-main .activity-changes-cell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-main .activity-change-list {
+  max-width: 260px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.admin-main .activity-change-list li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-main .lv-table td:nth-child(2),
+.admin-main .lv-table td:nth-child(3),
+.admin-main .lv-table td:nth-child(4) {
+  overflow-wrap: anywhere;
+}
+
+/* Shared controls and actions; page-specific layouts remain in their features. */
+.admin-main .lv-controls,
+.admin-main .users-controls,
+.admin-main .reports-filters {
+  min-width: 0;
+  padding: 14px;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-main .lv-search-input,
+.admin-main .users-search-input,
+.admin-main .lv-filter-select,
+.admin-main .users-filter-select,
+.admin-main .reports-filter-input,
+.admin-main .settings-input,
+.admin-main .settings-textarea {
+  min-height: var(--admin-control-height);
+  color: #293d31;
+  background: #fff;
+  border: 1px solid #d8e1da;
+  border-radius: 7px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.admin-main .lv-search-input:focus,
+.admin-main .users-search-input:focus,
+.admin-main .lv-filter-select:focus,
+.admin-main .users-filter-select:focus,
+.admin-main .reports-filter-input:focus,
+.admin-main .settings-input:focus,
+.admin-main .settings-textarea:focus {
+  border-color: var(--admin-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.14);
+}
+
+.admin-main .lv-search-button,
+.admin-main .users-search-button,
+.admin-main .dashboard-retry-button,
+.admin-main .reports-filter-actions .dashboard-retry-button,
+.admin-main .settings-save-button {
+  min-height: var(--admin-control-height);
+  color: #fff;
+  background: var(--admin-primary);
+  border: 1px solid var(--admin-primary);
+  border-radius: 7px;
+  box-shadow: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-main .reports-page-shell button:focus-visible,
+.admin-main .settings-page-shell button:focus-visible,
+.admin-main .users-page-shell button:focus-visible,
+.admin-main .lv-content button:focus-visible,
+.admin-main .reports-page-shell select:focus-visible,
+.admin-main .settings-page-shell select:focus-visible,
+.admin-main .users-page-shell select:focus-visible,
+.admin-main .lv-content select:focus-visible,
+.admin-main .reports-page-shell input:focus-visible,
+.admin-main .settings-page-shell input:focus-visible,
+.admin-main .users-page-shell input:focus-visible,
+.admin-main .lv-content input:focus-visible,
+.admin-main .reports-page-shell textarea:focus-visible,
+.admin-main .settings-page-shell textarea:focus-visible,
+.admin-main .users-page-shell textarea:focus-visible,
+.admin-main .lv-content textarea:focus-visible,
+.admin-main .reports-page-shell a:focus-visible,
+.admin-main .settings-page-shell a:focus-visible,
+.admin-main .users-page-shell a:focus-visible,
+.admin-main .lv-content a:focus-visible {
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 2px;
+}
+
+.admin-main .reports-filter-row {
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-main .reports-filter-label {
+  color: #53645a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-main .reports-filter-input {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.admin-main .reports-filter-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-main .users-search-row,
+.admin-main .lv-search-row {
+  flex-wrap: wrap;
+}
+
+.admin-main .users-filter-select,
+.admin-main .lv-filter-select {
+  min-width: 140px;
+}
+
+.admin-main .settings-field {
+  grid-template-columns: minmax(0, 30fr) minmax(0, 70fr);
+  column-gap: 20px;
+}
+
+.admin-main .settings-input,
+.admin-main .settings-textarea {
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.admin-main .settings-textarea {
+  min-height: 88px;
+}
+
+.admin-main .settings-field-error {
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.admin-main .users-empty,
+.admin-main .lv-empty {
+  color: var(--admin-muted);
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-main .lv-search-button:hover:not(:disabled),
+.admin-main .users-search-button:hover:not(:disabled),
+.admin-main .dashboard-retry-button:hover:not(:disabled),
+.admin-main .settings-save-button:hover:not(:disabled) {
+  background: var(--admin-primary-hover);
+  border-color: var(--admin-primary-hover);
+  box-shadow: none;
+}
+
+.admin-main .reports-clear-button,
+.admin-main .settings-reset-button,
+.admin-main .lv-page-button,
+.admin-main .users-page-button,
+.admin-main .users-page-number {
+  min-height: 36px;
+  color: #345843;
+  background: #fff;
+  border: 1px solid #d8e1da;
+  border-radius: 7px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.admin-main .reports-clear-button:hover:not(:disabled),
+.admin-main .settings-reset-button:hover:not(:disabled),
+.admin-main .lv-page-button:hover:not(:disabled),
+.admin-main .users-page-button:hover:not(:disabled),
+.admin-main .users-page-number:hover:not(:disabled) {
+  color: var(--admin-primary-hover);
+  background: #f5faf6;
+  border-color: #b9d4c1;
+}
+
+.admin-main .users-page-number--active {
+  color: #fff;
+  background: var(--admin-primary);
+  border-color: var(--admin-primary);
+}
+
+.admin-main .lv-action-btn,
+.admin-main .users-actions-trigger {
+  border-radius: 7px;
+}
+
+.admin-main .settings-card {
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.admin-main .settings-card-header {
+  background: #f7f9f7;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-main .settings-card-header::before,
+.admin-main .settings-card-art {
+  display: none;
+}
+
+.admin-main .settings-group-title {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.admin-main .settings-label {
+  color: #293d31;
+  font-size: 13px;
+}
+
+.admin-main .settings-description,
+.admin-main .settings-card-subtitle {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.admin-main .settings-reset-button,
+.admin-main .settings-save-button {
+  min-height: var(--admin-control-height);
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+/* Users gets the same card and native-table treatment as the other admin pages. */
+.admin-main .users-page-shell .users-content .lv-stats-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card,
+.admin-main .users-page-shell .users-content .users-stat-card {
+  min-height: 68px;
+  padding: 10px 12px;
+  color: #1a1a1a;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+  transform: none;
+}
+
+.admin-main .users-page-shell .users-content .users-stat-card::after {
+  border: 0;
+  border-radius: 0;
+  transform: none;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card .lv-stat-icon {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  border-radius: 8px;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card .lv-stat-value {
+  font-size: 20px;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card .lv-stat-label {
+  font-size: 10px;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card .lv-stat-icon--total,
+.admin-main .users-page-shell .users-content .lv-stat-card .lv-stat-icon--seller {
+  color: #197344;
+  background: #e6f4eb;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card .lv-stat-icon--buyer {
+  color: #3478b8;
+  background: #e8f2fb;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card .lv-stat-icon--admin {
+  color: #68796e;
+  background: #eef2ef;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card.lv-stat-card--active {
+  color: #fff;
+  background: #075d31;
+  border-color: #075d31;
+  box-shadow: 0 2px 5px rgba(11, 74, 39, 0.16);
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card.lv-stat-card--active .lv-stat-value,
+.admin-main .users-page-shell .users-content .lv-stat-card.lv-stat-card--active .lv-stat-label {
+  color: #fff;
+}
+
+.admin-main .users-page-shell .users-content .lv-stat-card.lv-stat-card--active .lv-stat-icon {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.admin-main .users-page-shell .users-content .users-stat-card--total {
+  color: #1a1a1a;
+  background: #fff;
+  border-color: var(--admin-border);
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-main .users-page-shell .users-content .users-stat-card--total .lv-stat-value,
+.admin-main .users-page-shell .users-content .users-stat-card--total .lv-stat-label {
+  color: #172f21;
+}
+
+.admin-main .users-page-shell .users-content .users-controls {
+  margin-bottom: 18px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-main .users-page-shell .users-content .users-search-input,
+.admin-main .users-page-shell .users-content .users-filter-select {
+  height: var(--admin-control-height);
+  min-height: var(--admin-control-height);
+  border-color: #d8e1da;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.admin-main .users-page-shell .users-content .users-search-input:focus,
+.admin-main .users-page-shell .users-content .users-filter-select:focus {
+  border-color: var(--admin-primary);
+  box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.14);
+}
+
+.admin-main .users-page-shell .users-content .users-search-button {
+  height: var(--admin-control-height);
+  min-height: var(--admin-control-height);
+  padding: 0 16px;
+  color: #fff;
+  background: var(--admin-primary);
+  border: 1px solid var(--admin-primary);
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.admin-main .users-page-shell .users-content .users-search-button:hover:not(:disabled) {
+  background: var(--admin-primary-hover);
+}
+
+.admin-main .users-page-shell .users-content .users-table-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-main .users-page-shell .users-content .users-table {
+  display: table;
+  width: 100%;
+  min-width: 780px;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+
+.admin-main .users-page-shell .users-content .users-table thead {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+}
+
+.admin-main .users-page-shell .users-content .users-table tbody {
+  display: table-row-group;
+  width: auto;
+}
+
+.admin-main .users-page-shell .users-content .users-table tbody tr {
+  display: table-row;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.admin-main .users-page-shell .users-content .users-table th {
+  padding: 11px 14px;
+  color: #68796e;
+  background: #f7f9f7;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.admin-main .users-page-shell .users-content .users-table td {
+  display: table-cell;
+  width: auto;
+  min-width: 0;
+  padding: 11px 14px;
+  color: #293d31;
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #edf1ee;
+  font-size: 13px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.admin-main .users-page-shell .users-content .users-table td::before {
+  display: none;
+  content: none;
+}
+
+.admin-main .users-page-shell .users-content .users-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-main .users-page-shell .users-content .users-table tbody tr:hover td {
+  background: #f6fbf7;
+}
+
+.admin-main .users-page-shell .users-content .users-name-cell {
+  max-width: 190px;
+  color: #293d31;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-main .users-page-shell .users-content .users-email-cell {
+  max-width: 250px;
+  color: #637168;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-main .users-page-shell .users-content .users-date-cell {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1024px) {
+  .admin-main .admin-header {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
+  .admin-main .dashboard-content,
+  .admin-main .lv-content,
+  .admin-main .users-content,
+  .admin-main .settings-content {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
+  .admin-main .reports-page-shell .dashboard-stats-grid,
+  .admin-main .lv-stats-grid,
+  .admin-main .activity-summary-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-main .lv-search-row,
+  .admin-main .users-search-row {
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .admin-main .lv-search-wrapper,
+  .admin-main .users-search-wrapper {
+    min-width: min(100%, 240px);
+  }
+
+  .admin-main .lv-filters,
+  .admin-main .users-filters {
+    flex-wrap: wrap;
+  }
+
+  .admin-main .users-page-shell .users-content .lv-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-main .verification-panel .lv-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .admin-main .verification-panel .verification-status-card {
+    min-height: 60px;
+    padding: 7px 10px;
+  }
+
+  .admin-main .admin-header {
+    min-height: 68px;
+    padding: 10px 16px;
+  }
+
+  .admin-main .admin-header-title {
+    font-size: 18px;
+  }
+
+  .admin-main .admin-header-subtitle {
+    font-size: 11px;
+  }
+
+  .admin-main .dashboard-content,
+  .admin-main .lv-content,
+  .admin-main .users-content,
+  .admin-main .settings-content {
+    padding: 18px 16px 28px;
+  }
+
+  .admin-main .lv-controls,
+  .admin-main .users-controls,
+  .admin-main .reports-filters {
+    padding: 12px;
+  }
+
+  .admin-main .users-pagination,
+  .admin-main .lv-pagination {
+    flex-wrap: wrap;
+  }
+
+  .admin-main .reports-page-shell .dashboard-stats-grid,
+  .admin-main .lv-stats-grid,
+  .admin-main .activity-summary-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-main .reports-filter-group {
+    flex: 1 1 160px;
+  }
+
+  .admin-main .reports-filter-input {
+    width: 100%;
+  }
+
+  .admin-main .settings-field {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  .admin-main .users-page-shell .users-content .lv-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-main .users-page-shell .users-content .users-table {
+    min-width: 780px;
+  }
+
+  .admin-main .users-page-shell .users-content .users-table tbody tr {
+    display: table-row;
+  }
+
+  .admin-main .users-page-shell .users-content .users-table td {
+    display: table-cell;
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  .admin-main .dashboard-page-shell > .admin-header {
+    min-height: 76px;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-main .admin-header {
+    gap: 10px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .admin-main .admin-header-heading--icon {
+    gap: 9px;
+  }
+
+  .admin-main .admin-header-page-icon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .admin-main .admin-header-page-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .admin-main .admin-header-name {
+    max-width: 94px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-main .admin-header-role {
+    display: none;
+  }
+
+  .admin-main .dashboard-content,
+  .admin-main .lv-content,
+  .admin-main .users-content,
+  .admin-main .settings-content {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .admin-main .reports-page-shell .dashboard-stats-grid,
+  .admin-main .lv-stats-grid,
+  .admin-main .activity-summary-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-main .lv-search-wrapper,
+  .admin-main .users-search-wrapper {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-main .lv-filters,
+  .admin-main .users-filters {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .admin-main .lv-filter-select,
+  .admin-main .users-filter-select {
+    width: 100%;
+  }
+
+  .admin-main .lv-table,
+  .admin-main .users-table {
+    min-width: 720px;
+  }
+
+  .admin-main .reports-filter-actions {
+    width: 100%;
+  }
+
+  .admin-main .reports-filter-actions > button {
+    flex: 1 1 auto;
+  }
+
+  .admin-main .users-page-shell .users-content .lv-stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 360px) {
+  .admin-main .verification-panel .lv-tabs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

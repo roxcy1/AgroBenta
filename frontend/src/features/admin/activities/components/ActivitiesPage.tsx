@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Activity as ActivityIcon, Settings, ShieldCheck, Users as UsersIcon } from 'lucide-react';
 import { useActivities, useActivitySummary } from '../api/useActivities';
 import type { Activity } from '../api/useActivities';
 import { useUsers } from '../../users/api/useUsers';
@@ -121,7 +122,10 @@ export function ActivitiesPage() {
   return (
     <div className="lv-tab-content">
       <div className="activity-summary-cards" role="region" aria-label="Activity summary last 24 hours">
-        <article className="activity-summary-card" tabIndex={0} aria-label="Total activities in last 24 hours">
+        <article className="activity-summary-card activity-summary-card--total" tabIndex={0} aria-label="Total activities in last 24 hours">
+          <span className="activity-summary-card__icon activity-summary-card__icon--total" aria-hidden="true">
+            <ActivityIcon />
+          </span>
           <div className="activity-summary-card__header">
             <h3 className="activity-summary-card__title">Total Activities</h3>
             <span className="activity-summary-card__window">Last 24h</span>
@@ -137,7 +141,10 @@ export function ActivitiesPage() {
           </div>
         </article>
 
-        <article className="activity-summary-card" tabIndex={0} aria-label="Active actors in last 24 hours">
+        <article className="activity-summary-card activity-summary-card--actors" tabIndex={0} aria-label="Active actors in last 24 hours">
+          <span className="activity-summary-card__icon activity-summary-card__icon--actors" aria-hidden="true">
+            <UsersIcon />
+          </span>
           <div className="activity-summary-card__header">
             <h3 className="activity-summary-card__title">Active Actors</h3>
             <span className="activity-summary-card__window">Last 24h</span>
@@ -154,7 +161,7 @@ export function ActivitiesPage() {
         </article>
 
         <article
-          className="activity-summary-card activity-summary-card--emphasis"
+          className="activity-summary-card activity-summary-card--emphasis activity-summary-card--moderation"
           tabIndex={0}
           role="button"
           aria-pressed={actionFilters.length > 0 && actionFilters.every((a) => ['listing_approved', 'listing_rejected', 'listing_deactivated', 'seller_verification_approved', 'seller_verification_rejected'].includes(a))}
@@ -189,6 +196,9 @@ export function ActivitiesPage() {
             }
           }}
         >
+          <span className="activity-summary-card__icon activity-summary-card__icon--moderation" aria-hidden="true">
+            <ShieldCheck />
+          </span>
           <div className="activity-summary-card__header">
             <h3 className="activity-summary-card__title">Moderation Actions</h3>
             <span className="activity-summary-card__window">Last 24h</span>
@@ -205,7 +215,7 @@ export function ActivitiesPage() {
         </article>
 
         <article
-          className="activity-summary-card"
+          className="activity-summary-card activity-summary-card--configuration"
           tabIndex={0}
           role="button"
           aria-pressed={actionFilter === 'settings_updated'}
@@ -232,6 +242,9 @@ export function ActivitiesPage() {
             }
           }}
         >
+          <span className="activity-summary-card__icon activity-summary-card__icon--configuration" aria-hidden="true">
+            <Settings />
+          </span>
           <div className="activity-summary-card__header">
             <h3 className="activity-summary-card__title">Configuration Changes</h3>
             <span className="activity-summary-card__window">Last 24h</span>
@@ -368,7 +381,7 @@ export function ActivitiesPage() {
       ) : (
         <>
           <div className="lv-table-container">
-            <table className="lv-table">
+            <table className="lv-table lv-table--activities">
               <thead>
                 <tr>
                   <th>Actor</th>
@@ -383,12 +396,15 @@ export function ActivitiesPage() {
               <tbody>
                 {activities.map((activity) => {
                   const changes = activityChanges(activity.metadata);
+                  const changesTitle = changes
+                    .map((change) => `${change.label}: ${change.from} → ${change.to}`)
+                    .join(' · ');
                   const targetLink = getActivityTargetLink(activity.metadata);
                   const actorLabel = activityActorLabel(activity.user);
 
                   return (
                     <tr key={activity.id}>
-                      <td className="lv-name-cell">
+                      <td className="lv-name-cell" title={actorLabel}>
                         {activity.user ? (
                           <Link className="activity-link" to={`/users?user=${activity.user.id}`}>
                             {actorLabel}
@@ -398,7 +414,7 @@ export function ActivitiesPage() {
                         )}
                       </td>
                       <td>{activityActionLabel(activity.action)}</td>
-                      <td>
+                      <td title={targetLink.label}>
                         {targetLink.href ? (
                           <Link className="activity-link" to={targetLink.href}>
                             {targetLink.label}
@@ -407,8 +423,10 @@ export function ActivitiesPage() {
                           targetLink.label
                         )}
                       </td>
-                      <td>{activity.description ?? '\u2014'}</td>
-                      <td className="activity-changes-cell">
+                      <td className="activity-description-cell" title={activity.description ?? '\u2014'}>
+                        {activity.description ?? '\u2014'}
+                      </td>
+                      <td className="activity-changes-cell" title={changesTitle || undefined}>
                         {changes.length === 0 ? (
                           '\u2014'
                         ) : (

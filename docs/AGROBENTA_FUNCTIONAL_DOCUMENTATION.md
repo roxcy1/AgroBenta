@@ -768,6 +768,18 @@ Whether messaging requires a listing context, and who may message whom, is
 
 **[MS p.15–16; MS-P admin screens, p.83–86]**
 
+**User account actions [DEC-08, project-owner decision 2026-11-07]:** the Admin
+Web may update a user's name and email, or deactivate an account using soft
+deletion. Account ID, role, seller capability, verification status, password,
+and timestamps remain controlled by their existing workflows. Deactivation
+revokes active API and database sessions, reserves the account's unique email,
+and preserves listings, verifications, conversations, activities, and
+transaction history. Active listings owned by a deactivated account are hidden
+from the buyer marketplace without changing their stored listing status. An
+administrator cannot deactivate their own account or the last active
+administrator; an administrator may deactivate another administrator while at
+least one active administrator remains.
+
 ### 9.3 The boundary is a security boundary
 
 * The mobile app must not call admin endpoints.
@@ -975,11 +987,19 @@ available (§0.1).
 
 MS-08 (listing title) remains open in §13.2. No title field or column is added.
 
+<<<<<<< Updated upstream
 ### 13.6 Closed by project-owner decision (2026-11-07)
 
 | ID | Item | Resolution |
 |---|---|---|
 | **DEC-07** | Trinidad addresses | Use the backend-owned 20-barangay catalog; new values use the canonical format in §3.3. Seller verification and listing locations are required, while profile location remains optional. Preserve unmatched legacy values until explicitly replaced; they must be corrected before listing submission for review. Existing string fields are reused without a schema change. |
+=======
+### 13.5 Closed by project-owner decision (2026-11-07)
+
+| ID | Item | Resolution |
+|---|---|---|
+| **DEC-08** | Admin user actions | Admins may edit only name/email and deactivate accounts through soft deletion. Self-deletion and removal of the last active administrator are refused. The email remains reserved, credentials are revoked, and associated business history is retained. Active listings from deactivated sellers are hidden from the marketplace without changing stored status (§9.2). |
+>>>>>>> Stashed changes
 
 ---
 
@@ -1009,6 +1029,7 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-03 | Part of MS-10 decided: password recovery uses a six-digit email code (§2.8). The manuscript does not specify the method. The email service remains open. |
 | 2026-11-03 | Part of MS-05 decided: the farm/business name is optional, and Proof of Address and Farm photos are implemented (§3.3, Figure 19). Whether to remove the selfie remains open, and MS-07 is unchanged. |
 | 2026-11-05 | **[DEC-05]** Per-user Account Mode preference is retained across logout and restored for the same authenticated user. This replaces the earlier logout-clear behavior in §2.7 rule 6; preferences are keyed by user ID and permission-checked on restoration. |
+| 2026-11-07 | **[DEC-08]** Approved Admin Web user editing and account deactivation rules (§9.2, §13.5): name/email only, soft deletion, session revocation, retained business history, inactive-seller listing suppression, and self/last-administrator protection. |
 | 2026-11-04 | **[DEC-04]** Government ID type selection and two-sided image capture, including the applicant's explicit no-back declaration, were specified by the project owner. This does not change the existing selfie, Proof of Address, privacy, review, or resubmission rules (§3.3). |
 | 2026-11-05 | **[DEC-06]** Resolved MS-03 by adopting Chicken alongside Cattle, Carabao, Goat and Swine, and approved the optional type-dependent breed catalog (§4.1). The manuscript remains to be updated. |
 | 2026-11-07 | **[DEC-07]** Adopted a backend-owned Trinidad barangay catalog and canonical address format (§2.8, §3.3, §4, §13.6). Profile location remains optional; seller verification and listing locations require a catalog barangay. Legacy values are preserved until replaced, with listing values corrected before submission. No PSGC codes or schema changes are introduced. |

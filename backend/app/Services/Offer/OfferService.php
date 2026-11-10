@@ -194,6 +194,10 @@ class OfferService
                 abort(409, 'This listing is not available for new transactions.');
             }
 
+            if ($listing->seller === null) {
+                abort(409, 'This listing is not available for new transactions.');
+            }
+
             if ((int) $listing->quantity < 1) {
                 abort(409, 'There is not enough stock for the requested quantity.');
             }

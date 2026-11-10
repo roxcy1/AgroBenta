@@ -290,6 +290,28 @@ class SellerVerificationTest extends TestCase
         $response->assertJsonPath('data.admin_note', 'Verified successfully.');
     }
 
+    public function test_admin_can_finish_reviewing_a_preserved_verification_after_account_deactivation(): void
+    {
+        $verification = $this->createVerification();
+        $token = $this->adminToken();
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->deleteJson("/api/admin/users/{$verification->user_id}")
+            ->assertOk();
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.seller.id', $verification->user_id);
+
+        $this->assertSoftDeleted('users', ['id' => $verification->user_id]);
+        $this->assertDatabaseHas('seller_verifications', [
+            'id' => $verification->id,
+            'status' => SellerVerificationStatus::Approved->value,
+        ]);
+    }
+
     public function test_approval_sets_seller_capability(): void
     {
         $verification = $this->createVerification();
