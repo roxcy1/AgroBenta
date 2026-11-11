@@ -49,6 +49,12 @@ dependencies:
   # documented Flutter version moves to 3.47 or later.
   google_sign_in_ios: ">=6.3.0 <6.4.0"
   gal: ^2.3.3
+  # Phone push notifications (Android): the FCM registration token sent to
+  # POST /api/devices, and opening the app from a tapped push. Held on 16.x:
+  # 17.0 deprecates the registration-token API (getToken/onTokenRefresh) the
+  # backend's FCM HTTP v1 send targets, in favour of Firebase Installation IDs.
+  firebase_core: ^4.15.2
+  firebase_messaging: ^16.7.1
 
 dev_dependencies:
   flutter_test:

@@ -55,6 +55,14 @@ class User extends Authenticatable
         return $this->seller_capability === SellerCapability::Seller;
     }
 
+    /**
+     * The phones registered for push notifications.
+     */
+    public function deviceTokens(): HasMany
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
     public function sellerVerifications(): HasMany
     {
         return $this->hasMany(SellerVerification::class);

@@ -5,6 +5,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/network/api_client.dart';
+import 'core/push/firebase_push_messaging.dart';
+import 'core/push/push_messaging.dart';
 import 'core/realtime/realtime_client.dart';
 import 'core/realtime/realtime_controller.dart';
 import 'core/realtime/realtime_event.dart';
@@ -66,7 +68,11 @@ import 'services/transaction_service.dart';
 import 'services/trinidad_location_service.dart';
 import 'features/notifications/state/notifications_controller.dart';
 import 'features/notifications/state/notifications_scope.dart';
+import 'features/notifications/state/push_registration_controller.dart';
+import 'features/notifications/view/notifications_screen.dart';
+import 'repositories/device_repository.dart';
 import 'repositories/notification_repository.dart';
+import 'services/device_service.dart';
 import 'services/notification_service.dart';
 
 /// AgroBenta mobile client — application entry point.
@@ -86,7 +92,8 @@ Future<void> main() async {
   // frame — there is no safe lazy point.
   await initializeDateFormatting('en_PH');
 
-  runApp(const AgroBentaApp());
+  // Firebase push on Android only; every other platform gets the no-op.
+  runApp(AgroBentaApp(pushMessaging: FirebasePushMessaging.forCurrentPlatform()));
 }
 
 class AgroBentaApp extends StatefulWidget {
@@ -94,8 +101,15 @@ class AgroBentaApp extends StatefulWidget {
     this.tokenStore,
     this.accountModePreferenceStore,
     this.httpClient,
+    this.pushMessaging,
     super.key,
   });
+
+  /// The phone's push notification source.
+  ///
+  /// Null means no push. Only `main()` passes the Firebase implementation, so
+  /// tests, which have no Firebase platform channel, never start it.
+  final PushMessaging? pushMessaging;
 
   /// Overrides the secure token store.
   ///
@@ -160,6 +174,14 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final PusherReverbClient _realtimeClient;
   late final RealtimeController _realtimeController;
   StreamSubscription<bool>? _realtimeConnectionSubscription;
+  late final PushMessaging _pushMessaging;
+  late final PushRegistrationController _pushRegistrationController;
+  StreamSubscription<Map<String, String>>? _pushOpenedSubscription;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  /// A push was tapped before a session was restored; open the Notifications
+  /// screen once the user is signed in.
+  bool _pendingPushOpen = false;
   int? _sessionUserId;
   bool _sessionControllersCreated = false;
 
@@ -287,7 +309,44 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _realtimeConnectionSubscription =
         _realtimeController.connected.listen(_handleRealtimeConnection);
 
+    // Push: registered with the backend for each session (see
+    // _handleAuthSessionChanged). A tapped push opens the Notifications screen.
+    _pushMessaging = widget.pushMessaging ?? const NoopPushMessaging();
+    _pushRegistrationController = PushRegistrationController(
+      _pushMessaging,
+      DeviceRepository(DeviceService(_apiClient)),
+    );
+    _pushOpenedSubscription = _pushMessaging.openedNotifications.listen(
+      (_) => _handlePushOpened(),
+      onError: (Object error) =>
+          debugPrint('Opening a push failed: ${error.runtimeType}'),
+    );
+
     _authController.addListener(_handleAuthSessionChanged);
+  }
+
+  void _handlePushOpened() {
+    if (_sessionUserId == null) {
+      _pendingPushOpen = true;
+      return;
+    }
+    _openNotifications();
+  }
+
+  void _openNotifications() {
+    _pendingPushOpen = false;
+    // After the next frame, so the signed-in shell is already in place when
+    // the push arrived with the session restore. A frame is requested because
+    // a tap on a push changes nothing else on screen that would schedule one.
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (BuildContext context) => const NotificationsScreen(),
+          ),
+        );
+      })
+      ..scheduleFrame();
   }
 
   void _handleAuthSessionChanged() {
@@ -298,8 +357,22 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
       return;
     }
 
+    // Push follows the session too: the old phone registration ends with the
+    // old session, and the new one registers this phone for its user. The
+    // controller runs these in order.
+    if (_sessionUserId != null) {
+      _pushRegistrationController.stop();
+    }
+    if (userId != null) {
+      _pushRegistrationController.start();
+    }
+
     _sessionUserId = userId;
     _createSessionControllers(replaceExisting: true);
+
+    if (userId != null && _pendingPushOpen) {
+      _openNotifications();
+    }
 
     // Real-time follows the session: connect the user's private channel, or
     // disconnect when signed out.
@@ -385,6 +458,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _trinidadLocationController.dispose();
     _realtimeConnectionSubscription?.cancel();
     _realtimeController.dispose();
+    _pushOpenedSubscription?.cancel();
+    _pushRegistrationController.dispose();
     _apiClient.close();
     super.dispose();
   }
@@ -480,6 +555,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                                   child: RealtimeScope(
                                     controller: _realtimeController,
                                     child: MaterialApp(
+                                      navigatorKey: _navigatorKey,
                                       title: 'AgroBenta',
                                       debugShowCheckedModeBanner: false,
                                       theme: AppTheme.light(),

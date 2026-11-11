@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Admin\TransactionController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
+use App\Http\Controllers\Api\Device\DeviceTokenController;
 use App\Http\Controllers\Api\Inquiry\InquiryController as MobileInquiryController;
 use App\Http\Controllers\Api\LivestockTypeController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
@@ -325,6 +326,13 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('notifications')->gr
     Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::delete('/{id}', [NotificationController::class, 'destroy']);
+});
+
+// Push notifications — the calling phone's FCM registration token. The row is
+// owned by the token's user and session, and is deleted with the session's
+// access token on logout, so there is no unregister route.
+Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    Route::post('/devices', [DeviceTokenController::class, 'store']);
 });
 
 Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->group(function (): void {
