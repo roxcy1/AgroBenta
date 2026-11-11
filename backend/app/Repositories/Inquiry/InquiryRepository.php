@@ -10,7 +10,6 @@ use App\Enums\InquiryTransactionMethod;
 use App\Enums\OfferStatus;
 use App\Models\Inquiry;
 use App\Models\User;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -28,7 +27,10 @@ use Illuminate\Support\Collection;
  *    and has no client-side entry point (`routes/api.php`, admin block).
  *
  * On the read path, the seller scope is likewise applied here in SQL, so
- * "not yours" is never a condition the controller can forget.
+ * "not yours" is never a condition the controller can forget. There is no
+ * seller inquiry inbox (an inquiry is delivered as a message, functional
+ * documentation §8.2); `listActiveForUser` serves the Messages "Inquiries" tab
+ * and `countForSeller` the seller dashboard total.
  */
 class InquiryRepository
 {

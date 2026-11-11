@@ -21,7 +21,7 @@ void main() {
   Future<void> pumpScreen(
     WidgetTester tester, {
     required Future<http.Response> Function(RecordedRequest request) handler,
-    VoidCallback? onOpenInquiries,
+    VoidCallback? onOpenMessages,
     VoidCallback? onOpenTransactions,
     ValueChanged<int>? onOpenTransaction,
   }) async {
@@ -41,7 +41,7 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.light(),
           home: AllActivitiesScreen(
-            onOpenInquiries: onOpenInquiries ?? () {},
+            onOpenMessages: onOpenMessages ?? () {},
             onOpenListings: () {},
             onOpenTransactions: onOpenTransactions ?? () {},
             onOpenTransaction: onOpenTransaction,
@@ -171,7 +171,7 @@ void main() {
   testWidgets('rows navigate to their existing destinations', (
     WidgetTester tester,
   ) async {
-    bool inquiries = false;
+    bool messages = false;
     int? transactionId;
 
     await pumpScreen(
@@ -190,7 +190,7 @@ void main() {
           ),
         ],
       ),
-      onOpenInquiries: () => inquiries = true,
+      onOpenMessages: () => messages = true,
       onOpenTransaction: (int id) => transactionId = id,
     );
 
@@ -198,7 +198,7 @@ void main() {
     await tester.tap(find.text('Transaction cancelled'));
     await tester.pumpAndSettle();
 
-    expect(inquiries, isTrue);
+    expect(messages, isTrue);
     expect(transactionId, 42);
   });
 }

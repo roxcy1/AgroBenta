@@ -9,7 +9,7 @@ import '../state/make_offer_controller.dart';
 import '../state/offer_scope.dart';
 import '../state/offer_state.dart';
 
-/// The seller's structured purchase-offer form for a received inquiry.
+/// The seller's structured purchase-offer form for an inquiry.
 ///
 /// An offer is always created from an existing inquiry: the inquiry supplies
 /// the buyer and the listing, so this screen sends only `inquiry_id`,
@@ -22,7 +22,15 @@ import '../state/offer_state.dart';
 /// every editable field is prefilled from the buyer's inquiry so "keep the
 /// buyer's preference" is the default.
 ///
+<<<<<<< Updated upstream
 /// Opens from a chat thread, using the server's `eligible_inquiry`.
+=======
+/// There is one way in, from the server's own records:
+/// [MakeOfferScreen.forConversation] — a chat thread, using
+/// `ConversationResource.eligible_inquiry`. Inquiries are delivered to the
+/// seller as messages (functional documentation §8.2, MS-18), so the
+/// conversation is where the seller starts an offer.
+>>>>>>> Stashed changes
 ///
 /// The controller is owned by this route. Popping returns `true` when an offer
 /// was created so the chat panel can refresh.

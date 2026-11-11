@@ -760,10 +760,11 @@ class MobileInquiryTest extends TestCase
     }
 
     #[Test]
-    public function seller_sees_collection_date_option_in_received_inquiries(): void
+    public function collection_date_option_is_stored_with_the_preferred_schedule(): void
     {
-        // Covered by SellerInquiryResource; this test keeps the mobile
-        // projection contract visible here alongside the buyer flow.
+        // The structured preferences are persisted on the inquiry row and
+        // carried in the message the seller reads (functional documentation
+        // §8.2, MS-18).
         $listing = $this->createListing($this->seller);
 
         $this->postInquiry($this->validInquiryBody($listing, [

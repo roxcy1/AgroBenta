@@ -725,6 +725,57 @@ class OfferTest extends TestCase
     }
 
     #[Test]
+<<<<<<< Updated upstream
+=======
+    public function the_messages_inquiry_list_reports_offer_eligibility(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        // Inquiries are delivered as messages (functional documentation §8.2,
+        // MS-18), so the seller reads them through the Messages "Inquiries"
+        // tab, not a separate inbox.
+        $list = fn () => $this->withHeader(
+            'Authorization',
+            'Bearer '.$this->mobileToken($this->seller),
+        )->getJson('/api/inquiries?role=seller')->assertOk()->json('data.inquiries.0');
+
+        $this->assertTrue($list()['can_make_offer']);
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 48000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->assertFalse($list()['can_make_offer'], 'a pending offer blocks another');
+
+        $this->postOfferAction('decline', $offerId, $this->buyer)->assertStatus(200);
+        $this->assertTrue($list()['can_make_offer'], 'a declined offer can be revised');
+
+        $offerId = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => 47000.00,
+        ])->assertStatus(201)->json('data.id');
+
+        $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(200);
+
+        // Acceptance is permanent, and the inquiry has become a transaction:
+        // the Inquiries tab lists only what still needs negotiating, so the
+        // accepted inquiry leaves it (the Transactions tab owns the sale).
+        $this->assertSame(
+            [],
+            $this->withHeader(
+                'Authorization',
+                'Bearer '.$this->mobileToken($this->seller),
+            )->getJson('/api/inquiries?role=seller')->assertOk()->json('data.inquiries'),
+            'an accepted inquiry becomes a transaction',
+        );
+    }
+
+    #[Test]
+>>>>>>> Stashed changes
     public function accepting_a_structured_offer_snapshots_its_terms_on_the_transaction(): void
     {
         $listing = $this->createListing($this->seller);

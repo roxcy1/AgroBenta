@@ -10,13 +10,17 @@ use App\Models\User;
 use App\Repositories\Inquiry\InquiryRepository;
 use App\Services\ActivityLogger;
 use App\Services\Messaging\MessagingService;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The rules for buyer inquiries and the seller's received-inquiry read.
+ * The rules for buyer inquiries.
+ *
+ * An inquiry is delivered to the seller as a message (functional documentation
+ * §8.2, MS-18), so there is no seller inbox here: the seller reads and answers
+ * it in Messages. The only seller-side inquiry read is the Messages "Inquiries"
+ * tab, which lists the caller's own active inquiries on the selected side.
  *
  * The repository persists the row and resolves the counterparties; this
  * service decides whether the inquiry may be created at all. The guards are

@@ -13,11 +13,11 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Create a buyer inquiry — the mobile write path.
+ * Buyer inquiries — the mobile write path and the Messages "Inquiries" tab.
  *
- * Received inquiries are read through the seller endpoint. There is no
- * administrator inquiry route: an inquiry is between the buyer and the seller
- * only (functional documentation §8.2). Every method
+ * An inquiry is delivered to the seller as a message, so there is no seller
+ * inquiry inbox and no administrator inquiry route: an inquiry is between the
+ * buyer and the seller only (functional documentation §8.2, MS-18). Every method
  * resolves the buyer from the token and the seller from the listing — never
  * from the body — so there is no parameter or field that could point an
  * inquiry at the wrong account.

@@ -55,49 +55,6 @@ Map<String, dynamic> inquiryJson({
   };
 }
 
-/// A `SellerInquiryResource` payload exactly as the backend serialises one.
-///
-/// Copied from `backend/app/Http/Resources/SellerInquiryResource.php`. There is
-/// deliberately no `status`: the seller-facing resource omits it, and a fixture
-/// that added one would let the model grow a field the API never sends.
-Map<String, dynamic> sellerInquiryJson({
-  Object? id = 5,
-  Map<String, dynamic>? buyer,
-  Map<String, dynamic>? listing,
-  String? subject = 'General Inquiry',
-  String message = 'Is this one still available?',
-  Object? purchaseInterest = true,
-  Object? transactionMethod = 'direct_deal',
-  Object? deliveryMethod = 'buyer_pickup',
-  Object? deliveryFee = '1500.00',
-  Object? contactMethod = 'in_app_message',
-  Object? preferredSchedule = '2026-10-25',
-  Object? collectionDateOption = 'specific_date',
-  Object? paymentMethod = 'cash',
-  Object? collectionMethod = 'farm_pickup',
-  Object? createdAt = '2026-10-19T08:15:00.000000Z',
-  bool? canMakeOffer = true,
-}) {
-  return <String, dynamic>{
-    'id': id,
-    'buyer': buyer ?? inquiryBuyerJson(),
-    'listing': listing ?? inquiryListingJson(),
-    'subject': subject,
-    'message': message,
-    'purchase_interest': purchaseInterest,
-    'transaction_method': transactionMethod,
-    'delivery_method': deliveryMethod,
-    'delivery_fee': deliveryFee,
-    'contact_method': contactMethod,
-    'preferred_schedule': preferredSchedule,
-    'collection_date_option': collectionDateOption,
-    'payment_method': paymentMethod,
-    'collection_method': collectionMethod,
-    'created_at': createdAt,
-    'can_make_offer': canMakeOffer,
-  };
-}
-
 /// The buyer projection: identity and display name only, never an email.
 Map<String, dynamic> inquiryBuyerJson({
   Object? id = 9,
@@ -215,35 +172,6 @@ http.Response inquiryCheckResponse({Map<String, dynamic>? inquiry}) {
   );
 }
 
-/// The `200` that `GET /api/seller/inquiries` answers with.
-http.Response sellerInquiryListResponse({
-  List<Map<String, dynamic>>? inquiries,
-  int currentPage = 1,
-  int lastPage = 1,
-  int perPage = 15,
-  int? total,
-}) {
-  final List<Map<String, dynamic>> items =
-      inquiries ?? <Map<String, dynamic>>[sellerInquiryJson()];
-  return http.Response(
-    jsonEncode(
-      successEnvelope(
-        data: <String, dynamic>{
-          'inquiries': items,
-          'pagination': <String, dynamic>{
-            'current_page': currentPage,
-            'last_page': lastPage,
-            'per_page': perPage,
-            'total': total ?? items.length,
-          },
-        },
-      ),
-    ),
-    200,
-    headers: _jsonHeaders,
-  );
-}
-
 /// A `422` with per-field errors, as `StoreInquiryRequest` produces it.
 http.Response inquiryValidationResponse({
   Map<String, Object> errors = const <String, Object>{
@@ -327,5 +255,8 @@ InquiryController buildInquiryController(
     buildInquiryRepository(tokenStore, handler, recorded: recorded),
   );
 }
+<<<<<<< Updated upstream
 
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes

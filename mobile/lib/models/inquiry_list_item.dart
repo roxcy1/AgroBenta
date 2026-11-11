@@ -54,9 +54,9 @@ class InquiryListItemListing {
 /// One active inquiry, as `GET /api/inquiries` returns it.
 ///
 /// Mirrors `InquiryListItemResource` field for field. This is not the buyer's
-/// create response (`Inquiry`) nor the seller's inbox record
-/// (`ReceivedInquiry`): it is side-aware, names the counterpart, and carries the
-/// latest offer so the Messages tab can show what still needs negotiating.
+/// create response (`Inquiry`): it is side-aware, names the counterpart, and
+/// carries the latest offer so the Messages tab can show what still needs
+/// negotiating.
 class InquiryListItem {
   const InquiryListItem({
     required this.id,

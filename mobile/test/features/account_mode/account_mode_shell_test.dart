@@ -135,7 +135,7 @@ void main() {
     expect(stack.index, 3);
   });
 
-  testWidgets('the Seller Home entry opens the received-inquiry inbox', (
+  testWidgets('the Seller Home inquiry count opens the Messages tab', (
     WidgetTester tester,
   ) async {
     final AccountModeShellHarness harness = await AccountModeShellHarness.pump(
@@ -144,20 +144,22 @@ void main() {
     harness.select(AccountMode.seller);
     await settleAccountModeShell(tester);
 
-    await tester.ensureVisible(find.text('View inquiries'));
+    await tester.ensureVisible(find.text('Inquiries'));
     await tester.pump();
-    await tester.tap(find.text('View inquiries'));
-    await settleAccountModeShell(tester);
+    await tester.tap(find.text('Inquiries'));
+    await tester.pump();
 
-    expect(find.byType(ReceivedInquiriesScreen), findsOneWidget);
-    expect(find.text('Maria Santos'), findsOneWidget);
-    expect(find.text('Is this one still available?'), findsOneWidget);
+    final IndexedStack stack = tester.widget<IndexedStack>(
+      find.byType(IndexedStack).first,
+    );
+    expect(stack.index, 2);
+    // Inquiries are delivered as messages (MS-18), so no seller inbox request
+    // is made anywhere in the flow.
     expect(
-      harness.recorded
-          .where((RecordedRequest r) => r.apiPath == '/seller/inquiries')
-          .last
-          .query,
-      <String, String>{'page': '1', 'per_page': '15'},
+      harness.recorded.where(
+        (RecordedRequest r) => r.apiPath == '/seller/inquiries',
+      ),
+      isEmpty,
     );
   });
 

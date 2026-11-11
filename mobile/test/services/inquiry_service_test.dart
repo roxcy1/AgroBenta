@@ -335,6 +335,7 @@ void main() {
       );
     });
   });
+<<<<<<< Updated upstream
 
   group('listReceived()', () {
     test('gets the seller inbox with only page and per_page', () async {
@@ -389,4 +390,6 @@ void main() {
       return;
     });
   });
+=======
+>>>>>>> Stashed changes
 }

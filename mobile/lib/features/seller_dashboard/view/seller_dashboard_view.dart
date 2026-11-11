@@ -14,12 +14,27 @@ import '../widgets/seller_activity_tile.dart';
 
 /// The seller dashboard shown on Seller Home.
 ///
+<<<<<<< Updated upstream
 /// Every value comes from `GET /seller/dashboard`, resolved from the token.
 /// Loading, empty, error and refresh states are rendered from that response;
 /// nothing is estimated.
 class SellerDashboardView extends StatefulWidget {
   const SellerDashboardView({
     required this.onOpenListings,
+=======
+/// Every value comes from real seller-scoped endpoints: `GET /seller/dashboard`
+/// for the summary, and — when a repository is supplied — `GET /seller/activities`
+/// for the recent-activity feed. Loading, empty, error, refresh and zero-count
+/// states are rendered from those responses; nothing is estimated.
+///
+/// Inquiries are delivered to the seller as messages (functional documentation
+/// §8.2, MS-18), so this dashboard has no separate inquiry inbox to open: the
+/// inquiry count is a real record count, and its tap opens Messages.
+class SellerDashboardView extends StatefulWidget {
+  const SellerDashboardView({
+    required this.onOpenListings,
+    required this.onOpenMessages,
+>>>>>>> Stashed changes
     required this.onOpenTransactions,
     required this.onAddListing,
     this.activityRepository,
@@ -30,6 +45,10 @@ class SellerDashboardView extends StatefulWidget {
   });
 
   final VoidCallback onOpenListings;
+<<<<<<< Updated upstream
+=======
+  final VoidCallback onOpenMessages;
+>>>>>>> Stashed changes
   final VoidCallback onOpenTransactions;
 
   /// Opens the existing create-listing form; the dashboard refreshes when the
@@ -173,6 +192,10 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
           _SummaryGrid(
             dashboard: dashboard,
             onOpenListings: widget.onOpenListings,
+<<<<<<< Updated upstream
+=======
+            onOpenMessages: widget.onOpenMessages,
+>>>>>>> Stashed changes
             onOpenTransactions: widget.onOpenTransactions,
           ),
           if (!dashboard.hasActivity) ...<Widget>[
@@ -189,6 +212,10 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
             const SizedBox(height: AppSpacing.lg),
             _RecentActivitySection(
               controller: _activity!,
+<<<<<<< Updated upstream
+=======
+              onOpenMessages: widget.onOpenMessages,
+>>>>>>> Stashed changes
               onOpenListings: widget.onOpenListings,
               onOpenTransactions: widget.onOpenTransactions,
               onOpenOffer: widget.onOpenOffer,
@@ -226,11 +253,19 @@ class _SummaryGrid extends StatelessWidget {
   const _SummaryGrid({
     required this.dashboard,
     required this.onOpenListings,
+<<<<<<< Updated upstream
+=======
+    required this.onOpenMessages,
+>>>>>>> Stashed changes
     required this.onOpenTransactions,
   });
 
   final SellerDashboard dashboard;
   final VoidCallback onOpenListings;
+<<<<<<< Updated upstream
+=======
+  final VoidCallback onOpenMessages;
+>>>>>>> Stashed changes
   final VoidCallback onOpenTransactions;
 
   @override
@@ -253,6 +288,16 @@ class _SummaryGrid extends StatelessWidget {
             ),
             _SummaryTile(
               width: width,
+<<<<<<< Updated upstream
+=======
+              label: 'Inquiries',
+              value: dashboard.inquiries.total,
+              icon: Icons.mark_email_unread_outlined,
+              onTap: onOpenMessages,
+            ),
+            _SummaryTile(
+              width: width,
+>>>>>>> Stashed changes
               label: 'Ongoing Transactions',
               value: dashboard.transactions.pending,
               icon: Icons.swap_horiz_outlined,
@@ -332,12 +377,24 @@ class _SummaryTile extends StatelessWidget {
 /// The latest genuine seller events, newest first, capped at five.
 ///
 /// Each row navigates only when its context identifies an existing record:
+<<<<<<< Updated upstream
 /// listing events open My Listings, and transaction events open the
 /// transaction detail (or the Transactions tab when the id is missing). No row
 /// is ever routed to a guessed record.
 class _RecentActivitySection extends StatelessWidget {
   const _RecentActivitySection({
     required this.controller,
+=======
+/// inquiry events open Messages (inquiries are delivered there, functional
+/// documentation §8.2), offers open the buyer conversation (or Messages when the
+/// buyer id is missing), listing events open My Listings, and transaction events
+/// open the transaction detail (or the Transactions tab when the id is missing).
+/// No row is ever routed to a guessed record.
+class _RecentActivitySection extends StatelessWidget {
+  const _RecentActivitySection({
+    required this.controller,
+    required this.onOpenMessages,
+>>>>>>> Stashed changes
     required this.onOpenListings,
     required this.onOpenTransactions,
     required this.onOpenOffer,
@@ -346,6 +403,10 @@ class _RecentActivitySection extends StatelessWidget {
   });
 
   final SellerActivityController controller;
+<<<<<<< Updated upstream
+=======
+  final VoidCallback onOpenMessages;
+>>>>>>> Stashed changes
   final VoidCallback onOpenListings;
   final VoidCallback onOpenTransactions;
   final void Function(int buyerId, int? transactionId)? onOpenOffer;
@@ -429,9 +490,13 @@ class _RecentActivitySection extends StatelessWidget {
     final String action = activity.action;
 
     if (action.startsWith('inquiry')) {
+<<<<<<< Updated upstream
       // Inquiries are delivered as messages now (§8.2): there is no seller
       // inbox to open, so activity rows have nothing to navigate to here.
       return null;
+=======
+      return onOpenMessages;
+>>>>>>> Stashed changes
     }
 
     if (action.startsWith('offer')) {
@@ -439,7 +504,11 @@ class _RecentActivitySection extends StatelessWidget {
       if (buyerId != null && onOpenOffer != null) {
         return () => onOpenOffer!(buyerId, activity.transactionId);
       }
+<<<<<<< Updated upstream
       return null;
+=======
+      return onOpenMessages;
+>>>>>>> Stashed changes
     }
 
     if (action.startsWith('listing')) {

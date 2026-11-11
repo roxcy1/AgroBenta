@@ -1,4 +1,7 @@
+<<<<<<< Updated upstream
 ﻿import '../core/constants/api_constants.dart';
+=======
+>>>>>>> Stashed changes
 import '../models/inquiry.dart';
 import '../models/inquiry_list_item.dart';
 import '../services/inquiry_service.dart';
@@ -22,7 +25,10 @@ class InquiryRepository {
     return _service.listActive(role: role);
   }
 
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
   /// The inquiry the authenticated buyer already sent about [listingId], or
   /// `null` when they have not sent one.
   ///
@@ -64,5 +70,8 @@ class InquiryRepository {
       collectionMethod: collectionMethod,
     );
   }
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 }

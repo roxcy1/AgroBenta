@@ -29,9 +29,17 @@ import '../widgets/home_header.dart';
 /// conversion, and completed-transaction figures are deliberately not shown
 /// because the API does not expose them.
 ///
+<<<<<<< Updated upstream
+=======
+/// Inquiries are delivered to the seller as messages (functional documentation
+/// §8.2, MS-18), so there is no separate inquiry inbox: the inquiry count and
+/// inquiry activities open the Messages tab. My Listings and Transactions
+/// switch to their existing shell tabs.
+>>>>>>> Stashed changes
 class SellerHomeScreen extends StatefulWidget {
   const SellerHomeScreen({
     this.onOpenListings,
+    this.onOpenMessages,
     this.onOpenProfile,
     this.onOpenTransactions,
     super.key,
@@ -39,6 +47,9 @@ class SellerHomeScreen extends StatefulWidget {
 
   /// Switches the shell to the My Listings tab.
   final VoidCallback? onOpenListings;
+
+  /// Switches the shell to the Messages tab, where inquiries are read.
+  final VoidCallback? onOpenMessages;
 
   /// Switches the shell to the Profile tab.
   final VoidCallback? onOpenProfile;
@@ -80,9 +91,21 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       await SellerListingScope.readOf(context).refresh();
     }
 
+    void openMessages() {
+      final VoidCallback? injected = widget.onOpenMessages;
+      if (injected != null) {
+        injected();
+      }
+    }
+
     /// Opens the buyer conversation behind an offer activity when the session
+<<<<<<< Updated upstream
     /// already knows that pair; when no conversation exists yet there is
     /// nothing to open, so this is a no-op.
+=======
+    /// already knows that pair; otherwise switches to Messages, where the
+    /// inquiry and its buyer live.
+>>>>>>> Stashed changes
     void openOfferActivity(int buyerId, int? transactionId) {
       final conversations = MessagingScope.readOf(
         context,
@@ -96,6 +119,10 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       }
 
       if (match == null) {
+<<<<<<< Updated upstream
+=======
+        openMessages();
+>>>>>>> Stashed changes
         return;
       }
 
@@ -153,6 +180,10 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => AllActivitiesScreen(
+<<<<<<< Updated upstream
+=======
+            onOpenMessages: openMessages,
+>>>>>>> Stashed changes
             onOpenListings: openListings,
             onOpenTransactions: openTransactions,
             onOpenOffer: openOfferActivity,
@@ -225,6 +256,10 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
                     onOpenOffer: openOfferActivity,
                     onOpenTransaction: openTransactionActivity,
                     onOpenListings: openListings,
+<<<<<<< Updated upstream
+=======
+                    onOpenMessages: openMessages,
+>>>>>>> Stashed changes
                     onOpenTransactions: openTransactions,
                     onSeeAllActivities: openAllActivities,
                   ),

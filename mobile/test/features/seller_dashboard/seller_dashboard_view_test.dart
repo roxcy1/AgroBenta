@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/seller_dashboard/state/seller_dashboard_scope.dart';
 import 'package:agrobenta_mobile/features/seller_dashboard/view/seller_dashboard_view.dart';
-import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
 import 'package:agrobenta_mobile/repositories/seller_activity_repository.dart';
 import 'package:agrobenta_mobile/repositories/seller_dashboard_repository.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
-import '../../support/inquiry_fakes.dart';
 import '../../support/seller_dashboard_fakes.dart';
 
 void main() {
@@ -37,10 +35,9 @@ void main() {
     WidgetTester tester,
     SellerDashboardRepository dashboardRepository, {
     VoidCallback? onOpenListings,
-    VoidCallback? onOpenInquiries,
+    VoidCallback? onOpenMessages,
     VoidCallback? onOpenTransactions,
     Future<void> Function()? onAddListing,
-    InquiryRepository? inquiriesRepository,
     SellerActivityRepository? activityRepository,
     void Function(int buyerId, int? transactionId)? onOpenOffer,
     ValueChanged<int>? onOpenTransaction,
@@ -54,10 +51,9 @@ void main() {
           home: Scaffold(
             body: SellerDashboardView(
               onOpenListings: onOpenListings ?? () {},
-              onOpenInquiries: onOpenInquiries ?? () {},
+              onOpenMessages: onOpenMessages ?? () {},
               onOpenTransactions: onOpenTransactions ?? () {},
               onAddListing: onAddListing ?? () async {},
-              inquiriesRepository: inquiriesRepository,
               activityRepository: activityRepository,
               onOpenOffer: onOpenOffer,
               onOpenTransaction: onOpenTransaction,
@@ -175,13 +171,13 @@ void main() {
     WidgetTester tester,
   ) async {
     bool openedListings = false;
-    bool openedInquiries = false;
+    bool openedMessages = false;
     bool openedTransactions = false;
     await pumpView(
       tester,
       repository((_) async => sellerDashboardResponse()),
       onOpenListings: () => openedListings = true,
-      onOpenInquiries: () => openedInquiries = true,
+      onOpenMessages: () => openedMessages = true,
       onOpenTransactions: () => openedTransactions = true,
     );
     await tester.pumpAndSettle();
@@ -192,8 +188,13 @@ void main() {
     await tester.tap(find.text('Completed Sales'));
 
     expect(openedListings, isTrue);
-    expect(openedInquiries, isTrue);
+    expect(openedMessages, isTrue);
     expect(openedTransactions, isTrue);
+    expect(
+      recorded.where((RecordedRequest r) => r.apiPath == '/seller/inquiries'),
+      isEmpty,
+      reason: 'there is no seller inquiry inbox (MS-18)',
+    );
   });
 
   testWidgets('Add listing invokes the supplied action', (
@@ -211,78 +212,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(calls, 1);
-  });
-
-  testWidgets('Needs Your Attention lists actionable inquiries only', (
-    WidgetTester tester,
-  ) async {
-    final InquiryRepository inquiryRepository = buildInquiryRepository(
-      tokenStore,
-      (RecordedRequest request) async => sellerInquiryListResponse(
-        inquiries: <Map<String, dynamic>>[
-          sellerInquiryJson(
-            buyer: inquiryBuyerJson(name: 'Maria Santos'),
-            canMakeOffer: true,
-          ),
-          sellerInquiryJson(
-            id: 6,
-            buyer: inquiryBuyerJson(id: 10, name: 'Not Actionable'),
-            canMakeOffer: false,
-          ),
-        ],
-      ),
-      recorded: recorded,
-    );
-
-    bool openedInquiries = false;
-    await pumpView(
-      tester,
-      repository((_) async => sellerDashboardResponse()),
-      inquiriesRepository: inquiryRepository,
-      onOpenInquiries: () => openedInquiries = true,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Needs Your Attention'), findsOneWidget);
-    expect(find.text('Maria Santos'), findsOneWidget);
-    expect(find.text('Not Actionable'), findsNothing);
-    expect(find.text('View inquiries'), findsOneWidget);
-
-    await tester.tap(find.text('Maria Santos'));
-    await tester.pumpAndSettle();
-    expect(openedInquiries, isTrue);
-
-    expect(
-      recorded.where((RecordedRequest r) => r.apiPath == '/seller/inquiries'),
-      hasLength(1),
-    );
-  });
-
-  testWidgets('falls back to labelled recent inquiries when none are actionable', (
-    WidgetTester tester,
-  ) async {
-    final InquiryRepository inquiryRepository = buildInquiryRepository(
-      tokenStore,
-      (RecordedRequest request) async => sellerInquiryListResponse(
-        inquiries: <Map<String, dynamic>>[
-          sellerInquiryJson(
-            buyer: inquiryBuyerJson(name: 'Ana Reyes'),
-            canMakeOffer: false,
-          ),
-        ],
-      ),
-      recorded: recorded,
-    );
-
-    await pumpView(
-      tester,
-      repository((_) async => sellerDashboardResponse()),
-      inquiriesRepository: inquiryRepository,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Ana Reyes'), findsOneWidget);
-    expect(find.text('View recent inquiries'), findsOneWidget);
   });
 
   SellerActivityRepository activityRepository(
@@ -435,7 +364,7 @@ void main() {
     testWidgets('navigates each event to its existing destination', (
       WidgetTester tester,
     ) async {
-      bool openedInquiries = false;
+      bool openedMessages = false;
       bool openedListings = false;
       int? offerBuyer;
       int? offerTransaction;
@@ -474,7 +403,7 @@ void main() {
             ],
           ),
         ),
-        onOpenInquiries: () => openedInquiries = true,
+        onOpenMessages: () => openedMessages = true,
         onOpenListings: () => openedListings = true,
         onOpenOffer: (int buyerId, int? id) {
           offerBuyer = buyerId;
@@ -490,17 +419,17 @@ void main() {
       await tester.tap(find.text('Transaction cancelled'));
       await tester.pumpAndSettle();
 
-      expect(openedInquiries, isTrue);
+      expect(openedMessages, isTrue);
       expect(openedListings, isTrue);
       expect(offerBuyer, 7);
       expect(offerTransaction, 31);
       expect(transactionId, 42);
     });
 
-    testWidgets('an offer without a buyer id falls back to the inbox', (
+    testWidgets('an offer without a buyer id falls back to Messages', (
       WidgetTester tester,
     ) async {
-      bool openedInquiries = false;
+      bool openedMessages = false;
       await pumpView(
         tester,
         repository((_) async => sellerDashboardResponse()),
@@ -515,7 +444,7 @@ void main() {
             ],
           ),
         ),
-        onOpenInquiries: () => openedInquiries = true,
+        onOpenMessages: () => openedMessages = true,
         onOpenOffer: (_, _) => fail('no buyer id, so no direct chat'),
       );
       await tester.pumpAndSettle();
@@ -523,7 +452,7 @@ void main() {
       await tester.tap(find.text('Offer declined'));
       await tester.pumpAndSettle();
 
-      expect(openedInquiries, isTrue);
+      expect(openedMessages, isTrue);
     });
 
     testWidgets('pull-to-refresh re-queries once and rebuilds do not', (

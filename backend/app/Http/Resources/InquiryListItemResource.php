@@ -8,11 +8,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * One active inquiry as the Messages "Inquiries" tab renders it.
  *
- * Distinct from `SellerInquiryResource` (the seller's received inbox) and
- * `MobileInquiryResource` (the buyer's create response): this projection is
- * side-aware, names the counterpart, and carries the latest offer so the tab
- * can show what still needs negotiating. It deliberately omits both parties'
- * contact details.
+ * Distinct from `MobileInquiryResource` (the buyer's create response): this
+ * projection is side-aware, names the counterpart, and carries the latest offer
+ * so the tab can show what still needs negotiating. It deliberately omits both
+ * parties' contact details.
  */
 class InquiryListItemResource extends JsonResource
 {

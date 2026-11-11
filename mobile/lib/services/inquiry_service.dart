@@ -4,7 +4,12 @@ import '../core/network/api_exception.dart';
 import '../models/inquiry.dart';
 import '../models/inquiry_list_item.dart';
 
+<<<<<<< Updated upstream
 /// The inquiry API surface: the buyer's create path.
+=======
+/// The inquiry API surface: the buyer's create path and the Messages
+/// "Inquiries" tab.
+>>>>>>> Stashed changes
 ///
 /// No token handling, no persistence, no error translation - those belong to
 /// `InquiryRepository` and `ApiClient`.
@@ -53,7 +58,11 @@ class InquiryService {
     );
   }
 
+<<<<<<< Updated upstream
   /// `GET /inquiries/listing/{listing}` â€” the caller's inquiry about one
+=======
+  /// `GET /inquiries/listing/{listing}` — the caller's inquiry about one
+>>>>>>> Stashed changes
   /// listing, or `null`.
   ///
   /// The pre-check the Inquire screen runs before rendering the form. Buyer

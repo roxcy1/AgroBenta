@@ -34,7 +34,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'auth_fakes.dart';
-import 'inquiry_fakes.dart';
 import 'livestock_type_fakes.dart';
 import 'marketplace_fakes.dart';
 import 'messaging_fakes.dart';
@@ -112,8 +111,6 @@ class AccountModeShellHarness {
             listings: <Map<String, dynamic>>[],
             total: 0,
           );
-        case '/seller/inquiries':
-          return sellerInquiryListResponse();
         case '/seller/dashboard':
           return sellerDashboardResponse();
         case '/seller/activities':

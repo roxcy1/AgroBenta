@@ -32,6 +32,7 @@ class _SellerShellState extends State<SellerShell> {
   int _index = 0;
 
   static const int _listingsIndex = 1;
+  static const int _messagesIndex = 2;
   static const int _transactionsIndex = 3;
   static const int _profileIndex = 4;
 
@@ -46,6 +47,7 @@ class _SellerShellState extends State<SellerShell> {
         children: <Widget>[
           SellerHomeScreen(
             onOpenListings: () => setState(() => _index = _listingsIndex),
+            onOpenMessages: () => setState(() => _index = _messagesIndex),
             onOpenProfile: () => setState(() => _index = _profileIndex),
             onOpenTransactions: () =>
                 setState(() => _index = _transactionsIndex),

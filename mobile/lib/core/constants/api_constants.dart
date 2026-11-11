@@ -503,10 +503,12 @@ abstract final class ProfileEndpoints {
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `inquiries`-creating mobile group: one write path, `POST /inquiries`, the
 /// buyer's structured contact with a seller about a listing, plus the buyer's
-/// pre-check `GET /inquiries/listing/{listing}`. Reading received inquiries is
-/// the seller surface in [SellerInquiryEndpoints]; triaging and re-statusing an
-/// inquiry are the Admin Web's `/admin/inquiries*` flow and are not part of
-/// this app's contract.
+/// pre-check `GET /inquiries/listing/{listing}` and the Message's "Inquiries"
+/// tab `GET /inquiries`.
+///
+/// An inquiry is delivered to the seller as a message (functional documentation
+/// §8.2, MS-18), so there is no seller inquiry inbox and no `/seller/inquiries`
+/// route. The seller reads and answers it in Messages.
 ///
 /// The route takes no user id. The buyer is the token and the seller is
 /// `listing.seller_id`, resolved server-side, so there is no parameter or body
@@ -563,7 +565,10 @@ abstract final class InquiryEndpoints {
   ];
 }
 
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 /// Seller dashboard endpoint, relative to the API root.
 ///
 /// The response contains listing counts by status, the received-inquiry total,

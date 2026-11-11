@@ -22,6 +22,10 @@ use App\Http\Controllers\Api\Offer\OfferController;
 use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\SellerActivity\SellerActivityController;
 use App\Http\Controllers\Api\SellerDashboard\SellerDashboardController;
+<<<<<<< Updated upstream
+=======
+use App\Http\Controllers\Api\SellerListing\PriceSuggestionController;
+>>>>>>> Stashed changes
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
@@ -141,6 +145,7 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
 });
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
 // Inquiries received by the caller as a seller. Read-only in this phase:
 // responding and declining are later work, and no status transition is exposed
@@ -152,6 +157,8 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
 // are refused as query parameters: none of them is a filter this list supports.
 Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
     
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 // The seller dashboard aggregates the caller's own listings, received
 // inquiries, and sales. The seller is the token's user. No route or query
@@ -192,9 +199,16 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
 
 // Inquiries â€” the buyer's structured contact with a seller about a listing.
 //
+<<<<<<< Updated upstream
 // The buyer's write path. Reading received inquiries is the seller route above.
 // There is no administrator inquiry route: an inquiry is between the buyer and
 // the seller only (functional documentation Â§8.2).
+=======
+// An inquiry is delivered to the seller as a message, so there is no seller
+// inquiry inbox (functional documentation §8.2, MS-18): the seller reads and
+// answers it in Messages. There is no administrator inquiry route either: an
+// inquiry is between the buyer and the seller only.
+>>>>>>> Stashed changes
 //
 // No route here takes a user id. The buyer is resolved from the token and the
 // seller from `listing.seller_id` inside the service, so there is no parameter

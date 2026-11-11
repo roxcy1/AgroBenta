@@ -15,6 +15,10 @@ import '../widgets/seller_activity_tile.dart';
 /// safe destinations as Seller Home's latest-five feed.
 class AllActivitiesScreen extends StatefulWidget {
   const AllActivitiesScreen({
+<<<<<<< Updated upstream
+=======
+    required this.onOpenMessages,
+>>>>>>> Stashed changes
     required this.onOpenListings,
     required this.onOpenTransactions,
     this.onOpenOffer,
@@ -22,6 +26,10 @@ class AllActivitiesScreen extends StatefulWidget {
     super.key,
   });
 
+<<<<<<< Updated upstream
+=======
+  final VoidCallback onOpenMessages;
+>>>>>>> Stashed changes
   final VoidCallback onOpenListings;
   final VoidCallback onOpenTransactions;
   final void Function(int buyerId, int? transactionId)? onOpenOffer;
@@ -220,16 +228,24 @@ class _AllActivitiesScreenState extends State<AllActivitiesScreen> {
     final String action = activity.action;
 
     if (action.startsWith('inquiry')) {
+<<<<<<< Updated upstream
       // Inquiries are delivered as messages now (§8.2): there is no seller
       // inbox to open, so activity rows have nothing to navigate to here.
       return null;
+=======
+      return widget.onOpenMessages;
+>>>>>>> Stashed changes
     }
     if (action.startsWith('offer')) {
       final int? buyerId = activity.buyerId;
       if (buyerId != null && widget.onOpenOffer != null) {
         return () => widget.onOpenOffer!(buyerId, activity.transactionId);
       }
+<<<<<<< Updated upstream
       return null;
+=======
+      return widget.onOpenMessages;
+>>>>>>> Stashed changes
     }
     if (action.startsWith('listing')) {
       return widget.onOpenListings;
