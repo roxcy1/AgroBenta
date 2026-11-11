@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Activity as ActivityIcon, CalendarDays, ClipboardList, History } from 'lucide-react';
 import type { Activity } from '../api/useActivities';
+import { AdminDetailModalHeader } from '../../components/AdminDetailModalHeader';
 import {
   activityActionLabel,
   activityActorLabel,
@@ -32,29 +34,29 @@ export default function ActivityDetailDialog({ activity, onClose }: ActivityDeta
   const targetLink = getActivityTargetLink(activity.metadata);
 
   return (
-    <div className="lv-action-modal-overlay" onClick={onClose}>
+    <div className="lv-action-modal-overlay listing-details-overlay" onClick={onClose}>
       <div
-        className="lv-action-modal lv-action-modal--detail"
+        className="lv-action-modal lv-action-modal--detail lv-action-modal--listing-details"
         role="dialog"
         aria-modal="true"
         aria-labelledby="activity-details-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="lv-detail-header">
-          <div className="lv-detail-heading">
-            <h2 className="lv-action-modal-title" id="activity-details-title">
-              Activity #{activity.id}
-            </h2>
-            <p className="lv-action-modal-desc">
-              {activity.description ?? activityActionLabel(activity.action)}
-            </p>
-          </div>
-        </header>
+        <AdminDetailModalHeader
+          title={`Activity #${activity.id}`}
+          subtitle={activity.description ?? activityActionLabel(activity.action)}
+          titleId="activity-details-title"
+          closeLabel="Close activity details"
+          onClose={onClose}
+        />
 
         <div className="lv-detail-body">
           <div className="lv-detail-grid">
             <section className="lv-detail-section">
-              <h3 className="lv-detail-section-title">Summary</h3>
+              <h3 className="lv-detail-section-title">
+                <ActivityIcon aria-hidden="true" />
+                Summary
+              </h3>
               <dl className="lv-detail-list">
                 <div className="lv-detail-item">
                   <dt className="lv-detail-label">Actor</dt>
@@ -97,7 +99,10 @@ export default function ActivityDetailDialog({ activity, onClose }: ActivityDeta
             </section>
 
             <section className="lv-detail-section">
-              <h3 className="lv-detail-section-title">Changes</h3>
+              <h3 className="lv-detail-section-title">
+                <History aria-hidden="true" />
+                Changes
+              </h3>
               {changes.length === 0 ? (
                 <p className="lv-detail-value activity-muted">
                   No field changes were recorded for this activity.
@@ -121,7 +126,10 @@ export default function ActivityDetailDialog({ activity, onClose }: ActivityDeta
             </section>
 
             <section className="lv-detail-section lv-detail-section--wide">
-              <h3 className="lv-detail-section-title">Context</h3>
+              <h3 className="lv-detail-section-title">
+                <ClipboardList aria-hidden="true" />
+                Context
+              </h3>
               {context.length === 0 ? (
                 <p className="lv-detail-value">No additional context recorded for this activity.</p>
               ) : (
@@ -137,7 +145,10 @@ export default function ActivityDetailDialog({ activity, onClose }: ActivityDeta
             </section>
 
             <section className="lv-detail-section lv-detail-section--wide">
-              <h3 className="lv-detail-section-title">Recorded</h3>
+              <h3 className="lv-detail-section-title">
+                <CalendarDays aria-hidden="true" />
+                Recorded
+              </h3>
               <dl className="lv-detail-list">
                 <div className="lv-detail-item">
                   <dt className="lv-detail-label">Occurred</dt>
@@ -167,8 +178,8 @@ export default function ActivityDetailDialog({ activity, onClose }: ActivityDeta
           </div>
         </div>
 
-        <footer className="lv-detail-footer">
-          <button type="button" className="lv-action-cancel" onClick={onClose}>
+        <footer className="lv-detail-footer listing-details-footer">
+          <button type="button" className="listing-details-footer-close" onClick={onClose}>
             Close
           </button>
         </footer>

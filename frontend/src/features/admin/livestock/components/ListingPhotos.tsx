@@ -6,6 +6,8 @@ interface ListingPhotosProps {
   photos: string[];
   /** Names the listing in each image's description, e.g. "Listing #4". */
   label: string;
+  /** Keep the full-size link in this component unless a details toolbar owns it. */
+  showOpenFullSize?: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ interface ListingPhotosProps {
  * link is missing on the server — says so in place of a broken image, so the
  * moderator is not left wondering whether the listing has no photos at all.
  */
-export default function ListingPhotos({ photos, label }: ListingPhotosProps) {
+export default function ListingPhotos({ photos, label, showOpenFullSize = true }: ListingPhotosProps) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
 
@@ -77,9 +79,11 @@ export default function ListingPhotos({ photos, label }: ListingPhotosProps) {
         <span className="lv-photos-position" aria-live="polite">
           {position}
         </span>
-        <a className="lv-photos-open" href={url} target="_blank" rel="noopener noreferrer">
-          Open full size
-        </a>
+        {showOpenFullSize && (
+          <a className="lv-photos-open" href={url} target="_blank" rel="noopener noreferrer">
+            Open full size
+          </a>
+        )}
       </div>
 
       {canStep && (
