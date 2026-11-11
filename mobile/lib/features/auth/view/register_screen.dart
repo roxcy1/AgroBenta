@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -8,6 +7,7 @@ import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
 import '../widgets/auth_scenic_header.dart';
+import '../widgets/google_sign_in_button.dart';
 import 'auth_validators.dart';
 
 /// `POST /auth/register`.
@@ -27,9 +27,10 @@ import 'auth_validators.dart';
 ///    Terms/Privacy acknowledgement is enforced **client-side only**. It is
 ///    required because the approved design specifies it, but the server neither
 ///    receives nor validates it.
-///  * **Social sign-up** — the backend implements no Google/Facebook OAuth and
-///    no credential exists, so the buttons are rendered disabled rather than
-///    implying a capability that is not there.
+///  * **Social sign-up** — Google only, on Android; Facebook was removed
+///    (project decision, MS-11, 2026-11-10). Google sign-up requires the same
+///    Terms/Privacy consent as the form. The button and its divider are hidden
+///    where Google sign-in is unavailable.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({required this.onSignIn, super.key});
 
@@ -115,6 +116,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       password: _password.text,
       passwordConfirmation: _confirmPassword.text,
     );
+  }
+
+  /// Google sign-up needs the same consent as the form, but not its fields.
+  Future<void> _signUpWithGoogle() async {
+    if (!_agreedToTerms) {
+      setState(
+        () => _consentError =
+            'Please agree to the Terms and Privacy Policy to continue.',
+      );
+      return;
+    }
+
+    await AuthScope.of(context).signInWithGoogle();
   }
 
   void _setConsent(bool value) {
@@ -246,16 +260,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         )
                       : const Text('Create Account'),
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                _buildDivider(theme),
-                const SizedBox(height: AppSpacing.lg),
-                _buildSocialRow(),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Social sign-up is not available yet.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
+                if (AuthScope.of(context).isGoogleSignInAvailable) ...<Widget>[
+                  const SizedBox(height: AppSpacing.xl),
+                  _buildDivider(theme),
+                  const SizedBox(height: AppSpacing.lg),
+                  GoogleSignInButton(
+                    onPressed: busy ? null : _signUpWithGoogle,
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 _buildFooter(theme, state),
               ],
@@ -398,55 +410,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Text('or sign up with', style: theme.textTheme.bodySmall),
         ),
         const Expanded(child: Divider()),
-      ],
-    );
-  }
-
-  Widget _buildSocialRow() {
-    // Disabled, not absent: the buttons are part of the approved layout, but the
-    // backend implements no OAuth. A disabled control states the feature is not
-    // available; a working-looking one would imply it is.
-    //
-    // Each carries its provider's brand mark from Font Awesome. The colours are
-    // the providers' brand identities, not part of the AgroBenta palette, so
-    // they stay local to these two icons rather than entering `AppColors`.
-    return const Row(
-      children: <Widget>[
-        Expanded(
-          child: OutlinedButton(
-            onPressed: null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                FaIcon(
-                  FontAwesomeIcons.google,
-                  size: 18,
-                  color: Color(0xFF4285F4),
-                ),
-                SizedBox(width: AppSpacing.xs),
-                Text('Google'),
-              ],
-            ),
-          ),
-        ),
-        SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: OutlinedButton(
-            onPressed: null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                FaIcon(
-                  FontAwesomeIcons.facebook,
-                  size: 18,
-                  color: Color(0xFF1877F2),
-                ),
-                SizedBox(width: AppSpacing.xs),
-                Text('Facebook'),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
