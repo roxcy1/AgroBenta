@@ -66,6 +66,18 @@ class AuthService {
     );
   }
 
+  /// `POST /auth/google` — exchanges a Google ID token for a session.
+  ///
+  /// A `401` means the token was rejected; a `403` means the account is an
+  /// administrator, which may not use the mobile app.
+  Future<AuthSession> loginWithGoogle({required String idToken}) {
+    return _apiClient.post<AuthSession>(
+      AuthEndpoints.google,
+      body: <String, dynamic>{'id_token': idToken},
+      parse: (Object? data) => AuthSession.fromJson(_asObject(data, 'google')),
+    );
+  }
+
   /// `GET /auth/me` — the authenticated user's own profile.
   ///
   /// Used on session restoration to prove a stored token is still valid and to

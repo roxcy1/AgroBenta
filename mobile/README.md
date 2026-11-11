@@ -77,6 +77,23 @@ flutter build ios --release --dart-define=API_BASE_URL=https://CHANGE_THIS_PRODU
 > behind a virtual network bridge, so `localhost` refers to the emulator
 > itself. See AGENTS.md §G.
 
+### Google sign-in (Android only)
+
+The "Continue with Google" button appears only on Android, and only when the
+build is given the backend's Google OAuth **Web application** client ID — the
+same value as `GOOGLE_CLIENT_ID` in `backend/.env`:
+
+```sh
+flutter run --dart-define=ANDROID_RUN_TARGET=emulator \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=CHANGE_THIS_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com
+```
+
+Google Cloud Console also needs an **Android** OAuth client for package
+`com.agrobenta.agrobenta_mobile` with the SHA-1 of the key that signs the build
+(`cd android && ./gradlew signingReport`). Each developer's debug keystore has
+its own SHA-1, so each one must be added; a release build needs the release
+key's SHA-1. No client secret is used by the app or the backend.
+
 Cleartext HTTP is denied by default on Android. Debug builds allow it broadly
 (`android/app/src/debug/res/xml/network_security_config.xml`) so a phone on the
 LAN can reach the plain-HTTP Docker stack; `src/main` stays strict and permits
