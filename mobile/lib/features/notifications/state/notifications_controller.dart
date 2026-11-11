@@ -31,9 +31,25 @@ import 'notifications_state.dart';
 /// server. A failure leaves the optimistic state in place — the next `load()`
 /// corrects it. The alternative, waiting for the round-trip, would make the
 /// badge flicker.
+///
+/// ## Polling
+///
+/// Real-time is the primary delivery path (GAP-20). When [appVisibility] is
+/// supplied, this controller also re-reads the unread count on a light timer
+/// as a reconciliation fallback for a missed event or a socket that never
+/// connected. Polling stops while the app is backgrounded and does one
+/// immediate refresh when it returns. Both paths share the same in-flight
+/// guard, so a poll never stacks on an event-driven refresh.
 class NotificationsController extends ChangeNotifier {
-  NotificationsController(this._repository, {this.realtimeEvents}) {
+  NotificationsController(
+    this._repository, {
+    this.realtimeEvents,
+    this.appVisibility,
+    this.pollInterval = const Duration(seconds: 30),
+  }) {
     _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _visibilitySubscription = appVisibility?.listen(_onVisibilityChanged);
+    _startPolling();
   }
 
   final NotificationRepository _repository;
@@ -42,7 +58,17 @@ class NotificationsController extends ChangeNotifier {
   /// event and the list reloads when a notification was actually written.
   final Stream<RealtimeEvent>? realtimeEvents;
 
+  /// Foreground state. Polling only exists when this is supplied, so a host
+  /// that does not provide it (widget tests) never starts a timer.
+  final Stream<bool>? appVisibility;
+
+  /// How often the badge is re-read while the app is in the foreground.
+  final Duration pollInterval;
+
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _visibilitySubscription;
+  Timer? _pollTimer;
+  bool _refreshingUnread = false;
 
   NotificationsState _state = const NotificationsState();
   NotificationsState get state => _state;
@@ -243,8 +269,14 @@ class NotificationsController extends ChangeNotifier {
 
   /// The single source of truth for the badge count.
   ///
-  /// A cheap call — the mobile bell polls this rather than the full list.
+  /// A cheap call — the badge reads this rather than the full list. Called by
+  /// the real-time handler, by the poll timer, and on returning to the
+  /// foreground. Overlapping calls collapse into one request.
   Future<void> refreshUnreadCount() async {
+    if (_refreshingUnread) {
+      return;
+    }
+    _refreshingUnread = true;
     try {
       final int count = await _repository.unreadCount();
       if (_disposed) {
@@ -253,6 +285,8 @@ class NotificationsController extends ChangeNotifier {
       _set(_state.copyWith(unreadCount: count));
     } on Object {
       // Silent: a stale badge is better than a crash.
+    } finally {
+      _refreshingUnread = false;
     }
   }
 
@@ -287,10 +321,42 @@ class NotificationsController extends ChangeNotifier {
     }
   }
 
+  /// Starts the reconciliation timer. Only created when a visibility signal
+  /// was supplied — polling is opt-in, like real-time.
+  void _startPolling() {
+    if (appVisibility == null || _disposed) {
+      return;
+    }
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      pollInterval,
+      (Timer _) => unawaited(refreshUnreadCount()),
+    );
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  /// Background: stop spending requests. Foreground: catch up immediately,
+  /// then resume the timer — the socket may have missed events while paused.
+  void _onVisibilityChanged(bool visible) {
+    if (visible) {
+      unawaited(refreshUnreadCount());
+      _startPolling();
+    } else {
+      _stopPolling();
+    }
+  }
+
   @override
   void dispose() {
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
+    _visibilitySubscription?.cancel();
+    _visibilitySubscription = null;
+    _stopPolling();
     _disposed = true;
     super.dispose();
   }

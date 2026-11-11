@@ -62,6 +62,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     // TODO(deep-link): route to the target screen once deep-linking lands.
   }
 
+  /// Confirms before clearing the whole inbox.
+  ///
+  /// The controller marks everything read optimistically, and there is no
+  /// endpoint to mark a notification unread again, so a stray tap would be
+  /// irreversible. The button is disabled once nothing is unread, so this
+  /// dialog is only reachable when it changes something.
+  Future<void> _confirmMarkAllRead() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Mark all as read?'),
+        content: const Text(
+          'Every notification will be marked as read. Notifications cannot be '
+          'marked unread again.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Mark all read'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await _controller.markAllRead();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,7 +105,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             builder: (BuildContext context, Widget? child) {
               final bool hasUnread = _controller.state.unreadCount > 0;
               return TextButton(
-                onPressed: hasUnread ? _controller.markAllRead : null,
+                onPressed: hasUnread ? _confirmMarkAllRead : null,
                 child: const Text('Mark all read'),
               );
             },

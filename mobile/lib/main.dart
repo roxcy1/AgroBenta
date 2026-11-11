@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
 
+import 'core/lifecycle/app_visibility.dart';
+import 'core/lifecycle/app_visibility_scope.dart';
 import 'core/network/api_client.dart';
 import 'core/realtime/realtime_client.dart';
 import 'core/realtime/realtime_controller.dart';
@@ -159,6 +161,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final TrinidadLocationController _trinidadLocationController;
   late final PusherReverbClient _realtimeClient;
   late final RealtimeController _realtimeController;
+  late final AppVisibility _appVisibility;
   StreamSubscription<bool>? _realtimeConnectionSubscription;
   int? _sessionUserId;
   bool _sessionControllersCreated = false;
@@ -278,6 +281,11 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _realtimeClient = PusherReverbClient(_tokenStore);
     _realtimeController = RealtimeController(_realtimeClient);
 
+    // One foreground/background signal for the whole session. The session
+    // controllers and every open chat take its stream and pause their polling
+    // while the app is not visible; the socket is stopped separately below.
+    _appVisibility = AppVisibility();
+
     // These controllers hold responses scoped to the bearer token. Recreate
     // them when the authenticated identity changes so their caches, loading
     // guards, and generations cannot cross account boundaries. Screen-owned
@@ -360,10 +368,12 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _conversationsController = ConversationsController(
       _messagingRepository,
       realtimeEvents: realtimeEvents,
+      appVisibility: _appVisibility.changes,
     );
     _notificationsController = NotificationsController(
       _notificationRepository,
       realtimeEvents: realtimeEvents,
+      appVisibility: _appVisibility.changes,
     );
     _sessionControllersCreated = true;
   }
@@ -384,6 +394,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _livestockTypesController.dispose();
     _trinidadLocationController.dispose();
     _realtimeConnectionSubscription?.cancel();
+    _appVisibility.dispose();
     _realtimeController.dispose();
     _apiClient.close();
     super.dispose();
@@ -477,14 +488,18 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                                   // every pushed route can subscribe to the
                                   // session's events without constructor
                                   // threading.
-                                  child: RealtimeScope(
-                                    controller: _realtimeController,
-                                    child: MaterialApp(
-                                      title: 'AgroBenta',
-                                      debugShowCheckedModeBanner: false,
-                                      theme: AppTheme.light(),
-                                      home: AuthGate(
-                                        authenticatedView: _buildAccountModeShell,
+                                  child: AppVisibilityScope(
+                                    visibility: _appVisibility,
+                                    child: RealtimeScope(
+                                      controller: _realtimeController,
+                                      child: MaterialApp(
+                                        title: 'AgroBenta',
+                                        debugShowCheckedModeBanner: false,
+                                        theme: AppTheme.light(),
+                                        home: AuthGate(
+                                          authenticatedView:
+                                              _buildAccountModeShell,
+                                        ),
                                       ),
                                     ),
                                   ),

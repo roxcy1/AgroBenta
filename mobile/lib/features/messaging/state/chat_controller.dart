@@ -22,6 +22,15 @@ import 'messaging_state.dart';
 /// pauses for a round-trip feels broken — while keeping the source of truth
 /// server-side: the placeholder has a temporary negative id and is discarded
 /// the moment the real message lands.
+///
+/// ## Polling
+///
+/// When [appVisibility] is supplied, the thread is re-read on a light timer
+/// while the app is in the foreground and paused in the background. This is a
+/// fallback for a missed event, not the delivery path — real-time still
+/// refreshes on the counterpart's message. The poll is silent: it replaces
+/// [ChatState.messages] without entering `loading`, so the thread never
+/// blanks or flashes a spinner every interval.
 class ChatController extends ChangeNotifier {
   /// The repository is a positional argument because Dart forbids a leading
   /// underscore in a named parameter, so `this._repository` cannot be used
@@ -36,9 +45,13 @@ class ChatController extends ChangeNotifier {
     this.messageListingId,
     this.realtimeEvents,
     this.connection,
+    this.appVisibility,
+    this.pollInterval = const Duration(seconds: 30),
   }) {
     _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
     _connectionSubscription = connection?.listen(_onConnectionChanged);
+    _visibilitySubscription = appVisibility?.listen(_onVisibilityChanged);
+    _startPolling();
   }
 
   final MessagingRepository _repository;
@@ -50,8 +63,17 @@ class ChatController extends ChangeNotifier {
   /// Connection changes; a reconnect re-fetches to recover missed messages.
   final Stream<bool>? connection;
 
+  /// Foreground state. Polling only exists when this is supplied.
+  final Stream<bool>? appVisibility;
+
+  /// How often the open thread is re-read while the app is in the foreground.
+  final Duration pollInterval;
+
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   StreamSubscription<bool>? _connectionSubscription;
+  StreamSubscription<bool>? _visibilitySubscription;
+  Timer? _pollTimer;
+  bool _polling = false;
 
   /// The other user in the thread.
   final int counterpartId;
@@ -137,6 +159,70 @@ class ChatController extends ChangeNotifier {
   void _onConnectionChanged(bool connected) {
     if (connected) {
       refresh();
+    }
+  }
+
+  /// Reconciles the open thread without disturbing what is on screen.
+  ///
+  /// `refresh()` is deliberately not used: it goes through [load], which sets
+  /// [ChatStatus.loading] and blanks the thread behind a spinner. A poll is a
+  /// background correction and must look like nothing happened; a failure
+  /// leaves the previous messages in place.
+  Future<void> _poll() async {
+    if (_disposed || _polling || _loading || _state.isSending) {
+      return;
+    }
+    _polling = true;
+    final int generation = ++_generation;
+
+    try {
+      final List<Message> messages = await _repository.thread(
+        counterpartId: counterpartId,
+        listingId: listingId,
+      );
+      if (_disposed || generation != _generation || _state.isSending) {
+        return;
+      }
+      _set(
+        _state.copyWith(
+          status: ChatStatus.ready,
+          messages: messages,
+          clearError: true,
+        ),
+      );
+    } on Object {
+      // Silent: a stale thread is better than an error the user did not ask
+      // for. The next load or realtime refresh corrects the truth.
+    } finally {
+      _polling = false;
+    }
+  }
+
+  void _startPolling() {
+    if (appVisibility == null || _disposed) {
+      return;
+    }
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      pollInterval,
+      (Timer _) => unawaited(_poll()),
+    );
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  /// Foreground: reconcile immediately, then resume the timer. Background:
+  /// stop — the thread is static state the next resume (or the next event)
+  /// will correct.
+  void _onVisibilityChanged(bool visible) {
+    if (visible) {
+      unawaited(_poll());
+      _startPolling();
+    } else {
+      _stopPolling();
     }
   }
 
@@ -284,6 +370,9 @@ class ChatController extends ChangeNotifier {
     _realtimeSubscription = null;
     _connectionSubscription?.cancel();
     _connectionSubscription = null;
+    _visibilitySubscription?.cancel();
+    _visibilitySubscription = null;
+    _stopPolling();
     _disposed = true;
     super.dispose();
   }

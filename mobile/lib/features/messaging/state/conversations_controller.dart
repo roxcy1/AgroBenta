@@ -22,9 +22,26 @@ import 'messaging_state.dart';
 /// they have messaged), so paginating an inbox is worse than just sending
 /// everything. If the list ever grows past a threshold, this controller is
 /// the one place that changes.
+///
+/// ## Polling
+///
+/// The unread badge is derived from this list — there is no separate
+/// messages-count endpoint — so the badge can only reconcile by re-reading
+/// the inbox. When [appVisibility] is supplied, that happens on a light timer
+/// while the app is in the foreground, and pauses in the background. The poll
+/// is silent: it never sets the `loading` status, so it cannot blank the
+/// screen or flash a spinner, and it shares the generation counter with
+/// `load()` so concurrent responses cannot interleave.
 class ConversationsController extends ChangeNotifier {
-  ConversationsController(this._repository, {this.realtimeEvents}) {
+  ConversationsController(
+    this._repository, {
+    this.realtimeEvents,
+    this.appVisibility,
+    this.pollInterval = const Duration(seconds: 30),
+  }) {
     _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+    _visibilitySubscription = appVisibility?.listen(_onVisibilityChanged);
+    _startPolling();
   }
 
   final MessagingRepository _repository;
@@ -33,7 +50,16 @@ class ConversationsController extends ChangeNotifier {
   /// conversation preview (last message, unread count, latest offer).
   final Stream<RealtimeEvent>? realtimeEvents;
 
+  /// Foreground state. Polling only exists when this is supplied.
+  final Stream<bool>? appVisibility;
+
+  /// How often the inbox is re-read while the app is in the foreground.
+  final Duration pollInterval;
+
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<bool>? _visibilitySubscription;
+  Timer? _pollTimer;
+  bool _polling = false;
 
   ConversationsState _state = const ConversationsState();
   ConversationsState get state => _state;
@@ -196,10 +222,73 @@ class ConversationsController extends ChangeNotifier {
     }
   }
 
+  /// Reconciles the inbox without touching what is on screen.
+  ///
+  /// Deliberately not `refresh()`: that delegates to `load()` for an empty
+  /// inbox, which sets `loading` and would flash a spinner every interval.
+  /// A poll is a background correction; on failure the previous state stays
+  /// exactly as it was.
+  Future<void> _poll() async {
+    if (_disposed || _polling || _loading) {
+      return;
+    }
+    _polling = true;
+    final int generation = ++_generation;
+
+    try {
+      final List<Conversation> conversations = await _repository
+          .conversations();
+      if (_disposed || generation != _generation) {
+        return;
+      }
+      _set(
+        _state.copyWith(
+          status: ConversationsStatus.ready,
+          conversations: conversations,
+          clearError: true,
+          clearRefreshError: true,
+        ),
+      );
+    } on Object {
+      // Silent: a stale inbox is better than an error the user did not ask
+      // for. Pull-to-refresh still surfaces failures explicitly.
+    } finally {
+      _polling = false;
+    }
+  }
+
+  void _startPolling() {
+    if (appVisibility == null || _disposed) {
+      return;
+    }
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      pollInterval,
+      (Timer _) => unawaited(_poll()),
+    );
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  void _onVisibilityChanged(bool visible) {
+    if (visible) {
+      unawaited(_poll());
+      _startPolling();
+    } else {
+      _stopPolling();
+    }
+  }
+
   @override
   void dispose() {
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
+    _visibilitySubscription?.cancel();
+    _visibilitySubscription = null;
+    _stopPolling();
     _disposed = true;
     super.dispose();
   }

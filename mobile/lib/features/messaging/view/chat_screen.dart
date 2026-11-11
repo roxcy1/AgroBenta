@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/lifecycle/app_visibility_scope.dart';
 import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -93,6 +94,9 @@ class _ChatScreenState extends State<ChatScreen> {
       messageListingId: widget.messageListingId,
       realtimeEvents: realtime?.events,
       connection: realtime?.connected,
+      // Same nullable pattern: without the scope (widget tests) the thread
+      // simply does not poll.
+      appVisibility: AppVisibilityScope.maybeOf(context)?.changes,
     );
     _controller.load();
     // Mark read on open — the user is looking at the thread, so unread
