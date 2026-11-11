@@ -25,6 +25,7 @@ import {
   Pie,
   Cell,
   Legend,
+  LabelList,
 } from 'recharts';
 import { useDashboard } from '../api/useDashboard';
 import { useReports } from '../reports/api/useReports';
@@ -32,9 +33,33 @@ import { formatDateTime } from '../../../lib/format';
 import { RecentListingsTable } from './RecentListingsTable';
 import { RecentTransactionsTable } from './RecentTransactionsTable';
 import { Header } from './Header';
-import { statusChartColor, statusLabel } from '../../../lib/status';
-import { CHART_AXIS, CHART_BAR, CHART_GRID, CHART_PIE_COLORS, CHART_TICK, CHART_TOOLTIP_STYLE } from '../../../lib/chartTheme';
+import { statusLabel } from '../../../lib/status';
+import {
+  CHART_AXIS,
+  CHART_GRID,
+  CHART_TICK_SMALL,
+  CHART_TOOLTIP_STYLE,
+  livestockChartColor,
+} from '../../../lib/chartTheme';
 import './Dashboard.css';
+
+const LISTING_STATUS_COLORS = {
+  draft: '#94A3B8',
+  pending: '#F59E0B',
+  active: '#15803D',
+  sold: '#3B82F6',
+  inactive: '#64748B',
+} as const;
+
+const DASHBOARD_CHART_TOOLTIP_STYLE = {
+  ...CHART_TOOLTIP_STYLE,
+  backgroundColor: '#fff',
+  border: '1px solid #e5ebe7',
+  borderRadius: 10,
+  boxShadow: '0 8px 22px rgba(11, 39, 24, 0.13)',
+};
+
+const DASHBOARD_CHART_TICK = { ...CHART_TICK_SMALL, fill: '#718078' };
 
 export function Dashboard() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -119,7 +144,7 @@ export function Dashboard() {
   const listingStatusData = (['draft', 'pending', 'active', 'sold', 'inactive'] as const).map((key) => ({
     status: statusLabel(key),
     count: listings[key],
-    color: key === 'active' ? '#15803d' : '#c4cbc6',
+    color: LISTING_STATUS_COLORS[key],
   }));
 
   const totalLivestockListings = livestock_distribution.reduce((total, item) => total + item.count, 0);
@@ -130,12 +155,12 @@ export function Dashboard() {
     {
       outcome: statusLabel('approved'),
       count: approvedVerifications,
-      color: statusChartColor('approved'),
+      color: '#16A34A',
     },
     {
       outcome: statusLabel('rejected'),
       count: rejectedVerifications,
-      color: statusChartColor('rejected'),
+      color: '#DC2626',
     },
   ];
 
@@ -211,7 +236,7 @@ export function Dashboard() {
           </h2>
 
           <div className="dashboard-charts-grid dashboard-charts-grid--flow">
-            <div className="dashboard-chart-card">
+            <div className="dashboard-chart-card dashboard-chart-card--bar-chart">
               <h3 className="dashboard-chart-title dashboard-chart-title--icon">
                 <Layers aria-hidden="true" />
                 Listings by Status
@@ -223,11 +248,15 @@ export function Dashboard() {
                     layout="vertical"
                     margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={CHART_TICK} stroke={CHART_AXIS} />
-                    <YAxis type="category" dataKey="status" width={82} tick={CHART_TICK} stroke={CHART_AXIS} />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
-                    <Bar dataKey="count" radius={[0, 2, 2, 0]} name="Listings">
+                    <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis type="category" dataKey="status" width={82} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip
+                      formatter={(value) => [String(value ?? 0), 'Listings']}
+                      contentStyle={DASHBOARD_CHART_TOOLTIP_STYLE}
+                      cursor={{ fill: 'rgba(21, 128, 61, 0.045)' }}
+                    />
+                    <Bar dataKey="count" barSize={26} radius={[6, 6, 6, 6]} name="Listings">
                       {listingStatusData.map((entry) => (
                         <Cell key={entry.status} fill={entry.color} />
                       ))}
@@ -245,7 +274,7 @@ export function Dashboard() {
               </p>
             </div>
 
-            <div className="dashboard-chart-card">
+            <div className="dashboard-chart-card dashboard-chart-card--bar-chart dashboard-chart-card--verification-outcome">
               <h3 className="dashboard-chart-title dashboard-chart-title--icon">
                 <ShieldCheck aria-hidden="true" />
                 Verification Records by Outcome
@@ -265,16 +294,28 @@ export function Dashboard() {
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart
                     data={verificationOutcomeData}
+                    layout="vertical"
                     margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                    <XAxis dataKey="outcome" tick={CHART_TICK} stroke={CHART_AXIS} />
-                    <YAxis allowDecimals={false} tick={CHART_TICK} stroke={CHART_AXIS} />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={CHART_TOOLTIP_STYLE} />
-                    <Bar dataKey="count" radius={[2, 2, 0, 0]} name="Verifications">
+                    <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis type="category" dataKey="outcome" width={82} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip
+                      formatter={(value) => [String(value ?? 0), 'Verifications']}
+                      contentStyle={DASHBOARD_CHART_TOOLTIP_STYLE}
+                      cursor={{ fill: 'rgba(21, 128, 61, 0.045)' }}
+                    />
+                    <Bar
+                      dataKey="count"
+                      radius={[6, 6, 6, 6]}
+                      barSize={26}
+                      background={{ fill: '#f3f7f4', radius: 8 }}
+                      name="Verifications"
+                    >
                       {verificationOutcomeData.map((entry) => (
-                        <Cell key={entry.outcome} fill={entry.color} />
+                        <Cell key={entry.outcome} fill={entry.color} stroke="#fff" strokeWidth={2} />
                       ))}
+                      <LabelList dataKey="count" position="right" fill="#203428" fontSize={12} fontWeight={700} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -289,7 +330,7 @@ export function Dashboard() {
               </p>
             </div>
 
-            <div className="dashboard-chart-card">
+            <div className="dashboard-chart-card dashboard-chart-card--bar-chart">
               <h3 className="dashboard-chart-title dashboard-chart-title--icon">
                 <TrendingUp aria-hidden="true" />
                 Transactions Over Time (Monthly, {now.getFullYear()})
@@ -297,11 +338,27 @@ export function Dashboard() {
               {transaction_trend.some(item => item.count > 0) ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={transaction_trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                    <XAxis dataKey="month" tick={CHART_TICK} stroke={CHART_AXIS} />
-                    <YAxis allowDecimals={false} tick={CHART_TICK} stroke={CHART_AXIS} />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={CHART_TOOLTIP_STYLE} />
-                    <Bar dataKey="count" fill={CHART_BAR} radius={[2, 2, 0, 0]} name="Transactions" />
+                    <defs>
+                      <linearGradient id="dashboard-transaction-bar-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#22A35A" />
+                        <stop offset="100%" stopColor="#15803D" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} vertical={false} />
+                    <XAxis dataKey="month" interval={0} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis allowDecimals={false} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip
+                      formatter={(value) => [String(value ?? 0), 'Transactions']}
+                      contentStyle={DASHBOARD_CHART_TOOLTIP_STYLE}
+                      cursor={{ fill: 'rgba(21, 128, 61, 0.045)' }}
+                    />
+                    <Bar
+                      dataKey="count"
+                      fill="url(#dashboard-transaction-bar-gradient)"
+                      barSize={18}
+                      radius={[6, 6, 0, 0]}
+                      name="Transactions"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -315,42 +372,47 @@ export function Dashboard() {
               </p>
             </div>
 
-            <div className="dashboard-chart-card">
+            <div className="dashboard-chart-card dashboard-chart-card--livestock-overview">
               <h3 className="dashboard-chart-title dashboard-chart-title--icon">
                 <Beef aria-hidden="true" />
                 Livestock Listings Overview
               </h3>
               {livestock_distribution.length > 0 ? (
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={224}>
                   <PieChart>
                     <Pie
                       data={livestock_distribution}
-                      cx="36%"
+                      cx="35%"
                       cy="50%"
                       innerRadius={54}
-                      outerRadius={78}
+                      outerRadius={82}
                       paddingAngle={2}
                       dataKey="count"
                       nameKey="type"
                       label={false}
                       labelLine={false}
                     >
-                      {livestock_distribution.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={CHART_PIE_COLORS[index % CHART_PIE_COLORS.length]} />
+                      {livestock_distribution.map((item, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={livestockChartColor(item.type, index)}
+                          stroke="#fff"
+                          strokeWidth={2}
+                        />
                       ))}
                     </Pie>
-                    <text x="36%" y="45%" textAnchor="middle" fill="#64748b" fontSize="11">Total</text>
-                    <text x="36%" y="55%" textAnchor="middle" fill="#0a2618" fontSize="22" fontWeight="700">
+                    <text x="35%" y="44%" textAnchor="middle" fill="#64748b" fontSize="11">Total</text>
+                    <text x="35%" y="55%" textAnchor="middle" fill="#0a2618" fontSize="22" fontWeight="700">
                       {totalLivestockListings}
                     </text>
-                    <text x="36%" y="63%" textAnchor="middle" fill="#64748b" fontSize="10">Listings</text>
+                    <text x="35%" y="64%" textAnchor="middle" fill="#64748b" fontSize="10">Listings</text>
                     <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
                     <Legend
                       layout="vertical"
                       verticalAlign="middle"
                       align="right"
                       iconType="circle"
-                      wrapperStyle={{ width: '40%', right: 0, fontSize: 10, lineHeight: '22px' }}
+                      wrapperStyle={{ width: '39%', right: 0, fontSize: 11, lineHeight: '22px' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>

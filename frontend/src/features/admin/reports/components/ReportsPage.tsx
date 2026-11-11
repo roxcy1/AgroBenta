@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Download, Package, Store, Users as UsersIcon } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Download, Package, Store, Users as UsersIcon } from 'lucide-react';
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
 import { useReports } from '../api/useReports';
@@ -7,7 +7,17 @@ import { livestockTypeLabel, useLivestockTypes } from '../../livestock/api/useLi
 import { formatNumber, formatPeso } from '../../../../lib/format';
 import { downloadCsv } from '../../../../lib/csv';
 import { statusChartColor } from '../../../../lib/status';
-import { CHART_AXIS, CHART_BAR, CHART_BAR_SECONDARY, CHART_GRID, CHART_LINE_ACCENT, CHART_PIE_COLORS, CHART_TICK, CHART_TICK_SMALL, CHART_TOOLTIP_STYLE } from '../../../../lib/chartTheme';
+import { CHART_AXIS, CHART_BAR, CHART_BAR_SECONDARY, CHART_GRID, CHART_LINE_ACCENT, CHART_PIE_COLORS, CHART_TICK_SMALL, CHART_TOOLTIP_STYLE } from '../../../../lib/chartTheme';
+
+const REPORT_CHART_HEIGHT = 230;
+const REPORT_CHART_TICK = { ...CHART_TICK_SMALL, fill: '#718078' };
+const REPORT_CHART_TOOLTIP_STYLE = {
+  ...CHART_TOOLTIP_STYLE,
+  backgroundColor: '#fff',
+  border: '1px solid #e2e8f0',
+  borderRadius: 9,
+  boxShadow: '0 8px 20px rgba(19, 48, 30, 0.12)',
+};
 
 export function ReportsPage() {
   const [dateFrom, setDateFrom] = useState('');
@@ -66,6 +76,15 @@ export function ReportsPage() {
 
   const filtersPanel = (
     <div className="reports-filters">
+      <div className="reports-filters-heading">
+        <span className="reports-filters-icon">
+          <CalendarDays aria-hidden="true" />
+        </span>
+        <div>
+          <h2>Report filters</h2>
+          <p>Choose an optional date range for supported reports.</p>
+        </div>
+      </div>
       <div className="reports-filter-row">
         <div className="reports-filter-group">
           <label className="reports-filter-label" htmlFor="date-from">Date From</label>
@@ -169,6 +188,8 @@ export function ReportsPage() {
 
   return (
     <div className="dashboard-content">
+      {filtersPanel}
+
       <div className="dashboard-section">
         <h2 className="dashboard-section-title">Marketplace Overview</h2>
         <div className="dashboard-stats-grid">
@@ -217,22 +238,20 @@ export function ReportsPage() {
         </div>
       </div>
 
-      {filtersPanel}
-
       <div className="dashboard-section">
         <h2 className="dashboard-section-title">Users &amp; Sellers</h2>
         <div className="dashboard-charts-grid">
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">User Distribution</h3>
             {users.seller_distribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <PieChart>
                   <Pie
                     data={users.seller_distribution}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
-                    outerRadius={85}
+                    outerRadius={78}
                     paddingAngle={2}
                     dataKey="count"
                     nameKey="label"
@@ -243,8 +262,8 @@ export function ReportsPage() {
                       <Cell key={`cell-${index}`} fill={CHART_PIE_COLORS[index % CHART_PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Users']} contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Legend />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Users']} contentStyle={REPORT_CHART_TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -255,7 +274,7 @@ export function ReportsPage() {
 
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">User Summary</h3>
-            <div className="dashboard-breakdown-list">
+            <ul className="dashboard-breakdown-list">
               <li>
                 <span className="dashboard-breakdown-label">Total Users</span>
                 <span className="dashboard-breakdown-value">{formatNumber(users.total)}</span>
@@ -272,7 +291,7 @@ export function ReportsPage() {
                 <span className="dashboard-breakdown-label">Admins</span>
                 <span className="dashboard-breakdown-value">{formatNumber(users.admins)}</span>
               </li>
-            </div>
+            </ul>
           </div>
         </div>
       </div>
@@ -283,13 +302,17 @@ export function ReportsPage() {
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">Listings by Livestock Type</h3>
             {listings.by_type.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <BarChart data={listings.by_type} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis dataKey="type" tick={CHART_TICK} stroke={CHART_AXIS} />
-                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Bar dataKey="count" fill={CHART_BAR} radius={[2, 2, 0, 0]} name="Listings" />
+                  <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} />
+                  <XAxis dataKey="type" tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
+                  <YAxis tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={REPORT_CHART_TOOLTIP_STYLE} />
+                  <Bar dataKey="count" barSize={24} radius={[6, 6, 0, 0]} name="Listings">
+                    {listings.by_type.map((_, index) => (
+                      <Cell key={`livestock-type-${index}`} fill={CHART_PIE_COLORS[index % CHART_PIE_COLORS.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -301,14 +324,14 @@ export function ReportsPage() {
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">Listings by Status</h3>
             {listings.by_status.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <PieChart>
                   <Pie
                     data={listings.by_status}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
-                    outerRadius={85}
+                    outerRadius={78}
                     paddingAngle={2}
                     dataKey="count"
                     nameKey="status"
@@ -319,8 +342,8 @@ export function ReportsPage() {
                       <Cell key={`cell-${entry.status}`} fill={statusChartColor(entry.status)} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Legend />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={REPORT_CHART_TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -330,7 +353,7 @@ export function ReportsPage() {
           </div>
         </div>
 
-        <div className="dashboard-breakdown-grid" style={{ marginTop: '20px' }}>
+        <div className="dashboard-breakdown-grid dashboard-breakdown-grid--reports">
           <div className="dashboard-breakdown-card">
             <h4 className="dashboard-breakdown-title">Price Statistics</h4>
             <ul className="dashboard-breakdown-list">
@@ -397,16 +420,16 @@ export function ReportsPage() {
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">Transaction Trend</h3>
             {transactions.trend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <LineChart data={transactions.trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis dataKey="month" tick={CHART_TICK} stroke={CHART_AXIS} />
-                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
+                  <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} />
+                  <XAxis dataKey="month" tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
+                  <YAxis tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
                   <Tooltip
                     formatter={(value) => [String(value ?? 0), 'Transactions']}
-                    contentStyle={CHART_TOOLTIP_STYLE}
+                    contentStyle={REPORT_CHART_TOOLTIP_STYLE}
                   />
-                  <Line type="monotone" dataKey="count" stroke={CHART_BAR} strokeWidth={2} dot={{ r: 3 }} name="Transactions" />
+                  <Line type="monotone" dataKey="count" stroke={CHART_BAR} strokeWidth={2.5} dot={{ r: 3, fill: CHART_BAR }} activeDot={{ r: 5 }} name="Transactions" />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -418,14 +441,14 @@ export function ReportsPage() {
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">Transactions by Status</h3>
             {transactions.by_status.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <PieChart>
                   <Pie
                     data={transactions.by_status}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
-                    outerRadius={85}
+                    outerRadius={78}
                     paddingAngle={2}
                     dataKey="count"
                     nameKey="status"
@@ -436,8 +459,8 @@ export function ReportsPage() {
                       <Cell key={`cell-${entry.status}`} fill={statusChartColor(entry.status)} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Legend />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={REPORT_CHART_TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -447,7 +470,7 @@ export function ReportsPage() {
           </div>
         </div>
 
-        <div className="dashboard-breakdown-grid" style={{ marginTop: '20px' }}>
+        <div className="dashboard-breakdown-grid dashboard-breakdown-grid--reports">
           <div className="dashboard-breakdown-card">
             <h4 className="dashboard-breakdown-title">Transaction Amounts</h4>
             <ul className="dashboard-breakdown-list">
@@ -510,13 +533,13 @@ export function ReportsPage() {
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">Verification Trend</h3>
             {seller_verifications.submission_trend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <BarChart data={seller_verifications.submission_trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis dataKey="month" tick={CHART_TICK} stroke={CHART_AXIS} />
-                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Submissions']} contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Bar dataKey="count" fill={CHART_BAR_SECONDARY} radius={[2, 2, 0, 0]} name="Submissions" />
+                  <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} />
+                  <XAxis dataKey="month" tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
+                  <YAxis tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Submissions']} contentStyle={REPORT_CHART_TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill={CHART_BAR_SECONDARY} barSize={22} radius={[6, 6, 0, 0]} name="Submissions" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -527,14 +550,14 @@ export function ReportsPage() {
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">Verification Records by Status</h3>
             {seller_verifications.status_distribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <PieChart>
                   <Pie
                     data={seller_verifications.status_distribution}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
-                    outerRadius={85}
+                    outerRadius={78}
                     paddingAngle={2}
                     dataKey="count"
                     nameKey="status"
@@ -545,8 +568,8 @@ export function ReportsPage() {
                       <Cell key={`cell-${entry.status}`} fill={statusChartColor(entry.status)} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Legend />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={REPORT_CHART_TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -558,7 +581,7 @@ export function ReportsPage() {
           </div>
         </div>
 
-        <div className="dashboard-breakdown-grid" style={{ marginTop: '20px' }}>
+        <div className="dashboard-breakdown-grid dashboard-breakdown-grid--reports">
           <div className="dashboard-breakdown-card">
             <h4 className="dashboard-breakdown-title">Verification Summary</h4>
             <ul className="dashboard-breakdown-list">
@@ -618,13 +641,13 @@ export function ReportsPage() {
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">Activity Trend</h3>
             {activities.trend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <LineChart data={activities.trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis dataKey="month" tick={CHART_TICK} stroke={CHART_AXIS} />
-                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Activities']} contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Line type="monotone" dataKey="count" stroke={CHART_LINE_ACCENT} strokeWidth={2} dot={{ r: 3 }} name="Activities" />
+                  <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} />
+                  <XAxis dataKey="month" tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
+                  <YAxis tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Activities']} contentStyle={REPORT_CHART_TOOLTIP_STYLE} />
+                  <Line type="monotone" dataKey="count" stroke={CHART_LINE_ACCENT} strokeWidth={2.5} dot={{ r: 3, fill: CHART_LINE_ACCENT }} activeDot={{ r: 5 }} name="Activities" />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -636,13 +659,13 @@ export function ReportsPage() {
           <div className="dashboard-chart-card">
             <h3 className="dashboard-chart-title">Activities by Action</h3>
             {activities.by_action.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={REPORT_CHART_HEIGHT}>
                 <BarChart data={activities.by_action.slice(0, 8)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis dataKey="action" tick={CHART_TICK_SMALL} stroke={CHART_AXIS} angle={-45} textAnchor="end" height={60} />
-                  <YAxis tick={CHART_TICK} stroke={CHART_AXIS} />
-                  <Tooltip formatter={(value) => [String(value ?? 0), 'Count']} contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Bar dataKey="count" fill={CHART_LINE_ACCENT} radius={[2, 2, 0, 0]} name="Count" />
+                  <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} />
+                  <XAxis dataKey="action" tick={REPORT_CHART_TICK} stroke={CHART_AXIS} angle={-45} textAnchor="end" height={60} />
+                  <YAxis tick={REPORT_CHART_TICK} stroke={CHART_AXIS} />
+                  <Tooltip formatter={(value) => [String(value ?? 0), 'Count']} contentStyle={REPORT_CHART_TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill={CHART_LINE_ACCENT} barSize={22} radius={[6, 6, 0, 0]} name="Count" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -652,7 +675,7 @@ export function ReportsPage() {
           </div>
         </div>
 
-        <div className="dashboard-breakdown-grid" style={{ marginTop: '20px' }}>
+        <div className="dashboard-breakdown-grid dashboard-breakdown-grid--reports">
           <div className="dashboard-breakdown-card">
             <h4 className="dashboard-breakdown-title">Activity Summary</h4>
             <ul className="dashboard-breakdown-list">
@@ -663,7 +686,7 @@ export function ReportsPage() {
             </ul>
           </div>
 
-          <div className="dashboard-breakdown-card" style={{ gridColumn: 'span 2' }}>
+          <div className="dashboard-breakdown-card dashboard-breakdown-card--wide">
             <h4 className="dashboard-breakdown-title">Top Users by Activity</h4>
             {activities.by_user.length > 0 ? (
               <ul className="dashboard-breakdown-list">

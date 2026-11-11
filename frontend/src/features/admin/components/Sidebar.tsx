@@ -1,12 +1,10 @@
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../auth/AuthProvider';
 import {
   Activity,
   BadgeCheck,
   Beef,
   ChartNoAxesCombined,
   LayoutDashboard,
-  LogOut,
   ReceiptText,
   Settings,
   Users,
@@ -43,7 +41,6 @@ const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: Luc
 ];
 
 export function Sidebar() {
-  const { logout } = useAuth();
   const { data: pendingVerifications } = useSellerVerifications({
     status: 'pending_review',
     per_page: 1,
@@ -92,10 +89,6 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <button type="button" className="sidebar-logout" onClick={() => void logout()}>
-        <LogOut className="sidebar-nav-icon" aria-hidden="true" />
-        <span className="sidebar-nav-label">Sign Out</span>
-      </button>
     </aside>
   );
 }

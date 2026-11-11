@@ -55,21 +55,10 @@
   font-size: 13px;
 }
 
-.dashboard-page-shell .admin-header-profile-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
 .dashboard-page-shell .admin-header-name {
   color: #24382c;
   font-size: 12px;
   font-weight: 600;
-}
-
-.dashboard-page-shell .admin-header-role {
-  color: #7d8b82;
-  font-size: 11px;
 }
 
 .dashboard-page-shell .admin-header-profile-chevron {
@@ -203,6 +192,48 @@
   box-shadow: 0 1px 3px rgba(11, 39, 24, 0.045);
 }
 
+.dashboard-page-shell .dashboard-chart-card--bar-chart {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-page-shell .dashboard-chart-card--bar-chart .dashboard-chart-empty {
+  height: 260px;
+}
+
+.dashboard-page-shell .dashboard-chart-card--bar-chart .dashboard-chart-caption {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.dashboard-page-shell .dashboard-chart-card--bar-chart .recharts-cartesian-grid line {
+  stroke-opacity: 0.65;
+}
+
+.dashboard-page-shell .dashboard-chart-card--bar-chart .recharts-cartesian-axis-tick text {
+  fill: #718078;
+  font-size: 11px;
+}
+
+.dashboard-page-shell .dashboard-chart-card--bar-chart .recharts-rectangle {
+  transition: filter 150ms ease;
+}
+
+.dashboard-page-shell .dashboard-chart-card--bar-chart .recharts-bar-rectangle:hover .recharts-rectangle {
+  filter: brightness(1.07) drop-shadow(0 1px 2px rgba(11, 39, 24, 0.18));
+}
+
+.dashboard-page-shell .dashboard-chart-card--livestock-overview .dashboard-chart-empty {
+  height: 224px;
+}
+
+.dashboard-page-shell .dashboard-chart-card--livestock-overview .recharts-wrapper,
+.dashboard-page-shell .dashboard-chart-card--livestock-overview .recharts-surface {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
 .dashboard-page-shell .dashboard-chart-title {
   margin-bottom: 8px;
   color: #293d31;
@@ -215,6 +246,12 @@
   height: 16px;
   flex: 0 0 auto;
   color: #39815a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-page-shell .dashboard-chart-card--bar-chart .recharts-rectangle {
+    transition: none;
+  }
 }
 
 .dashboard-page-shell .dashboard-chart-caption,
