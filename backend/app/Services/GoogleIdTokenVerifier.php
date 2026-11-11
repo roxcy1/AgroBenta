@@ -33,12 +33,21 @@ class GoogleIdTokenVerifier
             return null;
         }
 
+        // The token goes in the form body, never the query string, so it is not
+        // part of the request URL that HTTP client exceptions put in their
+        // message.
         try {
             $response = Http::connectTimeout(3)
                 ->timeout(5)
-                ->get(self::TOKENINFO_URL, ['id_token' => $idToken]);
+                ->asForm()
+                ->post(self::TOKENINFO_URL, ['id_token' => $idToken]);
         } catch (Throwable $exception) {
-            report($exception);
+            // Report only the failure type. The original exception's message,
+            // trace arguments and request can carry the token, so it is not
+            // reported or chained as the previous exception.
+            report(new \RuntimeException(
+                'Google ID token verification request failed ('.$exception::class.').'
+            ));
 
             return null;
         }

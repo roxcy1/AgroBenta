@@ -6,6 +6,7 @@ use App\Enums\SellerCapability;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -68,6 +69,46 @@ class GoogleSignInTest extends TestCase
         ]);
 
         Http::assertSent(fn ($request) => $request['id_token'] === 'valid-token');
+    }
+
+    #[Test]
+    public function the_id_token_is_sent_in_the_request_body_not_the_url(): void
+    {
+        $this->fakeTokenInfo();
+
+        $this->postJson('/api/auth/google', ['id_token' => 'valid-token'])->assertOk();
+
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && $request->isForm()
+            && $request['id_token'] === 'valid-token'
+            && ! str_contains($request->url(), 'valid-token'));
+    }
+
+    #[Test]
+    public function a_connection_failure_is_refused_without_reporting_the_token(): void
+    {
+        Exceptions::fake();
+        Http::fake([
+            'oauth2.googleapis.com/tokeninfo*' => Http::failedConnection(
+                'cURL error 28: timed out for https://oauth2.googleapis.com/tokeninfo?id_token=secret-token'
+            ),
+        ]);
+
+        $this->postJson('/api/auth/google', ['id_token' => 'secret-token'])
+            ->assertUnauthorized();
+
+        Exceptions::assertReported(fn (\RuntimeException $e) => str_contains($e->getMessage(), 'verification request failed'));
+
+        $reported = Exceptions::reported();
+        $this->assertNotEmpty($reported);
+
+        foreach ($reported as $exception) {
+            for ($e = $exception; $e !== null; $e = $e->getPrevious()) {
+                $this->assertStringNotContainsString('secret-token', $e->getMessage());
+            }
+        }
+
+        $this->assertDatabaseCount('users', 0);
     }
 
     #[Test]

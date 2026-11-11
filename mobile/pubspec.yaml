@@ -43,6 +43,11 @@ dependencies:
   # Custom host/port, bearer-token channel auth, and automatic reconnection.
   pusher_reverb_flutter: ^0.0.10
   google_sign_in: ^7.2.0
+  # Held below 6.4.0, which needs Flutter 3.47 / Dart 3.13; the project's
+  # documented toolchain is Flutter 3.44.4 (root README). The app uses Google
+  # sign-in on Android only, so this pin changes no behavior. Remove it when the
+  # documented Flutter version moves to 3.47 or later.
+  google_sign_in_ios: ">=6.3.0 <6.4.0"
   gal: ^2.3.3
 
 dev_dependencies:
