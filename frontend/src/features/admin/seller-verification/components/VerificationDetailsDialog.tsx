@@ -12,6 +12,7 @@ import {
   applicantDeclaredNoBackImage,
   governmentIdTypeLabel,
 } from './verificationDetails';
+import { VerificationModalHeader } from './VerificationModalHeader';
 
 interface VerificationDetailsDialogProps {
   verificationId: number;
@@ -123,22 +124,26 @@ function DocumentViewer({
       </dd>
 
       {objectUrl ? (
-        <div className="lv-action-modal-overlay" onClick={close}>
+        <div className="lv-action-modal-overlay listing-details-overlay verification-document-overlay" onClick={close}>
           <div
-            className="lv-action-modal lv-action-modal--detail"
+            className="lv-action-modal lv-action-modal--detail lv-action-modal--listing-details verification-document-modal"
             role="dialog"
             aria-modal="true"
             aria-label={`${label} document`}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="lv-detail-header">
-              <h2 className="lv-action-modal-title">{label}</h2>
-            </header>
-            <div className="lv-detail-body">
-              <img src={objectUrl} alt={label} style={{ maxWidth: '100%' }} />
+            <VerificationModalHeader
+              title={label}
+              subtitle="Secure seller verification document."
+              titleId="verification-document-title"
+              closeLabel="Close document preview"
+              onClose={close}
+            />
+            <div className="lv-detail-body verification-document-body">
+              <img className="verification-document-image" src={objectUrl} alt={label} />
             </div>
-            <footer className="lv-detail-footer">
-              <button type="button" className="lv-action-cancel" onClick={close}>
+            <footer className="lv-detail-footer listing-details-footer">
+              <button type="button" className="listing-details-footer-close" onClick={close}>
                 Close
               </button>
             </footer>
@@ -294,24 +299,21 @@ export default function VerificationDetailsDialog({
     : [];
 
   return (
-    <div className="lv-action-modal-overlay" onClick={onClose}>
+    <div className="lv-action-modal-overlay listing-details-overlay verification-details-overlay" onClick={onClose}>
       <div
-        className="lv-action-modal lv-action-modal--detail"
+        className="lv-action-modal lv-action-modal--detail lv-action-modal--listing-details verification-details-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="verification-details-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="lv-detail-header">
-          <div className="lv-detail-heading">
-            <h2 className="lv-action-modal-title" id="verification-details-title">
-              Verification #{verificationId}
-            </h2>
-            <p className="lv-action-modal-desc">
-              Full details and prior submissions for this applicant.
-            </p>
-          </div>
-        </header>
+        <VerificationModalHeader
+          title={`Verification #${verificationId}`}
+          subtitle="Full details and prior submissions for this applicant."
+          titleId="verification-details-title"
+          closeLabel="Close verification details"
+          onClose={onClose}
+        />
 
         <div className="lv-detail-body">
           {isLoading ? (
@@ -350,8 +352,8 @@ export default function VerificationDetailsDialog({
           )}
         </div>
 
-        <footer className="lv-detail-footer">
-          <button type="button" className="lv-action-cancel" onClick={onClose}>
+        <footer className="lv-detail-footer listing-details-footer">
+          <button type="button" className="listing-details-footer-close" onClick={onClose}>
             Close
           </button>
         </footer>
