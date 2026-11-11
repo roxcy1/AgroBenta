@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -59,26 +59,6 @@ describe('Sidebar navigation', () => {
     expect(screen.getByText('Management')).not.toBeNull();
     expect(screen.getByText('System')).not.toBeNull();
     expect(await screen.findByText('3')).not.toBeNull();
-  });
-
-  it('uses the existing authenticated logout action for Sign Out', async () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never);
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <MemoryRouter>
-            <Sidebar />
-          </MemoryRouter>
-        </AuthProvider>
-      </QueryClientProvider>,
-    );
-
-    localStorage.setItem('admin_token', 'test-token');
-    fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
-
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/admin/auth/logout'));
-    expect(localStorage.getItem('admin_token')).toBeNull();
+    expect(screen.queryByRole('button', { name: /sign out/i })).toBeNull();
   });
 });

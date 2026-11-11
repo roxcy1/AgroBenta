@@ -9,7 +9,7 @@
   justify-content: center;
   padding: 15px 18px;
   background: rgba(255, 255, 255, 0.025);
-  border-bottom-color: rgba(225, 239, 228, 0.1);
+  border-bottom: 0;
 }
 
 .sidebar .sidebar-logo-image {
@@ -97,23 +97,6 @@
   height: 18px;
   color: currentColor;
   stroke-width: 1.9;
-}
-
-.sidebar .sidebar-logout {
-  min-height: 42px;
-  margin: 8px 10px 14px;
-  padding: 9px 12px;
-  color: #fff;
-  background: linear-gradient(100deg, #166534 0%, #15803d 100%);
-  border-color: rgba(220, 252, 231, 0.15);
-  border-radius: 9px;
-  font-size: 13px;
-}
-
-.sidebar .sidebar-logout:hover {
-  color: #fff;
-  background: linear-gradient(100deg, #15803d 0%, #166534 100%);
-  border-color: rgba(220, 252, 231, 0.28);
 }
 
 @media (max-width: 768px) {
