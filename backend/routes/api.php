@@ -140,6 +140,19 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     Route::delete('/{listing}/photos', [SellerListingController::class, 'destroyPhoto']);
 });
 
+<<<<<<< Updated upstream
+=======
+// Inquiries received by the caller as a seller. Read-only in this phase:
+// responding and declining are later work, and no status transition is exposed
+// here.
+//
+// No route takes a seller id. The scope is the token's user and is applied in
+// the repository, so a seller can see only inquiries about their own listings
+// (functional documentation section 8.2 rule 2). `buyer_id`, `seller_id` and `status`
+// are refused as query parameters: none of them is a filter this list supports.
+Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
+    
+>>>>>>> Stashed changes
 // The seller dashboard aggregates the caller's own listings, received
 // inquiries, and sales. The seller is the token's user. No route or query
 // parameter takes a seller id, and no revenue or conversion metric is exposed.

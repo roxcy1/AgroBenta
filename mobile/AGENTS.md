@@ -643,6 +643,7 @@ backend exposes the approved seller's own inbox behind the same
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/inquiries` | Creates a buyer inquiry about an `active` listing. Returns `201` with the `MobileInquiryResource` and the envelope message `Inquiry sent.`. |
+<<<<<<< Updated upstream
 | `GET /api/inquiries/listing/{listing}` | Pre-check: the caller's own inquiry for that listing in `data`, or `data: null`. Buyer-scoped from the token; `404` only when the listing does not exist. |
 
 | IndexSellerInquiryRequest is no longer needed. The seller's received-inquiry
@@ -651,6 +652,17 @@ backend exposes the approved seller's own inbox behind the same
 // `SellerInquiryResource` types are preserved only for backward compatibility
 // with existing data; no mobile screen consumes them.
 
+=======
+
+| `GET /api/inquiries/listing/{listing}` | Pre-check: the caller's own inquiry for that listing in `data`, or `data: null`. Buyer-scoped from the token; `404` only when the listing does not exist. |
+
+| `IndexSellerInquiryRequest` is no longer needed. The seller's received-inquiry
+// inbox has been removed (PM decision MS-18, 2026-10-29): inquiries are
+// delivered to the seller as messages. The `IndexSellerInquiryRequest` and
+// `SellerInquiryResource` types are preserved only for backward compatibility
+// with existing data; no mobile screen consumes them.
+
+>>>>>>> Stashed changes
 Seller Home shows five destinations (Home, My Listings, Messages, Transactions,
 Profile). Inquiries are delivered to the seller as messages; there is no
 separate seller inbox screen. See GAP-19 for the status of buyer-initiated

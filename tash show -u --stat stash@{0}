@@ -1,0 +1,62 @@
+[1mdiff --git a/analyze_err.txt b/analyze_err.txt[m
+[1mnew file mode 100644[m
+[1mindex 0000000..cb78efc[m
+Binary files /dev/null and b/analyze_err.txt differ
+[1mdiff --git a/backend/routes/api.php b/backend/routes/api.php[m
+[1mindex 82d85ee..b9d86bc 100644[m
+[1m--- a/backend/routes/api.php[m
+[1m+++ b/backend/routes/api.php[m
+[36m@@ -1,4 +1,4 @@[m
+[31m-<?php[m
+[32m+[m[32m﻿<?php[m
+ [m
+ use App\Http\Controllers\Api\Admin\ActivityController;[m
+ use App\Http\Controllers\Api\Admin\AuthController;[m
+[36m@@ -67,7 +67,7 @@[m
+ // `ability:mobile` is the authorisation boundary, so a mobile token reaches[m
+ // this group and an admin token does not, in the same direction enforced for[m
+ // the auth group above. Visibility is enforced in the query, and `status` is[m
+[31m-// not an accepted parameter — see IndexListingRequest.[m
+[32m+[m[32m// not an accepted parameter â€” see IndexListingRequest.[m
+ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {[m
+     Route::get('/listings', [MarketplaceListingController::class, 'index']);[m
+     Route::get('/listings/{listing}', [MarketplaceListingController::class, 'show']);[m
+[36m@@ -85,12 +85,12 @@[m
+ // Submission grants nothing. `seller_capability` is set only by the admin[m
+ // approval endpoint above, and `SellerVerificationController` never writes it.[m
+ //[m
+[31m-// No throttle here, deliberately. The contract's throttling inventory (§3.5)[m
+[32m+[m[32m// No throttle here, deliberately. The contract's throttling inventory (Â§3.5)[m
+ // lists only login, register and price-suggestion, and D-09 is still open, so a[m
+ // limit on this route would be an undocumented behaviour change: it would turn[m
+ // the sixth attempt in a minute into a 429 that the contract never promises. The[m
+[31m-// abuse ceiling that does exist is the open-record rule below — one application[m
+[31m-// per buyer per open state, refused with 409 — plus `auth:sanctum`. Revisit under[m
+[32m+[m[32m// abuse ceiling that does exist is the open-record rule below â€” one application[m
+[32m+[m[32m// per buyer per open state, refused with 409 â€” plus `auth:sanctum`. Revisit under[m
+ // D-09 if a limit is decided.[m
+ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification')->group(function (): void {[m
+     Route::get('/me', [MobileSellerVerificationController::class, 'me']);[m
+[36m@@ -105,7 +105,7 @@[m
+     // farm photo's `{photo}` is only matched against the caller's own files. The file[m
+     // rules live in UploadSellerVerificationDocumentRequest and are enforced on[m
+     // the bytes, not the client's filename. The response never carries a path[m
+[31m-    // or URL — the file is on private storage and is read back only through[m
+[32m+[m[32m    // or URL â€” the file is on private storage and is read back only through[m
+     // GET /documents/{type} below, which resolves the record from the token.[m
+     Route::post('/documents', [MobileSellerVerificationController::class, 'storeDocument']);[m
+     Route::get('/documents/{type}', [MobileSellerVerificationController::class, 'showDocument']);[m
+[36m@@ -124,7 +124,7 @@[m
+ //[m
+ // `submit` and `destroy` are declared before `/seller/listings/{listing}` for the[m
+ // same reason `/me` is declared before its group: a static segment must never be[m
+[31m-// swallowed by a parameter. Neither is a deactivation — `active -> inactive` is an[m
+[32m+[m[32m// swallowed by a parameter. Neither is a deactivation â€” `active -> inactive` is an[m
+ // administrator action [D-02 rule 4] and is not exposed to sellers.[m
+ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/listings')->group(function (): void {[m
+     Route::get('/', [SellerListingController::class, 'index']);[m
+[36m@@ -134,9 +134,9 @@[m
+     Route::patch('/{listing}', [SellerListingController::class, 'update']);[m
+     Route::delete('/{listing}', [SellerListingController::class, 'destroy']);[m
+ [m
+[31m-    /
