@@ -47,7 +47,10 @@ class NotificationsController extends ChangeNotifier {
   /// argument at all keeps the current filter. The distinction matters
   /// because "All" is a valid filter value that is *not* a filter.
   Future<void> load({String? filter, bool changeFilter = false}) async {
-    if (_state.isInitialLoad && !changeFilter) {
+    // Only a load already in flight is skipped. `isInitialLoad` also covers the
+    // untouched `initial` status, so using it here made the very first load()
+    // return at once and left the screen on its spinner for good.
+    if (_state.status == NotificationsStatus.loading && !changeFilter) {
       return;
     }
 

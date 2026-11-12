@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_input_border.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
 import '../../../models/user.dart';
@@ -330,11 +331,12 @@ class _SearchBar extends StatelessWidget {
               onSubmitted: (String _) => onSubmit(),
               decoration: InputDecoration(
                 hintText: 'Search livestock, seller, or location...',
-                prefixIcon: const Icon(Icons.search),
-                isDense: true,
+                prefixIcon: const Icon(Icons.search, size: 20),
+                contentPadding: AppInputs.plainPadding,
                 suffixIcon: hasText
                     ? IconButton(
-                        icon: const Icon(Icons.close),
+                        icon: const Icon(Icons.close, size: 18),
+                        visualDensity: VisualDensity.compact,
                         tooltip: 'Clear search',
                         onPressed: onClear,
                       )

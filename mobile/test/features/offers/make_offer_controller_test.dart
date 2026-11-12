@@ -108,7 +108,7 @@ void main() {
           inquiryId: 5,
           listingId: 12,
           amount: '47000.00',
-          pickupDate: DateTime(2026, 11, 12),
+          pickupDate: DateTime(2036, 11, 12),
           paymentMethod: InquiryPaymentMethod.cash,
           collectionMethod: InquiryCollectionMethod.farmPickup,
           note: '  Bring a helper.  ',
@@ -124,7 +124,7 @@ void main() {
           'collection_method',
           'note',
         });
-        expect(body['proposed_pickup_date'], '2026-11-12');
+        expect(body['proposed_pickup_date'], '2036-11-12');
         expect(body['payment_method'], 'cash');
         expect(body['collection_method'], 'farm_pickup');
         expect(body['note'], 'Bring a helper.');

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../widgets/nav_line_icon.dart';
 
 import '../../../models/transaction.dart';
 import '../../home/view/buyer_home_screen.dart';
@@ -75,15 +76,15 @@ class _BuyerShellState extends State<BuyerShell> {
         child: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (int index) => setState(() => _index = index),
+          // The proposal's line icons: a selected tab keeps the same outline
+          // and only turns brand green (the theme colours it).
           destinations: <NavigationDestination>[
             const NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
+              icon: NavLineIcon(NavGlyph.home),
               label: 'Home',
             ),
             const NavigationDestination(
-              icon: Icon(Icons.search_outlined),
-              selectedIcon: Icon(Icons.search),
+              icon: NavLineIcon(NavGlyph.browse),
               label: 'Browse',
             ),
             // Messages, with the unread count as an icon badge. The count is
@@ -94,25 +95,17 @@ class _BuyerShellState extends State<BuyerShell> {
               icon: unread > 0
                   ? Badge(
                       label: Text(unread > 99 ? '99+' : '$unread'),
-                      child: const Icon(Icons.chat_bubble_outline),
+                      child: const NavLineIcon(NavGlyph.messages),
                     )
-                  : const Icon(Icons.chat_bubble_outline),
-              selectedIcon: unread > 0
-                  ? Badge(
-                      label: Text(unread > 99 ? '99+' : '$unread'),
-                      child: const Icon(Icons.chat_bubble),
-                    )
-                  : const Icon(Icons.chat_bubble),
+                  : const NavLineIcon(NavGlyph.messages),
               label: 'Messages',
             ),
             const NavigationDestination(
-              icon: Icon(Icons.swap_horiz_outlined),
-              selectedIcon: Icon(Icons.swap_horiz),
+              icon: NavLineIcon(NavGlyph.transactions),
               label: 'Transactions',
             ),
             const NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
+              icon: NavLineIcon(NavGlyph.profile),
               label: 'Profile',
             ),
           ],

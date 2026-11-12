@@ -7,17 +7,15 @@ import '../../marketplace/state/marketplace_controller.dart';
 import '../../marketplace/state/marketplace_state.dart';
 import '../../marketplace/widgets/listing_card.dart';
 
-/// Card width for the compact row. The shared [ListingCard] is designed for a
-/// full-width list; at this width its title may wrap to two lines, so the row
-/// height below must budget for that.
-const double _cardWidth = 230;
+/// Card width for the compact row, as in the approved design: about two and
+/// a bit cards show at once, so the row reads as scrollable.
+const double _cardWidth = 150;
 
-/// Row height: the card's 16:9 photo band (~125px at [_cardWidth]), plus its
-/// content — species, a two-line title, price and up to two meta rows — plus
-/// the card's own margin. Measured against the real card rather than guessed,
-/// because a fixed-height row that overflows is a yellow-and-black stripe on
-/// every buyer's Home screen.
-const double _rowHeight = 320;
+/// Row height: the card's 4:3 photo band (~112px at [_cardWidth]) plus its
+/// text block — name, place and price, each on one line — with a little room
+/// for a larger system font. A fixed-height row that overflows is a
+/// yellow-and-black stripe on every buyer's Home screen.
+const double _rowHeight = 218;
 
 /// The Home screen's listings row, driven by the shared marketplace state.
 ///

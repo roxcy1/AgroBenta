@@ -33,11 +33,11 @@ class MessageBubble extends StatelessWidget {
       return InquiryMessageCard(inquiry: inquiry, isMine: isMine);
     }
 
-    final Color bubbleColor = isMine
-        ? AppColors.primary
-        : theme.colorScheme.surfaceContainerHighest;
+    // Sent: brand green. Received: white with a hairline border, as in the
+    // approved design.
+    final Color bubbleColor = isMine ? AppColors.primary : AppColors.surface;
 
-    final Color textColor = isMine ? Colors.white : theme.colorScheme.onSurface;
+    final Color textColor = isMine ? Colors.white : AppColors.text;
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -54,7 +54,14 @@ class MessageBubble extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: bubbleColor.withValues(alpha: isPlaceholder ? 0.7 : 1),
-              borderRadius: BorderRadius.circular(14),
+              border: isMine ? null : Border.all(color: AppColors.border),
+              // The corner nearest the sender is tighter, like a speech tail.
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(12),
+                topRight: const Radius.circular(12),
+                bottomLeft: Radius.circular(isMine ? 12 : 4),
+                bottomRight: Radius.circular(isMine ? 4 : 12),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

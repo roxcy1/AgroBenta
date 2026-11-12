@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_input_border.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
@@ -28,6 +29,11 @@ import 'marketplace_filter_screen.dart';
 /// [MarketplaceScope.of] registers a dependency — calling it from `build` would
 /// mean the whole list rebuilt on every keystroke in the search field, and the
 /// list is the expensive part of this screen.
+/// Height of a listing card's text block under its photo: name, place and
+/// price, with their padding. Slightly generous so a larger system font
+/// still fits.
+const double _cardTextHeight = 104;
+
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
 
@@ -243,10 +249,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         final double availableWidth =
             constraints.maxWidth - (AppSpacing.screenGutter * 2);
         final double itemWidth = (availableWidth - spacing) / 2;
-        // Photo band (16:9) plus the compact fact block below it. A single
-        // extent keeps both columns pixel-aligned regardless of how much text
-        // a seller wrote.
-        final double itemExtent = (itemWidth * 9 / 16) + 184;
+        // Photo band (4:3, as the card draws it) plus the text block below
+        // it. A single extent keeps both columns pixel-aligned regardless of
+        // how much text a seller wrote.
+        final double itemExtent = (itemWidth * 3 / 4) + _cardTextHeight;
 
         return RefreshIndicator(
           // Pull-to-refresh keeps the current results mounted: `refresh` publishes
@@ -368,12 +374,13 @@ class _SearchAndFilters extends StatelessWidget {
                   onSubmitted: (String _) => controller.submitSearch(),
                   decoration: InputDecoration(
                     hintText: 'Search livestock',
-                    prefixIcon: const Icon(Icons.search),
-                    isDense: true,
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    contentPadding: AppInputs.plainPadding,
                     suffixIcon: state.searchText.isEmpty
                         ? null
                         : IconButton(
-                            icon: const Icon(Icons.close),
+                            icon: const Icon(Icons.close, size: 18),
+                            visualDensity: VisualDensity.compact,
                             tooltip: 'Clear search and filters',
                             onPressed: onClearSearch,
                           ),
@@ -395,7 +402,9 @@ class _SearchAndFilters extends StatelessWidget {
           if (state.filters.livestockType.trim().isNotEmpty) ...<Widget>[
             const SizedBox(height: AppSpacing.xs),
             _ActiveCategoryIndicator(
-              label: _BrowseCategory.labelFor(state.filters.livestockType.trim()),
+              label: _BrowseCategory.labelFor(
+                state.filters.livestockType.trim(),
+              ),
               onClear: onClearCategory,
             ),
           ],
@@ -522,7 +531,7 @@ class _LoadingList extends StatelessWidget {
             crossAxisCount: 2,
             mainAxisSpacing: spacing,
             crossAxisSpacing: spacing,
-            mainAxisExtent: (itemWidth * 9 / 16) + 184,
+            mainAxisExtent: (itemWidth * 3 / 4) + _cardTextHeight,
           ),
           itemCount: 4,
           itemBuilder: (BuildContext context, int index) =>

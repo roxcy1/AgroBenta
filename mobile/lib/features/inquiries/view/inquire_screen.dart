@@ -7,6 +7,7 @@ import '../../../core/utils/app_formatters.dart';
 import '../../../models/inquiry.dart';
 import '../../../models/listing.dart';
 import '../../../models/message.dart';
+import '../../../widgets/field_label.dart';
 import '../../../widgets/notice_banner.dart';
 import '../../../widgets/section_card.dart';
 import '../../auth/state/auth_scope.dart';
@@ -472,7 +473,7 @@ class _InquireScreenState extends State<InquireScreen> {
             textInputAction: TextInputAction.newline,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              labelText: 'Message *',
+              label: FieldLabel('Message *'),
               alignLabelWithHint: true,
               hintText: 'Type your inquiry here...',
               helperText:

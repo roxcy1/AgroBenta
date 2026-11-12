@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../widgets/temporary_logo.dart';
 import '../../../models/seller_verification.dart';
 import '../../../models/user.dart';
@@ -70,7 +71,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      // A white page: the approved design sets the account header and the
+      // mode switch straight on the surface, with only the lists boxed.
+      backgroundColor: AppColors.surface,
       body: ListenableBuilder(
         listenable: _controller,
         builder: (BuildContext context, Widget? child) {
@@ -189,58 +192,57 @@ class _ProfileSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Row(
-          children: <Widget>[
-            _Avatar(name: user.name, url: user.avatarUrl),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    user.name,
-                    style: theme.textTheme.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    user.email,
-                    style: theme.textTheme.bodySmall?.copyWith(
+    // No card: the avatar, name and email sit straight on the page.
+    return Row(
+      children: <Widget>[
+        InitialsAvatar(name: user.name, imageUrl: user.avatarUrl, radius: 36),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                user.name,
+                style: theme.textTheme.titleLarge,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: AppSpacing.xxxs),
+              Text(
+                user.email,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (user.location != null &&
+                  user.location!.isNotEmpty) ...<Widget>[
+                const SizedBox(height: AppSpacing.xxxs),
+                Row(
+                  children: <Widget>[
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
                       color: AppColors.textSecondary,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (user.location != null &&
-                      user.location!.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: AppSpacing.xxs),
-                    Row(
-                      children: <Widget>[
-                        const Icon(Icons.location_on_outlined, size: 16),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            user.location!,
-                            style: theme.textTheme.bodySmall,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        user.location!,
+                        style: theme.textTheme.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
-                ],
-              ),
-            ),
-            TextButton(onPressed: onEdit, child: const Text('Edit')),
-          ],
+                ),
+              ],
+            ],
+          ),
         ),
-      ),
+        TextButton(onPressed: onEdit, child: const Text('Edit')),
+      ],
     );
   }
 }
@@ -256,71 +258,91 @@ class _AccountModeCard extends StatelessWidget {
         AuthScope.of(context).state.user?.isSeller ?? false;
     final AccountMode mode = controller.mode;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(
-                  mode == AccountMode.seller
-                      ? Icons.storefront_outlined
-                      : Icons.shopping_cart_outlined,
-                  color: AppColors.primary,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const _GroupLabel('Account Mode'),
+        const SizedBox(height: AppSpacing.xs),
+        // A grey track with the selected half raised in white, as in the
+        // approved design, rather than Material's outlined pill.
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.xxs),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: SegmentedButton<AccountMode>(
+            style: ButtonStyle(
+              visualDensity: VisualDensity.standard,
+              backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+                (Set<WidgetState> states) =>
+                    states.contains(WidgetState.selected)
+                    ? AppColors.surface
+                    : Colors.transparent,
+              ),
+              foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+                (Set<WidgetState> states) =>
+                    states.contains(WidgetState.disabled)
+                    ? AppColors.textSecondary.withValues(alpha: 0.5)
+                    : states.contains(WidgetState.selected)
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+              ),
+              side: const WidgetStatePropertyAll<BorderSide>(
+                BorderSide(color: Colors.transparent),
+              ),
+              shape: WidgetStatePropertyAll<OutlinedBorder>(
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              textStyle: WidgetStatePropertyAll<TextStyle?>(
+                theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Text('Account Mode', style: theme.textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              mode == AccountMode.seller
-                  ? 'You can list and manage your livestock.'
-                  : 'Browse and purchase livestock.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            SegmentedButton<AccountMode>(
-              segments: <ButtonSegment<AccountMode>>[
-                const ButtonSegment<AccountMode>(
-                  value: AccountMode.buyer,
-                  label: Text('Buyer Mode'),
-                ),
-                ButtonSegment<AccountMode>(
-                  value: AccountMode.seller,
-                  label: const Text('Seller Mode'),
-                  enabled: canUseSellerMode,
-                ),
-              ],
-              selected: <AccountMode>{mode},
-              onSelectionChanged: (Set<AccountMode> selection) {
-                final AccountMode next = selection.first;
-                if (next == AccountMode.seller) {
-                  controller.requestSellerMode();
-                } else {
-                  controller.select(next);
-                }
-              },
-              showSelectedIcon: false,
-              expandedInsets: EdgeInsets.zero,
-            ),
-            if (!canUseSellerMode) ...<Widget>[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Seller Mode becomes available after seller verification.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+            segments: <ButtonSegment<AccountMode>>[
+              const ButtonSegment<AccountMode>(
+                value: AccountMode.buyer,
+                label: Text('Buyer Mode'),
+              ),
+              ButtonSegment<AccountMode>(
+                value: AccountMode.seller,
+                label: const Text('Seller Mode'),
+                enabled: canUseSellerMode,
               ),
             ],
-          ],
+            selected: <AccountMode>{mode},
+            onSelectionChanged: (Set<AccountMode> selection) {
+              final AccountMode next = selection.first;
+              if (next == AccountMode.seller) {
+                controller.requestSellerMode();
+              } else {
+                controller.select(next);
+              }
+            },
+            showSelectedIcon: false,
+            expandedInsets: EdgeInsets.zero,
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          mode == AccountMode.seller
+              ? 'You can list and manage your livestock.'
+              : 'Browse and purchase livestock.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        if (!canUseSellerMode) ...<Widget>[
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            'Seller Mode becomes available after seller verification.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -378,9 +400,17 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    const Icon(Icons.person_add_alt_outlined),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text('Become a Seller', style: theme.textTheme.titleSmall),
+                    Expanded(
+                      child: Text(
+                        'Become a Seller',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.storefront_outlined,
+                      size: 20,
+                      color: AppColors.primary,
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -491,12 +521,10 @@ class _AccountSettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('Account Settings', style: theme.textTheme.titleSmall),
+        const _GroupLabel('Account Settings'),
         const SizedBox(height: AppSpacing.xs),
         Card(
           margin: EdgeInsets.zero,
@@ -544,12 +572,10 @@ class _OtherSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('Other', style: theme.textTheme.titleSmall),
+        const _GroupLabel('Other'),
         const SizedBox(height: AppSpacing.xs),
         Card(
           margin: EdgeInsets.zero,
@@ -570,11 +596,12 @@ class _OtherSection extends StatelessWidget {
                 enabled: false,
                 onTap: () {},
               ),
-              const Divider(height: 1),
-              const _SignOutTile(),
             ],
           ),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        // Log Out stands alone, in red, so it is never tapped by habit.
+        const Card(margin: EdgeInsets.zero, child: _SignOutTile()),
       ],
     );
   }
@@ -600,15 +627,21 @@ class _SettingsTile extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
 
     return ListTile(
-      leading: Icon(icon),
+      leading: _IconTile(icon: icon),
       title: Text(title, style: theme.textTheme.titleSmall),
       subtitle: Text(
         subtitle,
         style: theme.textTheme.bodySmall?.copyWith(
           color: AppColors.textSecondary,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: const Icon(
+        Icons.chevron_right,
+        size: 20,
+        color: AppColors.textSecondary,
+      ),
       enabled: enabled,
       onTap: enabled ? onTap : null,
     );
@@ -622,41 +655,74 @@ class _SignOutTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isBusy = AuthScope.of(context).state.isSigningOut;
 
+    final ThemeData theme = Theme.of(context);
+
     return ListTile(
-      leading: const Icon(Icons.logout),
-      title: const Text('Log Out'),
-      subtitle: const Text('Sign out from your account'),
+      leading: const _IconTile(icon: Icons.logout, danger: true),
+      title: Text(
+        'Log Out',
+        style: theme.textTheme.titleSmall?.copyWith(color: AppColors.error),
+      ),
+      subtitle: Text(
+        'Sign out from your account',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      ),
       trailing: isBusy
           ? const SizedBox.square(
               dimension: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Icon(Icons.chevron_right),
+          : null,
       enabled: !isBusy,
       onTap: isBusy ? null : () => AuthScope.of(context).signOut(),
     );
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, required this.url});
+/// The small grey heading above a group of rows.
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.text);
 
-  final String name;
-  final String? url;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final String? src = url;
-    if (src == null || src.isEmpty) {
-      return CircleAvatar(
-        radius: 32,
-        child: Text(
-          name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-      );
-    }
-    return CircleAvatar(radius: 32, backgroundImage: NetworkImage(src));
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        color: AppColors.textSecondary,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+/// The tinted square that carries a row's icon.
+class _IconTile extends StatelessWidget {
+  const _IconTile({required this.icon, this.danger = false});
+
+  final IconData icon;
+
+  /// Red on a pale red tile, for the one destructive row.
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = danger ? AppColors.error : AppColors.primary;
+
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: danger
+            ? AppColors.error.withValues(alpha: 0.10)
+            : AppColors.primarySurface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Icon(icon, size: 19, color: accent),
+    );
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/conversation.dart';
 import '../../../models/message.dart';
@@ -489,17 +490,11 @@ class _SmallAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? url = user.avatarUrl;
-    if (url == null || url.isEmpty) {
-      return CircleAvatar(
-        radius: 16,
-        child: Text(
-          user.initial,
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-      );
-    }
-    return CircleAvatar(radius: 16, backgroundImage: NetworkImage(url));
+    return InitialsAvatar(
+      name: user.name,
+      imageUrl: user.avatarUrl,
+      radius: 16,
+    );
   }
 }
 
@@ -570,17 +565,11 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? url = user.avatarUrl;
-    if (url == null || url.isEmpty) {
-      return CircleAvatar(
-        radius: 32,
-        child: Text(
-          user.initial,
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-      );
-    }
-    return CircleAvatar(radius: 32, backgroundImage: NetworkImage(url));
+    return InitialsAvatar(
+      name: user.name,
+      imageUrl: user.avatarUrl,
+      radius: 32,
+    );
   }
 }
 

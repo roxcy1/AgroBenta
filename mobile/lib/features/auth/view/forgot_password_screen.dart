@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/auth_controller.dart';
 import '../state/auth_scope.dart';
 import '../widgets/auth_error_banner.dart';
@@ -96,7 +97,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             textInputAction: TextInputAction.done,
             autofillHints: const <String>[AutofillHints.email],
             autocorrect: false,
-            decoration: const InputDecoration(labelText: 'Email'),
+            decoration: const InputDecoration(label: FieldLabel('Email')),
             validator: validateRequiredEmail,
             onFieldSubmitted: (_) => _submit(),
           ),

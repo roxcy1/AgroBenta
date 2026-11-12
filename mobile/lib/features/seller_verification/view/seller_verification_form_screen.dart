@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../../models/seller_verification.dart';
@@ -466,9 +467,9 @@ class _SellerVerificationFormScreenState
                 initialValue: accountName,
                 readOnly: true,
                 decoration: const InputDecoration(
-                  labelText: 'Full name',
+                  label: FieldLabel('Full name'),
                   helperText: 'From your account — cannot be changed here.',
-                  suffixIcon: Icon(Icons.lock_outline),
+                  suffixIcon: FieldIcon(Icon(Icons.lock_outline)),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -480,7 +481,7 @@ class _SellerVerificationFormScreenState
               maxLength: kSellerVerificationPhoneMax,
               enabled: !isSubmitting,
               decoration: const InputDecoration(
-                labelText: 'Phone number',
+                label: FieldLabel('Phone number'),
                 helperText: 'Required for seller verification.',
               ),
               validator: (String? value) =>
@@ -496,7 +497,7 @@ class _SellerVerificationFormScreenState
               maxLength: kSellerVerificationAddressMax,
               enabled: !isSubmitting,
               decoration: const InputDecoration(
-                labelText: 'Address',
+                label: FieldLabel('Address'),
                 helperText: 'Required. Your residential or barangay address.',
               ),
               validator: (String? value) =>
@@ -511,7 +512,7 @@ class _SellerVerificationFormScreenState
               maxLength: kSellerVerificationShortFieldMax,
               enabled: !isSubmitting,
               decoration: const InputDecoration(
-                labelText: 'Business name',
+                label: FieldLabel('Business name'),
                 helperText: 'Optional. Your farm or business name.',
               ),
               validator: (String? value) =>
@@ -526,7 +527,7 @@ class _SellerVerificationFormScreenState
               maxLength: kSellerVerificationShortFieldMax,
               enabled: !isSubmitting,
               decoration: const InputDecoration(
-                labelText: 'Business location',
+                label: FieldLabel('Business location'),
                 helperText: 'Optional. Town, city or province.',
               ),
               validator: (String? value) =>
@@ -543,7 +544,7 @@ class _SellerVerificationFormScreenState
               maxLength: kSellerVerificationDescriptionMax,
               enabled: !isSubmitting,
               decoration: const InputDecoration(
-                labelText: 'Business description',
+                label: FieldLabel('Business description'),
                 alignLabelWithHint: true,
                 helperText:
                     'Optional. What you sell, and how long you have been '
@@ -594,7 +595,7 @@ class _SellerVerificationFormScreenState
               initialValue: _governmentIdType,
               isExpanded: true,
               decoration: InputDecoration(
-                labelText: 'Government ID Type',
+                label: FieldLabel('Government ID Type'),
                 errorText: _controller.state.errorFor('government_id_type'),
               ),
               items: GovernmentIdType.values
@@ -625,7 +626,7 @@ class _SellerVerificationFormScreenState
                 enabled: !isSubmitting,
                 textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
-                  labelText: 'Specify Government ID',
+                  label: FieldLabel('Specify Government ID'),
                   errorText: _controller.state.errorFor(
                     'government_id_description',
                   ),

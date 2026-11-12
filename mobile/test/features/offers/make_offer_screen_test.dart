@@ -48,7 +48,7 @@ void main() {
             askingPrice: '50000.00',
             paymentMethod: InquiryPaymentMethod.gcash,
             collectionMethod: InquiryCollectionMethod.farmPickup,
-            preferredSchedule: preferredSchedule ?? DateTime(2026, 11, 10),
+            preferredSchedule: preferredSchedule ?? DateTime(2036, 11, 10),
           ),
         ),
       ),
@@ -122,7 +122,7 @@ void main() {
     // Prefilled terms travel unchanged because the seller kept them.
     expect(post.body['payment_method'], 'gcash');
     expect(post.body['collection_method'], 'farm_pickup');
-    expect(post.body['proposed_pickup_date'], '2026-11-10');
+    expect(post.body['proposed_pickup_date'], '2036-11-10');
 
     expect(find.text('Offer sent'), findsOneWidget);
   });

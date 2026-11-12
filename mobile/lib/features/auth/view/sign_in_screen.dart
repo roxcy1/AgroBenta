@@ -4,6 +4,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
@@ -125,7 +126,8 @@ class _SignInScreenState extends State<SignInScreen> {
     const double overlap = 0;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      // White to the bottom edge, as in the approved design.
+      backgroundColor: AppColors.surface,
       // The header sits below the status bar rather than under it; the bottom
       // inset is applied inside the scroll content instead, so the panel can
       // run to the very bottom of the screen.
@@ -176,20 +178,6 @@ class _SignInScreenState extends State<SignInScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Text(
-                  'Welcome Back!',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineMedium,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Sign in to continue',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
                 if (state.errorMessage != null) ...<Widget>[
                   AuthErrorBanner(message: state.errorMessage!),
                   const SizedBox(height: AppSpacing.lg),
@@ -247,8 +235,8 @@ class _SignInScreenState extends State<SignInScreen> {
             autofillHints: const <String>[AutofillHints.email],
             autocorrect: false,
             decoration: const InputDecoration(
-              labelText: 'Email Address',
-              prefixIcon: Icon(Icons.mail_outline),
+              label: FieldLabel('Email Address', hasPrefixIcon: true),
+              prefixIcon: FieldIcon(Icon(Icons.mail_outline)),
             ),
             validator: (String? value) =>
                 // A server 422 for this field outranks the local check: it is
@@ -263,8 +251,8 @@ class _SignInScreenState extends State<SignInScreen> {
             autofillHints: const <String>[AutofillHints.password],
             onFieldSubmitted: (_) => _submit(),
             decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
+              label: FieldLabel('Password', hasPrefixIcon: true),
+              prefixIcon: const FieldIcon(Icon(Icons.lock_outline)),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscurePassword,
                 onPressed: () =>
@@ -353,11 +341,18 @@ class _SignInScreenState extends State<SignInScreen> {
         Expanded(
           child: OutlinedButton(
             onPressed: null,
-            child: const FaIcon(
-              FontAwesomeIcons.google,
-              size: 26,
-              color: Color(0xFF4285F4),
-              semanticLabel: 'Continue with Google — unavailable',
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                FaIcon(
+                  FontAwesomeIcons.google,
+                  size: 18,
+                  color: Color(0xFF4285F4),
+                  semanticLabel: 'Continue with Google — unavailable',
+                ),
+                SizedBox(width: AppSpacing.xs),
+                Text('Google'),
+              ],
             ),
           ),
         ),
@@ -365,11 +360,18 @@ class _SignInScreenState extends State<SignInScreen> {
         Expanded(
           child: OutlinedButton(
             onPressed: null,
-            child: const FaIcon(
-              FontAwesomeIcons.facebook,
-              size: 26,
-              color: Color(0xFF1877F2),
-              semanticLabel: 'Continue with Facebook — unavailable',
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                FaIcon(
+                  FontAwesomeIcons.facebook,
+                  size: 18,
+                  color: Color(0xFF1877F2),
+                  semanticLabel: 'Continue with Facebook — unavailable',
+                ),
+                SizedBox(width: AppSpacing.xs),
+                Text('Facebook'),
+              ],
             ),
           ),
         ),
@@ -413,12 +415,15 @@ class _PasswordVisibilityToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(
-        visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+    return FieldIcon(
+      IconButton(
+        onPressed: onPressed,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(
+          visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        ),
+        tooltip: visible ? 'Hide password' : 'Show password',
       ),
-      tooltip: visible ? 'Hide password' : 'Show password',
     );
   }
 }

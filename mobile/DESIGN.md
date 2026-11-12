@@ -1176,6 +1176,8 @@ Avoid mixing multiple unrelated icon styles.
 
 - **Logo:** `assets/images/AgroBentaLogo.png` (transparent background). It includes the "AgroBenta" wordmark, so never repeat the name as text beside it. Show it on white or very light backgrounds only.
 - **Livestock types:** cattle, carabao, goat and swine use the silhouettes in `assets/icons/livestock/`, through `LivestockTypeIcon`. They are tinted brand green. Any other type falls back to a neutral paw. Do not use Font Awesome stand-ins (hippo, bacon, paw) for these types.
+- **Bottom navigation icons:** Home, Browse, My Listings, Messages, Transactions and Profile use the approved proposal's thin line icons, drawn by `NavLineIcon` (`lib/widgets/nav_line_icon.dart`). A selected tab keeps the same outline and turns brand green; there is no filled variant.
+- **People without a photo:** a solid brand-green circle with up to two white initials, through `InitialsAvatar` (`lib/widgets/initials_avatar.dart`).
 
 ---
 

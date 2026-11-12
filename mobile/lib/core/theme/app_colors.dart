@@ -84,6 +84,10 @@ abstract final class AppColors {
   /// Hairline borders and dividers. Prefer this over shadows for separation.
   static const Color border = Color(0xFFE2E6E0);
 
+  /// A text field's outline. A step darker than [border] so an empty field
+  /// still reads as a control on a white page. (`#CFD8CA`)
+  static const Color fieldBorder = Color(0xFFCFD8CA);
+
   // --- Text ----------------------------------------------------------------
 
   /// Primary body and heading text.
@@ -91,4 +95,8 @@ abstract final class AppColors {
 
   /// Secondary text: captions, helper copy, metadata.
   static const Color textSecondary = Color(0xFF5B665E);
+
+  /// Placeholder text and the small icons inside a text field. Lighter than
+  /// [textSecondary]; never used for copy a user has to read. (`#8B948D`)
+  static const Color textHint = Color(0xFF8B948D);
 }

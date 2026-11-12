@@ -63,8 +63,17 @@ class HomeHeroBanner extends StatelessWidget {
                     ),
                     if (onExplore != null) ...<Widget>[
                       const SizedBox(height: AppSpacing.sm),
+                      // Compact, as in the approved design: the banner is
+                      // an invitation, not the screen's main action.
                       FilledButton(
                         onPressed: onExplore,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 36),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                          ),
+                          tapTargetSize: MaterialTapTargetSize.padded,
+                        ),
                         child: const Text('Explore Now'),
                       ),
                     ],

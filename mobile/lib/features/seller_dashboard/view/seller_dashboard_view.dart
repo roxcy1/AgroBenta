@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../models/received_inquiry.dart';
 import '../../../models/seller_activity.dart';
 import '../../../models/seller_dashboard.dart';
@@ -401,11 +402,36 @@ class _AttentionSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ReceivedInquiriesState state = controller.state;
+    final bool loaded =
+        state.status != ReceivedInquiriesStatus.failed &&
+        state.status != ReceivedInquiriesStatus.initial &&
+        state.status != ReceivedInquiriesStatus.loading;
+    final bool hasActionable = state.inquiries.any(
+      (ReceivedInquiry inquiry) => inquiry.canMakeOffer,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text('Needs Your Attention', style: theme.textTheme.titleMedium),
+        // The heading with its link on the same line, as in the approved
+        // design. The link appears only once there are inquiries to open.
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Needs Your Attention',
+                style: theme.textTheme.titleMedium,
+              ),
+            ),
+            if (loaded && state.inquiries.isNotEmpty)
+              TextButton(
+                onPressed: onOpenInquiries,
+                child: Text(
+                  hasActionable ? 'View inquiries' : 'View recent inquiries',
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.xs),
         if (state.status == ReceivedInquiriesStatus.failed)
           Row(
@@ -458,29 +484,37 @@ class _AttentionSection extends StatelessWidget {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        for (final ReceivedInquiry inquiry in shown)
-          _AttentionTile(inquiry: inquiry, onTap: onOpenInquiries),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: onOpenInquiries,
-            child: Text(
-              isActionable ? 'View inquiries' : 'View recent inquiries',
+    // One bordered list with hairlines between the rows.
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          for (int i = 0; i < shown.length; i++) ...<Widget>[
+            if (i > 0) const Divider(height: 1),
+            _AttentionTile(
+              inquiry: shown[i],
+              isNew: isActionable,
+              onTap: onOpenInquiries,
             ),
-          ),
-        ),
-      ],
+          ],
+        ],
+      ),
     );
   }
 }
 
 class _AttentionTile extends StatelessWidget {
-  const _AttentionTile({required this.inquiry, required this.onTap});
+  const _AttentionTile({
+    required this.inquiry,
+    required this.isNew,
+    required this.onTap,
+  });
 
   final ReceivedInquiry inquiry;
+
+  /// Whether the inquiry still waits for the seller's offer.
+  final bool isNew;
   final VoidCallback onTap;
 
   @override
@@ -490,47 +524,62 @@ class _AttentionTile extends StatelessWidget {
     final String listing =
         inquiry.listing?.title ?? 'Listing no longer available';
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Row(
-            children: <Widget>[
-              // The buyer's initial, as in the approved design.
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppColors.primary,
+    final String message = inquiry.message.trim();
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          children: <Widget>[
+            // The buyer's initials, as in the approved design.
+            InitialsAvatar(name: buyer, radius: 18),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(buyer, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 2),
+                  // The listing, then what the buyer asked.
+                  Text(
+                    message.isEmpty ? listing : '$listing · $message',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            if (isNew)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xxxs,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(6),
+                ),
                 child: Text(
-                  buyer.isEmpty ? '?' : buyer.substring(0, 1).toUpperCase(),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
+                  'New',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+              )
+            else
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppColors.textSecondary,
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(buyer, style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 2),
-                    Text(
-                      listing,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, size: 20),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -626,15 +675,22 @@ class _RecentActivitySection extends StatelessWidget {
         final List<SellerActivity> shown = state.activities
             .take(5)
             .toList(growable: false);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            for (final SellerActivity activity in shown)
-              SellerActivityTile(
-                activity: activity,
-                onTap: _actionFor(activity),
-              ),
-          ],
+        // One bordered list with hairlines between the rows.
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              for (int i = 0; i < shown.length; i++) ...<Widget>[
+                if (i > 0) const Divider(height: 1),
+                SellerActivityTile(
+                  activity: shown[i],
+                  onTap: _actionFor(shown[i]),
+                  boxed: true,
+                ),
+              ],
+            ],
+          ),
         );
     }
   }

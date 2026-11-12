@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
 import '../../../repositories/marketplace_repository.dart';
@@ -419,14 +420,7 @@ class _SellerSection extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: AppColors.primary,
-            child: Text(
-              _initial(listing.seller.name),
-              style: theme.textTheme.titleMedium?.copyWith(color: Colors.white),
-            ),
-          ),
+          InitialsAvatar(name: listing.seller.name, radius: 20),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -565,12 +559,6 @@ class _UnavailableNotice extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The fallback avatar letter for a seller with no image.
-String _initial(String name) {
-  final String trimmed = name.trim();
-  return trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
 }
 
 /// The round white back button that sits on top of the photo.

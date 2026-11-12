@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
 import '../../../models/livestock_type.dart';
+import '../../../widgets/field_label.dart';
 import '../../livestock_types/state/livestock_types_controller.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
 import '../../livestock_types/state/livestock_types_state.dart';
@@ -414,86 +415,75 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             final SellerListingState state = _controller.state;
             final bool busy = _submitting || state.isActioning;
 
-            return ExcludeSemantics(
-              child: Form(
-                key: _formKey,
-                child: Stepper(
-                  currentStep: _step,
-                  onStepContinue: busy ? null : _onStepContinue,
-                  onStepCancel: busy ? null : _onStepCancel,
-                  controlsBuilder: (BuildContext context, ControlsDetails details) {
-                    if (_step == 2) {
-                      return Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.md),
-                        child: FilledButton(
-                          onPressed: busy ? null : _save,
-                          child: busy
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  _isEditing ? 'Save changes' : 'Save as draft',
-                                ),
-                        ),
-                      );
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.md),
-                      // Expanded buttons: the test viewport (and small phones)
-                      // are narrower than the two buttons' intrinsic widths, so
-                      // an unconstrained Row overflows and fails layout. Sharing
-                      // the width keeps both actions on one line at any width.
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: details.onStepContinue,
-                              child: const Text('Continue'),
-                            ),
+            // The approved design: the three steps across the top, the
+            // current step's fields below, and Back / Continue pinned to the
+            // bottom edge instead of trailing the fields.
+            return Column(
+              children: <Widget>[
+                Expanded(
+                  child: ExcludeSemantics(
+                    child: Form(
+                      key: _formKey,
+                      child: Stepper(
+                        type: StepperType.horizontal,
+                        elevation: 0,
+                        margin: EdgeInsets.zero,
+                        currentStep: _step,
+                        onStepContinue: busy ? null : _onStepContinue,
+                        onStepCancel: busy ? null : _onStepCancel,
+                        // The actions live in the pinned bar below.
+                        controlsBuilder:
+                            (BuildContext context, ControlsDetails details) =>
+                                const SizedBox.shrink(),
+                        steps: <Step>[
+                          Step(
+                            title: const Text('Information'),
+                            isActive: _step >= 0,
+                            state: _step > 0
+                                ? StepState.complete
+                                : StepState.indexed,
+                            content: _buildInformationStep(state),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: TextButton(
-                              onPressed: details.onStepCancel,
-                              child: const Text('Back'),
-                            ),
+                          Step(
+                            title: const Text('Details'),
+                            isActive: _step >= 1,
+                            state: _step > 1
+                                ? StepState.complete
+                                : (_step == 1
+                                      ? StepState.indexed
+                                      : StepState.disabled),
+                            content: _buildDetailsStep(state),
+                          ),
+                          Step(
+                            title: const Text('Review'),
+                            isActive: _step >= 2,
+                            state: _step == 2
+                                ? StepState.indexed
+                                : StepState.disabled,
+                            content: _buildReviewStep(state),
                           ),
                         ],
                       ),
-                    );
-                  },
-                  steps: <Step>[
-                    Step(
-                      title: const Text('Information'),
-                      isActive: _step >= 0,
-                      state: _step > 0 ? StepState.complete : StepState.indexed,
-                      content: _buildInformationStep(state),
                     ),
-                    Step(
-                      title: const Text('Details'),
-                      isActive: _step >= 1,
-                      state: _step > 1
-                          ? StepState.complete
-                          : (_step == 1
-                                ? StepState.indexed
-                                : StepState.disabled),
-                      content: _buildDetailsStep(state),
-                    ),
-                    Step(
-                      title: const Text('Review'),
-                      isActive: _step >= 2,
-                      state: _step == 2
-                          ? StepState.indexed
-                          : StepState.disabled,
-                      content: _buildReviewStep(state),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                _FormActionBar(
+                  // On the first step Back leaves the form, as the close
+                  // button does; afterwards it returns to the previous step.
+                  onBack: busy
+                      ? null
+                      : (_step == 0
+                            ? () => Navigator.of(context).maybePop()
+                            : _onStepCancel),
+                  primaryLabel: _step == 2
+                      ? (_isEditing ? 'Save changes' : 'Save as draft')
+                      : 'Continue',
+                  onPrimary: busy
+                      ? null
+                      : (_step == 2 ? _save : _onStepContinue),
+                  busy: busy && _step == 2,
+                ),
+              ],
             );
           },
         ),
@@ -579,8 +569,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
 
                 return const InputDecorator(
                   decoration: InputDecoration(
-                    labelText: 'Type of livestock',
-                    border: OutlineInputBorder(),
+                    label: FieldLabel('Type of livestock'),
                   ),
                   child: Row(
                     children: <Widget>[
@@ -871,6 +860,61 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
 }
 
 /// What the seller is about to do, stated before the fields.
+/// Back and the step's main action, pinned to the bottom of the form.
+class _FormActionBar extends StatelessWidget {
+  const _FormActionBar({
+    required this.onBack,
+    required this.primaryLabel,
+    required this.onPrimary,
+    required this.busy,
+  });
+
+  final VoidCallback? onBack;
+  final String primaryLabel;
+  final VoidCallback? onPrimary;
+
+  /// Shows a spinner in place of the main action's label.
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenGutter,
+        AppSpacing.sm,
+        AppSpacing.screenGutter,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: OutlinedButton(onPressed: onBack, child: const Text('Back')),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: FilledButton(
+              onPressed: onPrimary,
+              child: busy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(primaryLabel),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Intro extends StatelessWidget {
   const _Intro({
     required this.isEditing,
@@ -987,7 +1031,7 @@ class _TextField extends StatelessWidget {
       // errors on fields the seller has not reached yet.
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
-        labelText: label,
+        label: FieldLabel(label),
         hintText: hint,
         // A prefix is a hint about units, not a separate control, so it is part
         // of the field rather than a separate label the screen reader has to
@@ -996,7 +1040,6 @@ class _TextField extends StatelessWidget {
         helperText: helper,
         helperMaxLines: 2,
         errorMaxLines: 3,
-        border: const OutlineInputBorder(),
       ),
       validator: (String? value) =>
           serverErrors?.first ?? validator?.call(value),
@@ -1045,8 +1088,7 @@ class _Dropdown<T> extends StatelessWidget {
       // does not show an error because of something typed elsewhere.
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
+        label: FieldLabel(label),
         errorMaxLines: 3,
         // Through the decoration rather than `forceErrorText`, and deliberately
         // so: `forceErrorText` marks the field *invalid*, which would make

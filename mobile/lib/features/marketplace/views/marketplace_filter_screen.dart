@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/livestock_type.dart';
+import '../../../widgets/field_label.dart';
 import '../../../widgets/livestock_type_icon.dart';
 import '../../livestock_types/state/livestock_types_controller.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
@@ -252,7 +253,7 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
                             }
                           },
                           decoration: const InputDecoration(
-                            labelText: 'Min price',
+                            label: FieldLabel('Min price'),
                             hintText: '0',
                             prefixText: '₱ ',
                           ),
@@ -276,7 +277,7 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
                             }
                           },
                           decoration: const InputDecoration(
-                            labelText: 'Max price',
+                            label: FieldLabel('Max price'),
                             hintText: 'No limit',
                             prefixText: '₱ ',
                           ),
@@ -306,9 +307,9 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
                     controller: _location,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                      labelText: 'Location',
+                      label: FieldLabel('Location', hasPrefixIcon: true),
                       hintText: 'e.g. Nueva Ecija',
-                      prefixIcon: Icon(Icons.place_outlined),
+                      prefixIcon: FieldIcon(Icon(Icons.place_outlined)),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xs),

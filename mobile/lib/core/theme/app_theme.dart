@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'app_input_border.dart';
 import 'app_spacing.dart';
 
 /// The single place the AgroBenta visual identity is expressed in Flutter.
@@ -97,41 +98,89 @@ abstract final class AppTheme {
         ),
       ),
 
+      // The one floating action (Create listing) is a solid brand-green
+      // button with white text, as in the approved design, not the seed's
+      // pale tonal container.
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        focusElevation: 2,
+        hoverElevation: 2,
+        highlightElevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        extendedTextStyle: _textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+
       dividerTheme: const DividerThemeData(
         color: AppColors.border,
         thickness: 1,
         space: 1,
       ),
 
+      // Text fields, per the approved design: the label sits above a 46dp
+      // white box with a 1dp outline that turns brand green and 2dp thick on
+      // focus. See `LabelAboveInputBorder` for how the label is kept above
+      // the box rather than in a notch.
       inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: AppColors.surface,
+        // The border paints the box's fill itself, below the label band.
+        filled: false,
         // Labels stay visible above the field. Never hide a label inside a
         // placeholder — placeholders disappear the moment a user types.
         floatingLabelBehavior: FloatingLabelBehavior.always,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
+        // For a field with a label. A field without one passes
+        // `AppInputs.plainPadding`.
+        contentPadding: AppInputs.labelledPadding,
+        // Never drawn: its size only sets the gap from the label to the
+        // text. See `AppInputs.inlineLabelFontSize`.
+        labelStyle: const TextStyle(
+          fontSize: AppInputs.inlineLabelFontSize,
+          height: 1.3,
+          fontWeight: FontWeight.w600,
+          color: AppColors.text,
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.border),
+        // Drawn at 0.75 scale by Material, so this reads as 13.
+        floatingLabelStyle: const TextStyle(
+          fontSize: AppInputs.labelFontSize / AppInputs.floatingLabelScale,
+          height: 1.3,
+          fontWeight: FontWeight.w600,
+          color: AppColors.text,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.border),
+        hintStyle: textTheme.bodyMedium?.copyWith(color: AppColors.textHint),
+        helperStyle: textTheme.labelMedium?.copyWith(
+          color: AppColors.textSecondary,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        errorStyle: textTheme.labelMedium?.copyWith(color: AppColors.error),
+        errorMaxLines: 3,
+        prefixIconColor: AppColors.textHint,
+        suffixIconColor: AppColors.textHint,
+        // 40, not Material's 48, so an icon never makes the 46dp box taller.
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: AppInputs.iconSlotWidth,
+          minHeight: 40,
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.error),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: AppInputs.iconSlotWidth,
+          minHeight: 40,
         ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.error, width: 2),
+        border: const LabelAboveInputBorder(),
+        enabledBorder: const LabelAboveInputBorder(),
+        disabledBorder: const LabelAboveInputBorder(
+          borderSide: BorderSide(color: AppColors.border),
+          fillColor: AppColors.background,
+        ),
+        focusedBorder: const LabelAboveInputBorder(
+          borderSide: BorderSide(color: AppColors.primary, width: 2),
+        ),
+        errorBorder: const LabelAboveInputBorder(
+          borderSide: BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: const LabelAboveInputBorder(
+          borderSide: BorderSide(color: AppColors.error, width: 2),
         ),
       ),
 
@@ -237,6 +286,8 @@ abstract final class AppTheme {
         ),
         iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
           (Set<WidgetState> states) => IconThemeData(
+            // The proposal draws the tab glyphs at 22, not Material's 24.
+            size: 22,
             // Selected: brand green. Otherwise: secondary text.
             color: states.contains(WidgetState.selected)
                 ? AppColors.primary

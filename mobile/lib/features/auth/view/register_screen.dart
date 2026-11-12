@@ -4,6 +4,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
@@ -208,6 +209,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineMedium,
                 ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Join AgroBenta as a buyer. You can apply to sell later '
+                  'from your profile.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 if (state.errorMessage != null) ...<Widget>[
                   AuthErrorBanner(message: state.errorMessage!),
@@ -271,8 +281,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             textInputAction: TextInputAction.next,
             autofillHints: const <String>[AutofillHints.name],
             decoration: const InputDecoration(
-              labelText: 'Full Name',
-              prefixIcon: Icon(Icons.person_outline),
+              label: FieldLabel('Full Name', hasPrefixIcon: true),
+              prefixIcon: FieldIcon(Icon(Icons.person_outline)),
             ),
             validator: (String? value) {
               final String local = value?.trim() ?? '';
@@ -292,8 +302,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             autofillHints: const <String>[AutofillHints.email],
             autocorrect: false,
             decoration: const InputDecoration(
-              labelText: 'Email Address',
-              prefixIcon: Icon(Icons.mail_outline),
+              label: FieldLabel('Email Address', hasPrefixIcon: true),
+              prefixIcon: FieldIcon(Icon(Icons.mail_outline)),
             ),
             validator: (String? value) =>
                 validateRequiredEmail(value) ?? state.errorFor('email'),
@@ -305,8 +315,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             textInputAction: TextInputAction.next,
             autofillHints: const <String>[AutofillHints.newPassword],
             decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
+              label: FieldLabel('Password', hasPrefixIcon: true),
+              prefixIcon: const FieldIcon(Icon(Icons.lock_outline)),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscurePassword,
                 onPressed: () =>
@@ -324,8 +334,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             autofillHints: const <String>[AutofillHints.newPassword],
             onFieldSubmitted: (_) => _submit(),
             decoration: InputDecoration(
-              labelText: 'Confirm Password',
-              prefixIcon: const Icon(Icons.lock_outline),
+              label: FieldLabel('Confirm Password', hasPrefixIcon: true),
+              prefixIcon: const FieldIcon(Icon(Icons.lock_outline)),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscureConfirmation,
                 onPressed: () => setState(
@@ -491,12 +501,15 @@ class _PasswordVisibilityToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(
-        visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+    return FieldIcon(
+      IconButton(
+        onPressed: onPressed,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(
+          visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        ),
+        tooltip: visible ? 'Hide password' : 'Show password',
       ),
-      tooltip: visible ? 'Hide password' : 'Show password',
     );
   }
 }

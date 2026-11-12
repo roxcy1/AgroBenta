@@ -111,8 +111,8 @@ void main() {
 
     expect(find.byType(TemporaryLogo), findsOneWidget);
     expect(find.text('Buy. Sell. Grow. Together.'), findsOneWidget);
-    expect(find.text('Welcome Back!'), findsOneWidget);
-    expect(find.text('Sign in to continue'), findsOneWidget);
+    expect(find.text('Welcome Back!'), findsNothing);
+    expect(find.text('Sign in to continue'), findsNothing);
     expect(find.text("Don't have an account?"), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Sign Up'), findsOneWidget);
   });
