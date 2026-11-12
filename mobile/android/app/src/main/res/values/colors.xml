@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Behind the adaptive app icon; matches the logo's white background. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- Push notification accent: AppColors.primary, the brand green. -->
+    <color name="notification_color">#006B4F</color>
+</resources>
