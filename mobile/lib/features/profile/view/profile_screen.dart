@@ -164,8 +164,14 @@ class _ProfileBody extends StatelessWidget {
                   const SizedBox(height: AppSpacing.md),
                   const _AccountModeCard(),
                   const SizedBox(height: AppSpacing.md),
-                  _BecomeSellerCard(user: user),
-                  const SizedBox(height: AppSpacing.lg),
+                  // Only for accounts that are not sellers yet. Once the
+                  // account is verified there is nothing left to apply for,
+                  // so the whole card goes, not just its button.
+                  if (!user.isSeller) ...<Widget>[
+                    _BecomeSellerCard(user: user),
+                    const SizedBox(height: AppSpacing.lg),
+                  ] else
+                    const SizedBox(height: AppSpacing.xs),
                   _AccountSettingsSection(
                     onEdit: onEdit,
                     onChangePassword: onChangePassword,
