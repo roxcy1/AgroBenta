@@ -1,18 +1,25 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/seller_verification.dart';
+import '../../../models/trinidad_location.dart';
 import '../../../models/user.dart';
+import '../../../widgets/trinidad_location_selector.dart';
 import '../../account_mode/state/account_mode.dart';
 import '../../account_mode/state/account_mode_controller.dart';
 import '../../account_mode/state/account_mode_scope.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../auth/widgets/auth_scenic_header.dart';
+import '../../help_center/view/help_center_screen.dart';
 import '../../seller_verification/state/seller_verification_controller.dart';
 import '../../seller_verification/state/seller_verification_scope.dart';
 import '../../seller_verification/state/seller_verification_state.dart';
 import '../../seller_verification/view/seller_verification_screen.dart';
+import '../../terms_and_policies/view/terms_and_policies_screen.dart';
+import '../../trinidad_location/state/trinidad_location_controller.dart';
+import '../../trinidad_location/state/trinidad_location_scope.dart';
 import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
@@ -22,10 +29,11 @@ import 'edit_profile_screen.dart';
 /// The caller's own profile.
 ///
 /// Reached from the signed-in shell's bottom navigation in both Buyer Mode and
-/// Seller Mode. Read-only until the user taps "Personal Information", which
-/// pushes the existing edit form. "Change
-/// password" is offered separately because the password is not part of the
-/// profile resource. Sign out lives under "Other".
+/// Seller Mode. Name and email are read-only until the user taps "Personal
+/// Information", which pushes the existing edit form. Address is displayed and
+/// edited in its own section. "Change password" is offered separately because
+/// the password is not part of the profile resource. Sign out lives under
+/// "Other".
 ///
 /// Reads the profile controller once in `initState` and rebuilds from
 /// [ListenableBuilder], following the same pattern as the rest of the M6
@@ -39,6 +47,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late final ProfileController _controller;
+  bool _openingHelpCenter = false;
+  bool _openingTermsAndPolicies = false;
 
   @override
   void initState() {
@@ -67,6 +77,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _openHelpCenter() async {
+    if (_openingHelpCenter) return;
+    _openingHelpCenter = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const HelpCenterScreen(),
+        ),
+      );
+    } finally {
+      _openingHelpCenter = false;
+    }
+  }
+
+  Future<void> _openTermsAndPolicies() async {
+    if (_openingTermsAndPolicies) return;
+    _openingTermsAndPolicies = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const TermsAndPoliciesScreen(),
+        ),
+      );
+    } finally {
+      _openingTermsAndPolicies = false;
+    }
+  }
+
+  Future<void> _openAddressEditor(User user) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (BuildContext context) =>
+          _EditAddressSheet(user: user, controller: _controller),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,8 +134,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (!mounted) {
                 return;
               }
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text(success)));
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(success)));
               _controller.consumeSuccess();
             });
           }
@@ -99,7 +152,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _ => _ProfileBody(
               user: state.user!,
               onEdit: _openEdit,
+              onEditAddress: () => _openAddressEditor(state.user!),
               onChangePassword: _openChangePassword,
+              onHelpAndSupport: _openHelpCenter,
+              onTermsAndPolicies: _openTermsAndPolicies,
             ),
           };
         },
@@ -112,26 +168,34 @@ class _ProfileBody extends StatelessWidget {
   const _ProfileBody({
     required this.user,
     required this.onEdit,
+    required this.onEditAddress,
     required this.onChangePassword,
+    required this.onHelpAndSupport,
+    required this.onTermsAndPolicies,
   });
 
   final User user;
   final VoidCallback onEdit;
+  final VoidCallback onEditAddress;
   final VoidCallback onChangePassword;
+  final VoidCallback onHelpAndSupport;
+  final VoidCallback onTermsAndPolicies;
 
   @override
   Widget build(BuildContext context) {
     // The header carries the same painted landscape, temporary logo and tagline
     // as the auth screens, so the brand treatment stays in one place. It grows
-    // with the text scale and is capped, like the auth screens, so an enlarged
-    // wordmark cannot overflow.
-    final double textScale = MediaQuery.textScalerOf(context)
-        .scale(1)
-        .clamp(1.0, 1.8)
-        .toDouble();
+    // with the text scale and is capped, like the auth screens. A narrow phone
+    // needs additional height because the wordmark can wrap onto another line.
+    final double textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, 1.8).toDouble();
+    final double minimumHeroHeight = MediaQuery.sizeOf(context).width <= 360
+        ? 250.0
+        : 180.0;
     final double heroHeight =
         (MediaQuery.sizeOf(context).height * 0.26 * textScale)
-            .clamp(180.0, 260.0)
+            .clamp(minimumHeroHeight, 260.0)
             .toDouble();
 
     // How far the summary card rides up over the header's lower edge.
@@ -162,11 +226,16 @@ class _ProfileBody extends StatelessWidget {
                         _BecomeSellerCard(user: user),
                         const SizedBox(height: AppSpacing.lg),
                         _AccountSettingsSection(
+                          location: user.location,
                           onEdit: onEdit,
+                          onEditAddress: onEditAddress,
                           onChangePassword: onChangePassword,
                         ),
                         const SizedBox(height: AppSpacing.lg),
-                        const _OtherSection(),
+                        _OtherSection(
+                          onHelpAndSupport: onHelpAndSupport,
+                          onTermsAndPolicies: onTermsAndPolicies,
+                        ),
                       ],
                     ),
                   ),
@@ -220,29 +289,205 @@ class _ProfileSummaryCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (user.location != null &&
-                      user.location!.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: AppSpacing.xxs),
-                    Row(
-                      children: <Widget>[
-                        const Icon(Icons.location_on_outlined, size: 16),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            user.location!,
-                            style: theme.textTheme.bodySmall,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
             ),
             TextButton(onPressed: onEdit, child: const Text('Edit')),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditAddressSheet extends StatefulWidget {
+  const _EditAddressSheet({required this.user, required this.controller});
+
+  final User user;
+  final ProfileController controller;
+
+  @override
+  State<_EditAddressSheet> createState() => _EditAddressSheetState();
+}
+
+class _EditAddressSheetState extends State<_EditAddressSheet> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TrinidadLocationController _locationCatalog;
+  TrinidadLocation? _location;
+  String? _legacyAddress;
+  String? _pendingAddress;
+  bool _locationTouched = false;
+  Map<String, List<String>> _displayedErrors = const <String, List<String>>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _locationCatalog = TrinidadLocationScope.readOf(context);
+    _pendingAddress = widget.user.location?.trim();
+    _restoreQueuedLocation();
+    _locationCatalog.addListener(_onLocationCatalogChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _locationCatalog.ensureLoaded();
+    });
+  }
+
+  @override
+  void dispose() {
+    _locationCatalog.removeListener(_onLocationCatalogChanged);
+    super.dispose();
+  }
+
+  void _restoreQueuedLocation() {
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    if (catalog == null) return;
+
+    final String? raw = _pendingAddress;
+    final TrinidadLocation? parsed = catalog.parseAddress(raw);
+    _location = parsed;
+    _legacyAddress = raw != null && raw.isNotEmpty && parsed == null
+        ? raw
+        : null;
+  }
+
+  void _onLocationCatalogChanged() {
+    if (_pendingAddress != null && _locationCatalog.state.isReady && mounted) {
+      setState(_restoreQueuedLocation);
+    }
+  }
+
+  void _onLocationChanged(TrinidadLocation? value) {
+    setState(() {
+      _location = value;
+      _legacyAddress = null;
+      _pendingAddress = null;
+      _locationTouched = true;
+    });
+  }
+
+  void _revealServerFieldErrors(Map<String, List<String>> errors) {
+    if (mapEquals(errors, _displayedErrors)) return;
+    _displayedErrors = Map<String, List<String>>.of(errors);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _formKey.currentState?.validate();
+    });
+  }
+
+  Future<void> _saveAddress() async {
+    if (!_locationTouched || !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    if (catalog == null) return;
+
+    final String location =
+        _location?.formattedAddress(
+          municipality: catalog.municipality,
+          province: catalog.province,
+        ) ??
+        '';
+    final bool saved = await widget.controller.save(location: location);
+    if (saved && mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenGutter,
+            AppSpacing.lg,
+            AppSpacing.screenGutter,
+            AppSpacing.lg,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: ListenableBuilder(
+                listenable: widget.controller,
+                builder: (BuildContext context, Widget? child) {
+                  final ProfileState state = widget.controller.state;
+                  final bool canSave =
+                      !state.isBusy &&
+                      _locationTouched &&
+                      _locationCatalog.state.catalog != null;
+                  _revealServerFieldErrors(state.fieldErrors);
+
+                  return Form(
+                    key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Text(
+                          'Edit address',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          'Choose a barangay and optionally add a street or purok.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                        if (state.errorMessage != null) ...<Widget>[
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            state.errorMessage!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.md),
+                        TrinidadLocationSelector(
+                          value: _location,
+                          legacyAddress: _legacyAddress,
+                          maxFormattedLength:
+                              TrinidadLocation.profileAddressMax,
+                          isRequired: false,
+                          enabled: !state.isBusy,
+                          externalError: state.errorFor('location'),
+                          onChanged: _onLocationChanged,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.xs,
+                          children: <Widget>[
+                            OutlinedButton(
+                              onPressed: state.isBusy
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: canSave ? _saveAddress : null,
+                              child: state.isBusy
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text('Save address'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -487,11 +732,15 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
 
 class _AccountSettingsSection extends StatelessWidget {
   const _AccountSettingsSection({
+    required this.location,
     required this.onEdit,
+    required this.onEditAddress,
     required this.onChangePassword,
   });
 
+  final String? location;
   final VoidCallback onEdit;
+  final VoidCallback onEditAddress;
   final VoidCallback onChangePassword;
 
   @override
@@ -514,13 +763,7 @@ class _AccountSettingsSection extends StatelessWidget {
                 onTap: onEdit,
               ),
               const Divider(height: 1),
-              _SettingsTile(
-                icon: Icons.home_outlined,
-                title: 'Address',
-                subtitle: 'Manage your delivery address',
-                enabled: false,
-                onTap: () {},
-              ),
+              _AddressSettingsTile(location: location, onTap: onEditAddress),
               const Divider(height: 1),
               _SettingsTile(
                 icon: Icons.lock_outline,
@@ -544,8 +787,81 @@ class _AccountSettingsSection extends StatelessWidget {
   }
 }
 
+class _AddressSettingsTile extends StatelessWidget {
+  const _AddressSettingsTile({required this.location, required this.onTap});
+
+  final String? location;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String savedAddress = location?.trim() ?? '';
+    final bool hasAddress = savedAddress.isNotEmpty;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(Icons.home_outlined, color: AppColors.primary),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Address', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    hasAddress ? savedAddress : 'Not provided',
+                    softWrap: true,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  if (!hasAddress) ...<Widget>[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      'Tap to add your delivery address',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _OtherSection extends StatelessWidget {
-  const _OtherSection();
+  const _OtherSection({
+    required this.onHelpAndSupport,
+    required this.onTermsAndPolicies,
+  });
+
+  final VoidCallback onHelpAndSupport;
+  final VoidCallback onTermsAndPolicies;
 
   @override
   Widget build(BuildContext context) {
@@ -564,16 +880,14 @@ class _OtherSection extends StatelessWidget {
                 icon: Icons.help_outline,
                 title: 'Help and Support',
                 subtitle: 'Get help or contact support',
-                enabled: false,
-                onTap: () {},
+                onTap: onHelpAndSupport,
               ),
               const Divider(height: 1),
               _SettingsTile(
                 icon: Icons.description_outlined,
                 title: 'Terms and Policies',
                 subtitle: 'View our terms, privacy policy, and guidelines',
-                enabled: false,
-                onTap: () {},
+                onTap: onTermsAndPolicies,
               ),
               const Divider(height: 1),
               const _SignOutTile(),

@@ -42,10 +42,14 @@ delivery addresses, notification preferences, or account statuses.
 
 A white card overlaps the lower edge of the header.
 
-Show only fields available from the authenticated profile/API
-response: - Actual user name. - Actual user email. - Location only if it
-exists in the approved response. - Profile image only if an approved
-field and asset/URL exist; otherwise use the existing generic avatar.
+Show only fields available from the authenticated profile/API response:
+
+- Actual user name.
+- Actual user email.
+- Profile image only if an approved field and asset/URL exist; otherwise use
+  the existing generic avatar.
+
+The address is presented in Account Settings, not as another summary line.
 
 The screenshot's sample name, email, location, and portrait are
 illustrative only. Do not hardcode them.
@@ -55,6 +59,21 @@ profile implementation. Name editing is supported; email editing remains
 deferred. Do not expose email editing or add profile-image upload
 without approval. If avatar capture/upload is unsupported, do not show a
 working camera action.
+
+### B.1 Address in Account Settings
+
+- Show one tappable Address row in Account Settings, with the authenticated
+  user's saved `location` string as its subtitle and normal wrapping for long
+  values.
+- Show a clear "Not provided" state when the optional address is empty.
+- Do not duplicate the address in the profile summary or Personal Information
+  form.
+- Edit through the existing Trinidad barangay catalog and
+  `TrinidadLocationSelector`, saving only the existing `location` field via
+  the current profile update API.
+- Preserve an unmatched legacy value until the user explicitly chooses a new
+  catalog address. Address is optional; do not invent additional address fields
+  or change its stored string format.
 
 ### C. Account Mode Card
 
@@ -92,15 +111,13 @@ personal details" 2. **Address** --- "Manage your delivery address" 3.
 **Change Password** --- "Update your account password" 4. **Notification
 Settings** --- "Manage your notification preferences"
 
-Feature rules: - Personal Information: connect to existing M6 profile
-and name-edit flow. - Address: only navigate to an implemented, approved
-feature. The current known profile contract has no address field; do not
-add fields, migrations, or fake persistence. - Change Password: connect
-to the existing M6 password-change screen. - Notification Settings: only
-use an existing preferences feature backed by supported APIs/state. - If
-a feature is not implemented, do not make it appear functional. Omit it
-or clearly mark it unavailable according to existing conventions, and
-report the limitation.
+Personal Information connects to the existing M6 personal-details form;
+Address displays the saved value and opens the existing address editor;
+Change Password connects to the existing M6 password-change screen. Notification
+Settings uses only an existing preferences feature backed by supported APIs/state.
+If another feature is not implemented, do not make it appear functional. Omit it
+or clearly mark it unavailable according to existing conventions, and report
+the limitation.
 
 ### F. Other
 
@@ -108,12 +125,26 @@ Reference rows: 1. **Help and Support** --- "Get help or contact
 support" 2. **Terms and Policies** --- "View our terms, privacy policy,
 and guidelines" 3. **Log Out** --- "Sign out from your account"
 
-Rules: - Help and Support must open an existing support destination or
-approved contact method; do not invent contact details. - Terms and
-Policies must open approved content or configured destinations; do not
-invent URLs. - Log Out must use the existing authentication
-controller/service and logout flow. - After logout, follow the existing
-authentication gate. - Never expose tokens or sensitive data in UI/logs.
+Rules:
+
+- Help and Support opens the bundled Help Center. It provides selectable
+  Account & Profile, Buying Livestock, Selling Livestock, Transactions, and
+  Safety & Security categories; expandable FAQs; and real-time search across
+  bundled articles. Help content remains available offline and describes only
+  behavior the mobile app actually implements. FAQ facts must be sourced from
+  the approved functional documentation/manuscript and checked against the
+  current mobile workflows; omit or flag facts whose source is unresolved.
+- Show **“Direct support contact is not configured yet.”** until an approved
+  contact method exists. Do not invent contact details or add a fake support
+  request form.
+- Terms and Policies opens the availability screen. Terms and Conditions and
+  Privacy Policy remain unavailable until approved final text is provided;
+  Community Guidelines appear only if approved content exists. Do not invent
+  legal provisions, effective dates, version numbers, or URLs. Register links
+  remain non-navigable until approved destinations exist.
+- Log Out must use the existing authentication controller/service and logout
+  flow. After logout, follow the existing authentication gate.
+- Never expose tokens or sensitive data in UI/logs.
 
 ## 3. Bottom Navigation --- Required Order
 
@@ -182,16 +213,20 @@ Use this exact visible order: 1. **Home** 2. **Browse** 3. **Messages**
 
 ## 8. Acceptance Criteria
 
-1.  Profile follows the reference: branded header, profile summary,
-    account-mode card, Become a Seller card, Account Settings, Other,
-    and bottom navigation.
+1.  Profile follows the reference: branded header, profile summary, account-mode
+    card, Become a Seller card, Account Settings (including one Address row),
+    Other, and bottom navigation.
 2.  Identity comes from the authenticated API response.
 3.  The existing temporary AgroBenta logo is reused if available.
 4.  Personal Information and Change Password connect to the existing M6
     implementation.
 5.  Seller verification uses the existing server-controlled flow.
-6.  Address, notification settings, help, and terms are not presented as
-    functional unless supported destinations exist.
+6.  Address appears once in Account Settings and uses the existing profile API
+    and Trinidad location selector. Help and Support opens the offline Help
+    Center; direct support remains clearly marked as not configured. Notification
+    settings remain unavailable unless supported destinations exist. Terms and
+    Policies opens its availability screen without presenting unapproved legal
+    text as official.
 7.  Email remains read-only and no profile-image upload is invented.
 8.  Bottom navigation order is Home, Browse, Messages, Transactions,
     Profile.

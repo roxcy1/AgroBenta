@@ -16,6 +16,7 @@ import 'package:agrobenta_mobile/models/seller_verification.dart';
 import 'package:agrobenta_mobile/repositories/seller_verification_repository.dart';
 import 'package:agrobenta_mobile/services/seller_verification_service.dart';
 import 'package:agrobenta_mobile/widgets/local_image_preview.dart';
+import 'package:agrobenta_mobile/widgets/trinidad_location_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -27,10 +28,7 @@ import '../../support/seller_verification_app_harness.dart';
 import '../../support/trinidad_location_fakes.dart';
 import '../../support/seller_verification_fakes.dart';
 
-Finder _barangayDropdown() => find.ancestor(
-  of: find.text('Barangay'),
-  matching: find.byType(DropdownButtonFormField<String>),
-);
+Finder _barangayFormField() => find.byKey(trinidadBarangayFormFieldKey);
 
 typedef _Upload = Future<void> Function(XFile file);
 typedef _Fetch = Future<Uint8List?> Function(VerificationDocumentType type);
@@ -606,9 +604,7 @@ void main() {
           '09445556666',
         );
         expect(
-          tester
-              .widget<DropdownButtonFormField<String>>(_barangayDropdown())
-              .initialValue,
+          tester.widget<FormField<String>>(_barangayFormField()).initialValue,
           'San Isidro',
         );
         expect(
@@ -748,9 +744,7 @@ void main() {
           '09445556666',
         );
         expect(
-          tester
-              .widget<DropdownButtonFormField<String>>(_barangayDropdown())
-              .initialValue,
+          tester.widget<FormField<String>>(_barangayFormField()).initialValue,
           'San Isidro',
         );
       },
@@ -827,9 +821,7 @@ void main() {
           reason: 'resubmission uses the previous verification snapshot',
         );
         expect(
-          tester
-              .widget<DropdownButtonFormField<String>>(_barangayDropdown())
-              .initialValue,
+          tester.widget<FormField<String>>(_barangayFormField()).initialValue,
           'Poblacion',
         );
         final Finder next = find.widgetWithText(FilledButton, 'Next');
@@ -859,9 +851,7 @@ void main() {
         );
         expect(find.text('New profile address'), findsOneWidget);
         expect(
-          tester
-              .widget<DropdownButtonFormField<String>>(_barangayDropdown())
-              .initialValue,
+          tester.widget<FormField<String>>(_barangayFormField()).initialValue,
           isNull,
           reason: 'a legacy address must not select a guessed barangay',
         );
