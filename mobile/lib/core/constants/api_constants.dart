@@ -496,6 +496,17 @@ abstract final class NotificationEndpoints {
   ];
 }
 
+/// Push notification registration, relative to the API root.
+abstract final class DeviceEndpoints {
+  /// `POST` — register this phone's FCM token for the signed-in session.
+  /// 200, `{ success, message }` with no `data`.
+  ///
+  /// The body is exactly `{ token }`; the owner is the bearer token's user and
+  /// a `user_id` is refused with `422`. There is no unregister route: the
+  /// server deletes the registration with the session's token on logout.
+  static const String register = '/devices';
+}
+
 /// Profile endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the

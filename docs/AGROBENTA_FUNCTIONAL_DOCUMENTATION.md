@@ -675,8 +675,17 @@ Events that notify (from the manuscript):
 * Transaction-related status changes.
 
 Notifications for new inquiries, new messages and listing approval/rejection
-fit the same pattern; the full list and whether phone push notifications are
-used are **[OPEN]**, §13, MS-15.
+fit the same pattern; the full list is **[OPEN]**, §13, MS-15.
+
+**Phone push notifications** are used (project decision, 2026-11-11). Every
+stored notification is also pushed to the recipient's signed-in Android phones
+through Firebase Cloud Messaging. A push shows only the notification's title
+and a fixed line ("Open AgroBenta to see the details."); its stored body, which
+can hold an administrator's note or another user's name, stays in the app.
+Tapping a push opens the Notifications screen. A phone is registered for the
+signed-in session only and stops receiving pushes when that session signs out.
+Chat messages are not stored notifications and are not pushed. iOS push is not
+set up.
 
 A user may only read or act on **their own** notifications.
 
@@ -972,7 +981,7 @@ for the manuscript's author.
 | **MS-12** | **Transaction statuses:** how are "seller accepted" and "in delivery" stored, given the ERD has only `pending`, `completed`, `cancelled`? Do the seller tabs "Inquiry" and "Negotiating" belong to transactions or to inquiries? **Implementation decision (DEC-09):** a separate fulfillment progression, not new transaction statuses; manuscript wording still to be updated. |
 | **MS-13** | **Agreed price and delivery fee:** can the agreed price differ from the asking price? Is a delivery fee recorded and added to the total, given Limitation 5? **Implementation decision (DEC-09):** agreed price is the offer amount; no delivery fee is added. |
 | **MS-14** | **Cancellation:** who may cancel, and up to which step? **Implementation decision (DEC-09):** either party before handover or seller dispatch; later cancellation is blocked pending a future resolution process. |
-| **MS-15** | **Notifications:** the full list of events, and whether phone push notifications are required. |
+| **MS-15** | **Notifications:** the full list of events. ~~Whether phone push notifications are required?~~ Yes, every stored notification is pushed to Android phones (project decision, 2026-11-11; see §7). |
 | **MS-16** | **"Verified Buyer"** appears in the seller transaction prototype (Figure 26). Is there a buyer verification, or is this label a mistake? |
 | **MS-17** | **Hosting for evaluation:** where will the system run for the 15 evaluators, and how will they install the app? |
 | **MS-18** | **Inquiries as messages:** the team decided (2026-10-29) that a buyer's inquiry is delivered to the seller as a message, with no separate seller inquiry inbox. Can the manuscript be updated to match (p.15 "recorded separately from ordinary messages"; Figure 25 "Respond to Inquiry — Seller")? Should the `inquiries` table still be kept as a record? |
@@ -1062,6 +1071,7 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-04 | **[DEC-04]** Government ID type selection and two-sided image capture, including the applicant's explicit no-back declaration, were specified by the project owner. This does not change the existing selfie, Proof of Address, privacy, review, or resubmission rules (§3.3). |
 | 2026-11-05 | **[DEC-06]** Resolved MS-03 by adopting Chicken alongside Cattle, Carabao, Goat and Swine, and approved the optional type-dependent breed catalog (§4.1). The manuscript remains to be updated. |
 | 2026-11-07 | **[DEC-07]** Adopted a backend-owned Trinidad barangay catalog and canonical address format (§2.8, §3.3, §4, §13.6). Profile location remains optional; seller verification and listing locations require a catalog barangay. Legacy values are preserved until replaced, with listing values corrected before submission. No PSGC codes or schema changes are introduced. |
+| 2026-11-11 | Part of MS-15 decided: phone push notifications are used (§7). Every stored notification (the eight current types) is pushed to the recipient's Android phones through Firebase Cloud Messaging, with the title and a fixed line only. The manuscript does not mention push. The full list of notification events remains open. |
 | 2026-11-11 | Rest of MS-11 decided: "Remember me" is built (§2.8). Ticked by default; unticked keeps the session only until the app is closed. MS-11 is closed. |
 | 2026-11-10 | Part of MS-11 decided: Google sign-in is built (Android only) and Facebook sign-in is removed (§2.8). An existing account with the same email is signed in; a new email gets a buyer account. The manuscript prototype shows both buttons. "Remember me" remains open. |
 | 2026-11-09 | **[DEC-09]** Approved the two-action Listing Details UX (Ask Seller / I'm Interested), the shortened optional-message interest form, the four current collection choices, atomic stock reservation with cancellation release, the pre-handover cancellation cutoff, buyer receipt confirmation as the later completion actor, unchanged payment-method recording, disputes out of scope, and one-head-per-offer (§6.3–§6.5, §8.2, §13.7). |
