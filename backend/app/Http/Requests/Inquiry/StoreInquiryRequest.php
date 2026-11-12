@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Inquiry;
 
+use App\Enums\InquiryCollectionMethod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
@@ -10,24 +11,20 @@ use Illuminate\Validation\Rule;
  * Body for creating a buyer inquiry from the mobile client.
  *
  * The allow-list is exactly the structured preferences the Inquire form
- * collects: `listing_id`, `message`, the two required preferences
- * (`payment_method`, `collection_method`), the collection-date option, and the
- * remaining optional preference columns of the `inquiries` table. `buyer_id`,
- * `seller_id` and `status` are server-owned — the buyer is the token, the
- * seller is `listing.seller_id`, and an inquiry is always created `open` — so
- * they are refused with a 422 rather than silently dropped.
+ * collects: `listing_id`, the two required preferences (`payment_method`,
+ * `collection_method`), and the remaining optional fields of the `inquiries`
+ * table. `buyer_id`, `seller_id` and `status` are server-owned — the buyer is
+ * the token, the seller is `listing.seller_id`, and an inquiry is always
+ * created `open` — so they are refused with a 422 rather than silently dropped.
  *
- * `message` carries the design document's 500-character ceiling so the server
- * and the client's character counter agree, and a whitespace-only message is
- * refused rather than stored as a blank inquiry.
+ * `message` and `collection_date_option` are optional. When a message is
+ * supplied it carries the 500-character ceiling and may not be whitespace-only.
+ * When a date option requests a concrete date, `preferred_schedule` is required
+ * and may not be in the past.
  *
- * `payment_method` and `collection_method` are required: the Inquire form
- * collects both before it can be submitted.
- *
- * `collection_date_option` is required and selects one of `specific_date`,
- * `next_few_days` or `this_week`. When `specific_date` is chosen,
- * `preferred_schedule` is required and must not be a past date; the relative
- * options do not require a date.
+ * `payment_method` and `collection_method` remain required. The collection
+ * rule accepts the four current choices plus the legacy `discuss_with_seller`
+ * value so older app builds do not break; the current form never offers it.
  */
 class StoreInquiryRequest extends FormRequest
 {
@@ -45,9 +42,9 @@ class StoreInquiryRequest extends FormRequest
     {
         return [
             'listing_id' => ['required', 'integer', 'exists:listings,id'],
-            'message' => ['required', 'string', 'max:500', 'not_regex:/^\s*$/'],
+            'message' => ['nullable', 'string', 'max:500', 'not_regex:/^\s*$/'],
             'collection_date_option' => [
-                'required',
+                'nullable',
                 'string',
                 'in:specific_date,next_few_days,this_week',
             ],
@@ -89,7 +86,14 @@ class StoreInquiryRequest extends FormRequest
             'delivery_fee' => ['nullable', 'numeric', 'min:0'],
             'contact_method' => ['nullable', 'string', 'in:in_app_message'],
             'payment_method' => ['required', 'string', 'in:cash,gcash,maya,other'],
-            'collection_method' => ['required', 'string', 'in:farm_pickup,buyer_arranged_transportation,discuss_with_seller'],
+            'collection_method' => [
+                'required',
+                'string',
+                Rule::in([
+                    ...InquiryCollectionMethod::selectableValues(),
+                    InquiryCollectionMethod::DiscussWithSeller->value,
+                ]),
+            ],
 
             'buyer_id' => ['prohibited'],
             'seller_id' => ['prohibited'],

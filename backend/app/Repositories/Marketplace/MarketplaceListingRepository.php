@@ -63,14 +63,14 @@ class MarketplaceListingRepository
     public const POPULAR_WINDOW_DAYS = 30;
 
     /**
-     * The only livestock categories the buyer surface ranks, lowercased for
+     * The approved livestock categories the buyer surface ranks, lowercased for
      * comparison. `listings.livestock_type` is free text; anything else is not
      * a category this feature can present, so it is excluded rather than
      * guessed at.
      *
      * @var list<string>
      */
-    public const POPULAR_TYPES = ['cattle', 'carabao', 'goat', 'swine'];
+    public const POPULAR_TYPES = ['cattle', 'carabao', 'goat', 'swine', 'chicken'];
 
     /**
      * Rank the canonical livestock categories by completed sales, newest window
@@ -161,7 +161,10 @@ class MarketplaceListingRepository
             ])
             ->where('id', $listingId)
             ->where(function (Builder $query) use ($viewerId): void {
-                $query->where('status', ListingStatus::Active)
+                $query->where(function (Builder $active): void {
+                    $active->where('status', ListingStatus::Active)
+                        ->whereHas('seller');
+                })
                     ->orWhere('seller_id', $viewerId);
             })
             ->first();
@@ -175,7 +178,10 @@ class MarketplaceListingRepository
     {
         return Listing::query()
             ->with('seller:id,name')
-            ->where('status', ListingStatus::Active);
+            ->where('status', ListingStatus::Active)
+            // Preserve the listing row and status, but keep its live inventory
+            // hidden when the owning account has been deactivated.
+            ->whereHas('seller');
     }
 
     /**

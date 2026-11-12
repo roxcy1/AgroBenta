@@ -27,9 +27,11 @@ void main() {
     WidgetTester tester, {
     required Future<http.Response> Function(RecordedRequest request) handler,
     List<RecordedRequest>? recorded,
+    FakeGoogleSignIn? googleSignIn,
   }) async {
     final AuthController controller = AuthController(
       buildAuthRepository(tokenStore, handler, recorded: recorded),
+      googleSignIn: googleSignIn ?? FakeGoogleSignIn(isAvailable: false),
     );
     addTearDown(controller.dispose);
 
@@ -107,7 +109,24 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Log In'), findsOneWidget);
   });
 
-  testWidgets('social sign-up is shown but disabled', (
+  testWidgets('Google is the only social sign-up option', (
+    WidgetTester tester,
+  ) async {
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+      googleSignIn: FakeGoogleSignIn(),
+    );
+
+    expect(
+      find.widgetWithText(OutlinedButton, 'Continue with Google'),
+      findsOneWidget,
+    );
+    expect(find.text('Facebook'), findsNothing);
+    expect(find.text('Social sign-up is not available yet.'), findsNothing);
+  });
+
+  testWidgets('Google sign-up is hidden where it is unavailable', (
     WidgetTester tester,
   ) async {
     await pumpRegister(
@@ -115,20 +134,58 @@ void main() {
       handler: (_) async => fail('no request expected'),
     );
 
-    final OutlinedButton google = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Google'),
-    );
-    final OutlinedButton facebook = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Facebook'),
+    expect(find.text('or sign up with'), findsNothing);
+    expect(find.text('Continue with Google'), findsNothing);
+  });
+
+  testWidgets('Google sign-up needs consent before Google is opened', (
+    WidgetTester tester,
+  ) async {
+    final FakeGoogleSignIn google = FakeGoogleSignIn();
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+      googleSignIn: google,
     );
 
-    expect(google.onPressed, isNull, reason: 'Google OAuth is not implemented');
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await tester.pump();
+
+    expect(google.calls, 0);
     expect(
-      facebook.onPressed,
-      isNull,
-      reason: 'Facebook OAuth is not implemented',
+      find.text('Please agree to the Terms and Privacy Policy to continue.'),
+      findsOneWidget,
     );
-    expect(find.text('Social sign-up is not available yet.'), findsOneWidget);
+  });
+
+  testWidgets('Google sign-up with consent sends the ID token', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> recorded = <RecordedRequest>[];
+    final AuthController controller = await pumpRegister(
+      tester,
+      recorded: recorded,
+      googleSignIn: FakeGoogleSignIn(idToken: 'id-token-from-google'),
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: authSessionJson())),
+        200,
+      ),
+    );
+
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.tap(find.byType(Checkbox));
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    for (int i = 0; i < 8; i++) {
+      await tester.pump();
+    }
+
+    expect(recorded.single.apiPath, '/auth/google');
+    expect(recorded.single.body, <String, dynamic>{
+      'id_token': 'id-token-from-google',
+    });
+    expect(controller.state.isSignedIn, isTrue);
   });
 
   testWidgets('will not submit a valid form until consent is given', (

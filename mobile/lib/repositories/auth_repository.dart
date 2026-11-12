@@ -35,13 +35,31 @@ class AuthRepository {
     return session.user;
   }
 
-  /// Signs in and stores the returned token.
-  Future<User> login({required String email, required String password}) async {
+  /// Signs in and stores the returned token. With [remember] false the token
+  /// is kept only until the app is closed.
+  Future<User> login({
+    required String email,
+    required String password,
+    bool remember = true,
+  }) async {
     final AuthSession session = await _service.login(
       email: email,
       password: password,
     );
-    await _persist(session);
+    await _persist(session, remember: remember);
+    return session.user;
+  }
+
+  /// Signs in with a Google ID token and stores the returned token. With
+  /// [remember] false the token is kept only until the app is closed.
+  Future<User> loginWithGoogle({
+    required String idToken,
+    bool remember = true,
+  }) async {
+    final AuthSession session = await _service.loginWithGoogle(
+      idToken: idToken,
+    );
+    await _persist(session, remember: remember);
     return session.user;
   }
 
@@ -139,12 +157,12 @@ class AuthRepository {
   /// An empty token is treated as a contract violation rather than stored: a
   /// stored empty string would make `ApiClient` send no `Authorization` header
   /// at all, and the resulting `401` would be a confusing dead end.
-  Future<void> _persist(AuthSession session) async {
+  Future<void> _persist(AuthSession session, {bool remember = true}) async {
     if (session.token.isEmpty) {
       throw const ApiException.malformedResponse(
         message: 'The server returned an empty authentication token.',
       );
     }
-    await _tokenStore.write(session.token);
+    await _tokenStore.write(session.token, persist: remember);
   }
 }

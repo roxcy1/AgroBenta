@@ -35,6 +35,8 @@ enum ActivityAction: string
 
     case TransactionCreated = 'transaction_created';
     case TransactionCancelled = 'transaction_cancelled';
+    case TransactionFulfillmentUpdated = 'transaction_fulfillment_updated';
+    case TransactionCompleted = 'transaction_completed';
 
     case InquiryCreated = 'inquiry_created';
     case InquiryStatusUpdated = 'inquiry_status_updated';
@@ -46,6 +48,8 @@ enum ActivityAction: string
     case OfferWithdrawn = 'offer_withdrawn';
 
     case SettingsUpdated = 'settings_updated';
+    case AdminUserUpdated = 'admin_user_updated';
+    case AdminUserDeleted = 'admin_user_deleted';
 
     public function label(): string
     {
@@ -67,6 +71,8 @@ enum ActivityAction: string
             self::SellerVerificationRejected => 'Seller verification rejected',
             self::TransactionCreated => 'Transaction created',
             self::TransactionCancelled => 'Transaction cancelled',
+            self::TransactionFulfillmentUpdated => 'Transaction fulfillment updated',
+            self::TransactionCompleted => 'Transaction completed',
             self::InquiryCreated => 'Inquiry created',
             self::InquiryStatusUpdated => 'Inquiry status updated',
             self::InquiryDeleted => 'Inquiry deleted',
@@ -75,6 +81,8 @@ enum ActivityAction: string
             self::OfferDeclined => 'Offer declined',
             self::OfferWithdrawn => 'Offer withdrawn',
             self::SettingsUpdated => 'Settings updated',
+            self::AdminUserUpdated => 'User account updated by an administrator',
+            self::AdminUserDeleted => 'User account deactivated by an administrator',
         };
     }
 }

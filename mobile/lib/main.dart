@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -5,6 +7,10 @@ import 'package:http/http.dart' as http;
 import 'dart:ui' as ui;
 
 import 'core/network/api_client.dart';
+import 'core/realtime/realtime_client.dart';
+import 'core/realtime/realtime_controller.dart';
+import 'core/realtime/realtime_event.dart';
+import 'core/realtime/realtime_scope.dart';
 import 'core/storage/account_mode_preference_store.dart';
 import 'core/storage/token_store.dart';
 import 'core/storage/token_storage.dart';
@@ -32,6 +38,8 @@ import 'features/seller_listings/state/seller_listing_scope.dart';
 import 'features/seller_verification/state/seller_verification_controller.dart';
 import 'features/seller_verification/state/seller_verification_scope.dart';
 import 'features/transactions/state/transaction_scope.dart';
+import 'features/trinidad_location/state/trinidad_location_controller.dart';
+import 'features/trinidad_location/state/trinidad_location_scope.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/inquiry_repository.dart';
 import 'repositories/livestock_type_repository.dart';
@@ -44,6 +52,7 @@ import 'repositories/seller_dashboard_repository.dart';
 import 'repositories/seller_listing_repository.dart';
 import 'repositories/seller_verification_repository.dart';
 import 'repositories/transaction_repository.dart';
+import 'repositories/trinidad_location_repository.dart';
 import 'services/auth_service.dart';
 import 'services/inquiry_service.dart';
 import 'services/livestock_type_service.dart';
@@ -56,6 +65,7 @@ import 'services/seller_dashboard_service.dart';
 import 'services/seller_listing_service.dart';
 import 'services/seller_verification_service.dart';
 import 'services/transaction_service.dart';
+import 'services/trinidad_location_service.dart';
 import 'features/notifications/state/notifications_controller.dart';
 import 'features/notifications/state/notifications_scope.dart';
 import 'repositories/notification_repository.dart';
@@ -211,6 +221,12 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final LivestockTypeService _livestockTypeService;
   late final LivestockTypeRepository _livestockTypeRepository;
   late final LivestockTypesController _livestockTypesController;
+  late final TrinidadLocationService _trinidadLocationService;
+  late final TrinidadLocationRepository _trinidadLocationRepository;
+  late final TrinidadLocationController _trinidadLocationController;
+  late final PusherReverbClient _realtimeClient;
+  late final RealtimeController _realtimeController;
+  StreamSubscription<bool>? _realtimeConnectionSubscription;
   int? _sessionUserId;
   bool _sessionControllersCreated = false;
 
@@ -314,12 +330,30 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _livestockTypesController = LivestockTypesController(
       _livestockTypeRepository,
     );
+    _trinidadLocationService = TrinidadLocationService(_apiClient);
+    _trinidadLocationRepository = TrinidadLocationRepository(
+      _trinidadLocationService,
+    );
+    _trinidadLocationController = TrinidadLocationController(
+      _trinidadLocationRepository,
+    );
+
+    // Real-time: the WebSocket client is created once; the controller connects
+    // and disconnects as the session changes (see _handleAuthSessionChanged).
+    // Created before the session controllers because they subscribe to its
+    // decoded events themselves.
+    _realtimeClient = PusherReverbClient(_tokenStore);
+    _realtimeController = RealtimeController(_realtimeClient);
 
     // These controllers hold responses scoped to the bearer token. Recreate
     // them when the authenticated identity changes so their caches, loading
     // guards, and generations cannot cross account boundaries. Screen-owned
     // controllers are disposed with the authenticated shell itself.
     _createSessionControllers();
+
+    _realtimeConnectionSubscription =
+        _realtimeController.connected.listen(_handleRealtimeConnection);
+
     _authController.addListener(_handleAuthSessionChanged);
   }
 
@@ -333,9 +367,33 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
 
     _sessionUserId = userId;
     _createSessionControllers(replaceExisting: true);
+
+    // Real-time follows the session: connect the user's private channel, or
+    // disconnect when signed out.
+    if (userId == null) {
+      _realtimeController.stop();
+    } else {
+      _realtimeController.start(userId);
+    }
+
     if (mounted) {
       setState(() {});
     }
+  }
+
+  /// A (re)connection is the point where events may have been missed while the
+  /// socket was down. Re-fetch the authoritative state so nothing is lost;
+  /// duplicate events from the overlap are harmless because the screens
+  /// replace their data from the REST response.
+  void _handleRealtimeConnection(bool connected) {
+    if (!connected) {
+      return;
+    }
+
+    _notificationsController.refreshUnreadCount();
+    _conversationsController.refresh();
+    _sellerVerificationController.load();
+    _sellerListingController.refresh();
   }
 
   void _createSessionControllers({bool replaceExisting = false}) {
@@ -348,9 +406,14 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
       _notificationsController.dispose();
     }
 
+    // Each session controller subscribes to the decoded events and refreshes
+    // only the surface it owns (see `_onRealtimeEvent` in each controller).
+    final Stream<RealtimeEvent> realtimeEvents = _realtimeController.events;
+
     _marketplaceController = MarketplaceController(_marketplaceRepository);
     _sellerVerificationController = SellerVerificationController(
       _sellerVerificationRepository,
+      realtimeEvents: realtimeEvents,
       // Approval moves `seller_capability` on the account, so the session's user
       // is re-read from `/auth/me` when a verification comes back approved. The
       // capability is server-owned: this is the app asking, not deciding.
@@ -358,10 +421,17 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     );
     _sellerListingController = SellerListingController(
       _sellerListingRepository,
+      realtimeEvents: realtimeEvents,
     );
     _profileController = ProfileController(_profileRepository);
-    _conversationsController = ConversationsController(_messagingRepository);
-    _notificationsController = NotificationsController(_notificationRepository);
+    _conversationsController = ConversationsController(
+      _messagingRepository,
+      realtimeEvents: realtimeEvents,
+    );
+    _notificationsController = NotificationsController(
+      _notificationRepository,
+      realtimeEvents: realtimeEvents,
+    );
     _sessionControllersCreated = true;
   }
 
@@ -379,6 +449,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _conversationsController.dispose();
     _notificationsController.dispose();
     _livestockTypesController.dispose();
+    _trinidadLocationController.dispose();
+    _realtimeConnectionSubscription?.cancel();
+    _realtimeController.dispose();
     _apiClient.close();
     super.dispose();
   }
@@ -392,84 +465,95 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // pushed route, which is exactly where the listing detail screen lives: the
     // scope lookups there would fail and the app would assert the moment a
     // buyer tapped a card.
-    return LivestockTypesScope(
-      repository: _livestockTypeRepository,
-      controller: _livestockTypesController,
-      child: AuthScope(
-        controller: _authController,
-        child: AccountModeScope(
-          controller: _accountModeController,
-          child: MarketplaceScope(
-            repository: _marketplaceRepository,
-            controller: _marketplaceController,
-            // Outside `MarketplaceScope` rather than nested inside it: the seller
-            // verification screens are pushed from Home, and a scope nested in
-            // `home` would be invisible to them for the same reason the outer scopes
-            // must sit above `MaterialApp`.
-            child: SellerVerificationScope(
-              repository: _sellerVerificationRepository,
-              controller: _sellerVerificationController,
-              // Sibling of the other scopes, not nested inside one of them, for the
-              // same reason each of them sits above `MaterialApp`: My Listings and
-              // the form are pushed routes and need to reach this from a route
-              // pushed by a widget that is a descendant of the shell.
-              child: SellerListingScope(
-                repository: _sellerListingRepository,
-                controller: _sellerListingController,
-                // Profile sits as a sibling of the other scopes, above
-                // `MaterialApp`, for the same reason each of them does: the
-                // profile screens are pushed routes and a scope installed inside
-                // `home` would be invisible to them.
-                child: ProfileScope(
-                  repository: _profileRepository,
-                  controller: _profileController,
-                  // Transactions sits as a sibling of the other scopes, above
+    return TrinidadLocationScope(
+      repository: _trinidadLocationRepository,
+      controller: _trinidadLocationController,
+      child: LivestockTypesScope(
+        repository: _livestockTypeRepository,
+        controller: _livestockTypesController,
+        child: AuthScope(
+          controller: _authController,
+          child: AccountModeScope(
+            controller: _accountModeController,
+            child: MarketplaceScope(
+              repository: _marketplaceRepository,
+              controller: _marketplaceController,
+              // Outside `MarketplaceScope` rather than nested inside it: the seller
+              // verification screens are pushed from Home, and a scope nested in
+              // `home` would be invisible to them for the same reason the outer scopes
+              // must sit above `MaterialApp`.
+              child: SellerVerificationScope(
+                repository: _sellerVerificationRepository,
+                controller: _sellerVerificationController,
+                // Sibling of the other scopes, not nested inside one of them, for the
+                // same reason each of them sits above `MaterialApp`: My Listings and
+                // the form are pushed routes and need to reach this from a route
+                // pushed by a widget that is a descendant of the shell.
+                child: SellerListingScope(
+                  repository: _sellerListingRepository,
+                  controller: _sellerListingController,
+                  // Profile sits as a sibling of the other scopes, above
                   // `MaterialApp`, for the same reason each of them does: the
-                  // detail screen is a pushed route.
-                  child: TransactionScope(
-                    repository: _transactionRepository,
-                    // Messaging sits as a sibling of the other scopes, above
+                  // profile screens are pushed routes and a scope installed inside
+                  // `home` would be invisible to them.
+                  child: ProfileScope(
+                    repository: _profileRepository,
+                    controller: _profileController,
+                    // Transactions sits as a sibling of the other scopes, above
                     // `MaterialApp`, for the same reason each of them does: the
-                    // chat screen is a pushed route and needs to reach the shared
-                    // repository and the conversations controller.
-                    child: MessagingScope(
-                      repository: _messagingRepository,
-                      conversationsController: _conversationsController,
-                      // Notifications sits as a sibling of the other scopes, above
+                    // detail screen is a pushed route.
+                    child: TransactionScope(
+                      repository: _transactionRepository,
+                      // Messaging sits as a sibling of the other scopes, above
                       // `MaterialApp`, for the same reason each of them does: the
-                      // Notifications screen is a pushed route and the bell icon
-                      // in the Home AppBar needs to reach the same controller.
-                      child: NotificationsScope(
-                        repository: _notificationRepository,
-                        controller: _notificationsController,
-                        // Inquiries sits as a sibling of the other scopes, above
+                      // chat screen is a pushed route and needs to reach the shared
+                      // repository and the conversations controller.
+                      child: MessagingScope(
+                        repository: _messagingRepository,
+                        conversationsController: _conversationsController,
+                        // Notifications sits as a sibling of the other scopes, above
                         // `MaterialApp`, for the same reason each of them does: the
-                        // inquire screen is a pushed route, and only the
-                        // repository is shared — the screen builds its own
-                        // controller and disposes it with the route.
-                        child: InquiryScope(
-                          repository: _inquiryRepository,
-                          // Offers sit above `MaterialApp` for the same reason:
-                          // the make-offer form is pushed from the seller's
-                          // inquiry inbox and the offer panel lives inside every
-                          // chat route, so both must be able to reach the shared
-                          // repository. The controllers are per-screen.
-                          child: OfferScope(
-                            repository: _offerRepository,
-                            // The seller dashboard repository sits above
-                            // `MaterialApp` like every other scope. Seller Home
-                            // creates its own controller, so only the repository
-                            // is long-lived.
-                            child: SellerDashboardScope(
-                              repository: _sellerDashboardRepository,
-                              child: SellerActivityScope(
-                                repository: _sellerActivityRepository,
-                                child: MaterialApp(
-                                  title: 'AgroBenta',
-                                  debugShowCheckedModeBanner: false,
-                                  theme: AppTheme.light(),
-                                  home: AuthGate(
-                                    authenticatedView: _buildAccountModeShell,
+                        // Notifications screen is a pushed route and the bell icon
+                        // in the Home AppBar needs to reach the same controller.
+                        child: NotificationsScope(
+                          repository: _notificationRepository,
+                          controller: _notificationsController,
+                          // Inquiries sits as a sibling of the other scopes, above
+                          // `MaterialApp`, for the same reason each of them does: the
+                          // inquire screen is a pushed route, and only the
+                          // repository is shared — the screen builds its own
+                          // controller and disposes it with the route.
+                          child: InquiryScope(
+                            repository: _inquiryRepository,
+                            // Offers sit above `MaterialApp` for the same reason:
+                            // the make-offer form is pushed from the seller's
+                            // inquiry inbox and the offer panel lives inside every
+                            // chat route, so both must be able to reach the shared
+                            // repository. The controllers are per-screen.
+                            child: OfferScope(
+                              repository: _offerRepository,
+                              // The seller dashboard repository sits above
+                              // `MaterialApp` like every other scope. Seller Home
+                              // creates its own controller, so only the repository
+                              // is long-lived.
+                              child: SellerDashboardScope(
+                                repository: _sellerDashboardRepository,
+                                child: SellerActivityScope(
+                                  repository: _sellerActivityRepository,
+                                  // Real-time sits closest to `MaterialApp` so
+                                  // every pushed route can subscribe to the
+                                  // session's events without constructor
+                                  // threading.
+                                  child: RealtimeScope(
+                                    controller: _realtimeController,
+                                    child: MaterialApp(
+                                      title: 'AgroBenta',
+                                      debugShowCheckedModeBanner: false,
+                                      theme: AppTheme.light(),
+                                      home: AuthGate(
+                                        authenticatedView: _buildAccountModeShell,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),

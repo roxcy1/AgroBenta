@@ -20,7 +20,8 @@ class _FakeTokenStore implements TokenStore {
   Future<String?> read() async => token;
 
   @override
-  Future<void> write(String value) async => token = value;
+  Future<void> write(String value, {bool persist = true}) async =>
+      token = value;
 
   @override
   Future<bool> clearIfCurrent(String expectedToken) async {
@@ -399,6 +400,25 @@ void main() {
 
       expect(error.validationErrors['email'], <String>[
         'The email field is required.',
+      ]);
+    });
+
+    test('422 preserves structured top-level details', () async {
+      final ApiException error = await captureStatus(422, <String, dynamic>{
+        'success': false,
+        'message': 'A price suggestion cannot be generated for this listing.',
+        'status': 'withheld',
+        'warnings': <String>['Outside the supported model envelope.'],
+        'reason_codes': <String>['insufficient_model_support'],
+      });
+
+      expect(error.kind, ApiErrorKind.validation);
+      expect(error.details['status'], 'withheld');
+      expect(error.details['warnings'], <String>[
+        'Outside the supported model envelope.',
+      ]);
+      expect(error.details['reason_codes'], <String>[
+        'insufficient_model_support',
       ]);
     });
 

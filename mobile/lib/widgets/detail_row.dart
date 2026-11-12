@@ -40,26 +40,37 @@ class DetailRow extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label!,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              value!,
-              textAlign: TextAlign.right,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            // A long label wraps within a little over half the row instead of
+            // pushing the value off the edge on a narrow phone.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: constraints.maxWidth.isFinite
+                    ? constraints.maxWidth * 0.55
+                    : double.infinity,
+              ),
+              child: Text(
+                label!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                value!,
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

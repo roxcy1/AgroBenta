@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/transaction.dart';
 import '../../../repositories/transaction_repository.dart';
@@ -22,10 +23,8 @@ import 'transaction_tab.dart';
 /// is not shown — it is the same server state as "Ongoing" — see
 /// [TransactionsFilter].
 ///
-/// The Completed filter is honestly empty for a long time: no path in the app
-/// can reach `completed` today (the backend's complete endpoint answers 501,
-/// OQ-15), and that is correct rather than a bug to work around by faking a
-/// completion path.
+/// The Completed filter lists records completed by the buyer's receipt
+/// confirmation after the seller reports pickup or delivery.
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({
     required this.role,
@@ -60,12 +59,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     super.initState();
     // Read once: the repository identity never changes for the session.
     final TransactionRepository repository = TransactionScope.readOf(context);
+    final realtime = RealtimeScope.maybeOf(context);
     _controllers = <TransactionsFilter, TransactionsController>{
       for (final TransactionsFilter filter in TransactionsFilter.values)
         filter: TransactionsController(
           repository,
           filter.status,
           role: widget.role,
+          realtimeEvents: realtime?.events,
+          connection: realtime?.connected,
         ),
     };
     _controllers[TransactionsFilter.all]!.loadInitial();

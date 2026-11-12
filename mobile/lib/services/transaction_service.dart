@@ -2,16 +2,13 @@ import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../models/transaction.dart';
 import '../models/transaction_page.dart';
+import '../models/transaction_receipt.dart';
 
 /// The transaction API surface.
 ///
-/// Four methods, one per implemented endpoint, and nothing else. No token
-/// handling, no persistence, no error translation beyond what [ApiClient]
-/// already does — those belong to `TransactionRepository`.
-///
-/// There is deliberately **no `complete` method**. The backend answers that
-/// transition with an explicit 501 (OQ-15), and a method that always errors
-/// is worse than no method.
+/// One method per implemented endpoint. No token handling, no persistence, no
+/// error translation beyond what [ApiClient] already does — those belong to
+/// `TransactionRepository`.
 class TransactionService {
   const TransactionService(this._apiClient);
 
@@ -74,14 +71,63 @@ class TransactionService {
 
   /// `POST /transactions/{id}/cancel` — cancel a pending transaction.
   ///
-  /// Either party may cancel ([D-15] rule 5), pending-only, irreversible.
-  /// The body allow-list is empty: the action reads no input, so nothing is
-  /// sent. A `409` means the transaction already left `pending`.
+  /// Either party may cancel before handover/dispatch, irreversible. The body
+  /// allow-list is empty: the action reads no input, so nothing is sent. A
+  /// `409` means the transaction left pending or passed the valid cutoff.
   Future<Transaction> cancel(int id) {
     return _apiClient.post<Transaction>(
       TransactionEndpoints.cancel(id),
       parse: (Object? data) => Transaction.fromJson(
         _asObject(data, 'POST /transactions/$id/cancel'),
+      ),
+    );
+  }
+
+  /// The six fulfillment actions exposed by the backend.
+  ///
+  /// The path is chosen from the typed action, never from a raw string, so the
+  /// client cannot construct an arbitrary endpoint. Every action has an empty
+  /// body and returns the updated transaction with fresh `permitted_actions`.
+  Future<Transaction> performFulfillmentAction(
+    int id,
+    TransactionFulfillmentAction action,
+  ) {
+    final String path = switch (action) {
+      TransactionFulfillmentAction.preparing => TransactionEndpoints.preparing(
+        id,
+      ),
+      TransactionFulfillmentAction.readyForPickup =>
+        TransactionEndpoints.readyForPickup(id),
+      TransactionFulfillmentAction.pickedUp => TransactionEndpoints.pickedUp(
+        id,
+      ),
+      TransactionFulfillmentAction.onTheWay => TransactionEndpoints.onTheWay(
+        id,
+      ),
+      TransactionFulfillmentAction.delivered => TransactionEndpoints.delivered(
+        id,
+      ),
+      TransactionFulfillmentAction.confirmReceived =>
+        TransactionEndpoints.complete(id),
+    };
+
+    return _apiClient.post<Transaction>(
+      path,
+      parse: (Object? data) =>
+          Transaction.fromJson(_asObject(data, 'POST $path')),
+    );
+  }
+
+  /// `GET /transactions/{id}/receipt` — the completed sale's receipt.
+  ///
+  /// A `404` means the transaction is missing or the caller is not a party; a
+  /// `409` means it is not completed yet. Both are normal outcomes the screen
+  /// renders without guessing.
+  Future<TransactionReceipt> receipt(int id) {
+    return _apiClient.get<TransactionReceipt>(
+      TransactionEndpoints.receipt(id),
+      parse: (Object? data) => TransactionReceipt.fromJson(
+        _asObject(data, 'GET /transactions/$id/receipt'),
       ),
     );
   }

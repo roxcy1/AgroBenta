@@ -1,0 +1,65 @@
+{
+  "model_file": "candidate_catboost_targeted_v3_20261105T133811927044Z.cbm",
+  "training_rows": 1697,
+  "dataset_provenance": "synthetic",
+  "feature_ranges": {
+    "age_months": {
+      "min": 0.032854,
+      "max": 99.0,
+      "p01": 0.164271,
+      "p99": 93.03999999999996
+    },
+    "weight_kg": {
+      "min": 0.03,
+      "max": 707.4,
+      "p01": 0.07,
+      "p99": 632.76
+    }
+  },
+  "observed_categories": [
+    "carabao",
+    "cattle",
+    "chicken",
+    "goat",
+    "swine"
+  ],
+  "observed_breeds": {
+    "carabao": [
+      "murrah",
+      "native_murrah_cross",
+      "philippine_native_carabao"
+    ],
+    "cattle": [
+      "brahman",
+      "brahman_cross",
+      "holstein_friesian",
+      "philippine_native_cattle"
+    ],
+    "chicken": [
+      "boholano_native_chicken",
+      "broiler",
+      "improved_native_chicken",
+      "layer"
+    ],
+    "goat": [
+      "anglo_nubian",
+      "boer",
+      "saanen",
+      "ubay_boholano_native_goat"
+    ],
+    "swine": [
+      "duroc",
+      "duroc_landrace_cross",
+      "landrace",
+      "large_white_yorkshire",
+      "native_pig"
+    ]
+  },
+  "target": {
+    "name": "actual_sale_price",
+    "unit": "PHP",
+    "min": 27.0,
+    "max": 153450.0
+  },
+  "warning": "Synthetic training data only. Do not interpret this profile as real-market price evidence."
+}

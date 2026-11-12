@@ -24,7 +24,13 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../support/auth_fakes.dart';
 import '../../support/seller_verification_app_harness.dart';
+import '../../support/trinidad_location_fakes.dart';
 import '../../support/seller_verification_fakes.dart';
+
+Finder _barangayDropdown() => find.ancestor(
+  of: find.text('Barangay'),
+  matching: find.byType(DropdownButtonFormField<String>),
+);
 
 typedef _Upload = Future<void> Function(XFile file);
 typedef _Fetch = Future<Uint8List?> Function(VerificationDocumentType type);
@@ -557,7 +563,7 @@ void main() {
                 successEnvelope(
                   data: userJson(
                     phone: '09445556666',
-                    location: 'San Isidro, Trinidad',
+                    location: 'Purok 2, Barangay San Isidro, Trinidad, Bohol',
                   ),
                 ),
               ),
@@ -574,17 +580,21 @@ void main() {
         await verificationController.load();
 
         await tester.pumpWidget(
-          AuthScope(
-            controller: authController,
-            child: SellerVerificationScope(
-              repository: _DocumentRepository((_) async {}),
-              controller: verificationController,
-              child: const MaterialApp(
-                home: SellerVerificationFormScreen(isResubmission: false),
+          TrinidadLocationTestScope(
+            tokenStore: tokenStore,
+            child: AuthScope(
+              controller: authController,
+              child: SellerVerificationScope(
+                repository: _DocumentRepository((_) async {}),
+                controller: verificationController,
+                child: const MaterialApp(
+                  home: SellerVerificationFormScreen(isResubmission: false),
+                ),
               ),
             ),
           ),
         );
+        await settleSellerVerification(tester);
 
         expect(
           tester
@@ -597,12 +607,18 @@ void main() {
         );
         expect(
           tester
+              .widget<DropdownButtonFormField<String>>(_barangayDropdown())
+              .initialValue,
+          'San Isidro',
+        );
+        expect(
+          tester
               .widget<TextFormField>(
-                find.widgetWithText(TextFormField, 'Address'),
+                find.widgetWithText(TextFormField, 'Street / Purok (optional)'),
               )
               .controller!
               .text,
-          'San Isidro, Trinidad',
+          'Purok 2',
         );
       },
     );
@@ -689,7 +705,7 @@ void main() {
                 successEnvelope(
                   data: userJson(
                     phone: '09445556666',
-                    location: 'San Isidro, Trinidad',
+                    location: 'Purok 2, Barangay San Isidro, Trinidad, Bohol',
                   ),
                 ),
               ),
@@ -706,17 +722,21 @@ void main() {
         await verificationController.load();
 
         await tester.pumpWidget(
-          AuthScope(
-            controller: authController,
-            child: SellerVerificationScope(
-              repository: _DocumentRepository((_) async {}),
-              controller: verificationController,
-              child: const MaterialApp(
-                home: SellerVerificationFormScreen(isResubmission: false),
+          TrinidadLocationTestScope(
+            tokenStore: tokenStore,
+            child: AuthScope(
+              controller: authController,
+              child: SellerVerificationScope(
+                repository: _DocumentRepository((_) async {}),
+                controller: verificationController,
+                child: const MaterialApp(
+                  home: SellerVerificationFormScreen(isResubmission: false),
+                ),
               ),
             ),
           ),
         );
+        await settleSellerVerification(tester);
 
         expect(
           tester
@@ -729,12 +749,9 @@ void main() {
         );
         expect(
           tester
-              .widget<TextFormField>(
-                find.widgetWithText(TextFormField, 'Address'),
-              )
-              .controller!
-              .text,
-          'San Isidro, Trinidad',
+              .widget<DropdownButtonFormField<String>>(_barangayDropdown())
+              .initialValue,
+          'San Isidro',
         );
       },
     );
@@ -768,6 +785,7 @@ void main() {
             controllerReturning(
               sellerVerificationJson(
                 status: 'rejected',
+                address: 'Barangay Poblacion, Trinidad, Bohol',
                 hasIdDocument: true,
                 hasProofOfAddress: false,
                 hasSelfie: false,
@@ -783,17 +801,21 @@ void main() {
         await verificationController.load();
 
         await tester.pumpWidget(
-          AuthScope(
-            controller: authController,
-            child: SellerVerificationScope(
-              repository: documentsRepository,
-              controller: verificationController,
-              child: const MaterialApp(
-                home: SellerVerificationFormScreen(isResubmission: true),
+          TrinidadLocationTestScope(
+            tokenStore: tokenStore,
+            child: AuthScope(
+              controller: authController,
+              child: SellerVerificationScope(
+                repository: documentsRepository,
+                controller: verificationController,
+                child: const MaterialApp(
+                  home: SellerVerificationFormScreen(isResubmission: true),
+                ),
               ),
             ),
           ),
         );
+        await settleSellerVerification(tester);
         expect(
           tester
               .widget<TextFormField>(
@@ -806,12 +828,9 @@ void main() {
         );
         expect(
           tester
-              .widget<TextFormField>(
-                find.widgetWithText(TextFormField, 'Address'),
-              )
-              .controller!
-              .text,
-          'Trinidad, Bohol',
+              .widget<DropdownButtonFormField<String>>(_barangayDropdown())
+              .initialValue,
+          'Poblacion',
         );
         final Finder next = find.widgetWithText(FilledButton, 'Next');
         await scrollSellerVerificationIntoView(tester, next);
@@ -838,14 +857,13 @@ void main() {
               .text,
           '08222222222',
         );
+        expect(find.text('New profile address'), findsOneWidget);
         expect(
           tester
-              .widget<TextFormField>(
-                find.widgetWithText(TextFormField, 'Address'),
-              )
-              .controller!
-              .text,
-          'New profile address',
+              .widget<DropdownButtonFormField<String>>(_barangayDropdown())
+              .initialValue,
+          isNull,
+          reason: 'a legacy address must not select a guessed barangay',
         );
       },
     );

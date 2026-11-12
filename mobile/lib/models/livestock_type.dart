@@ -6,12 +6,17 @@ import '../core/utils/json_utils.dart';
 /// lowercase string written to `listings.livestock_type`, and [label] is what a
 /// person reads. The client never invents either.
 class LivestockType {
-  const LivestockType({required this.value, required this.label});
+  const LivestockType({
+    required this.value,
+    required this.label,
+    this.breeds = const <String>[],
+  });
 
   factory LivestockType.fromJson(Map<String, dynamic> json) {
     return LivestockType(
       value: readString(json, 'value'),
       label: readString(json, 'label'),
+      breeds: readStringList(json, 'breeds'),
     );
   }
 
@@ -20,6 +25,9 @@ class LivestockType {
 
   /// The display label, e.g. `Cattle`.
   final String label;
+
+  /// Breeds currently offered for this category by the backend catalog.
+  final List<String> breeds;
 
   /// The label for a raw stored value, given the catalog.
   ///
@@ -73,5 +81,5 @@ class LivestockType {
   }
 
   @override
-  String toString() => 'LivestockType($value, $label)';
+  String toString() => 'LivestockType($value, $label, $breeds)';
 }

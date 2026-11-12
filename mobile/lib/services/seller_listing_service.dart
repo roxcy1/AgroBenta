@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
+import '../models/ai_price_estimate.dart';
 import '../models/listing.dart';
 import '../models/marketplace_page.dart';
 
@@ -126,6 +127,21 @@ class SellerListingService {
       SellerListingEndpoints.submit(id),
       parse: (Object? data) =>
           Listing.fromJson(_asObject(data, 'POST /seller/listings/$id/submit')),
+    );
+  }
+
+  /// `POST /seller/listings/{id}/price-suggestion` — request an AI estimate.
+  ///
+  /// The endpoint carries no request body: the persisted listing is the input.
+  /// The response is the stored `AiPriceEstimateResource`. A `withheld` or
+  /// `invalid` refusal arrives as a `422` whose structured details are preserved
+  /// by [ApiException.details].
+  Future<AiPriceEstimate> requestPriceSuggestion(int id) {
+    return _apiClient.post<AiPriceEstimate>(
+      SellerListingEndpoints.priceSuggestion(id),
+      parse: (Object? data) => AiPriceEstimate.fromJson(
+        _asObject(data, 'POST /seller/listings/$id/price-suggestion'),
+      ),
     );
   }
 

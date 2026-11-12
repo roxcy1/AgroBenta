@@ -17,6 +17,14 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    // Reverb channel subscription is authenticated with the same Sanctum bearer
+    // token as the REST API, not the session `web` guard. `auth:sanctum` (rather
+    // than the default `web` middleware) is what lets the Flutter/React clients
+    // authenticate a `private-*` subscription without a session or CSRF cookie.
+    ->withBroadcasting(
+        __DIR__.'/../routes/channels.php',
+        ['middleware' => ['auth:sanctum']],
+    )
     ->withMiddleware(function (Middleware $middleware): void {
         // Registered globally (rather than on the `api` group) because Laravel
         // sorts the route middleware stack by priority, hoisting the

@@ -4,10 +4,12 @@ namespace App\Services\SellerListing;
 
 use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
+use App\Enums\LivestockType;
 use App\Http\Requests\SellerListing\SellerListingRules;
 use App\Models\Listing;
 use App\Models\User;
 use App\Repositories\SellerListing\SellerListingRepository;
+use App\Repositories\Transaction\TransactionRepository;
 use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -63,6 +65,7 @@ class SellerListingService
 
     public function __construct(
         private readonly SellerListingRepository $listingRepository,
+        private readonly TransactionRepository $transactions,
         private readonly ActivityLogger $activity,
     ) {}
 
@@ -147,22 +150,63 @@ class SellerListingService
     {
         $this->ensureStatusIs($listing, self::EDITABLE_STATUSES, 'Only a draft or an active listing can be edited.');
 
+        // The mobile form clears an incompatible breed when the seller changes
+        // livestock type. Empty optional values are otherwise omitted from PATCH
+        // bodies, so clear the persisted value here when the type changed.
+        if (array_key_exists('livestock_type', $attributes) &&
+            (string) $attributes['livestock_type'] !== (string) $listing->livestock_type &&
+            trim((string) ($attributes['breed'] ?? '')) === '') {
+            $attributes['breed'] = '';
+        } elseif (array_key_exists('breed', $attributes) && $attributes['breed'] === null) {
+            $attributes['breed'] = '';
+        }
+
         if (array_key_exists('photos', $attributes)) {
             $attributes['photos'] = $this->validatedPhotoFilenames($listing, $attributes['photos']);
         }
 
         return DB::transaction(function () use ($listing, $attributes): Listing {
-            $before = $listing->getAttributes();
+            // Lock the row so a reservation cannot slip in between the stock
+            // check below and the quantity write.
+            $locked = Listing::query()
+                ->whereKey($listing->getKey())
+                ->lockForUpdate()
+                ->first();
 
-            $updated = $this->listingRepository->update($listing, $attributes);
+            if ($locked === null ||
+                (int) $locked->seller_id !== (int) $listing->seller_id) {
+                abort(404, 'Listing not found.');
+            }
+
+            $this->ensureStatusIs(
+                $locked,
+                self::EDITABLE_STATUSES,
+                'Only a draft or an active listing can be edited.',
+            );
+
+            // A reserved head has already been removed from `quantity`. Letting
+            // a seller overwrite that column while a pending transaction still
+            // holds stock would make the reservation invisible to the next
+            // available-stock check.
+            if (array_key_exists('quantity', $attributes) &&
+                (int) $attributes['quantity'] !== (int) $locked->quantity &&
+                $this->transactions->hasActiveReservationsForListing(
+                    (int) $locked->getKey(),
+                )) {
+                abort(409, 'Quantity cannot be changed while transactions are reserving stock.');
+            }
+
+            $before = $locked->getAttributes();
+
+            $updated = $this->listingRepository->update($locked, $attributes);
 
             $this->activity->log(
-                $listing->seller_id,
+                $locked->seller_id,
                 ActivityAction::ListingUpdated,
-                sprintf('Listing #%d updated.', $listing->getKey()),
+                sprintf('Listing #%d updated.', $locked->getKey()),
                 [
                     'target_type' => 'listing',
-                    'target_id' => $listing->getKey(),
+                    'target_id' => $locked->getKey(),
                     'changes' => $this->changedAttributes(
                         $before,
                         $updated->getAttributes(),
@@ -283,6 +327,13 @@ class SellerListingService
     public function delete(Listing $listing): void
     {
         $this->ensureStatusIs($listing, self::DELETABLE_STATUSES, 'Only a draft or an inactive listing can be deleted.');
+
+        // Completed sales are historical records. Deleting the listing would
+        // cascade the transaction away, taking its receipt with it, so the
+        // delete is refused while a completed transaction references it.
+        if ($this->transactions->hasCompletedForListing((int) $listing->getKey())) {
+            abort(409, 'This listing cannot be deleted because it has a completed transaction.');
+        }
 
         DB::transaction(function () use ($listing): void {
             $targetId = $listing->getKey();
@@ -489,6 +540,7 @@ class SellerListingService
                 // submittability.
                 'age_value' => $this->wholeNumberOrNull($listing->age_value),
                 'age_unit' => $listing->age_unit,
+                'age_information' => $listing->age_information,
                 'gender' => $listing->gender,
                 // The `decimal:2` cast rounds on read, so a row that stores a
                 // third decimal would look valid and slip past the rule DEC-02
@@ -496,6 +548,7 @@ class SellerListingService
                 // the cast value is only a fallback for an unsaved attribute.
                 'weight_value' => $listing->getRawOriginal('weight_value', $listing->weight_value),
                 'weight_unit' => $listing->weight_unit,
+                'weight_information' => $listing->weight_information,
                 'quantity' => $listing->quantity,
                 'asking_price' => $listing->getRawOriginal('asking_price', $listing->asking_price),
                 'location' => $listing->location,
@@ -513,6 +566,21 @@ class SellerListingService
 
         if ($validator->fails()) {
             throw ValidationException::withMessages($validator->errors()->toArray());
+        }
+
+        // Catalog breeds cannot be paired with a different catalog type. A
+        // non-catalog breed on an already stored listing is historical free text
+        // and remains readable/submittable; new create/edit selections are
+        // validated at their request boundary.
+        $livestockType = LivestockType::tryFrom((string) $listing->livestock_type);
+        $breed = trim((string) $listing->breed);
+        if ($livestockType !== null &&
+            $breed !== '' &&
+            LivestockType::isCatalogBreed($breed) &&
+            ! $livestockType->hasBreed($breed)) {
+            throw ValidationException::withMessages([
+                'breed' => ['The selected breed does not belong to this livestock type.'],
+            ]);
         }
 
         $this->ensureStatusIs(

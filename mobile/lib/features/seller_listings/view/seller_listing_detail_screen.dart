@@ -255,6 +255,15 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                           ),
                           const SizedBox(height: AppSpacing.md),
                           _FactsGrid(listing: listing),
+                          if (listing.hasEstimatedMeasurement) ...<Widget>[
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Estimated age or weight is provided by the '
+                              'seller and is not independently verified.',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(color: AppColors.textSecondary),
+                            ),
+                          ],
                           ..._details(listing),
                           if (listing.createdAt != null) ...<Widget>[
                             const SizedBox(height: AppSpacing.md),
@@ -291,7 +300,20 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
   List<Widget> _details(Listing listing) {
     bool filled(String? value) => value != null && value.trim().isNotEmpty;
 
+    final String? totalValue = _totalListingValueFor(listing);
+
     final List<Widget> rows = <Widget>[
+      DetailRow(
+        label: 'Number of Animals Available',
+        value:
+            '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
+      ),
+      // The asking price is per head; the total is shown for reference only.
+      if (totalValue != null)
+        DetailRow(
+          label: 'Total listing value',
+          value: '$totalValue (informational only)',
+        ),
       if (filled(listing.shortDescription))
         DetailRow(label: 'Description', value: listing.shortDescription),
       if (filled(listing.genderLabel))
@@ -301,9 +323,6 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
       if (filled(listing.additionalNotes))
         DetailRow(label: 'Notes', value: listing.additionalNotes!),
     ];
-    if (rows.isEmpty) {
-      return const <Widget>[];
-    }
     return <Widget>[
       const SizedBox(height: AppSpacing.md),
       SectionCard(title: 'Details', children: rows),
@@ -389,7 +408,7 @@ class _Summary extends StatelessWidget {
         ],
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Price and location',
+          'Asking Price (₱) — Per Head',
           style: theme.textTheme.labelMedium?.copyWith(
             color: AppColors.textSecondary,
             fontWeight: FontWeight.w600,
@@ -452,8 +471,9 @@ class _FactsGrid extends StatelessWidget {
         'Quantity',
         '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
       ),
-      ('Age', listing.ageLabel),
-      ('Weight', listing.weightLabel),
+      // "Estimated Age" / "Measured Weight" when the seller said which.
+      (listing.ageInformationLabel ?? 'Age', listing.ageLabel),
+      (listing.weightInformationLabel ?? 'Weight', listing.weightLabel),
       ('Health', _present(listing.healthStatus)),
     ];
 
@@ -655,4 +675,15 @@ class _ActionBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The informational total for one listing, or `null` when either value is
+/// missing or invalid. This never replaces the server's transaction calculation.
+String? _totalListingValueFor(Listing listing) {
+  final double? unitPrice = AppFormatters.parseDecimal(listing.askingPrice);
+  if (unitPrice == null || unitPrice < 0 || listing.quantity < 1) {
+    return null;
+  }
+  final String raw = (unitPrice * listing.quantity).toStringAsFixed(2);
+  return AppFormatters.formatMoney(raw) ?? raw;
 }

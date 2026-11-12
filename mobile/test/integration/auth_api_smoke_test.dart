@@ -47,7 +47,8 @@ class _MemoryTokenStore implements TokenStore {
   Future<String?> read() async => token;
 
   @override
-  Future<void> write(String value) async => token = value;
+  Future<void> write(String value, {bool persist = true}) async =>
+      token = value;
 
   @override
   Future<void> clear() async => token = null;

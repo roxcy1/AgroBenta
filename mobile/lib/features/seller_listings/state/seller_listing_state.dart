@@ -1,3 +1,4 @@
+import '../../../models/ai_price_estimate.dart';
 import '../../../models/listing.dart';
 import '../../../models/pagination.dart';
 import 'listing_photo_item.dart';
@@ -63,6 +64,9 @@ enum SellerListingAction {
 
   /// `POST /seller/listings/{id}/photos`. Upload photos to a listing.
   uploadingPhotos,
+
+  /// `POST /seller/listings/{id}/price-suggestion`.
+  suggestingPrice,
 }
 
 /// An immutable snapshot of everything the seller listing screens render from.
@@ -86,6 +90,7 @@ class SellerListingState {
     this.conflictMessage,
     this.validationErrors = const <String, List<String>>{},
     this.photos = const <ListingPhotoItem>[],
+    this.priceSuggestion,
   });
 
   final SellerListingStatus status;
@@ -159,6 +164,12 @@ class SellerListingState {
   /// Per-field messages from a `422`, keyed by contract field name. Rendered
   /// beside the field rather than as a dump.
   final Map<String, List<String>> validationErrors;
+
+  /// The most recent price-suggestion attempt for the open form, or `null`.
+  ///
+  /// This is form-scoped presentation state: it is cleared when an input that
+  /// feeds the model changes or when another draft action starts.
+  final PriceSuggestionResult? priceSuggestion;
 
   /// 1-based page currently displayed, or 0 before anything has loaded.
   int get currentPage => pagination?.currentPage ?? 0;
@@ -263,6 +274,7 @@ class SellerListingState {
     String? actionErrorMessage,
     String? conflictMessage,
     Map<String, List<String>>? validationErrors,
+    PriceSuggestionResult? priceSuggestion,
     bool clearError = false,
     bool clearLoadMoreError = false,
     bool clearRefreshError = false,
@@ -270,6 +282,7 @@ class SellerListingState {
     bool clearActionError = false,
     bool clearConflict = false,
     bool clearListings = false,
+    bool clearPriceSuggestion = false,
   }) {
     return SellerListingState(
       status: status ?? this.status,
@@ -301,6 +314,9 @@ class SellerListingState {
           ? null
           : (conflictMessage ?? this.conflictMessage),
       validationErrors: validationErrors ?? this.validationErrors,
+      priceSuggestion: clearPriceSuggestion
+          ? null
+          : (priceSuggestion ?? this.priceSuggestion),
     );
   }
 

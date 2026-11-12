@@ -1,8 +1,8 @@
 /**
  * Chart colours and text sizes for the Admin Web.
  *
- * Colours are CSS tokens from `index.css`, so charts follow the theme and no
- * page carries its own hex values. Status colours come from `lib/status.ts`.
+ * Shared chart colours come from CSS tokens in `index.css`; livestock species
+ * use a fixed semantic palette. Status colours come from `lib/status.ts`.
  * Text sizes live here too, so no chart sets its own.
  */
 
@@ -22,6 +22,20 @@ export const CHART_PIE_COLORS = [
   'var(--chart-pie-6)',
   'var(--chart-pie-7)',
 ];
+
+/** Stable, semantically matched colors for the dashboard's livestock distribution chart. */
+export const CHART_LIVESTOCK_COLORS: Record<string, string> = {
+  carabao: '#087C59',
+  cattle: '#3B82F6',
+  chicken: '#F59E0B',
+  goat: '#8B5CF6',
+  swine: '#EF4444',
+};
+
+export function livestockChartColor(type: string, fallbackIndex: number): string {
+  const key = type.trim().toLowerCase();
+  return CHART_LIVESTOCK_COLORS[key] ?? CHART_PIE_COLORS[fallbackIndex % CHART_PIE_COLORS.length];
+}
 
 /** Axis tick labels, tooltips: the sizes every chart uses. */
 export const CHART_TICK = { fontSize: 12 };

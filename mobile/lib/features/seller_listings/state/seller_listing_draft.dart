@@ -14,6 +14,7 @@ import '../../../models/listing.dart';
 /// sending `null`. That is the honest encoding of a form, and on a PATCH it is
 /// also the correct one: the server treats an absent field as "leave it alone",
 /// so a null would be asking to clear a value the seller never touched.
+/// `clearBreed` is the explicit user action that opts into sending `breed: null`.
 ///
 /// It also sidesteps a genuine ambiguity. `age_value`/`age_unit` and
 /// `weight_value`/`weight_unit` are required in pairs, and the contract expresses
@@ -33,11 +34,14 @@ class SellerListingDraft {
   const SellerListingDraft({
     this.livestockType = '',
     this.breed = '',
+    this.clearBreed = false,
     this.ageValue = '',
     this.ageUnit,
+    this.ageInformation = 'known',
     this.gender,
     this.weightValue = '',
     this.weightUnit,
+    this.weightInformation = 'measured',
     this.quantity = '',
     this.askingPrice = '',
     this.location = '',
@@ -61,9 +65,11 @@ class SellerListingDraft {
       // in the contract, so the fraction only exists in the column.
       ageValue: _trimTrailingDecimalZero(listing.ageValue),
       ageUnit: listing.ageUnit,
+      ageInformation: listing.ageInformation ?? 'known',
       gender: listing.gender,
       weightValue: listing.weightValue ?? '',
       weightUnit: listing.weightUnit,
+      weightInformation: listing.weightInformation ?? 'measured',
       quantity: listing.quantity.toString(),
       askingPrice: listing.askingPrice,
       location: listing.location,
@@ -79,11 +85,14 @@ class SellerListingDraft {
   /// make it possible to save a body that does not match what is on screen.
   final String livestockType;
   final String breed;
+  final bool clearBreed;
   final String ageValue;
   final String? ageUnit;
+  final String ageInformation;
   final String? gender;
   final String weightValue;
   final String? weightUnit;
+  final String weightInformation;
   final String quantity;
   final String askingPrice;
   final String location;
@@ -111,7 +120,11 @@ class SellerListingDraft {
         case 'livestock_type':
           put(key, livestockType);
         case 'breed':
-          put(key, breed);
+          if (clearBreed) {
+            body[key] = null;
+          } else {
+            put(key, breed);
+          }
         case 'age_value':
           // Integer per the contract. Parsed with `tryParse` rather than
           // `parse`: the form validates before it gets here, but a draft can
@@ -129,6 +142,11 @@ class SellerListingDraft {
           if (ageValue.trim().isNotEmpty && ageUnit != null) {
             body[key] = ageUnit;
           }
+        case 'age_information':
+          // The information type travels with the age pair, never alone.
+          if (ageValue.trim().isNotEmpty && ageUnit != null) {
+            body[key] = ageInformation;
+          }
         case 'gender':
           if (gender != null) {
             body[key] = gender;
@@ -140,6 +158,11 @@ class SellerListingDraft {
         case 'weight_unit':
           if (weightValue.trim().isNotEmpty && weightUnit != null) {
             body[key] = weightUnit;
+          }
+        case 'weight_information':
+          // The information type travels with the weight pair, never alone.
+          if (weightValue.trim().isNotEmpty && weightUnit != null) {
+            body[key] = weightInformation;
           }
         case 'quantity':
           // Same guard as `age_value`: the contract holds this to an integer,

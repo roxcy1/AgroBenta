@@ -8,8 +8,13 @@ import 'package:agrobenta_mobile/features/inquiries/view/inquire_screen.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
+import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
+import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
+import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
+import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
 import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
+import 'package:agrobenta_mobile/repositories/messaging_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -17,6 +22,8 @@ import 'package:http/http.dart' as http;
 import '../../support/auth_fakes.dart';
 import '../../support/inquiry_fakes.dart';
 import '../../support/marketplace_fakes.dart';
+import '../../support/messaging_fakes.dart';
+import '../../support/offer_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -42,6 +49,8 @@ void main() {
     required int viewerId,
     List<Object?>? photos,
     int completedSales = 0,
+    String? ageInformation = 'known',
+    String? weightInformation = 'measured',
   }) async {
     Future<http.Response> transport(RecordedRequest request) async {
       final String path = request.apiPath;
@@ -52,6 +61,8 @@ void main() {
             seller: sellerJson(id: sellerId),
             photos: photos,
             completedSales: completedSales,
+            ageInformation: ageInformation,
+            weightInformation: weightInformation,
           ),
         );
       }
@@ -88,6 +99,28 @@ void main() {
       recorded: recorded,
     );
 
+    final MessagingRepository messagingRepository = buildMessagingRepository(
+      tokenStore,
+      (RecordedRequest request) async {
+        if (request.apiPath.contains('/read')) {
+          return threadReadResponse();
+        }
+        if (request.apiPath.contains('/messages')) {
+          return messageThreadResponse();
+        }
+        return conversationsResponse();
+      },
+      recorded: recorded,
+    );
+    final ConversationsController conversationsController =
+        ConversationsController(messagingRepository);
+    addTearDown(conversationsController.dispose);
+
+    final offerRepository = buildOfferRepository(
+      tokenStore,
+      (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
+    );
+
     tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -100,9 +133,16 @@ void main() {
           controller: marketplaceController,
           child: InquiryScope(
             repository: inquiryRepository,
-            child: MaterialApp(
-              theme: AppTheme.light(),
-              home: const ListingDetailScreen(listingId: 12),
+            child: MessagingScope(
+              repository: messagingRepository,
+              conversationsController: conversationsController,
+              child: OfferScope(
+                repository: offerRepository,
+                child: MaterialApp(
+                  theme: AppTheme.light(),
+                  home: const ListingDetailScreen(listingId: 12),
+                ),
+              ),
             ),
           ),
         ),
@@ -125,9 +165,9 @@ void main() {
       expect(find.text('Mabalacat, Pampanga'), findsOneWidget);
 
       // Attributes.
-      expect(find.text('Age'), findsOneWidget);
+      expect(find.text('Known Age'), findsOneWidget);
       expect(find.text('18 months'), findsOneWidget);
-      expect(find.text('Weight'), findsOneWidget);
+      expect(find.text('Measured Weight'), findsOneWidget);
       expect(find.text('320.5 kg'), findsOneWidget);
       expect(find.text('Gender'), findsOneWidget);
       expect(find.text('Female'), findsOneWidget);
@@ -138,6 +178,28 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Rizal Farms'), findsOneWidget);
+    });
+
+    testWidgets('labels seller-estimated measurements and explains them', (
+      WidgetTester tester,
+    ) async {
+      await pumpDetail(
+        tester,
+        sellerId: 3,
+        viewerId: 7,
+        ageInformation: 'estimated',
+        weightInformation: 'estimated',
+      );
+
+      expect(find.text('Estimated Age'), findsOneWidget);
+      expect(find.text('Estimated Weight'), findsOneWidget);
+      expect(
+        find.text(
+          'Estimated age or weight is provided by the seller and is not '
+          'independently verified.',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('shows no placeholder rating', (WidgetTester tester) async {
@@ -200,42 +262,57 @@ void main() {
   });
 
   group('listing detail actions', () {
-    testWidgets('a non-owner gets the single Inquire action', (
+    testWidgets('a non-owner gets Ask Seller and I am Interested', (
       WidgetTester tester,
     ) async {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
+      expect(find.widgetWithText(OutlinedButton, 'Ask Seller'), findsOneWidget);
       expect(
-        find.widgetWithText(FilledButton, 'Inquire About Livestock'),
+        find.widgetWithText(FilledButton, "I'm Interested"),
         findsOneWidget,
       );
-      // The detail screen no longer offers chat or purchase actions; both
-      // remain reachable from their own destinations.
-      expect(find.text('Message'), findsNothing);
-      expect(find.text('Buy'), findsNothing);
       expect(find.text('Inquire'), findsNothing);
     });
 
     testWidgets('the owner gets no actions', (WidgetTester tester) async {
       await pumpDetail(tester, sellerId: 7, viewerId: 7);
 
-      expect(find.text('Inquire About Livestock'), findsNothing);
-      expect(find.text('Message'), findsNothing);
-      expect(find.text('Inquire'), findsNothing);
-      expect(find.text('Buy'), findsNothing);
+      expect(find.text('Ask Seller'), findsNothing);
+      expect(find.text("I'm Interested"), findsNothing);
     });
 
-    testWidgets('Inquire About Livestock opens the inquiry form and sends '
-        'nothing by itself', (WidgetTester tester) async {
+    testWidgets('Ask Seller opens the conversation and creates nothing', (
+      WidgetTester tester,
+    ) async {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
-      await tester.tap(
-        find.widgetWithText(FilledButton, 'Inquire About Livestock'),
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Ask Seller'));
+      await settle(tester);
+
+      expect(find.byType(ChatScreen), findsOneWidget);
+      expect(find.byType(InquireScreen), findsNothing);
+      expect(
+        recorded.where(
+          (RecordedRequest r) =>
+              r.method == 'POST' &&
+              (r.apiPath == '/messages' || r.apiPath == '/inquiries'),
+        ),
+        isEmpty,
+        reason: 'opening chat is navigation, not a message or an inquiry',
       );
+    });
+
+    testWidgets("I'm Interested opens the inquiry form and sends nothing", (
+      WidgetTester tester,
+    ) async {
+      await pumpDetail(tester, sellerId: 3, viewerId: 7);
+
+      await tester.tap(find.widgetWithText(FilledButton, "I'm Interested"));
       await settle(tester);
 
       expect(find.byType(InquireScreen), findsOneWidget);
-      expect(find.text('Message *'), findsOneWidget);
+      expect(find.text('Message (optional)'), findsOneWidget);
       expect(
         recorded.where((RecordedRequest r) => r.method == 'POST'),
         isEmpty,

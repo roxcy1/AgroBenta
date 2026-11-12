@@ -17,7 +17,7 @@ use Tests\TestCase;
  * `GET /api/marketplace/popular-livestock`.
  *
  * Popularity is completed sales only: the count is distinct completed
- * transactions inside the last 30 days, over the four canonical categories.
+ * transactions inside the last 30 days, over the canonical categories.
  * Pending, cancelled, older sales and non-canonical livestock types never
  * count.
  */
@@ -104,16 +104,20 @@ class PopularLivestockTest extends TestCase
         $cattle = $this->createListing('cattle');
         $goat = $this->createListing('goat');
         $swine = $this->createListing('swine');
+        $chicken = $this->createListing('chicken');
 
         $this->completeSale($cattle);
         $this->completeSale($cattle);
         $this->completeSale($goat);
         $this->completeSale($swine);
+        $this->completeSale($chicken);
+        $this->completeSale($chicken);
+        $this->completeSale($chicken);
 
         $categories = $this->categories();
 
-        $this->assertSame(['Cattle', 'Goat', 'Swine'], array_column($categories, 'livestock_type'));
-        $this->assertSame([2, 1, 1], array_column($categories, 'completed_sales'));
+        $this->assertSame(['Chicken', 'Cattle', 'Goat', 'Swine'], array_column($categories, 'livestock_type'));
+        $this->assertSame([3, 2, 1, 1], array_column($categories, 'completed_sales'));
 
         $response = $this->withHeader(
             'Authorization',

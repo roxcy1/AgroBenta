@@ -14,10 +14,16 @@ services:
     environment:
       - DB_HOST=mysql
       - REDIS_HOST=redis
+      # Internal, private FastAPI service. No host port is published.
+      - PRICE_PREDICTION_URL=http://ml-service:8002
+      - PRICE_PREDICTION_CONNECT_TIMEOUT=2
+      - PRICE_PREDICTION_TIMEOUT=5
     depends_on:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      ml-service:
         condition: service_healthy
     networks:
       - app_network
@@ -97,6 +103,32 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Private ML prediction service ───────────────────────────────────────
+  # Reached only as http://ml-service:8002 on app_network. No ports are
+  # published, so it is not reachable from the host or the internet.
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    environment:
+      # Optional explicit model selection. Empty uses models/active_model.json.
+      - MODEL_PATH=${ML_MODEL_PATH:-}
+    networks:
+      - app_network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/ready', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   # ── Node (React + Vite) ─────────────────────────────────────────────────
   node:
     build:
@@ -111,24 +143,49 @@ services:
     networks:
       - app_network
 
-  # ── Laravel Reverb ──────────────────────────────────────────────────────
-  # Disabled until real-time (WebSocket) features are required.
-  # reverb:
-  #   build:
-  #     context: ./docker/php
-  #     dockerfile: Dockerfile
-  #   working_dir: /var/www/html
-  #   volumes:
-  #     - ./backend:/var/www/html
-  #   entrypoint: []
-  #   command: php artisan reverb:start --host=0.0.0.0 --port=8080
-  #   ports:
-  #     - "${REVERB_PORT:-8083}:8080"
-  #   depends_on:
-  #     - php
-  #   networks:
-  #     - app_network
-  #   restart: unless-stopped
+  # ── Laravel Reverb (WebSocket server) ───────────────────────────────────
+  # Single-instance WebSocket server. Listens on 0.0.0.0:8080 inside Docker and
+  # is published as ${REVERB_PORT:-8083} on the host for client connections.
+  # Reuses the PHP image but runs a different process; mounts the shared vendor
+  # volume so the autoloader (and Reverb itself) is present.
+  reverb:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    working_dir: /var/www/html
+    volumes:
+      - ./backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor
+    entrypoint: []
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    ports:
+      - "${REVERB_PORT:-8083}:8080"
+    depends_on:
+      - php
+      - redis
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  # ── Redis queue worker ──────────────────────────────────────────────────
+  # Drains the Redis queue for queued jobs (including future broadcast jobs).
+  # QUEUE_CONNECTION=redis; see config/queue.php.
+  queue:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    working_dir: /var/www/html
+    volumes:
+      - ./backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor
+    entrypoint: []
+    command: php artisan queue:work redis --sleep=3 --tries=3 --timeout=60
+    depends_on:
+      - php
+      - redis
+    networks:
+      - app_network
+    restart: unless-stopped
 
 volumes:
   mysql_data:

@@ -22,8 +22,8 @@ import '../../support/auth_fakes.dart';
 /// nothing to do with signing in. The end-to-end paths — sign in, wrong
 /// password, empty form, the registration round trip — are covered by
 /// `auth_gate_test.dart`. This file covers what the gate cannot: the
-/// presentation contract of the screen itself, especially the reference
-/// controls the backend does not support (remember me and social sign-in).
+/// presentation contract of the screen itself, especially remember me and
+/// Google sign-in.
 void main() {
   late FakeTokenStore tokenStore;
 
@@ -47,9 +47,11 @@ void main() {
     List<RecordedRequest>? recorded,
     VoidCallback? onRegister,
     VoidCallback? onForgotPassword,
+    FakeGoogleSignIn? googleSignIn,
   }) async {
     final AuthController controller = AuthController(
       buildAuthRepository(tokenStore, handler, recorded: recorded),
+      googleSignIn: googleSignIn ?? FakeGoogleSignIn(isAvailable: false),
     );
     addTearDown(controller.dispose);
 
@@ -142,7 +144,94 @@ void main() {
     expect(obscureOf(tester), isTrue, reason: 'password hides again');
   });
 
-  signInTest('remember me is inert and forgot password is a working link', (
+  signInTest('remember me starts ticked and toggles from box or label', (
+    WidgetTester tester,
+  ) async {
+    await pumpSignIn(
+      tester,
+      handler: (_) async => fail('toggling may not reach the API'),
+    );
+
+    bool ticked() => tester.widget<Checkbox>(find.byType(Checkbox)).value!;
+
+    expect(ticked(), isTrue, reason: 'ticked by default (MS-11)');
+
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    expect(ticked(), isFalse);
+
+    await tester.tap(find.text('Remember me'));
+    await tester.pump();
+    expect(ticked(), isTrue);
+  });
+
+  signInTest('a ticked remember me saves the session', (
+    WidgetTester tester,
+  ) async {
+    await pumpSignIn(
+      tester,
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: authSessionJson())),
+        200,
+      ),
+    );
+
+    await fillFields(tester);
+    await tester.ensureVisible(find.byType(FilledButton));
+    await tester.tap(find.byType(FilledButton));
+    await settle(tester);
+
+    expect(tokenStore.token, '1|test-mobile-token');
+    expect(tokenStore.lastWritePersisted, isTrue);
+  });
+
+  signInTest('an unticked remember me keeps the session only until closed', (
+    WidgetTester tester,
+  ) async {
+    await pumpSignIn(
+      tester,
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: authSessionJson())),
+        200,
+      ),
+    );
+
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    await fillFields(tester);
+    await tester.ensureVisible(find.byType(FilledButton));
+    await tester.tap(find.byType(FilledButton));
+    await settle(tester);
+
+    expect(tokenStore.token, '1|test-mobile-token');
+    expect(tokenStore.lastWritePersisted, isFalse);
+  });
+
+  signInTest('an unticked remember me also applies to Google sign-in', (
+    WidgetTester tester,
+  ) async {
+    await pumpSignIn(
+      tester,
+      googleSignIn: FakeGoogleSignIn(),
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: authSessionJson())),
+        200,
+      ),
+    );
+
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await settle(tester);
+
+    expect(tokenStore.lastWritePersisted, isFalse);
+  });
+
+  signInTest('forgot password is a working link', (
     WidgetTester tester,
   ) async {
     final List<RecordedRequest> recorded = <RecordedRequest>[];
@@ -151,17 +240,7 @@ void main() {
       tester,
       recorded: recorded,
       onForgotPassword: () => forgotTaps++,
-      handler: (_) async => fail('neither control may reach the API'),
-    );
-
-    // Remember-me: a Sanctum token has no "remembered" session to switch, so
-    // the checkbox exists for layout only.
-    final Checkbox checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
-    expect(checkbox.value, isFalse);
-    expect(
-      checkbox.onChanged,
-      isNull,
-      reason: 'remember-me must not imply it changes session persistence',
+      handler: (_) async => fail('the link may not reach the API'),
     );
 
     final Finder forgot = find.text('Forgot Password?');
@@ -177,29 +256,123 @@ void main() {
     expect(recorded, isEmpty);
   });
 
-  signInTest('social sign-in is shown but disabled', (
+  signInTest('Google is the only social option, and Facebook is gone', (
+    WidgetTester tester,
+  ) async {
+    await pumpSignIn(
+      tester,
+      handler: (_) async => fail('no request expected'),
+      googleSignIn: FakeGoogleSignIn(),
+    );
+
+    expect(find.text('or continue with'), findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, 'Continue with Google'),
+      findsOneWidget,
+    );
+    expect(find.byIcon(FontAwesomeIcons.google.data), findsOneWidget);
+    expect(find.byIcon(FontAwesomeIcons.facebook.data), findsNothing);
+    expect(find.text('Social sign-in is not available yet.'), findsNothing);
+  });
+
+  signInTest('Google sign-in is hidden where it is unavailable', (
     WidgetTester tester,
   ) async {
     await pumpSignIn(tester, handler: (_) async => fail('no request expected'));
 
-    expect(find.text('or continue with'), findsOneWidget);
+    expect(find.text('or continue with'), findsNothing);
+    expect(find.byType(OutlinedButton), findsNothing);
+  });
 
-    final List<OutlinedButton> social = tester
-        .widgetList<OutlinedButton>(find.byType(OutlinedButton))
-        .toList();
-    expect(social, hasLength(2));
-    for (final OutlinedButton button in social) {
-      expect(
-        button.onPressed,
-        isNull,
-        reason: 'Google/Facebook OAuth is not implemented by the backend',
-      );
-    }
+  signInTest('Google sign-in sends the ID token and signs in', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> recorded = <RecordedRequest>[];
+    final AuthController controller = await pumpSignIn(
+      tester,
+      recorded: recorded,
+      googleSignIn: FakeGoogleSignIn(idToken: 'id-token-from-google'),
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: authSessionJson())),
+        200,
+      ),
+    );
 
-    // The brand marks are the official glyphs, not approximations.
-    expect(find.byIcon(FontAwesomeIcons.google.data), findsOneWidget);
-    expect(find.byIcon(FontAwesomeIcons.facebook.data), findsOneWidget);
-    expect(find.text('Social sign-in is not available yet.'), findsOneWidget);
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await settle(tester);
+
+    expect(recorded.single.apiPath, '/auth/google');
+    expect(recorded.single.body, <String, dynamic>{
+      'id_token': 'id-token-from-google',
+    });
+    expect(controller.state.isSignedIn, isTrue);
+    expect(tokenStore.token, '1|test-mobile-token');
+  });
+
+  signInTest('cancelling Google sign-in sends nothing and shows no error', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> recorded = <RecordedRequest>[];
+    final FakeGoogleSignIn google = FakeGoogleSignIn(idToken: null);
+    final AuthController controller = await pumpSignIn(
+      tester,
+      recorded: recorded,
+      googleSignIn: google,
+      handler: (_) async => fail('no request expected'),
+    );
+
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await settle(tester);
+
+    expect(google.calls, 1);
+    expect(recorded, isEmpty);
+    expect(controller.state.isSignedIn, isFalse);
+    expect(controller.state.errorMessage, isNull);
+  });
+
+  signInTest('a Google failure shows a message and sends nothing', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> recorded = <RecordedRequest>[];
+    await pumpSignIn(
+      tester,
+      recorded: recorded,
+      googleSignIn: FakeGoogleSignIn(error: StateError('no network')),
+      handler: (_) async => fail('no request expected'),
+    );
+
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await settle(tester);
+
+    expect(recorded, isEmpty);
+    expect(find.text(AuthController.googleSignInErrorMessage), findsOneWidget);
+  });
+
+  signInTest('a token the server rejects leaves the user signed out', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = await pumpSignIn(
+      tester,
+      googleSignIn: FakeGoogleSignIn(),
+      handler: (_) async => http.Response(
+        jsonEncode(<String, dynamic>{
+          'success': false,
+          'message': 'Google sign-in failed.',
+        }),
+        401,
+      ),
+    );
+
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await settle(tester);
+
+    expect(controller.state.isSignedIn, isFalse);
+    expect(controller.state.errorMessage, isNotNull);
+    expect(tokenStore.token, isNull);
   });
 
   signInTest('a repeat tap during an active request is ignored', (

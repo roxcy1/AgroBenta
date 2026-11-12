@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ActivityAction;
+use App\Events\ActivityRecorded;
 use App\Models\Activity;
 use App\Models\User;
 
@@ -32,12 +33,18 @@ class ActivityLogger
         ?string $description = null,
         array $metadata = [],
     ): Activity {
-        return Activity::query()->create([
+        $activity = Activity::query()->create([
             'user_id' => $actor instanceof User ? $actor->getKey() : $actor,
             'action' => $action->value,
             'description' => $description,
             'metadata' => $metadata === [] ? null : $metadata,
         ]);
+
+        // Let administrators' dashboards update live. Queued + after-commit
+        // (see ActivityRecorded), so it never blocks or fails the write.
+        ActivityRecorded::dispatch($activity);
+
+        return $activity;
     }
 
     /**

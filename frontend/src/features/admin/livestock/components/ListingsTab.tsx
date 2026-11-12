@@ -4,6 +4,7 @@ import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/query
 import { useListing, useListingCounts, useListings } from '../api/useListings';
 import {
   listingTypeOptions,
+  livestockTypeLabel,
   requestLivestockTypesRefetch,
   useLivestockTypes,
 } from '../api/useLivestockTypes';
@@ -238,7 +239,7 @@ export function ListingsTab() {
             ) : (
               <>
                 <div className="lv-table-container">
-                  <table className="lv-table">
+                  <table className="lv-table lv-table--listings">
                     <thead>
                       <tr>
                         <th>Photo</th>
@@ -259,19 +260,21 @@ export function ListingsTab() {
                           key={listing.id}
                           className="lv-listings-row"
                           tabIndex={0}
-                          aria-label={`View details for ${listing.livestock_type} listing`}
+                          aria-label={`View details for ${livestockTypeLabel(listing.livestock_type, livestockTypes)} listing`}
                           onClick={() => setDetails(listing)}
                           onKeyDown={(event) => handleRowKeyDown(event, listing)}
                         >
                           <td className="lv-photo-cell">
                             <ListingPhotoThumb url={listing.photos[0]} />
                           </td>
-                          <td className="lv-name-cell">{listing.livestock_type}</td>
-                          <td>{listing.breed}</td>
+                          <td className="lv-name-cell" title={livestockTypeLabel(listing.livestock_type, livestockTypes)}>
+                            {livestockTypeLabel(listing.livestock_type, livestockTypes)}
+                          </td>
+                          <td title={listing.breed}>{listing.breed}</td>
                           <td>{listing.quantity}</td>
                           <td className="lv-price-cell">{formatPeso(listing.asking_price)}</td>
-                          <td>{listing.location}</td>
-                          <td className="lv-seller-cell">{listing.seller.name}</td>
+                          <td title={listing.location}>{listing.location}</td>
+                          <td className="lv-seller-cell" title={listing.seller.name}>{listing.seller.name}</td>
                           <td>
                             <StatusBadge status={listing.status} />
                           </td>
@@ -339,13 +342,18 @@ export function ListingsTab() {
           // error-prone than an effect that clears them after the fact.
           key={`${decision.listing.id}-${decision.option.action}`}
           listing={decision.listing}
+          livestockTypes={livestockTypes ?? []}
           option={decision.option}
           onClose={() => setDecision(null)}
         />
       )}
 
       {activeDetails && (
-        <ListingDetailsDialog listing={activeDetails} onClose={handleCloseDetails} />
+        <ListingDetailsDialog
+          listing={activeDetails}
+          livestockTypes={livestockTypes ?? []}
+          onClose={handleCloseDetails}
+        />
       )}
     </>
   );

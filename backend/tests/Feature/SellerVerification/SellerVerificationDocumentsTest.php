@@ -148,7 +148,7 @@ class SellerVerificationDocumentsTest extends TestCase
         return $this->withToken($this->mobileToken($user))
             ->postJson('/api/seller-verification', array_merge([
                 'phone' => '09171234567',
-                'address' => 'Trinidad, Bohol',
+                'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
                 'government_id_type' => 'philippine_national_id',
                 'has_no_back_image' => false,
             ], $body));
@@ -164,7 +164,7 @@ class SellerVerificationDocumentsTest extends TestCase
         return SellerVerification::create(array_merge([
             'user_id' => $user->id,
             'phone' => '09171234567',
-            'address' => 'Trinidad, Bohol',
+            'address' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
             'business_name' => 'Reyes Livestock',
             'business_location' => 'Mabalacat, Pampanga',
             'business_description' => 'Family cattle farm.',

@@ -46,6 +46,7 @@ class MobileAuthService
         private readonly UserRepository $users,
         private readonly AuthService $auth,
         private readonly ActivityLogger $activity,
+        private readonly GoogleIdTokenVerifier $google,
     ) {
         //
     }
@@ -100,6 +101,53 @@ class MobileAuthService
             ActivityAction::UserLoggedIn,
             'User signed in.',
             ['context' => ['guard' => 'mobile']],
+        );
+
+        return [
+            'result' => self::RESULT_AUTHENTICATED,
+            'user' => $user,
+            'token' => $this->issueToken($user),
+        ];
+    }
+
+    /**
+     * Sign in with a Google ID token and issue a mobile-scoped bearer token.
+     *
+     * Project decision (MS-11, 2026-11-10): an existing account with the same
+     * email is signed in, since Google has verified that email; an unknown
+     * email gets a new normal user account. A new account receives a random
+     * password nobody knows; Forgot Password can set a real one later.
+     *
+     * @return array{result: string, user?: User, token?: string}
+     */
+    public function loginWithGoogle(string $idToken): array
+    {
+        $identity = $this->google->verify($idToken);
+
+        if ($identity === null) {
+            return ['result' => self::RESULT_INVALID_CREDENTIALS];
+        }
+
+        $user = $this->users->findByEmail($identity['email']);
+
+        // Administrators never use the mobile app, and a deleted account's
+        // email still holds its unique slot, so neither gets a new account.
+        if ($user?->isAdmin()
+            || ($user === null && User::onlyTrashed()->where('email', $identity['email'])->exists())) {
+            return ['result' => self::RESULT_NOT_PERMITTED];
+        }
+
+        $user ??= $this->users->create([
+            'name' => $identity['name'] ?? Str::before($identity['email'], '@'),
+            'email' => $identity['email'],
+            'password' => Str::random(64),
+        ]);
+
+        $this->activity->logSafely(
+            $user,
+            ActivityAction::UserLoggedIn,
+            'User signed in.',
+            ['context' => ['guard' => 'mobile', 'method' => 'google']],
         );
 
         return [

@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 /**
  * Development-only demo data for the Buyer Home "Popular Livestock" ranking.
  *
- * Creates 100 completed sales across the four canonical categories — cattle 40,
+ * Creates 100 completed sales across four canonical categories — cattle 40,
  * goat 30, swine 20, carabao 10 — each against a **distinct** demo listing, so
  * the ranking reflects genuine completed-transaction counts.
  *

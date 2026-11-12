@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../widgets/initials_avatar.dart';
@@ -37,6 +38,7 @@ class ChatScreen extends StatefulWidget {
     this.listingId,
     this.listingTitle,
     this.listingPrice,
+    this.messageListingId,
     this.offerInquiry,
     this.counterpartRole,
     super.key,
@@ -49,7 +51,7 @@ class ChatScreen extends StatefulWidget {
   /// caller because [AuthScope] cannot be reached from `initState`.
   final int currentUserId;
 
-  /// The listing this thread is about, if any.
+  /// The listing this thread is filtered to, if any.
   final int? listingId;
 
   /// The thread's listing name and asking price, as the conversation list
@@ -57,6 +59,9 @@ class ChatScreen extends StatefulWidget {
   /// livestock the conversation is about.
   final String? listingTitle;
   final String? listingPrice;
+  /// The listing to tag new messages with when opened from a listing's detail
+  /// screen. The thread itself still shows the whole buyer–seller history.
+  final int? messageListingId;
 
   /// The server-provided inquiry the seller can still answer with an offer.
   ///
@@ -84,11 +89,18 @@ class _ChatScreenState extends State<ChatScreen> {
     // is registered, so it is safe from `initState`.
     final repository = MessagingScope.readRepositoryOf(context);
 
+    // Real-time is optional: the controllers subscribe only when a scope is
+    // installed (always in the app; absent in some widget tests).
+    final realtime = RealtimeScope.maybeOf(context);
+
     _controller = ChatController(
       repository,
       counterpartId: widget.counterpart.id,
       currentUserId: widget.currentUserId,
       listingId: widget.listingId,
+      messageListingId: widget.messageListingId,
+      realtimeEvents: realtime?.events,
+      connection: realtime?.connected,
     );
     _controller.load();
     // Mark read on open — the user is looking at the thread, so unread
@@ -100,6 +112,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _offers = ChatOffersController(
       OfferScope.readOf(context),
       counterpartId: widget.counterpart.id,
+      realtimeEvents: realtime?.events,
+      connection: realtime?.connected,
     );
     _offers.load();
   }

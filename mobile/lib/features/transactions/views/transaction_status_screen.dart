@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/message.dart';
@@ -20,9 +21,10 @@ import 'transaction_status_content.dart';
 /// `GET /transactions/{id}` call — there is no separate "status" endpoint, and
 /// none is invented.
 ///
-/// The tracker reflects the real workflow only. The backend keeps one current
-/// `status` and no per-step history, so a dated timeline is not available and
-/// is not faked; [TransactionStatusContent] states that plainly.
+/// The tracker reflects the real collection-specific fulfillment workflow. The
+/// backend keeps one current status and fulfillment stage with no per-step
+/// history, so a dated timeline is not available and is not faked;
+/// [TransactionStatusContent] states that plainly.
 class TransactionStatusScreen extends StatelessWidget {
   const TransactionStatusScreen({required this.transactionId, super.key});
 
@@ -57,6 +59,8 @@ class _StatusBodyState extends State<_StatusBody> {
     _controller = TransactionDetailController(
       TransactionScope.readOf(context),
       widget.transactionId,
+      realtimeEvents: RealtimeScope.maybeOf(context)?.events,
+      connection: RealtimeScope.maybeOf(context)?.connected,
     );
     _controller.load();
   }

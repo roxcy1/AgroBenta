@@ -3,8 +3,10 @@
 namespace App\Services\Transaction;
 
 use App\Enums\ActivityAction;
-use App\Enums\ListingStatus;
+use App\Enums\FulfillmentStatus;
 use App\Enums\TransactionStatus;
+use App\Events\TransactionCreated as TransactionCreatedEvent;
+use App\Events\TransactionUpdated;
 use App\Models\Listing;
 use App\Models\Transaction;
 use App\Models\User;
@@ -12,6 +14,7 @@ use App\Notifications\TransactionCreated;
 use App\Notifications\TransactionStatusChanged;
 use App\Repositories\Transaction\TransactionRepository;
 use App\Services\ActivityLogger;
+use App\Services\Listing\ListingReservationService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -25,19 +28,22 @@ use Illuminate\Support\Facades\DB;
  *  - creation is buyer-initiated, against an `active` listing the buyer does
  *    not own, with stock to cover the quantity (rule 1, rule 6, §6.2);
  *  - `total_amount` is `asking_price × quantity`, server-derived (rule 3);
- *  - `pending → cancelled` by either party, and that is the only transition
- *    this service offers (rule 5);
- *  - `completed` and `cancelled` are terminal — no undo, no reopen.
+ *  - stock is reserved atomically at creation and returned exactly once on
+ *    cancellation;
+ *  - `pending → cancelled` by either party before the fulfillment cutoff
+ *    (rule 5);
+ *  - `completed` is written by `TransactionFulfillmentService` after buyer
+ *    receipt confirmation; both terminal states are immutable.
  *
- * Completion is deliberately absent. [D-15] rule 4 requires "the appropriate
- * transaction confirmation" without naming the actor, and that ambiguity is
- * open as OQ-15. The `complete` transition stays unimplemented until it is
- * answered; no method below offers a substitute for it.
+ * Creation and cancellation live here; the seller/buyer fulfillment progression
+ * lives in the fulfillment service so this class stays focused on the sale
+ * record.
  */
 class TransactionService
 {
     public function __construct(
         private readonly TransactionRepository $transactions,
+        private readonly ListingReservationService $reservations,
         private readonly ActivityLogger $activity,
     ) {
         //
@@ -83,31 +89,23 @@ class TransactionService
     public function create(User $buyer, Listing $listing, int $quantity): Transaction
     {
         return DB::transaction(function () use ($buyer, $listing, $quantity): Transaction {
-            // Reload with a row lock so a concurrent markSold() cannot flip the
-            // listing to `sold` between the status check and transaction create.
-            $locked = Listing::query()
-                ->where('id', $listing->getKey())
-                ->lockForUpdate()
-                ->first();
+            // Reserve atomically: this locks the listing row, checks its status
+            // and persisted stock, and decrements the quantity. Two concurrent
+            // buyers therefore cannot reserve the same heads.
+            $locked = $this->reservations->reserve(
+                (int) $listing->getKey(),
+                $quantity,
+            );
 
-            if ($locked === null) {
-                abort(404, 'Listing not found.');
-            }
-
-            if ($locked->status !== ListingStatus::Active) {
+            // A soft-deleted seller has no active account to fulfil the sale.
+            // The listing row and its status remain as history, but a stale
+            // client must not create new business against it.
+            if ($locked->seller === null) {
                 abort(409, 'This listing is not available for new transactions.');
             }
 
             if ((int) $locked->seller_id === (int) $buyer->getKey()) {
                 abort(409, 'You cannot transact on your own listing.');
-            }
-
-            if ($quantity < 1) {
-                abort(409, 'Quantity must be at least one.');
-            }
-
-            if ((int) $locked->quantity < $quantity) {
-                abort(409, 'There is not enough stock for the requested quantity.');
             }
 
             // Server-derived total amount from the locked listing's current price.
@@ -156,6 +154,8 @@ class TransactionService
                 $seller->notify(new TransactionCreated($transaction->fresh(['listing', 'buyer'])));
             }
 
+            TransactionCreatedEvent::dispatch($transaction);
+
             return $transaction;
         });
     }
@@ -163,30 +163,66 @@ class TransactionService
     /**
      * Cancel a pending transaction. Either party may cancel [D-15 rule 5].
      *
-     * The transition is irreversible: a cancelled transaction stays cancelled.
+     * The row is locked, the status re-checked, and any stock this transaction
+     * reserved is returned in the same database transaction that marks it
+     * cancelled. The `inventory_reserved` flag makes the release idempotent:
+     * a second cancel is a 409 and releases nothing.
+     *
+     * The fulfillment phase will narrow "before handover or dispatch" to a
+     * concrete cutoff once those stages exist.
      */
     public function cancel(Transaction $transaction, User $actor): Transaction
     {
-        $this->ensureStatusIs(
-            $transaction,
-            [TransactionStatus::Pending],
-            'Only a pending transaction can be cancelled.',
-        );
-
         return DB::transaction(function () use ($transaction, $actor): Transaction {
-            $cancelled = $this->transactions->updateStatus($transaction, TransactionStatus::Cancelled);
+            // Re-read under a row lock: the model handed in by the controller
+            // may be stale, and a concurrent cancel must not release stock
+            // twice.
+            $locked = $this->transactions->lockForUser(
+                (int) $transaction->getKey(),
+                $actor,
+            );
+
+            if ($locked === null) {
+                abort(404, 'Transaction not found.');
+            }
+
+            $this->ensureStatusIs(
+                $locked,
+                [TransactionStatus::Pending],
+                'Only a pending transaction can be cancelled.',
+            );
+
+            $flow = FulfillmentStatus::flowFor($locked->collection_method);
+            $fulfillment = $locked->fulfillment_status ?? FulfillmentStatus::Confirmed;
+
+            if (! $fulfillment->allowsCancellation($flow)) {
+                abort(409, 'This transaction can no longer be cancelled after handover or dispatch.');
+            }
+
+            // Return reserved stock only when this transaction actually took
+            // it. Historical pending rows created before reservation have the
+            // flag false and must not inflate the listing.
+            if ($locked->inventory_reserved) {
+                $this->reservations->release(
+                    (int) $locked->listing_id,
+                    (int) $locked->quantity,
+                );
+                $this->transactions->releaseInventory($locked);
+            }
+
+            $cancelled = $this->transactions->updateStatus($locked, TransactionStatus::Cancelled);
 
             $this->activity->log(
                 $actor,
                 ActivityAction::TransactionCancelled,
-                sprintf('Transaction #%d cancelled.', $transaction->getKey()),
+                sprintf('Transaction #%d cancelled.', $locked->getKey()),
                 [
                     'target_type' => 'transaction',
-                    'target_id' => $transaction->getKey(),
+                    'target_id' => $locked->getKey(),
                     'context' => [
-                        'listing_id' => $transaction->listing_id,
-                        'buyer_id' => $transaction->buyer_id,
-                        'seller_id' => $transaction->seller_id,
+                        'listing_id' => $locked->listing_id,
+                        'buyer_id' => $locked->buyer_id,
+                        'seller_id' => $locked->seller_id,
                     ],
                     'changes' => [
                         'status' => [
@@ -199,9 +235,9 @@ class TransactionService
 
             // Notify the counterparty about the cancellation. The actor already
             // knows they cancelled it; only the other party needs to learn.
-            $counterpartyId = $actor->getKey() === $transaction->buyer_id
-                ? $transaction->seller_id
-                : $transaction->buyer_id;
+            $counterpartyId = $actor->getKey() === $locked->buyer_id
+                ? $locked->seller_id
+                : $locked->buyer_id;
 
             $counterparty = User::find($counterpartyId);
             if ($counterparty !== null) {
@@ -213,12 +249,19 @@ class TransactionService
                 ));
             }
 
+            TransactionUpdated::dispatch(
+                $cancelled,
+                TransactionStatus::Cancelled->value,
+                null,
+                (int) $counterpartyId,
+            );
+
             return $cancelled;
         });
     }
 
     /**
-     * Guard a lifecycle transition on the transaction's current state.
+     * Guard a lifecycle transition on the freshly locked transaction state.
      *
      * @param  list<TransactionStatus>  $allowed
      */

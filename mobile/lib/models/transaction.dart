@@ -4,10 +4,9 @@ import 'listing.dart';
 /// A transaction's lifecycle state, as stored in `transactions.status`.
 ///
 /// Serialised by `backend/app/Enums/TransactionStatus.php` and surfaced
-/// verbatim by `MobileTransactionResource`. [D-15]: `pending` is the only
-/// non-terminal state; `completed` and `cancelled` are terminal. Completion
-/// itself is unimplemented (OQ-15, backend 501), so `completed` is modelled
-/// because terminal records can exist, not because the app can produce them.
+/// verbatim by `MobileTransactionResource`. `pending` is the only non-terminal
+/// state; `completed` and `cancelled` are terminal. Completion is produced by
+/// the buyer confirming receipt after the seller reports pickup or delivery.
 enum TransactionStatus {
   pending('pending'),
   completed('completed'),
@@ -26,6 +25,92 @@ enum TransactionStatus {
       }
     }
     throw FormatException('Unknown transaction status "$value".');
+  }
+}
+
+/// The separate fulfillment stage recorded by `transactions.fulfillment_status`.
+///
+/// This is deliberately not part of [TransactionStatus]. The ERD lifecycle
+/// remains pending/completed/cancelled, while this progression records what the
+/// seller and buyer have reported on the ground. A legacy record may have no
+/// stage (`null`), which the UI treats safely.
+enum TransactionFulfillmentStatus {
+  confirmed('confirmed', 'Confirmed'),
+  preparing('preparing', 'Preparing'),
+  readyForPickup('ready_for_pickup', 'Ready for Pickup'),
+  pickedUp('picked_up', 'Picked Up'),
+  onTheWay('on_the_way', 'On the Way'),
+  delivered('delivered', 'Delivered'),
+  completed('completed', 'Completed');
+
+  const TransactionFulfillmentStatus(this.value, this.label);
+
+  /// The exact lowercase string the API sends.
+  final String value;
+
+  /// Display-only label. The API contract is always [value].
+  final String label;
+
+  static TransactionFulfillmentStatus? tryFromValue(String? value) {
+    if (value == null) {
+      return null;
+    }
+    for (final TransactionFulfillmentStatus status
+        in TransactionFulfillmentStatus.values) {
+      if (status.value == value) {
+        return status;
+      }
+    }
+    return null;
+  }
+}
+
+/// One server-permitted fulfillment action from `permitted_actions`.
+///
+/// The server decides which of these the current viewer may perform; the app
+/// never infers a button from the stage alone.
+enum TransactionFulfillmentAction {
+  preparing('preparing', 'Start Preparing', 'Preparation started.'),
+  readyForPickup(
+    'ready_for_pickup',
+    'Mark Ready for Pickup',
+    'Marked ready for pickup.',
+  ),
+  pickedUp('picked_up', 'Confirm Handover', 'Handover confirmed.'),
+  onTheWay('on_the_way', 'Mark On the Way', 'Marked on the way.'),
+  delivered('delivered', 'Mark Delivered', 'Marked delivered.'),
+  confirmReceived(
+    'confirm_received',
+    'Confirm Received',
+    'Receipt confirmed. Transaction completed.',
+  );
+
+  const TransactionFulfillmentAction(
+    this.value,
+    this.label,
+    this.successMessage,
+  );
+
+  /// The exact lowercase string the API sends in `permitted_actions`.
+  final String value;
+
+  /// Display label for the action button.
+  final String label;
+
+  /// Confirmation shown after a successful action.
+  final String successMessage;
+
+  static TransactionFulfillmentAction? tryFromValue(String? value) {
+    if (value == null) {
+      return null;
+    }
+    for (final TransactionFulfillmentAction action
+        in TransactionFulfillmentAction.values) {
+      if (action.value == value) {
+        return action;
+      }
+    }
+    return null;
   }
 }
 
@@ -122,6 +207,70 @@ class TransactionListing {
   }
 }
 
+/// The terms snapshotted when the transaction was created.
+///
+/// These are recorded preferences, not a payment or logistics service. A null
+/// collection method is a legacy/direct record and is rendered as unspecified.
+class TransactionTerms {
+  const TransactionTerms({
+    this.offerId,
+    this.pickupDate,
+    this.paymentMethod,
+    this.collectionMethod,
+  });
+
+  factory TransactionTerms.fromJson(Map<String, dynamic> json) {
+    return TransactionTerms(
+      offerId: readNullableInt(json, 'offer_id'),
+      pickupDate: readNullableDateTime(json, 'pickup_date'),
+      paymentMethod: readNullableString(json, 'payment_method'),
+      collectionMethod: readNullableString(json, 'collection_method'),
+    );
+  }
+
+  static const TransactionTerms empty = TransactionTerms();
+
+  final int? offerId;
+  final DateTime? pickupDate;
+  final String? paymentMethod;
+  final String? collectionMethod;
+
+  bool get isDelivery => collectionMethod == 'seller_arranged_delivery';
+
+  /// The buyer-facing label for the recorded collection preference.
+  String get collectionMethodLabel =>
+      collectionMethodLabelFor(collectionMethod);
+
+  /// The buyer-facing label for the recorded payment preference.
+  String get paymentMethodLabel => paymentMethodLabelFor(paymentMethod);
+}
+
+/// The display label for a stored `collection_method` value.
+///
+/// Shared by the transaction terms and the receipt so the two surfaces cannot
+/// describe the same value differently. Unknown/null values are honest rather
+/// than guessed.
+String collectionMethodLabelFor(String? value) => switch (value) {
+  'farm_pickup' => 'Personal Pickup',
+  'buyer_arranged_transportation' => 'Buyer-Arranged Transportation',
+  'seller_arranged_delivery' => 'Seller-Arranged Delivery',
+  'not_sure_yet' => 'Not Sure Yet',
+  'discuss_with_seller' => 'Discuss with seller',
+  _ => 'Not specified',
+};
+
+/// The display label for a stored `payment_method` preference.
+///
+/// This is a preference, never a payment fact. A missing value is shown as
+/// "Not recorded" rather than assumed cash.
+String paymentMethodLabelFor(String? value) => switch (value) {
+  'cash' => 'Cash',
+  'gcash' => 'GCash',
+  'maya' => 'Maya',
+  'other' => 'Other / Discuss with seller',
+  _ => 'Not recorded',
+};
+
 /// One transaction, as the mobile surface returns it.
 ///
 /// Mirrors `MobileTransactionResource` field for field. `total_amount` stays
@@ -139,9 +288,19 @@ class Transaction {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.terms = TransactionTerms.empty,
+    this.fulfillmentStatus,
+    this.fulfillmentStatusValue,
+    this.permittedActions = const <String>[],
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic>? terms = readNullableObject(json, 'terms');
+    final String? fulfillmentValue = readNullableString(
+      json,
+      'fulfillment_status',
+    );
+
     return Transaction(
       id: readInt(json, 'id'),
       role: TransactionRole.fromValue(readString(json, 'role')),
@@ -154,6 +313,14 @@ class Transaction {
       status: TransactionStatus.fromValue(readString(json, 'status')),
       createdAt: readNullableDateTime(json, 'created_at'),
       updatedAt: readNullableDateTime(json, 'updated_at'),
+      terms: terms == null
+          ? TransactionTerms.empty
+          : TransactionTerms.fromJson(terms),
+      fulfillmentStatus: TransactionFulfillmentStatus.tryFromValue(
+        fulfillmentValue,
+      ),
+      fulfillmentStatusValue: fulfillmentValue,
+      permittedActions: readStringList(json, 'permitted_actions'),
     );
   }
 
@@ -179,6 +346,20 @@ class Transaction {
 
   final DateTime? updatedAt;
 
+  /// The snapshotted collection/payment preferences.
+  final TransactionTerms terms;
+
+  /// The recorded fulfillment stage, or null on a legacy record.
+  final TransactionFulfillmentStatus? fulfillmentStatus;
+
+  /// The raw server value. It is retained so an unknown non-null stage can be
+  /// distinguished from a legacy missing stage instead of being shown as
+  /// Confirmed.
+  final String? fulfillmentStatusValue;
+
+  /// The actions the server permits for the authenticated viewer.
+  final List<String> permittedActions;
+
   /// Display form of the id: `TRX-001`. The id itself stays an int.
   String get displayId => 'TRX-${id.toString().padLeft(3, '0')}';
 
@@ -186,6 +367,65 @@ class Transaction {
   /// non-terminal state; both exits are terminal and irreversible.
   bool get isPending => status == TransactionStatus.pending;
 
+  /// The stage the UI should show.
+  ///
+  /// A pending legacy record predates `fulfillment_status`; it starts at
+  /// Confirmed. A completed record without a stage is shown as completed.
+  /// Cancelled records intentionally return null and use the transaction status
+  /// instead.
+  TransactionFulfillmentStatus? get effectiveFulfillmentStatus {
+    if (fulfillmentStatus != null) {
+      return fulfillmentStatus;
+    }
+    // A non-null raw value that this app does not recognise must not fall back
+    // to Confirmed: the screen shows a safe unavailable state instead.
+    if (fulfillmentStatusValue != null) {
+      return null;
+    }
+    return switch (status) {
+      TransactionStatus.pending => TransactionFulfillmentStatus.confirmed,
+      TransactionStatus.completed => TransactionFulfillmentStatus.completed,
+      TransactionStatus.cancelled => null,
+    };
+  }
+
+  /// Whether the server sent a stage this app version does not understand.
+  bool get hasUnknownFulfillmentStatus =>
+      fulfillmentStatusValue != null && fulfillmentStatus == null;
+
+  /// Whether this is an older pending record with no recorded stage.
+  bool get hasLegacyFulfillment =>
+      status == TransactionStatus.pending && fulfillmentStatusValue == null;
+
+  bool permits(String action) => permittedActions.contains(action);
+
+  bool get canConfirmReceived =>
+      permits(TransactionFulfillmentAction.confirmReceived.value);
+
+  bool get canCancel => permits('cancel');
+
+  /// The one seller step the server permits, if any.
+  ///
+  /// The order is fixed so a malformed response with several seller actions
+  /// can never render more than one primary step.
+  TransactionFulfillmentAction? get nextSellerAction {
+    for (final TransactionFulfillmentAction action
+        in const <TransactionFulfillmentAction>[
+          TransactionFulfillmentAction.preparing,
+          TransactionFulfillmentAction.readyForPickup,
+          TransactionFulfillmentAction.pickedUp,
+          TransactionFulfillmentAction.onTheWay,
+          TransactionFulfillmentAction.delivered,
+        ]) {
+      if (permits(action.value)) {
+        return action;
+      }
+    }
+    return null;
+  }
+
   @override
-  String toString() => 'Transaction($id, ${status.value}, ${role.value})';
+  String toString() =>
+      'Transaction($id, ${status.value}, ${role.value}, '
+      '${fulfillmentStatus?.value ?? 'no-stage'})';
 }

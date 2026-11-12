@@ -420,6 +420,10 @@ void main() {
 
       expect(chip('all').selected, isTrue);
       expect(find.text('Category:'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('browse-category-chicken')),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const ValueKey<String>('browse-category-swine')),
@@ -430,6 +434,24 @@ void main() {
       expect(chip('swine').selected, isTrue);
       expect(chip('all').selected, isFalse);
       expect(find.text('Category: Swine'), findsOneWidget);
+    });
+
+    testWidgets('loads Chicken from the backend catalog', (
+      WidgetTester tester,
+    ) async {
+      final MarketplaceHarness harness = await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-chicken')),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      expect(harness.recorded.last.query['livestock_type'], 'chicken');
+      expect(find.text('Category: Chicken'), findsOneWidget);
     });
 
     testWidgets('reflects a category applied from Home or the Filter screen', (

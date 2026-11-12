@@ -5,10 +5,12 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../widgets/initials_avatar.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
+import '../../../models/message.dart';
 import '../../../repositories/marketplace_repository.dart';
 import '../../../widgets/detail_row.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../inquiries/view/inquire_screen.dart';
+import '../../messaging/view/chat_screen.dart';
 import '../state/listing_detail_controller.dart';
 import '../state/listing_detail_state.dart';
 import '../state/marketplace_scope.dart';
@@ -198,6 +200,16 @@ class _DetailsPanel extends StatelessWidget {
             _SummarySection(listing: listing),
             const SizedBox(height: AppSpacing.md),
             _FactsGrid(listing: listing),
+            if (listing.hasEstimatedMeasurement) ...<Widget>[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Estimated age or weight is provided by the seller and is not '
+                'independently verified.',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
             if (listing.shortDescription.trim().isNotEmpty) ...<Widget>[
               const SizedBox(height: AppSpacing.lg),
               _TextSection(
@@ -300,8 +312,9 @@ class _FactsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<(String, String?)> facts = <(String, String?)>[
-      ('Age', listing.ageLabel),
-      ('Weight', listing.weightLabel),
+      // "Estimated Age" / "Measured Weight" when the seller said which.
+      (listing.ageInformationLabel ?? 'Age', listing.ageLabel),
+      (listing.weightInformationLabel ?? 'Weight', listing.weightLabel),
       ('Gender', listing.genderLabel),
       ('Health', listing.healthStatus),
       ('Vaccination', listing.vaccination),
@@ -442,23 +455,19 @@ class _SellerSection extends StatelessWidget {
   }
 }
 
-/// The pinned Message / Inquire / Buy bar.
+/// The pinned Ask Seller / I'm Interested bar.
 ///
-/// Three separate paths, because they are three separate things: a free-form
-/// chat thread, the structured inquiry form, and transaction creation. The
-/// middle one used to open the Buy sheet, which left a button labelled
-/// "Inquire" creating a transaction — a buyer who wanted to *ask* something
-/// could not, and a buyer who wanted to buy was taken to a sheet they did not
-/// ask for. Each button now does what it says.
+/// Two separate paths: **Ask Seller** opens the existing buyer–seller
+/// conversation without creating an inquiry, offer, transaction or
+/// reservation; **I'm Interested** opens the existing structured inquiry form.
 ///
-/// The labels are text-only on purpose: three icon-plus-label buttons overflow
-/// on a 320dp phone once each button's padding is counted, and the label is
-/// the part that carries the meaning (mobile/DESIGN.md: the word, not the
-/// decoration).
+/// The thread is loaded as the full buyer–seller conversation, while a new
+/// message started here is tagged with this listing. That keeps replies the
+/// seller sent from the normal Messages inbox visible instead of hiding them
+/// behind a listing filter.
 ///
-/// Renders nothing when the viewer owns the listing — a seller has no create
-/// endpoint, cannot transact with themselves (§6.2), and cannot message
-/// themselves either.
+/// Renders nothing when the viewer owns the listing — a seller cannot message
+/// or inquire with themselves.
 class _ActionBar extends StatelessWidget {
   const _ActionBar({required this.listing});
 
@@ -485,10 +494,18 @@ class _ActionBar extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
+            child: OutlinedButton(
+              style: _barButtonStyle,
+              onPressed: () => _openMessages(context, viewerId),
+              child: const Text('Ask Seller'),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
             child: FilledButton(
               style: _barButtonStyle,
               onPressed: () => _openInquiry(context),
-              child: const Text('Inquire About Livestock'),
+              child: const Text('I\'m Interested'),
             ),
           ),
         ],
@@ -503,6 +520,32 @@ class _ActionBar extends StatelessWidget {
       const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
     ),
   );
+
+  /// Opens the existing conversation with the listing's seller.
+  ///
+  /// Nothing is created until the buyer actually sends a message. The thread is
+  /// not narrowed to this listing, so prior buyer–seller history remains
+  /// visible; a new message sent here carries the listing id.
+  void _openMessages(BuildContext context, int? viewerId) {
+    if (viewerId == null) {
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ChatScreen(
+          counterpart: ChatUser(
+            id: listing.seller.id,
+            name: listing.seller.name,
+            avatarUrl: null,
+          ),
+          currentUserId: viewerId,
+          messageListingId: listing.id,
+          counterpartRole: 'Seller',
+        ),
+      ),
+    );
+  }
 
   /// Opens the structured inquiry form with the listing it asks about.
   ///

@@ -10,9 +10,14 @@ import '../../../widgets/field_label.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../../models/seller_verification.dart';
+import '../../../models/trinidad_location.dart';
 import '../../../models/user.dart';
+import '../../../features/profile/state/profile_scope.dart';
+import '../../trinidad_location/state/trinidad_location_controller.dart';
+import '../../trinidad_location/state/trinidad_location_scope.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
+import '../../../widgets/trinidad_location_selector.dart';
 import '../state/seller_verification_controller.dart';
 import '../state/seller_verification_documents_controller.dart';
 import '../state/seller_verification_documents_state.dart';
@@ -101,7 +106,6 @@ class _SellerVerificationFormScreenState
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _governmentIdFormKey = GlobalKey<FormState>();
   final TextEditingController _phone = TextEditingController();
-  final TextEditingController _address = TextEditingController();
   final TextEditingController _businessName = TextEditingController();
   final TextEditingController _businessLocation = TextEditingController();
   final TextEditingController _businessDescription = TextEditingController();
@@ -110,11 +114,15 @@ class _SellerVerificationFormScreenState
 
   late final SellerVerificationController _controller;
   late final SellerVerificationDocumentsController _documents;
+  late final TrinidadLocationController _locationCatalog;
   AuthController? _authController;
   int? _authenticatedUserId;
   bool _authIdentityInitialized = false;
   bool _phonePrefilled = false;
   bool _addressPrefilled = false;
+  String? _pendingAddress;
+  TrinidadLocation? _location;
+  String? _legacyAddress;
   SellerVerification? _previousVerification;
   GovernmentIdType? _governmentIdType;
 
@@ -162,7 +170,10 @@ class _SellerVerificationFormScreenState
       _governmentIdDescription.clear();
       _governmentIdType = null;
       _phone.text = authController?.state.user?.phone ?? '';
-      _address.text = authController?.state.user?.location ?? '';
+      _queueAddress(
+        ProfileScope.maybeReadOf(context)?.state.user?.location ??
+            authController?.state.user?.location,
+      );
       _phonePrefilled = true;
       _addressPrefilled = true;
     }
@@ -179,9 +190,44 @@ class _SellerVerificationFormScreenState
       _phonePrefilled = true;
     }
     if (!_addressPrefilled) {
-      _address.text = _previousVerification?.address ?? user.location ?? '';
+      _queueAddress(
+        _previousVerification?.address ??
+            ProfileScope.maybeReadOf(context)?.state.user?.location ??
+            user.location,
+      );
       _addressPrefilled = true;
     }
+  }
+
+  void _queueAddress(String? rawAddress) {
+    _pendingAddress = rawAddress?.trim();
+    _restoreQueuedAddress();
+  }
+
+  void _restoreQueuedAddress() {
+    final String? rawAddress = _pendingAddress;
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final TrinidadLocation? parsed = catalog?.parseAddress(rawAddress);
+    _location = parsed;
+    _legacyAddress =
+        rawAddress != null && rawAddress.isNotEmpty && parsed == null
+        ? rawAddress
+        : null;
+  }
+
+  void _handleLocationCatalogChanged() {
+    if (_pendingAddress != null && _locationCatalog.state.isReady && mounted) {
+      setState(_restoreQueuedAddress);
+    }
+  }
+
+  void _handleLocationChanged(TrinidadLocation? value) {
+    setState(() {
+      _location = value;
+      _legacyAddress = null;
+      _pendingAddress = null;
+      _addressPrefilled = true;
+    });
   }
 
   @override
@@ -193,6 +239,8 @@ class _SellerVerificationFormScreenState
     _documents = SellerVerificationDocumentsController(
       SellerVerificationScope.repositoryOf(context),
     );
+    _locationCatalog = TrinidadLocationScope.readOf(context);
+    _locationCatalog.addListener(_handleLocationCatalogChanged);
 
     final SellerVerification? previous = _controller.state.verification;
     _previousVerification = previous;
@@ -212,10 +260,14 @@ class _SellerVerificationFormScreenState
         _phonePrefilled = true;
       }
       if (previous.address != null) {
-        _address.text = previous.address!;
+        _queueAddress(previous.address);
         _addressPrefilled = true;
       }
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _locationCatalog.ensureLoaded();
+    });
 
     // Historical documents remain previewable but are not staged for a new
     // resubmission; the controller seeds them as requiring a fresh upload.
@@ -250,13 +302,14 @@ class _SellerVerificationFormScreenState
     _businessDescription.dispose();
     _governmentIdDescription.dispose();
     _phone.dispose();
-    _address.dispose();
     _documents.dispose();
+    _locationCatalog.removeListener(_handleLocationCatalogChanged);
     super.dispose();
   }
 
   void _goToDocuments() {
-    if (_formKey.currentState?.validate() ?? false) {
+    if (_locationCatalog.state.isReady &&
+        (_formKey.currentState?.validate() ?? false)) {
       setState(() => _step = 1);
     }
   }
@@ -303,9 +356,16 @@ class _SellerVerificationFormScreenState
   }
 
   Future<void> _submit() async {
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
     final bool created = await _controller.submit(
       phone: _phone.text.trim(),
-      address: _address.text.trim(),
+      address: catalog == null
+          ? ''
+          : (_location?.formattedAddress(
+                  municipality: catalog.municipality,
+                  province: catalog.province,
+                ) ??
+                ''),
       businessName: _businessName.text,
       businessLocation: _businessLocation.text,
       businessDescription: _businessDescription.text,
@@ -385,7 +445,11 @@ class _SellerVerificationFormScreenState
       appBar: AppBar(title: const Text('Seller Application')),
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge(<Listenable>[_controller, _documents]),
+          listenable: Listenable.merge(<Listenable>[
+            _controller,
+            _documents,
+            _locationCatalog,
+          ]),
           builder: (BuildContext context, Widget? child) {
             final SellerVerificationState state = _controller.state;
             final SellerVerificationDocumentsState documents = _documents.state;
@@ -489,20 +553,14 @@ class _SellerVerificationFormScreenState
                   _controller.state.errorFor('phone'),
             ),
             const SizedBox(height: AppSpacing.md),
-            TextFormField(
-              controller: _address,
-              keyboardType: TextInputType.streetAddress,
-              textCapitalization: TextCapitalization.words,
-              textInputAction: TextInputAction.next,
-              maxLength: kSellerVerificationAddressMax,
+            TrinidadLocationSelector(
+              value: _location,
+              legacyAddress: _legacyAddress,
+              maxFormattedLength: kSellerVerificationAddressMax,
+              isRequired: true,
               enabled: !isSubmitting,
-              decoration: const InputDecoration(
-                label: FieldLabel('Address'),
-                helperText: 'Required. Your residential or barangay address.',
-              ),
-              validator: (String? value) =>
-                  validateVerificationAddress(value) ??
-                  _controller.state.errorFor('address'),
+              externalError: _controller.state.errorFor('address'),
+              onChanged: _handleLocationChanged,
             ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
@@ -801,9 +859,18 @@ class _SellerVerificationFormScreenState
     final ThemeData theme = Theme.of(context);
     final String? accountName =
         widget.accountName ?? _authController?.state.user?.name;
+    final String description = _businessDescription.text.trim();
     final String businessName = _businessName.text.trim();
     final String location = _businessLocation.text.trim();
-    final String description = _businessDescription.text.trim();
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final String address = catalog == null
+        ? (_legacyAddress ?? 'Not provided')
+        : (_location?.formattedAddress(
+                municipality: catalog.municipality,
+                province: catalog.province,
+              ) ??
+              _legacyAddress ??
+              'Not provided');
 
     return <Widget>[
       Text('Review Your Information', style: theme.textTheme.titleLarge),
@@ -827,12 +894,7 @@ class _SellerVerificationFormScreenState
                 ? 'Not provided'
                 : _phone.text.trim(),
           ),
-          DetailRow(
-            label: 'Address',
-            value: _address.text.trim().isEmpty
-                ? 'Not provided'
-                : _address.text.trim(),
-          ),
+          DetailRow(label: 'Address', value: address),
           DetailRow(
             label: 'Business name',
             value: businessName.isEmpty ? 'Not provided' : businessName,

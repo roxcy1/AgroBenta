@@ -10,21 +10,14 @@ import '../../livestock_types/state/livestock_types_state.dart';
 /// One buyer-facing browse category: a stable id, a label, an icon, and the
 /// `livestock_type` filter value a tap applies.
 ///
-/// The labels are the five categories the approved Home design specifies
-/// (`AgroBenta_Home_DESIGN (1).md` §3.4). The filter value is the label itself,
-/// sent as the marketplace's existing exact-match `livestock_type` filter — the
-/// category tiles do not invent an endpoint or a query parameter, they drive
-/// the same filter the marketplace sheet does.
+/// The labels come from the backend-owned catalog, so an approved category is
+/// available here without a second client-side list. The filter value is the
+/// catalog value, sent as the marketplace's existing exact-match
+/// `livestock_type` filter — the category tiles do not invent an endpoint or a
+/// query parameter, they drive the same filter the marketplace sheet does.
 ///
-/// ## The vocabulary caveat
-///
-/// `listings.livestock_type` is free text typed by sellers and matched
-/// **exactly** by the server (functional documentation §4.1, OQ-04). These
-/// tiles therefore guess five likely spellings; a seller who typed "cattle"
-/// or "Cow" will not match "Cattle". A controlled vocabulary is a business
-/// decision that has not been made, so this is the honest approximation the
-/// design calls for — and the reason the section is reported as a known gap
-/// rather than presented as a complete taxonomy.
+/// Historical listings may still hold seller-typed values outside the catalog;
+/// those remain readable, but a category tile filters by the canonical value.
 @immutable
 class HomeCategory {
   const HomeCategory({

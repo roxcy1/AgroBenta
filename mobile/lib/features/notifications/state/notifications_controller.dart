@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/app_notification.dart';
 import '../../../repositories/notification_repository.dart';
 import '../../../services/notification_service.dart';
@@ -29,9 +32,17 @@ import 'notifications_state.dart';
 /// corrects it. The alternative, waiting for the round-trip, would make the
 /// badge flicker.
 class NotificationsController extends ChangeNotifier {
-  NotificationsController(this._repository);
+  NotificationsController(this._repository, {this.realtimeEvents}) {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+  }
 
   final NotificationRepository _repository;
+
+  /// The session's decoded events. When supplied, the badge refreshes on every
+  /// event and the list reloads when a notification was actually written.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
 
   NotificationsState _state = const NotificationsState();
   NotificationsState get state => _state;
@@ -47,9 +58,9 @@ class NotificationsController extends ChangeNotifier {
   /// argument at all keeps the current filter. The distinction matters
   /// because "All" is a valid filter value that is *not* a filter.
   Future<void> load({String? filter, bool changeFilter = false}) async {
-    // Only a load already in flight is skipped. `isInitialLoad` also covers the
-    // untouched `initial` status, so using it here made the very first load()
-    // return at once and left the screen on its spinner for good.
+    // Skip only while a load is already in flight. The "initial" status means
+    // the screen has never loaded — that first load must be allowed to run,
+    // otherwise the inbox stays on its spinner forever.
     if (_state.status == NotificationsStatus.loading && !changeFilter) {
       return;
     }
@@ -267,8 +278,19 @@ class NotificationsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Every broadcast is a cheap badge refresh; the list reloads only when a
+  /// notification was actually written (the badge and list then agree).
+  void _onRealtimeEvent(RealtimeEvent event) {
+    unawaited(refreshUnreadCount());
+    if (event.name == 'notification.created') {
+      unawaited(refresh());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
     _disposed = true;
     super.dispose();
   }

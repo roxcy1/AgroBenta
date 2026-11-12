@@ -4,6 +4,15 @@ import api from '../../../../lib/api';
 export interface LivestockTypeOption {
   value: string;
   label: string;
+  breeds: string[];
+}
+
+export function livestockTypeLabel(
+  value: string | null | undefined,
+  types: LivestockTypeOption[] | undefined,
+): string {
+  if (!value) return '';
+  return types?.find((type) => type.value === value.toLowerCase())?.label ?? value;
 }
 
 interface LivestockTypeResponse {
@@ -18,7 +27,7 @@ export async function fetchLivestockTypes(): Promise<LivestockTypeOption[]> {
 export function listingTypeOptions(
   types: LivestockTypeOption[] | undefined,
 ): LivestockTypeOption[] {
-  return [{ value: '', label: 'All Types' }, ...(types ?? [])];
+  return [{ value: '', label: 'All Types', breeds: [] }, ...(types ?? [])];
 }
 
 // Avoid duplicate catalog requests while a retry is already in flight.

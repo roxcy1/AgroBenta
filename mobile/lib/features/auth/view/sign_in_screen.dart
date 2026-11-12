@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -10,25 +9,25 @@ import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
 import '../widgets/auth_notice_banner.dart';
 import '../widgets/auth_scenic_header.dart';
+import '../widgets/google_sign_in_button.dart';
 import 'auth_validators.dart';
 
-/// `POST /auth/login`.
+/// `POST /auth/login`, or `POST /auth/google`.
 ///
-/// Email and password only. There is no "remember me" and no social sign-in:
-/// this app has one account per person and one way in, so there is no role
-/// choice here either.
+/// Email and password, or Google on Android. There is no role choice: this app
+/// has one account per person.
 ///
 /// The layout follows `AgroBenta_Login_DESIGN.md` — the branded landscape hero
 /// overlapped by the white login card, mirroring the registration screen so the
-/// two read as one experience. Two controls the reference shows are **not**
-/// backed by the backend, and are handled honestly rather than faked:
+/// two read as one experience. Notes on the reference's controls:
 ///
-///  * **Remember me** — a Sanctum token is always kept until logout, so there is
-///    no "remembered" versus "session" distinction to switch. The checkbox is
-///    rendered inert.
-///  * **Social sign-in** — the backend implements no Google/Facebook OAuth, so
-///    the buttons are rendered disabled rather than implying a capability that
-///    is not there.
+///  * **Remember me** — ticked by default. Ticked keeps the user signed in
+///    after the app is closed; unticked ends the session when the app is
+///    closed (project decision, MS-11, 2026-11-11). It applies to both email
+///    and Google sign-in.
+///  * **Social sign-in** — Google only; Facebook was removed (project decision,
+///    MS-11, 2026-11-10). The Google button and its divider are hidden where
+///    Google sign-in is unavailable (web, or no `GOOGLE_SERVER_CLIENT_ID`).
 class SignInScreen extends StatefulWidget {
   const SignInScreen({
     required this.onRegister,
@@ -55,6 +54,9 @@ class _SignInScreenState extends State<SignInScreen> {
 
   /// Password visibility. Hidden by default, per the design.
   bool _obscurePassword = true;
+
+  /// "Remember me". Ticked by default, so ignoring it keeps the user signed in.
+  bool _rememberMe = true;
 
   /// The field errors currently on screen, so a repeat of the same server error
   /// does not re-validate for nothing.
@@ -94,9 +96,11 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
-    final bool signedIn = await AuthScope.of(
-      context,
-    ).signIn(email: _email.text.trim(), password: _password.text);
+    final bool signedIn = await AuthScope.of(context).signIn(
+      email: _email.text.trim(),
+      password: _password.text,
+      remember: _rememberMe,
+    );
 
     if (!signedIn && mounted) {
       _password.clear();
@@ -187,7 +191,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ],
                 _buildFields(state),
                 const SizedBox(height: AppSpacing.sm),
-                _buildRememberForgotRow(theme),
+                _buildRememberForgotRow(theme, busy),
                 const SizedBox(height: AppSpacing.xl),
                 FilledButton(
                   onPressed: busy ? null : _submit,
@@ -201,16 +205,18 @@ class _SignInScreenState extends State<SignInScreen> {
                         )
                       : const Text('Log In'),
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                _buildDivider(theme),
-                const SizedBox(height: AppSpacing.lg),
-                _buildSocialRow(),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Social sign-in is not available yet.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
+                if (AuthScope.of(context).isGoogleSignInAvailable) ...<Widget>[
+                  const SizedBox(height: AppSpacing.xl),
+                  _buildDivider(theme),
+                  const SizedBox(height: AppSpacing.lg),
+                  GoogleSignInButton(
+                    onPressed: busy
+                        ? null
+                        : () => AuthScope.of(
+                            context,
+                          ).signInWithGoogle(remember: _rememberMe),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 _buildFooter(theme, state),
               ],
@@ -266,36 +272,37 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildRememberForgotRow(ThemeData theme) {
-    // Neither control is backed by the API: a token does not distinguish a
-    // "remembered" session and there is no recovery endpoint. They are shown to
-    // match the approved layout but are deliberately inert, so the screen never
-    // implies a capability the backend does not have.
+  Widget _buildRememberForgotRow(ThemeData theme, bool busy) {
+    void toggle() => setState(() => _rememberMe = !_rememberMe);
+
     return Row(
       children: <Widget>[
         Expanded(
-          child: Row(
-            children: <Widget>[
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: Checkbox(
-                  value: false,
-                  // Remember-me is not supported, so the control is inert.
-                  onChanged: null,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Flexible(
-                child: Text(
-                  'Remember me',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
+          child: InkWell(
+            // The label toggles too, so the target is not just a 24 px box.
+            onTap: busy ? null : toggle,
+            child: Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(
+                    value: _rememberMe,
+                    onChanged: busy ? null : (_) => toggle(),
+                    visualDensity: VisualDensity.compact,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: AppSpacing.xs),
+                Flexible(
+                  child: Text(
+                    'Remember me',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
@@ -325,56 +332,6 @@ class _SignInScreenState extends State<SignInScreen> {
           child: Text('or continue with', style: theme.textTheme.bodySmall),
         ),
         const Expanded(child: Divider()),
-      ],
-    );
-  }
-
-  Widget _buildSocialRow() {
-    // Disabled, not absent: the buttons are part of the approved layout, but the
-    // backend implements no OAuth. A disabled control states the feature is not
-    // available; a working-looking one would imply it is. The brand marks come
-    // from Font Awesome — the project ships no Google/Facebook asset and
-    // Material has no Google glyph — and keep their brand colours even while
-    // disabled, because a greyed-out logo is no longer that logo.
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: OutlinedButton(
-            onPressed: null,
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                FaIcon(
-                  FontAwesomeIcons.google,
-                  size: 18,
-                  color: Color(0xFF4285F4),
-                  semanticLabel: 'Continue with Google — unavailable',
-                ),
-                SizedBox(width: AppSpacing.xs),
-                Text('Google'),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: OutlinedButton(
-            onPressed: null,
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                FaIcon(
-                  FontAwesomeIcons.facebook,
-                  size: 18,
-                  color: Color(0xFF1877F2),
-                  semanticLabel: 'Continue with Facebook — unavailable',
-                ),
-                SizedBox(width: AppSpacing.xs),
-                Text('Facebook'),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }

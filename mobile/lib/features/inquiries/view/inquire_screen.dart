@@ -103,7 +103,7 @@ class _InquireScreenState extends State<InquireScreen> {
 
   late final InquiryController _controller;
 
-  InquiryPaymentMethod? _paymentMethod;
+  InquiryPaymentMethod? _paymentMethod = InquiryPaymentMethod.other;
   InquiryCollectionMethod? _collectionMethod;
   InquiryCollectionDateOption? _collectionDateOption;
   DateTime? _preferredSchedule;
@@ -172,9 +172,6 @@ class _InquireScreenState extends State<InquireScreen> {
     final String? collectionError = validateInquiryCollectionMethod(
       _collectionMethod,
     );
-    final String? dateError = validateInquiryCollectionDateOption(
-      _collectionDateOption,
-    );
     final String? preferredDateError = validateInquiryPreferredDate(
       _collectionDateOption,
       _preferredSchedule,
@@ -187,17 +184,14 @@ class _InquireScreenState extends State<InquireScreen> {
       _dateError = preferredDateError;
     });
 
-    if (!formValid ||
-        paymentError != null ||
-        collectionError != null ||
-        dateError != null) {
+    if (!formValid || paymentError != null || collectionError != null) {
       return;
     }
 
     final bool sent = await _controller.send(
       listingId: widget.listing.id,
       message: _message.text,
-      collectionDateOption: _collectionDateOption!,
+      collectionDateOption: _collectionDateOption,
       preferredSchedule: _preferredSchedule,
       // The validators above guarantee both are set on this path.
       paymentMethod: _paymentMethod!,
@@ -229,6 +223,8 @@ class _InquireScreenState extends State<InquireScreen> {
           builder: (BuildContext context) => ChatScreen(
             counterpart: counterpart,
             currentUserId: currentUserId,
+            messageListingId: widget.listing.id,
+            counterpartRole: 'Seller',
           ),
         ),
       );
@@ -284,7 +280,7 @@ class _InquireScreenState extends State<InquireScreen> {
             if (state.existingInquiry != null) {
               return const Text('Inquiry Already Sent');
             }
-            return const Text('Inquire About Livestock');
+            return const Text('I\'m Interested');
           },
         ),
       ),
@@ -424,7 +420,7 @@ class _InquireScreenState extends State<InquireScreen> {
                                           color: Colors.white,
                                         ),
                                       )
-                                    : const Text('Send Inquiry'),
+                                    : const Text('Send Interest'),
                               ),
                             ),
                           ],
@@ -457,10 +453,11 @@ class _InquireScreenState extends State<InquireScreen> {
 
     return <Widget>[
       SectionCard(
-        title: 'Additional Message',
+        title: 'Additional Message (optional)',
         children: <Widget>[
           Text(
-            'Tell the seller what you would like to know.',
+            'Add anything the seller should know. You can also send this '
+            'through Messages.',
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -473,9 +470,9 @@ class _InquireScreenState extends State<InquireScreen> {
             textInputAction: TextInputAction.newline,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              label: FieldLabel('Message *'),
+              label: FieldLabel('Message (optional)'),
               alignLabelWithHint: true,
-              hintText: 'Type your inquiry here...',
+              hintText: 'Type your message here...',
               helperText:
                   'Ask about availability, additional photos, or the '
                   'asking price.',
@@ -532,6 +529,7 @@ class _InquireScreenState extends State<InquireScreen> {
     final ThemeData theme = Theme.of(context);
     final String? error =
         _paymentError ?? _controller.state.errorFor('payment_method');
+    // `other` is the "Discuss with Seller" preference and is the form default.
 
     return <Widget>[
       SectionCard(
@@ -542,52 +540,74 @@ class _InquireScreenState extends State<InquireScreen> {
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: AppSpacing.sm),
-          _PreferenceCard(
-            selected: _paymentMethod == InquiryPaymentMethod.cash,
-            icon: Icons.money_outlined,
-            title: 'Cash',
-            subtitle: 'Pay with cash.',
-            enabled: !isSubmitting,
-            onTap: () => setState(() {
-              _paymentMethod = InquiryPaymentMethod.cash;
-              _paymentError = null;
-            }),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _PreferenceCard(
+                    selected: _paymentMethod == InquiryPaymentMethod.cash,
+                    icon: Icons.money_outlined,
+                    title: 'Cash',
+                    subtitle: 'Pay with cash.',
+                    enabled: !isSubmitting,
+                    onTap: () => setState(() {
+                      _paymentMethod = InquiryPaymentMethod.cash;
+                      _paymentError = null;
+                    }),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _PreferenceCard(
+                    selected: _paymentMethod == InquiryPaymentMethod.gcash,
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'GCash',
+                    subtitle: 'Pay with GCash.',
+                    enabled: !isSubmitting,
+                    onTap: () => setState(() {
+                      _paymentMethod = InquiryPaymentMethod.gcash;
+                      _paymentError = null;
+                    }),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          _PreferenceCard(
-            selected: _paymentMethod == InquiryPaymentMethod.gcash,
-            icon: Icons.account_balance_wallet_outlined,
-            title: 'GCash',
-            subtitle: 'Pay with GCash.',
-            enabled: !isSubmitting,
-            onTap: () => setState(() {
-              _paymentMethod = InquiryPaymentMethod.gcash;
-              _paymentError = null;
-            }),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _PreferenceCard(
-            selected: _paymentMethod == InquiryPaymentMethod.maya,
-            icon: Icons.account_balance_wallet_outlined,
-            title: 'Maya',
-            subtitle: 'Pay with Maya.',
-            enabled: !isSubmitting,
-            onTap: () => setState(() {
-              _paymentMethod = InquiryPaymentMethod.maya;
-              _paymentError = null;
-            }),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _PreferenceCard(
-            selected: _paymentMethod == InquiryPaymentMethod.other,
-            icon: Icons.help_outline,
-            title: 'Other / Discuss with seller',
-            subtitle: 'Agree payment with the seller.',
-            enabled: !isSubmitting,
-            onTap: () => setState(() {
-              _paymentMethod = InquiryPaymentMethod.other;
-              _paymentError = null;
-            }),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _PreferenceCard(
+                    selected: _paymentMethod == InquiryPaymentMethod.maya,
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Maya',
+                    subtitle: 'Pay with Maya.',
+                    enabled: !isSubmitting,
+                    onTap: () => setState(() {
+                      _paymentMethod = InquiryPaymentMethod.maya;
+                      _paymentError = null;
+                    }),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _PreferenceCard(
+                    selected: _paymentMethod == InquiryPaymentMethod.other,
+                    icon: Icons.help_outline,
+                    title: 'Discuss with Seller',
+                    subtitle: 'Agree payment with the seller.',
+                    enabled: !isSubmitting,
+                    onTap: () => setState(() {
+                      _paymentMethod = InquiryPaymentMethod.other;
+                      _paymentError = null;
+                    }),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
           if (error != null)
@@ -616,44 +636,82 @@ class _InquireScreenState extends State<InquireScreen> {
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: AppSpacing.sm),
-          _PreferenceCard(
-            selected: _collectionMethod == InquiryCollectionMethod.farmPickup,
-            icon: Icons.location_on_outlined,
-            title: 'Farm Pickup',
-            subtitle: 'Pick up from the seller\'s farm.',
-            enabled: !isSubmitting,
-            onTap: () => setState(() {
-              _collectionMethod = InquiryCollectionMethod.farmPickup;
-              _collectionError = null;
-            }),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _PreferenceCard(
+                    selected:
+                        _collectionMethod == InquiryCollectionMethod.farmPickup,
+                    icon: Icons.location_on_outlined,
+                    title: 'Personal Pickup',
+                    subtitle: 'Pick up from the seller\'s farm.',
+                    enabled: !isSubmitting,
+                    onTap: () => setState(() {
+                      _collectionMethod = InquiryCollectionMethod.farmPickup;
+                      _collectionError = null;
+                    }),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _PreferenceCard(
+                    selected:
+                        _collectionMethod ==
+                        InquiryCollectionMethod.buyerArrangedTransportation,
+                    icon: Icons.directions_car_outlined,
+                    title: 'Buyer-Arranged',
+                    subtitle: 'Arrange my own livestock transportation.',
+                    enabled: !isSubmitting,
+                    onTap: () => setState(() {
+                      _collectionMethod =
+                          InquiryCollectionMethod.buyerArrangedTransportation;
+                      _collectionError = null;
+                    }),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          _PreferenceCard(
-            selected:
-                _collectionMethod ==
-                InquiryCollectionMethod.buyerArrangedTransportation,
-            icon: Icons.directions_car_outlined,
-            title: 'Arrange Transport',
-            subtitle: 'Arrange my own livestock transportation.',
-            enabled: !isSubmitting,
-            onTap: () => setState(() {
-              _collectionMethod =
-                  InquiryCollectionMethod.buyerArrangedTransportation;
-              _collectionError = null;
-            }),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _PreferenceCard(
-            selected:
-                _collectionMethod == InquiryCollectionMethod.discussWithSeller,
-            icon: Icons.chat_bubble_outline,
-            title: 'Discuss',
-            subtitle: 'Discuss arrangements with the seller.',
-            enabled: !isSubmitting,
-            onTap: () => setState(() {
-              _collectionMethod = InquiryCollectionMethod.discussWithSeller;
-              _collectionError = null;
-            }),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _PreferenceCard(
+                    selected:
+                        _collectionMethod ==
+                        InquiryCollectionMethod.sellerArrangedDelivery,
+                    icon: Icons.local_shipping_outlined,
+                    title: 'Seller Delivery',
+                    subtitle: 'The seller arranges delivery.',
+                    enabled: !isSubmitting,
+                    onTap: () => setState(() {
+                      _collectionMethod =
+                          InquiryCollectionMethod.sellerArrangedDelivery;
+                      _collectionError = null;
+                    }),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _PreferenceCard(
+                    selected:
+                        _collectionMethod == InquiryCollectionMethod.notSureYet,
+                    icon: Icons.help_outline,
+                    title: 'Not Sure Yet',
+                    subtitle: 'Decide the arrangement with the seller.',
+                    enabled: !isSubmitting,
+                    onTap: () => setState(() {
+                      _collectionMethod = InquiryCollectionMethod.notSureYet;
+                      _collectionError = null;
+                    }),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
           if (error != null)
@@ -681,10 +739,11 @@ class _InquireScreenState extends State<InquireScreen> {
 
     return <Widget>[
       SectionCard(
-        title: 'Preferred Collection Date *',
+        title: 'Preferred Collection Date (optional)',
         children: <Widget>[
           Text(
-            'When do you hope to collect the livestock?',
+            'When do you hope to collect the livestock? You can leave this '
+            'unanswered and agree later.',
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -732,6 +791,19 @@ class _InquireScreenState extends State<InquireScreen> {
 
   List<Widget> _dateOptionCards(bool isSubmitting, ThemeData theme) {
     return <Widget>[
+      _PreferenceCard(
+        selected: _collectionDateOption == null,
+        icon: Icons.event_available_outlined,
+        title: 'No preference',
+        subtitle: 'Agree a date with the seller later.',
+        enabled: !isSubmitting,
+        onTap: () => setState(() {
+          _collectionDateOption = null;
+          _preferredSchedule = null;
+          _dateError = null;
+        }),
+      ),
+      const SizedBox(width: AppSpacing.sm),
       _PreferenceCard(
         selected:
             _collectionDateOption == InquiryCollectionDateOption.specificDate,

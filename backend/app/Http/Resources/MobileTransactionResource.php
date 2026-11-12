@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\FulfillmentStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -54,6 +55,13 @@ class MobileTransactionResource extends JsonResource
                 'collection_method' => $this->collection_method,
             ],
             'status' => $this->status?->value,
+            'fulfillment_status' => $this->fulfillment_status?->value,
+            // Server-decided for this viewer: the client renders only these
+            // actions, never a guessed transition.
+            'permitted_actions' => FulfillmentStatus::permittedActionsFor(
+                $this->resource,
+                $request->user()?->getAuthIdentifier(),
+            ),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

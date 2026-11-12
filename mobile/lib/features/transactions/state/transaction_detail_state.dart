@@ -20,6 +20,9 @@ enum TransactionDetailStatus {
 
   /// A cancel call is in flight. The loaded transaction stays on screen.
   cancelling,
+
+  /// A fulfillment action is in flight. The loaded transaction stays on screen.
+  updating,
 }
 
 /// An immutable snapshot for the transaction detail screen.
@@ -33,6 +36,8 @@ class TransactionDetailState {
     this.transaction,
     this.errorMessage,
     this.cancelErrorMessage,
+    this.actionErrorMessage,
+    this.activeAction,
   });
 
   final TransactionDetailStatus status;
@@ -47,18 +52,40 @@ class TransactionDetailState {
   /// transaction stays on screen; only the notice appears.
   final String? cancelErrorMessage;
 
+  /// A displayable failure or stale-state notice for a fulfillment action.
+  final String? actionErrorMessage;
+
+  /// The fulfillment action currently in flight, when [status] is `updating`.
+  final TransactionFulfillmentAction? activeAction;
+
   bool get isLoading => status == TransactionDetailStatus.loading;
 
   bool get isUnavailable => status == TransactionDetailStatus.unavailable;
 
   bool get isCancelling => status == TransactionDetailStatus.cancelling;
 
-  /// Cancel is offered only while pending — the only non-terminal state.
-  /// Both exits are terminal and irreversible, so nothing else gets a button.
+  bool get isUpdating => status == TransactionDetailStatus.updating;
+
+  bool get isBusy => isCancelling || isUpdating;
+
+  /// Cancel is offered only when the server says so. That keeps the client
+  /// from offering a cancellation after the handover/dispatch cutoff.
   bool get canCancel =>
       (status == TransactionDetailStatus.ready ||
           status == TransactionDetailStatus.cancelling) &&
-      (transaction?.isPending ?? false);
+      (transaction?.canCancel ?? false) &&
+      !(transaction?.hasUnknownFulfillmentStatus ?? false);
+
+  bool get canConfirmReceived =>
+      status == TransactionDetailStatus.ready &&
+      (transaction?.canConfirmReceived ?? false) &&
+      !(transaction?.hasUnknownFulfillmentStatus ?? false);
+
+  TransactionFulfillmentAction? get nextSellerAction =>
+      status == TransactionDetailStatus.ready &&
+          !(transaction?.hasUnknownFulfillmentStatus ?? false)
+      ? transaction?.nextSellerAction
+      : null;
 
   @override
   String toString() => 'TransactionDetailState(${status.name})';

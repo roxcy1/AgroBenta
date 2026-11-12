@@ -191,6 +191,11 @@ void main() {
         'buyer_arranged_transportation',
       );
       expect(
+        InquiryCollectionMethod.sellerArrangedDelivery.value,
+        'seller_arranged_delivery',
+      );
+      expect(InquiryCollectionMethod.notSureYet.value, 'not_sure_yet');
+      expect(
         InquiryCollectionMethod.discussWithSeller.value,
         'discuss_with_seller',
       );

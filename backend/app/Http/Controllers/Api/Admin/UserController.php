@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListUsersRequest;
+use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Http\Resources\AdminUserResource;
 use App\Models\User;
 use App\Services\Admin\AdminUserService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
@@ -54,6 +56,34 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'data' => new AdminUserResource($user),
+        ], 200);
+    }
+
+    /** Update the administrator-editable name and email fields. */
+    public function update(UpdateUserRequest $request, User $user): JsonResponse
+    {
+        $updated = $this->users->updateUser(
+            $user,
+            $request->validated(),
+            $request->user(),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User updated.',
+            'data' => new AdminUserResource($updated),
+        ], 200);
+    }
+
+    /** Soft-delete the account and revoke its active credentials. */
+    public function destroy(Request $request, User $user): JsonResponse
+    {
+        $deleted = $this->users->deleteUser($user, $request->user());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User deleted.',
+            'data' => new AdminUserResource($deleted),
         ], 200);
     }
 }

@@ -35,4 +35,36 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Private price-prediction service
+    |--------------------------------------------------------------------------
+    |
+    | Laravel depends only on the versioned HTTP contract. It never reads a
+    | model filename or CatBoost internals.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Google Sign-In (mobile)
+    |--------------------------------------------------------------------------
+    |
+    | The OAuth "Web application" client ID the mobile app passes as its
+    | `serverClientId`. ID tokens must carry it as their audience. No client
+    | secret is needed to verify an ID token, so none is configured here.
+    |
+    */
+
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+    ],
+
+    'price_prediction' => [
+        'url' => env('PRICE_PREDICTION_URL', 'http://ml-service:8002'),
+        'connect_timeout' => (int) env('PRICE_PREDICTION_CONNECT_TIMEOUT', 2),
+        'timeout' => (int) env('PRICE_PREDICTION_TIMEOUT', 5),
+        'contract_version' => env('PRICE_PREDICTION_CONTRACT_VERSION', '1.0'),
+    ],
+
 ];

@@ -23,7 +23,7 @@ import 'auth_fakes.dart';
 Map<String, dynamic> sellerVerificationJson({
   Object? id = 4,
   Object? phone = '09171234567',
-  Object? address = 'Trinidad, Bohol',
+  Object? address = 'Barangay Poblacion, Trinidad, Bohol',
   String? businessName = 'Rizal Farms',
   Object? businessLocation = 'Mabalacat, Pampanga',
   Object? businessDescription = 'Family-run cattle farm, trading since 2011.',
