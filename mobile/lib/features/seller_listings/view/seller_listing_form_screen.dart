@@ -2156,6 +2156,7 @@ class _Dropdown<T> extends StatelessWidget {
     final String? serverError = serverErrors?.first;
 
     return DropdownButtonFormField<T>(
+      icon: const FieldDropdownIcon(),
       initialValue: value,
       items: items,
       onChanged: onChanged,

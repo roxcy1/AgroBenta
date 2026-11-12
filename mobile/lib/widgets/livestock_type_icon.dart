@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// The silhouette for a livestock type, tinted to [color].
 ///
-/// The four catalogue types have their own artwork in
+/// The five catalogue types have their own artwork in
 /// `assets/icons/livestock/`. They replace the Font Awesome stand-ins (a hippo
 /// for carabao, bacon for swine, a paw for goat) that were a reported visual
 /// compromise. Any other type falls back to a neutral paw.
@@ -26,6 +26,7 @@ class LivestockTypeIcon extends StatelessWidget {
     'carabao',
     'goat',
     'swine',
+    'chicken',
   };
 
   /// Whether [type] has its own artwork rather than the fallback.

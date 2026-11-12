@@ -197,6 +197,7 @@ class _TrinidadLocationSelectorState extends State<TrinidadLocationSelector> {
             _fixedField(label: 'Municipality', value: catalog.municipality),
             const SizedBox(height: AppSpacing.md),
             DropdownButtonFormField<String>(
+              icon: const FieldDropdownIcon(),
               key: ValueKey<String>(
                 'trinidad-barangay-${dropdownValue ?? 'unset'}',
               ),

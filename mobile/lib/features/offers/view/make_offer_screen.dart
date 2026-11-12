@@ -320,6 +320,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<InquiryPaymentMethod>(
+                  icon: const FieldDropdownIcon(),
                   initialValue: _paymentMethod,
                   decoration: const InputDecoration(
                     label: FieldLabel('Payment method'),
@@ -340,6 +341,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<InquiryCollectionMethod>(
+                  icon: const FieldDropdownIcon(),
                   initialValue: _collectionMethod,
                   decoration: const InputDecoration(
                     label: FieldLabel('Collection method'),

@@ -23,7 +23,7 @@ class FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool rtl = Directionality.of(context) == TextDirection.rtl;
     final double inset = hasPrefixIcon
-        ? AppInputs.iconSlotWidth
+        ? AppInputs.iconSlotWidth + AppInputs.prefixIconGap
         : AppInputs.horizontalPadding;
     final double shift = inset / AppInputs.floatingLabelScale;
 
@@ -59,6 +59,30 @@ class FieldIcon extends StatelessWidget {
             child: child,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The arrow of a labelled `DropdownButtonFormField`. Pass it as `icon`.
+///
+/// Material places the arrow as a suffix icon centred on the whole field and
+/// flush with its edge. This moves it down onto the box and in from the edge,
+/// like [FieldIcon] does for other icons.
+class FieldDropdownIcon extends StatelessWidget {
+  const FieldDropdownIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsetsDirectional.only(
+        top: AppInputs.labelBand,
+        end: AppInputs.horizontalPadding - 2,
+      ),
+      child: Icon(
+        Icons.keyboard_arrow_down,
+        size: 20,
+        color: AppColors.textHint,
       ),
     );
   }

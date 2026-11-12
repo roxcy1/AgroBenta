@@ -650,6 +650,7 @@ class _SellerVerificationFormScreenState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             DropdownButtonFormField<GovernmentIdType>(
+              icon: const FieldDropdownIcon(),
               initialValue: _governmentIdType,
               isExpanded: true,
               decoration: InputDecoration(

@@ -16,6 +16,9 @@ abstract final class AppInputs {
   /// Padding inside the box, top and bottom.
   static const double verticalPadding = 12;
 
+  /// The space Material leaves between a leading icon and the text.
+  static const double prefixIconGap = 4;
+
   /// Width reserved for a leading or trailing icon inside the box.
   static const double iconSlotWidth = 44;
 
@@ -74,7 +77,9 @@ class LabelAboveInputBorder extends OutlineInputBorder {
     super.borderSide = const BorderSide(color: AppColors.fieldBorder),
     super.borderRadius = const BorderRadius.all(Radius.circular(AppRadius.sm)),
     this.fillColor = AppColors.surface,
-  });
+    // No gap: Material would otherwise inset the text and label a further
+    // 4dp beyond the content padding.
+  }) : super(gapPadding: 0);
 
   /// The colour inside the box.
   final Color fillColor;
