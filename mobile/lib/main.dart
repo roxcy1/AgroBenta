@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:ui' show FlutterView;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
@@ -85,6 +87,8 @@ import 'services/notification_service.dart';
 /// visual rules, and the API gap register for what the backend does not expose
 /// yet.
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   // `intl` ships date symbols for `en_US` only; every other locale must be
   // initialised explicitly or `DateFormat(..., 'en_PH')` throws a
   // `LocaleDataException` the first time a date is rendered. On a device that
@@ -93,7 +97,60 @@ Future<void> main() async {
   await initializeDateFormatting('en_PH');
 
   // Firebase push on Android only; every other platform gets the no-op.
-  runApp(AgroBentaApp(pushMessaging: FirebasePushMessaging.forCurrentPlatform()));
+  final PushMessaging pushMessaging =
+      FirebasePushMessaging.forCurrentPlatform();
+
+  if (kIsWeb) {
+    runWidget(_WebMultiViewRoot(pushMessaging: pushMessaging));
+  } else {
+    runApp(AgroBentaApp(pushMessaging: pushMessaging));
+  }
+}
+
+/// Creates one app tree for each Flutter view supplied by the web embedder.
+///
+/// The embedder can add or remove views after startup. Its view list is
+/// refreshed when the platform dispatcher reports metric changes.
+class _WebMultiViewRoot extends StatefulWidget {
+  const _WebMultiViewRoot({required this.pushMessaging});
+
+  final PushMessaging pushMessaging;
+
+  @override
+  State<_WebMultiViewRoot> createState() => _WebMultiViewRootState();
+}
+
+class _WebMultiViewRootState extends State<_WebMultiViewRoot>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeMetrics() {
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ViewCollection(
+    views: WidgetsBinding.instance.platformDispatcher.views
+        .map(
+          (FlutterView view) => View(
+            key: ValueKey<int>(view.viewId),
+            view: view,
+            child: AgroBentaApp(pushMessaging: widget.pushMessaging),
+          ),
+        )
+        .toList(growable: false),
+  );
 }
 
 class AgroBentaApp extends StatefulWidget {

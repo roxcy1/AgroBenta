@@ -6,6 +6,7 @@ import 'package:agrobenta_mobile/features/seller_verification/view/seller_verifi
 import 'package:agrobenta_mobile/features/trinidad_location/state/trinidad_location_scope.dart';
 import 'package:agrobenta_mobile/models/seller_verification.dart';
 import 'package:agrobenta_mobile/widgets/local_image_preview.dart';
+import 'package:agrobenta_mobile/widgets/trinidad_location_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -32,12 +33,10 @@ void main() {
   /// Advances one step, supplying the required contact snapshots in this shared
   /// form-flow helper when no auth profile values were provided by a test.
   Future<void> tapNext(WidgetTester tester) async {
-    final Finder barangay = find.ancestor(
-      of: find.text('Barangay'),
-      matching: find.byType(DropdownButtonFormField<String>),
-    );
-    if (barangay.evaluate().isNotEmpty &&
-        tester.widget<DropdownButtonFormField<String>>(barangay).initialValue ==
+    final Finder barangayField = find.byKey(trinidadBarangayFieldKey);
+    final Finder barangayFormField = find.byKey(trinidadBarangayFormFieldKey);
+    if (barangayField.evaluate().isNotEmpty &&
+        tester.widget<FormField<String>>(barangayFormField).initialValue ==
             null) {
       expect(
         TrinidadLocationScope.readOf(
@@ -45,8 +44,9 @@ void main() {
         ).state.catalog?.barangays,
         contains('Banlasan'),
       );
-      await scrollSellerVerificationIntoView(tester, barangay);
-      await tester.tap(barangay);
+      await tester.ensureVisible(barangayField);
+      await settleSellerVerification(tester);
+      await tester.tap(barangayField);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Banlasan').last);
       await tester.pumpAndSettle();
@@ -247,7 +247,7 @@ void main() {
         expect(find.text('Phone number'), findsOneWidget);
         expect(find.text('Province'), findsOneWidget);
         expect(find.text('Municipality'), findsOneWidget);
-        expect(find.text('Barangay'), findsOneWidget);
+        expect(find.text('Barangay *'), findsOneWidget);
         expect(find.text('Street / Purok (optional)'), findsOneWidget);
         expect(find.text('Business name'), findsOneWidget);
         expect(find.text('Business location'), findsOneWidget);
@@ -664,7 +664,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Review Your Information'), findsNothing);
-      expect(find.text('Barangay'), findsOneWidget);
+      expect(find.text('Barangay *'), findsOneWidget);
     });
 
     testWidgets('shows a 409 as information, not a failure', (
@@ -823,12 +823,7 @@ void main() {
       );
       expect(
         tester
-            .widget<DropdownButtonFormField<String>>(
-              find.ancestor(
-                of: find.text('Barangay'),
-                matching: find.byType(DropdownButtonFormField<String>),
-              ),
-            )
+            .widget<FormField<String>>(find.byKey(trinidadBarangayFormFieldKey))
             .initialValue,
         'Poblacion',
       );
