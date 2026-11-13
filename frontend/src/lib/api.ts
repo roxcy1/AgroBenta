@@ -23,7 +23,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('admin_token');
-      if (window.location.pathname !== '/login') {
+      // The public home page ("/") must stay put: a visitor with an expired
+      // admin token there is simply signed out, not sent to the login form.
+      if (!['/', '/login'].includes(window.location.pathname)) {
         window.location.href = '/login';
       }
     }

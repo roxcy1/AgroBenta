@@ -123,7 +123,9 @@ Pushes are sent by the `queue` worker, so it must be running. Without the key, n
 | Service | URL |
 |---------|-----|
 | Laravel (via Nginx) | http://localhost:8001 |
-| React + Vite dev server | http://localhost:5174 |
+| React + Vite dev server — public home page | http://localhost:5174 |
+| Admin login | http://localhost:5174/login |
+| Admin dashboard (after login) | http://localhost:5174/dashboard |
 | phpMyAdmin | http://localhost:8082 |
 | MySQL (external client) | localhost:33070 |
 | Redis (external client) | localhost:6379 |
