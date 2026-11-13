@@ -8,6 +8,7 @@ import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_controller.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_scope.dart';
+import 'package:agrobenta_mobile/features/profile/view/address_screen.dart';
 import 'package:agrobenta_mobile/features/profile/view/change_password_screen.dart';
 import 'package:agrobenta_mobile/features/profile/view/edit_profile_screen.dart';
 import 'package:agrobenta_mobile/features/profile/view/profile_screen.dart';
@@ -153,7 +154,7 @@ void main() {
     // Supported rows are tappable; the unimplemented ones are inert.
     expect(isDisabled(tester, 'Personal Information'), isFalse);
     expect(isDisabled(tester, 'Change Password'), isFalse);
-    expect(isDisabled(tester, 'Address'), isTrue);
+    expect(isDisabled(tester, 'Address'), isFalse);
     expect(isDisabled(tester, 'Notification Settings'), isTrue);
 
     // Other: Help/Terms have no approved destination, Log Out is real.
@@ -230,6 +231,94 @@ void main() {
 
     await tapAction(tester, 'Change Password');
     expect(find.byType(ChangePasswordScreen), findsOneWidget);
+  });
+
+  testWidgets('Address opens the saved address screen', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async => http.Response(
+        jsonEncode(
+          successEnvelope(
+            data: userJson(
+              location: 'Purok 4, Barangay Banlasan, Trinidad, Bohol',
+            ),
+          ),
+        ),
+        200,
+      ),
+    );
+
+    await tapAction(tester, 'Address');
+
+    expect(find.byType(AddressScreen), findsOneWidget);
+  });
+
+  testWidgets('a fast double tap opens Address only once', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final ListTile tile = tester.widget<ListTile>(
+      find.widgetWithText(ListTile, 'Address'),
+    );
+
+    // Fire the callback twice in the same frame, which is what a fast double
+    // tap does: the route has not been pushed yet, so hit-testing alone cannot
+    // drop the second call — the guard must.
+    tile.onTap!();
+    tile.onTap!();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AddressScreen, skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('a fast double tap opens the edit form only once', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final ListTile tile = tester.widget<ListTile>(
+      find.widgetWithText(ListTile, 'Personal Information'),
+    );
+
+    tile.onTap!();
+    tile.onTap!();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(EditProfileScreen, skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('a fast double tap opens seller verification only once', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final FilledButton button = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Start Seller Verification'),
+    );
+
+    button.onPressed!();
+    button.onPressed!();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byType(SellerVerificationScreen, skipOffstage: false),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Become a Seller opens the existing verification flow', (
