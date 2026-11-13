@@ -16,6 +16,7 @@ import '../../seller_verification/view/seller_verification_screen.dart';
 import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
+import 'address_screen.dart';
 import 'change_password_screen.dart';
 import 'edit_profile_screen.dart';
 
@@ -40,6 +41,14 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final ProfileController _controller;
 
+  /// True while this screen has a pushed destination on top of it.
+  ///
+  /// The navigator is the wrong place to discover a double tap: by the time the
+  /// second tap is hit-tested the first `push` may not have completed its
+  /// transition, so two routes can stack. The flag is set *before* awaiting the
+  /// push and cleared when the route pops, which makes the second call a no-op.
+  bool _opening = false;
+
   @override
   void initState() {
     super.initState();
@@ -49,22 +58,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _openEdit() async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (BuildContext context) => const EditProfileScreen(),
-        fullscreenDialog: true,
-      ),
-    );
+  /// Pushes [builder] at most once, however fast the control is tapped.
+  Future<void> _pushOnce(WidgetBuilder builder) async {
+    if (_opening) {
+      return;
+    }
+    setState(() => _opening = true);
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(builder: builder, fullscreenDialog: true),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _opening = false);
+      }
+    }
   }
 
-  Future<void> _openChangePassword() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) => const ChangePasswordScreen(),
-        fullscreenDialog: true,
-      ),
-    );
+  Future<void> _openEdit() {
+    return _pushOnce((BuildContext context) => const EditProfileScreen());
+  }
+
+  Future<void> _openAddress() {
+    return _pushOnce((BuildContext context) => const AddressScreen());
+  }
+
+  Future<void> _openChangePassword() {
+    return _pushOnce((BuildContext context) => const ChangePasswordScreen());
   }
 
   @override
@@ -82,8 +102,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (!mounted) {
                 return;
               }
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text(success)));
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(success)));
               _controller.consumeSuccess();
             });
           }
@@ -98,7 +119,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             _ => _ProfileBody(
               user: state.user!,
+              enabled: !_opening,
               onEdit: _openEdit,
+              onAddress: _openAddress,
               onChangePassword: _openChangePassword,
             ),
           };
@@ -111,12 +134,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _ProfileBody extends StatelessWidget {
   const _ProfileBody({
     required this.user,
+    required this.enabled,
     required this.onEdit,
+    required this.onAddress,
     required this.onChangePassword,
   });
 
   final User user;
+  final bool enabled;
   final VoidCallback onEdit;
+  final VoidCallback onAddress;
   final VoidCallback onChangePassword;
 
   @override
@@ -125,10 +152,9 @@ class _ProfileBody extends StatelessWidget {
     // as the auth screens, so the brand treatment stays in one place. It grows
     // with the text scale and is capped, like the auth screens, so an enlarged
     // wordmark cannot overflow.
-    final double textScale = MediaQuery.textScalerOf(context)
-        .scale(1)
-        .clamp(1.0, 1.8)
-        .toDouble();
+    final double textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, 1.8).toDouble();
     final double heroHeight =
         (MediaQuery.sizeOf(context).height * 0.26 * textScale)
             .clamp(180.0, 260.0)
@@ -155,14 +181,20 @@ class _ProfileBody extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        _ProfileSummaryCard(user: user, onEdit: onEdit),
+                        _ProfileSummaryCard(
+                          user: user,
+                          enabled: enabled,
+                          onEdit: onEdit,
+                        ),
                         const SizedBox(height: AppSpacing.md),
                         const _AccountModeCard(),
                         const SizedBox(height: AppSpacing.md),
                         _BecomeSellerCard(user: user),
                         const SizedBox(height: AppSpacing.lg),
                         _AccountSettingsSection(
+                          enabled: enabled,
                           onEdit: onEdit,
+                          onAddress: onAddress,
                           onChangePassword: onChangePassword,
                         ),
                         const SizedBox(height: AppSpacing.lg),
@@ -184,9 +216,14 @@ class _ProfileBody extends StatelessWidget {
 }
 
 class _ProfileSummaryCard extends StatelessWidget {
-  const _ProfileSummaryCard({required this.user, required this.onEdit});
+  const _ProfileSummaryCard({
+    required this.user,
+    required this.enabled,
+    required this.onEdit,
+  });
 
   final User user;
+  final bool enabled;
   final VoidCallback onEdit;
 
   @override
@@ -241,7 +278,10 @@ class _ProfileSummaryCard extends StatelessWidget {
                 ],
               ),
             ),
-            TextButton(onPressed: onEdit, child: const Text('Edit')),
+            TextButton(
+              onPressed: enabled ? onEdit : null,
+              child: const Text('Edit'),
+            ),
           ],
         ),
       ),
@@ -342,6 +382,10 @@ class _BecomeSellerCard extends StatefulWidget {
 class _BecomeSellerCardState extends State<_BecomeSellerCard> {
   late final SellerVerificationController _controller;
 
+  /// Guards the push while the route is opening, so a fast double tap cannot
+  /// stack two verification screens.
+  bool _opening = false;
+
   @override
   void initState() {
     super.initState();
@@ -351,13 +395,23 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
     }
   }
 
-  void _openVerification() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            SellerVerificationScreen(accountName: widget.user.name),
-      ),
-    );
+  Future<void> _openVerification() async {
+    if (_opening) {
+      return;
+    }
+    setState(() => _opening = true);
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) =>
+              SellerVerificationScreen(accountName: widget.user.name),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _opening = false);
+      }
+    }
   }
 
   @override
@@ -449,7 +503,7 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
   Widget _action(SellerVerificationState state, {required bool isSeller}) {
     if (isSeller) {
       return FilledButton(
-        onPressed: _openVerification,
+        onPressed: _opening ? null : _openVerification,
         child: const Text('View verification'),
       );
     }
@@ -470,15 +524,15 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
 
     return switch (state.status) {
       SellerVerificationUiStatus.notSubmitted => FilledButton(
-        onPressed: _openVerification,
+        onPressed: _opening ? null : _openVerification,
         child: const Text('Start Seller Verification'),
       ),
       SellerVerificationUiStatus.rejected => FilledButton(
-        onPressed: _openVerification,
+        onPressed: _opening ? null : _openVerification,
         child: const Text('Resubmit Verification'),
       ),
       _ => OutlinedButton(
-        onPressed: _openVerification,
+        onPressed: _opening ? null : _openVerification,
         child: const Text('View status'),
       ),
     };
@@ -487,11 +541,15 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
 
 class _AccountSettingsSection extends StatelessWidget {
   const _AccountSettingsSection({
+    required this.enabled,
     required this.onEdit,
+    required this.onAddress,
     required this.onChangePassword,
   });
 
+  final bool enabled;
   final VoidCallback onEdit;
+  final VoidCallback onAddress;
   final VoidCallback onChangePassword;
 
   @override
@@ -511,6 +569,7 @@ class _AccountSettingsSection extends StatelessWidget {
                 icon: Icons.person_outline,
                 title: 'Personal Information',
                 subtitle: 'View and update your personal details',
+                enabled: enabled,
                 onTap: onEdit,
               ),
               const Divider(height: 1),
@@ -518,14 +577,15 @@ class _AccountSettingsSection extends StatelessWidget {
                 icon: Icons.home_outlined,
                 title: 'Address',
                 subtitle: 'Manage your delivery address',
-                enabled: false,
-                onTap: () {},
+                enabled: enabled,
+                onTap: onAddress,
               ),
               const Divider(height: 1),
               _SettingsTile(
                 icon: Icons.lock_outline,
                 title: 'Change Password',
                 subtitle: 'Update your account password',
+                enabled: enabled,
                 onTap: onChangePassword,
               ),
               const Divider(height: 1),

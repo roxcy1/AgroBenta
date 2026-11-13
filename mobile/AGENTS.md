@@ -353,9 +353,13 @@ disagree. Signing out, changing accounts or losing capability clears the mode.
   ```sh
   flutter pub get
   flutter analyze          # must be clean
-  flutter test             # must pass
+  flutter test --dart-define=ANDROID_RUN_TARGET=emulator   # must pass
   flutter build apk --debug
   ```
+
+  `flutter test` runs as Android, and a native Android build has no default API
+  URL, so the suite needs `ANDROID_RUN_TARGET=emulator` (or an explicit
+  `API_BASE_URL`). Plain `flutter test` fails before the first assertion.
 
 * Write tests where they earn their keep. Priority order:
   1. model `fromJson` against the real Resource shape,
@@ -929,9 +933,9 @@ the collection-specific fulfillment flow: pickup stages for personal pickup,
 buyer-arranged transportation and legacy/unknown methods, and delivery stages
 for seller-arranged delivery.
 
-**Still open below.** GAP-01 to GAP-09, GAP-11 to GAP-13, GAP-16 and GAP-20 are
-`CLOSED` — implemented in the backend and consumed by the app. GAP-14 and GAP-15
-are `OPEN`. GAP-19 is `PARTIALLY CLOSED`: the seller inbox is
+**Still open below.** GAP-01 to GAP-09, GAP-11 to GAP-14, GAP-16 and GAP-20 are
+`CLOSED` — implemented in the backend and consumed by the app. GAP-15 is
+`OPEN`. GAP-19 is `PARTIALLY CLOSED`: the seller inbox is
 implemented and consumed, while buyer re-read, inquiry detail and seller
 response remain missing.
 
@@ -954,7 +958,7 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-11 | Transactions | **CLOSED** for the mobile surface. `GET /api/transactions` (own records only; `?role`, `?status`, paginated), `POST /api/transactions` (buyer creates `pending` from an `active` listing; body `listing_id` + `quantity` only; `total_amount` server-derived), `GET /api/transactions/{id}` (party-only; `404` otherwise) and `POST /api/transactions/{id}/cancel` (pending-only, either party; `409` once terminal; the reserved quantity is restored exactly once), behind `auth:sanctum` + `ability:mobile`, served by `Api/Transaction/TransactionController` over `MobileTransactionResource`. A transaction atomically reserves its quantity from `listings.quantity`; offer acceptance uses the same reservation path and notifies the seller. The backend implements a separate `fulfillment_status` progression, seller-only `preparing`/`ready-for-pickup`/`picked-up`/`on-the-way`/`delivered` actions, and buyer-only `complete` after handover/delivery. Cancellation is blocked after pickup handover or dispatch. The mobile model, detail screen, status tracker and action buttons consume these fields; buttons come only from server `permitted_actions`. Completed receipts are served by `GET /api/transactions/{id}/receipt` from the completion snapshot (`completed_at`, party names, listing type/breed, quantity, total, payment/collection), are buyer-visible in the app, and can be saved as a PNG on Android/iOS. Tests: `backend/tests/Feature/Transaction/MobileTransactionTest.php`, `backend/tests/Feature/Transaction/FulfillmentTest.php`, `backend/tests/Feature/Transaction/ReceiptTest.php`, plus the Flutter transaction and receipt model/service/controller/widget suites. | - |
 | GAP-12 | Notifications | **CLOSED.** `GET /api/notifications` (paginated `notifications` list with `pagination` and `unread_count`), `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `POST /api/notifications/read-all` and `DELETE /api/notifications/{id}`, all behind `auth:sanctum` + `ability:mobile` and served by `Api/Notification/NotificationController` over `NotificationResource`. Every route resolves the record from the token — no route takes a user id — and notification ids are UUID strings. The app consumes this through its own Notifications screen, reached from the Home bell and from the Messages screen's Notifications chip. | — |
 | GAP-13 | Messaging | **CLOSED.** `GET /api/conversations`, `POST /api/conversations/{userId}/read`, `GET /api/conversations/{userId}/messages`, `POST /api/messages` and `PATCH /api/messages/{id}/read`, behind `auth:sanctum` + `ability:mobile`, served by `Api/Messaging/ConversationController` and `MessageController` over `ConversationResource` / `MessageResource`. Conversations are derived from message pairs (no table, no id); the caller's own participation scopes every query, and `sender_id`/`receiver_id` are server-derived on send. Consumed by the Messages inbox and chat screens. `ConversationResource` also carries the pair-level `has_inquiry` / `has_transaction` booleans the inbox filters use; backend coverage lives in `backend/tests/Feature/Messaging/ConversationClassificationTest.php`. Real-time delivery now accompanies it — see GAP-20 (closed). | — |
-| GAP-14 | Profile read/update for the current user | No endpoint. Admin can list users but not edit them. `OPEN`. | Profile |
+| GAP-14 | Profile read/update for the current user | **CLOSED.** `GET /api/profile`, `PUT /api/profile` and `PUT /api/profile/password` live behind `auth:sanctum` + `ability:mobile` (`routes/api.php`), served by `Api/Profile/ProfileController` over `UserResource`. No route takes an id: the record is always resolved from the token. `PUT /profile` is a partial update whose allow-list is `name`, `email`, `phone`, `location`, `avatar_url` and `bio`, plus `current_password` when the email changes; `role`, `seller_capability`, `id` and `password` are `prohibited` (`422`). `location` is the caller's single optional Trinidad address, validated by `TrinidadLocationAddressRule`, which preserves an unchanged legacy value until it is replaced. Consumed by the Profile screen, Edit Profile, Change Password and Address screens. | — |
 | GAP-15 | Token lifetime policy | Mobile tokens are issued non-expiring, the same as admin tokens. No expiry, no refresh, no revocation-all. Still needs an explicit decision before shipping, so a mobile session currently lasts until it is logged out or revoked. | Security |
 | GAP-16 | Sanctum token ability scoping for mobile | **CLOSED.** Mobile tokens carry `['mobile']`; mobile routes require `ability:mobile`. The `admin` group now also requires `ability:admin`, so a mobile token is refused by admin routes and an admin token is refused by mobile routes. Both directions are covered by `backend/tests/Feature/Auth/MobileAuthTest.php`. | — |
 | GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry, and `GET /api/inquiries/listing/{listing}` pre-checks the buyer's existing inquiry for a listing. `GET /api/seller/inquiries` lists the approved seller's inquiries through `SellerInquiryResource`, which omits buyer email and inquiry status. Administrator inquiry endpoints have been removed; inquiries are handled between buyers and sellers only. The app directs buyers to Messages after submitting an inquiry or when an inquiry already exists. Buyer inquiry list/detail and dedicated seller inquiry detail/status actions remain unavailable. | Buyer inquiry list/detail, dedicated seller inquiry detail/status actions, any remaining server-driven status display |
@@ -1099,7 +1103,7 @@ the earlier round. The register entries changed accordingly:
 ```sh
 flutter pub get
 flutter analyze     # must be clean
-flutter test        # must pass
+flutter test --dart-define=ANDROID_RUN_TARGET=emulator   # must pass
 flutter build apk --debug
 ```
 
