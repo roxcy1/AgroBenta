@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
+import 'package:agrobenta_mobile/features/receipts/state/transaction_receipt_controller.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transaction_detail_controller.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transactions_controller.dart';
 import 'package:agrobenta_mobile/models/transaction.dart';
@@ -21,6 +22,8 @@ import 'auth_fakes.dart';
 /// [totalAmount] is a decimal **string** exactly as `decimal(14,2)` columns
 /// serialise over the API; it is display-only and must never be parsed for
 /// arithmetic in the client.
+const Object _unsetFulfillment = Object();
+
 Map<String, dynamic> transactionJson({
   Object? id = 1,
   String role = 'buyer',
@@ -29,9 +32,31 @@ Map<String, dynamic> transactionJson({
   Object? quantity = 1,
   Object? totalAmount = '42500.00',
   String status = 'pending',
+  Object? fulfillmentStatus = _unsetFulfillment,
+  List<String>? permittedActions,
+  String? collectionMethod = 'farm_pickup',
+  Object? pickupDate,
+  String? paymentMethod = 'cash',
   Object? createdAt = '2026-10-01T08:15:00.000000Z',
   Object? updatedAt = '2026-10-01T08:15:00.000000Z',
 }) {
+  final Object? resolvedFulfillment =
+      identical(fulfillmentStatus, _unsetFulfillment)
+      ? switch (status) {
+          'completed' => 'completed',
+          'cancelled' => null,
+          _ => 'confirmed',
+        }
+      : fulfillmentStatus;
+
+  final List<String> resolvedActions =
+      permittedActions ??
+      switch (status) {
+        'pending' when role == 'seller' => <String>['preparing', 'cancel'],
+        'pending' => <String>['cancel'],
+        _ => <String>[],
+      };
+
   return <String, dynamic>{
     'id': id,
     'role': role,
@@ -40,6 +65,14 @@ Map<String, dynamic> transactionJson({
     'quantity': quantity,
     'total_amount': totalAmount,
     'status': status,
+    'terms': <String, dynamic>{
+      'offer_id': null,
+      'pickup_date': pickupDate,
+      'payment_method': paymentMethod,
+      'collection_method': collectionMethod,
+    },
+    'fulfillment_status': resolvedFulfillment,
+    'permitted_actions': resolvedActions,
     'created_at': createdAt,
     'updated_at': updatedAt,
   };
@@ -48,7 +81,7 @@ Map<String, dynamic> transactionJson({
 /// The embedded `listing` snapshot: identity, species, breed and photos only.
 Map<String, dynamic> transactionListingJson({
   Object? id = 12,
-  String livestockType = 'Cattle',
+  String livestockType = 'cattle',
   String breed = 'Holstein',
   List<Object?>? photos,
 }) {
@@ -93,6 +126,54 @@ Map<String, dynamic> transactionPageJson({
 const Map<String, String> _jsonHeaders = <String, String>{
   'content-type': 'application/json',
 };
+
+/// A `TransactionReceiptResource` payload exactly as the backend serialises one.
+///
+/// Field names and shapes copy `backend/app/Http/Resources/
+/// TransactionReceiptResource.php`. No emails are present by design.
+Map<String, dynamic> transactionReceiptJson({
+  int version = 1,
+  String reference = 'TRX-001',
+  Object? completedAt = '2026-11-10T08:15:00.000000Z',
+  String buyerName = 'Pedro Reyes',
+  String sellerName = 'Rizal Farms',
+  String livestockType = 'cattle',
+  String breed = 'Angus',
+  int quantity = 1,
+  String totalAmount = '42500.00',
+  String? paymentMethod = 'cash',
+  String? collectionMethod = 'farm_pickup',
+  String status = 'completed',
+}) {
+  return <String, dynamic>{
+    'version': version,
+    'reference': reference,
+    'completed_at': completedAt,
+    'buyer': <String, dynamic>{'name': buyerName},
+    'seller': <String, dynamic>{'name': sellerName},
+    'listing': <String, dynamic>{
+      'livestock_type': livestockType,
+      'breed': breed,
+    },
+    'quantity': quantity,
+    'total_amount': totalAmount,
+    'payment_method': paymentMethod,
+    'collection_method': collectionMethod,
+    'status': status,
+  };
+}
+
+/// A successful `GET /api/transactions/{id}/receipt` HTTP response.
+http.Response transactionReceiptResponse({
+  Map<String, dynamic>? receipt,
+  int statusCode = 200,
+}) {
+  return http.Response(
+    jsonEncode(successEnvelope(data: receipt ?? transactionReceiptJson())),
+    statusCode,
+    headers: _jsonHeaders,
+  );
+}
 
 /// A successful `GET /api/transactions` HTTP response.
 http.Response transactionListResponse({
@@ -224,6 +305,19 @@ TransactionDetailController buildTransactionDetailController(
   List<RecordedRequest>? recorded,
 }) {
   return TransactionDetailController(
+    buildTransactionRepository(tokenStore, handler, recorded: recorded),
+    transactionId,
+  );
+}
+
+/// A receipt controller over a mock transport.
+TransactionReceiptController buildTransactionReceiptController(
+  FakeTokenStore tokenStore,
+  Future<http.Response> Function(RecordedRequest request) handler, {
+  int transactionId = 1,
+  List<RecordedRequest>? recorded,
+}) {
+  return TransactionReceiptController(
     buildTransactionRepository(tokenStore, handler, recorded: recorded),
     transactionId,
   );

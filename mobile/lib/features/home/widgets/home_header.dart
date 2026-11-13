@@ -20,10 +20,19 @@ import '../../../widgets/temporary_logo.dart';
 /// the account's `avatar_url` when one is set and the existing generic
 /// initial treatment when it is not — no profile image is invented.
 class HomeHeader extends StatelessWidget {
-  const HomeHeader({required this.user, this.onOpenProfile, super.key});
+  const HomeHeader({
+    required this.user,
+    required this.eyebrow,
+    this.onOpenProfile,
+    super.key,
+  });
 
   /// The authenticated user, for the avatar's fallback initial.
   final User user;
+
+  /// The small line above the greeting, e.g. "Buying near Lipa, Batangas"
+  /// or "Seller Mode".
+  final String eyebrow;
 
   /// Switches the shell to the Profile tab. Null omits the avatar action, so
   /// a standalone use of this screen never renders a dead control.
@@ -33,7 +42,11 @@ class HomeHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Padding(
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.screenGutter,
         AppSpacing.sm,
@@ -42,24 +55,27 @@ class HomeHeader extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
+          // The logo artwork carries the AgroBenta wordmark.
           const TemporaryLogo(size: 40),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(
-                  'AgroBenta',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryDark,
-                  ),
+                  eyebrow,
+                  style: theme.textTheme.labelSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  'Buy. Sell. Grow. Together.',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
+                  'Hello, ${user.name}!',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -70,10 +86,7 @@ class HomeHeader extends StatelessWidget {
               tooltip: 'Profile',
               onPressed: onOpenProfile,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 48,
-                minHeight: 48,
-              ),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               icon: _Avatar(name: user.name, url: user.avatarUrl),
             ),
         ],
@@ -146,9 +159,6 @@ class _Avatar extends StatelessWidget {
         ),
       );
     }
-    return CircleAvatar(
-      radius: 18,
-      backgroundImage: NetworkImage(src),
-    );
+    return CircleAvatar(radius: 18, backgroundImage: NetworkImage(src));
   }
 }

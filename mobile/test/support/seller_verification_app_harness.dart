@@ -13,6 +13,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'auth_fakes.dart';
 import 'seller_verification_fakes.dart';
+import 'trinidad_location_fakes.dart';
 
 /// A repository that fails loudly if anything reaches for it.
 ///
@@ -47,10 +48,13 @@ class SellerVerificationTestScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SellerVerificationScope(
-      repository: unusedRepository(),
-      controller: controller,
-      child: child,
+    return TrinidadLocationTestScope(
+      tokenStore: FakeTokenStore('unused'),
+      child: SellerVerificationScope(
+        repository: unusedRepository(),
+        controller: controller,
+        child: child,
+      ),
     );
   }
 }
@@ -97,7 +101,10 @@ class _NeverSubmittedVerificationScopeState
     return SellerVerificationScope(
       repository: unusedRepository(),
       controller: _controller,
-      child: widget.child,
+      child: TrinidadLocationTestScope(
+        tokenStore: FakeTokenStore('unused'),
+        child: widget.child,
+      ),
     );
   }
 }
@@ -146,18 +153,21 @@ class SellerVerificationHarness {
     await tester.pumpWidget(
       // Above `MaterialApp`, exactly as `main.dart` does it. The form is a
       // pushed route, and a scope inside `home` would be invisible to it.
-      SellerVerificationScope(
-        repository: buildSellerVerificationRepository(
-          tokenStore,
-          handler,
-          recorded: recorded,
-        ),
-        controller: controller,
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: SellerVerificationScreen(
-            accountName: accountName,
-            pickImage: pickImage,
+      TrinidadLocationTestScope(
+        tokenStore: tokenStore,
+        child: SellerVerificationScope(
+          repository: buildSellerVerificationRepository(
+            tokenStore,
+            handler,
+            recorded: recorded,
+          ),
+          controller: controller,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: SellerVerificationScreen(
+              accountName: accountName,
+              pickImage: pickImage,
+            ),
           ),
         ),
       ),
@@ -212,19 +222,107 @@ Future<void> settleSellerVerification(
   }
 }
 
+/// Scrolls [target] into view using the scrollable that actually contains it.
+Future<void> scrollSellerVerificationIntoView(
+  WidgetTester tester,
+  Finder target,
+) async {
+  final Finder scrollable = find
+      .ancestor(of: target, matching: find.byType(Scrollable))
+      .first;
+  // The loop below only scrolls downwards. A target that is already built
+  // but sits above the viewport is brought back first.
+  if (target.hitTestable().evaluate().isEmpty && target.evaluate().isNotEmpty) {
+    await tester.ensureVisible(target.first);
+    for (int frame = 0; frame < 4; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
+  for (int attempt = 0; attempt < 12; attempt++) {
+    if (target.hitTestable().evaluate().isNotEmpty) {
+      // Let the scroll settle enough for the button center to stay in the
+      // viewport when the caller taps it, without pumpAndSettle's spinner risk.
+      for (int frame = 0; frame < 4; frame++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      if (target.hitTestable().evaluate().isNotEmpty) return;
+    }
+    await tester.drag(scrollable, const Offset(0, -160));
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
 /// A tiny in-memory PNG an [XFile] can read, for picker injection in tests.
 /// The bytes are a valid 1x1 PNG so `Image.file`/`Image.memory` would render if
 /// ever asked to; the tests exercise the flow, not the pixels.
 final Uint8List kFakeVerificationImageBytes = Uint8List.fromList(<int>[
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-  0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-  0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-  0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-  0x42, 0x60, 0x82,
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0A,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0D,
+  0x0A,
+  0x2D,
+  0xB4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
 ]);
 
 /// A picker that always returns a fresh in-memory PNG.
@@ -246,26 +344,38 @@ Future<XFile?> cancelledVerificationPicker(
 ) async => null;
 
 /// Taps the first pick action on a document card, identified by its card title.
-Future<void> tapDocumentPick(
-  WidgetTester tester,
-  String cardTitle,
-) async {
+Future<void> tapDocumentPick(WidgetTester tester, String cardTitle) async {
   final Finder card = find.ancestor(
     of: find.text(cardTitle),
     matching: find.byType(Card),
   );
   final Finder button = find.descendant(
     of: card,
-    matching: find.widgetWithText(FilledButton, 'Take Photo'),
+    matching: find.widgetWithText(
+      FilledButton,
+      cardTitle == 'Government ID — Front'
+          ? 'Upload Front ID Image'
+          : cardTitle == 'Government ID — Back'
+          ? 'Upload Back ID Image'
+          : 'Take Photo',
+    ),
   );
   await tester.ensureVisible(button);
-  await tester.pump(const Duration(milliseconds: 50));
+  await tester.pumpAndSettle();
   await tester.tap(button);
   await settleSellerVerification(tester);
 }
 
-/// Advances through the Documents step by uploading both required images.
+/// Advances through the Documents step by uploading the required images.
 Future<void> uploadBothDocuments(WidgetTester tester) async {
-  await tapDocumentPick(tester, 'Valid Government-Issued ID');
+  await tapDocumentPick(tester, 'Government ID — Front');
+  final Finder noBack = find.widgetWithText(
+    OutlinedButton,
+    'My ID Has No Back Image',
+  );
+  await scrollSellerVerificationIntoView(tester, noBack);
+  await tester.tap(noBack);
+  await settleSellerVerification(tester);
+  await tapDocumentPick(tester, 'Proof of Address');
   await tapDocumentPick(tester, 'Selfie Holding Your ID');
 }

@@ -59,6 +59,8 @@ void main() {
       );
 
       expect(verification.id, 9);
+      expect(verification.phone, '09171234567');
+      expect(verification.address, 'Barangay Poblacion, Trinidad, Bohol');
       expect(verification.businessName, 'Santos Cattle Co.');
       expect(verification.businessLocation, 'Mabalacat, Pampanga');
       expect(
@@ -66,6 +68,13 @@ void main() {
         'Family-run cattle farm, trading since 2011.',
       );
       expect(verification.idDocumentRef, 'PHL-ID-88213');
+      expect(
+        verification.governmentIdType,
+        GovernmentIdType.philippineNationalId,
+      );
+      expect(verification.hasNoBackImage, isFalse);
+      expect(verification.hasIdDocumentFront, isTrue);
+      expect(verification.hasIdDocumentBack, isFalse);
       expect(verification.status, SellerVerificationStatus.rejected);
       expect(
         verification.adminNote,
@@ -77,9 +86,25 @@ void main() {
       expect(verification.canResubmit, isTrue);
     });
 
+    test('parses the Others description and one-sided declaration', () {
+      final SellerVerification verification = SellerVerification.fromJson(
+        sellerVerificationJson(
+          governmentIdType: 'others',
+          governmentIdDescription: 'Barangay ID',
+          hasNoBackImage: true,
+        ),
+      );
+
+      expect(verification.governmentIdType, GovernmentIdType.others);
+      expect(verification.governmentIdDescription, 'Barangay ID');
+      expect(verification.hasNoBackImage, isTrue);
+    });
+
     test('tolerates every optional field being null', () {
       final SellerVerification verification = SellerVerification.fromJson(
         sellerVerificationJson(
+          phone: null,
+          address: null,
           businessLocation: null,
           businessDescription: null,
           idDocumentRef: null,
@@ -90,6 +115,8 @@ void main() {
       );
 
       expect(verification.businessLocation, isNull);
+      expect(verification.phone, isNull);
+      expect(verification.address, isNull);
       expect(verification.businessDescription, isNull);
       expect(verification.idDocumentRef, isNull);
       expect(verification.adminNote, isNull);

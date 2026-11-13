@@ -56,6 +56,29 @@ enum SellerVerificationStatus {
   }
 }
 
+enum GovernmentIdType {
+  philippineNationalId(
+    'philippine_national_id',
+    'Philippine National ID (PhilID / ePhilID)',
+  ),
+  driversLicense('drivers_license', "Driver's License (LTO)"),
+  philHealthId('philhealth_id', 'PhilHealth ID'),
+  votersId('voters_id', "Voter's ID"),
+  postalId('postal_id', 'Postal ID'),
+  others('others', 'Others');
+
+  const GovernmentIdType(this.value, this.label);
+  final String value;
+  final String label;
+
+  static GovernmentIdType? fromNullableValue(String? value) {
+    for (final GovernmentIdType type in values) {
+      if (type.value == value) return type;
+    }
+    return null;
+  }
+}
+
 /// Which evidence document an upload or fetch refers to.
 ///
 /// Mirrors `backend/app/Enums/SellerVerificationDocumentType.php`. The wire
@@ -64,9 +87,18 @@ enum SellerVerificationStatus {
 enum VerificationDocumentType {
   /// A photo of a government-issued identity document.
   idDocument('id_document'),
+  idDocumentFront('id_document_front'),
+  idDocumentBack('id_document_back'),
 
   /// A selfie of the applicant holding the same identity document.
-  selfie('selfie');
+  selfie('selfie'),
+
+  /// A document showing the applicant's address, e.g. a utility bill.
+  proofOfAddress('proof_of_address'),
+
+  /// An optional photo of the livestock or farm area. Unlike the others, an
+  /// application can hold several.
+  farmPhoto('farm_photo');
 
   const VerificationDocumentType(this.value);
 
@@ -93,16 +125,25 @@ enum VerificationDocumentType {
 class SellerVerification {
   const SellerVerification({
     required this.id,
+    required this.phone,
+    required this.address,
     required this.businessName,
     required this.businessLocation,
     required this.businessDescription,
     required this.idDocumentRef,
+    this.governmentIdType,
+    this.governmentIdDescription,
+    this.hasNoBackImage,
     required this.status,
     required this.adminNote,
     required this.submittedAt,
     required this.reviewedAt,
+    this.hasIdDocumentFront = false,
+    this.hasIdDocumentBack = false,
     this.hasIdDocument = false,
     this.hasSelfie = false,
+    this.hasProofOfAddress = false,
+    this.farmPhotoIds = const <String>[],
   });
 
   /// Field names the mobile resource must not contain.
@@ -127,36 +168,64 @@ class SellerVerification {
 
     return SellerVerification(
       id: readInt(json, 'id'),
-      businessName: readString(json, 'business_name'),
+      phone: readNullableString(json, 'phone'),
+      address: readNullableString(json, 'address'),
+      businessName: readNullableString(json, 'business_name'),
       businessLocation: readNullableString(json, 'business_location'),
       businessDescription: readNullableString(json, 'business_description'),
       idDocumentRef: readNullableString(json, 'id_document_ref'),
+      governmentIdType: GovernmentIdType.fromNullableValue(
+        readNullableString(json, 'government_id_type'),
+      ),
+      governmentIdDescription: readNullableString(
+        json,
+        'government_id_description',
+      ),
+      hasNoBackImage: json['has_no_back_image'] is bool
+          ? json['has_no_back_image'] as bool
+          : null,
       status: SellerVerificationStatus.fromValue(readString(json, 'status')),
       adminNote: readNullableString(json, 'admin_note'),
       submittedAt: readNullableDateTime(json, 'submitted_at'),
       reviewedAt: readNullableDateTime(json, 'reviewed_at'),
       hasIdDocument: _readBool(json, 'has_id_document'),
+      hasIdDocumentFront:
+          json['has_id_document_front'] == true ||
+          _readBool(json, 'has_id_document'),
+      hasIdDocumentBack: json['has_id_document_back'] == true,
       hasSelfie: _readBool(json, 'has_selfie'),
+      hasProofOfAddress: _readBool(json, 'has_proof_of_address'),
+      farmPhotoIds: _readStringList(json, 'farm_photo_ids'),
     );
   }
 
   /// `seller_verifications.id`.
   final int id;
 
-  /// The only required field of the form.
-  final String businessName;
+  /// Contact phone snapshot supplied with this verification. Nullable on
+  /// legacy records created before the snapshot fields were introduced.
+  final String? phone;
+
+  /// Applicant address snapshot supplied with this verification. Nullable on
+  /// legacy records created before the snapshot fields were introduced.
+  final String? address;
+
+  /// The farm or business name. Optional, so `null` when it was left blank.
+  final String? businessName;
 
   final String? businessLocation;
 
   final String? businessDescription;
 
-  /// A reference to an identity document — **not** the document.
+  /// A free-text reference to an identity document, such as a document number.
   ///
-  /// There is no upload endpoint and no storage for one (functional documentation
-  /// §3.3), so this is a string the seller supplies: a document number, a
-  /// reference code, whatever their own process uses. The app must never present
-  /// a file picker here, which would imply a mechanism that does not exist.
+  /// This is **not** the document, which is uploaded separately, so the app must
+  /// never present a file picker for this field.
   final String? idDocumentRef;
+
+  final GovernmentIdType? governmentIdType;
+  final String? governmentIdDescription;
+  final bool? hasNoBackImage;
 
   final SellerVerificationStatus status;
 
@@ -179,13 +248,33 @@ class SellerVerification {
   /// when the key is absent, so the model keeps working against an older resource
   /// that predates the documents migration.
   final bool hasIdDocument;
+  final bool hasIdDocumentFront;
+  final bool hasIdDocumentBack;
 
   /// Whether a selfie has been uploaded for this application.
   final bool hasSelfie;
 
+  /// Whether a proof of address has been uploaded for this application.
+  final bool hasProofOfAddress;
+
+  /// The ids that name this application's farm photos on the document endpoint.
+  final List<String> farmPhotoIds;
+
+  /// Reads a list of strings the resource always sends.
+  static List<String> _readStringList(Map<String, dynamic> json, String key) {
+    final Object? value = json[key];
+    if (value is List) {
+      return value.cast<String>().toList(growable: false);
+    }
+    throw FormatException(
+      'Expected field "$key" to be a list, got ${value.runtimeType}.',
+      json.toString(),
+    );
+  }
+
   /// Reads a boolean the resource always sends.
   ///
-  /// A missing key is a contract change — the resource emits both flags on every
+  /// A missing key is a contract change — the resource emits every flag on every
   /// record — so it throws rather than defaulting, matching the strictness of
   /// the rest of this model's parsing.
   static bool _readBool(Map<String, dynamic> json, String key) {

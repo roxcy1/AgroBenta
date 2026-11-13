@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../constants/api_constants.dart';
@@ -24,6 +26,12 @@ import 'token_store.dart';
 /// options keep the token unreadable until the device has been unlocked once,
 /// and stop it migrating to a new device via backup.
 ///
+/// ## Remember me
+///
+/// `write(token, persist: false)` keeps the token in this object's memory
+/// only and deletes any saved token, so it disappears when the app process
+/// ends. Nothing is ever written outside the keystore.
+///
 /// ## Not yet implemented
 ///
 /// The backend issues Sanctum tokens with no expiry and there is no refresh
@@ -42,14 +50,58 @@ class TokenStorage implements TokenStore {
           );
 
   final FlutterSecureStorage _storage;
+  Future<void> _writeQueue = Future<void>.value();
+
+  /// A "Remember me"-unticked token. Lives only as long as the app process.
+  String? _sessionToken;
 
   @override
-  Future<String?> read() => _storage.read(key: ApiConstants.tokenStorageKey);
+  Future<String?> read() async =>
+      _sessionToken ?? await _storage.read(key: ApiConstants.tokenStorageKey);
 
   @override
-  Future<void> write(String token) =>
-      _storage.write(key: ApiConstants.tokenStorageKey, value: token);
+  Future<void> write(String token, {bool persist = true}) =>
+      _serialize<void>(() async {
+        if (persist) {
+          _sessionToken = null;
+          await _storage.write(key: ApiConstants.tokenStorageKey, value: token);
+        } else {
+          // Remove any remembered token first, so a later launch cannot
+          // restore an older session.
+          await _storage.delete(key: ApiConstants.tokenStorageKey);
+          _sessionToken = token;
+        }
+      });
 
   @override
-  Future<void> clear() => _storage.delete(key: ApiConstants.tokenStorageKey);
+  Future<void> clear() => _serialize<void>(() async {
+    _sessionToken = null;
+    await _storage.delete(key: ApiConstants.tokenStorageKey);
+  });
+
+  @override
+  Future<bool> clearIfCurrent(String expectedToken) =>
+      _serialize<bool>(() async {
+        final String? current =
+            _sessionToken ??
+            await _storage.read(key: ApiConstants.tokenStorageKey);
+        if (current != expectedToken) return false;
+        _sessionToken = null;
+        await _storage.delete(key: ApiConstants.tokenStorageKey);
+        return true;
+      });
+
+  /// Serializes credential mutations so a compare-and-clear cannot race a
+  /// token write for a newly authenticated account.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final Completer<T> result = Completer<T>();
+    _writeQueue = _writeQueue.then((_) async {
+      try {
+        result.complete(await operation());
+      } on Object catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    });
+    return result.future;
+  }
 }

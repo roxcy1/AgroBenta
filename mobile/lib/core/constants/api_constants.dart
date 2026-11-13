@@ -57,6 +57,12 @@ abstract final class MarketplaceEndpoints {
   /// client-selected filter.
   static const String browse = '/listings';
 
+  /// `GET` — Buyer Home's Popular Livestock ranking. 200, plain envelope.
+  ///
+  /// Completed sales in the last 30 days, grouped over the canonical livestock
+  /// categories. Read-only and token-scoped; no query parameters.
+  static const String popularLivestock = '/marketplace/popular-livestock';
+
   /// `GET` — one listing's detail. 200, plain envelope.
   ///
   /// [id] is appended to build the path. It is a selector, not proof of
@@ -77,6 +83,27 @@ abstract final class MarketplaceEndpoints {
   /// clamps to this rather than letting a screen discover the limit by
   /// provoking an error.
   static const int maxPerPage = 50;
+}
+
+/// The approved livestock-type catalog, relative to the API root.
+///
+/// This is the backend enum's public projection. The catalog values are the only
+/// ones a seller may write; historical rows may still hold values outside the
+/// catalog, and those remain readable everywhere.
+abstract final class LivestockTypeEndpoints {
+  /// `GET` - the approved categories. 200, **not** the standard envelope.
+  ///
+  /// The controller returns `{ "data": [...] }` directly, without the
+  /// `{success, message, data}` wrapper every other JSON endpoint uses. It is
+  /// fetched through [ApiClient.getRawJson] so the exception stays local to this
+  /// one endpoint instead of weakening envelope handling everywhere.
+  static const String catalog = '/livestock-types';
+}
+
+/// The approved locality catalog for the initial Trinidad, Bohol locale.
+abstract final class TrinidadLocationEndpoints {
+  /// `GET` — fixed region/province/municipality and the approved barangays.
+  static const String catalog = '/locations/trinidad/barangays';
 }
 
 /// Seller verification endpoints, relative to the API root.
@@ -125,6 +152,11 @@ abstract final class SellerVerificationEndpoints {
   static String deleteDocument(String type) =>
       '/seller-verification/documents/$type';
 
+  /// `GET` streams one submitted farm photo; `DELETE` removes one staged farm
+  /// photo. Farm photos are several files, so each is named by its id.
+  static String farmPhoto(String photoId) =>
+      '/seller-verification/documents/farm_photo/$photoId';
+
   /// The multipart field name the document bytes travel in.
   static const String documentFileField = 'document';
 
@@ -135,10 +167,15 @@ abstract final class SellerVerificationEndpoints {
   /// reader does not have to open the Form Request to know what a submission may
   /// contain.
   static const List<String> writableFields = <String>[
+    'phone',
+    'address',
     'business_name',
     'business_location',
     'business_description',
     'id_document_ref',
+    'government_id_type',
+    'government_id_description',
+    'has_no_back_image',
   ];
 }
 
@@ -181,6 +218,16 @@ abstract final class SellerListingEndpoints {
   /// and it is one-way: the server answers `409` for a listing that is not a
   /// draft.
   static String submit(int id) => '/seller/listings/$id/submit';
+
+  /// `POST` — request an AI price suggestion for a draft. 200, plain envelope.
+  ///
+  /// [id] is appended. The endpoint accepts no request body. It is owner-scoped
+  /// and draft-only; the server answers `422` for another state. A successful
+  /// response is an `AiPriceEstimateResource`; `withheld` and `invalid` refusals
+  /// arrive as structured `422` bodies with `status`, `warnings` and
+  /// `reason_codes`.
+  static String priceSuggestion(int id) =>
+      '/seller/listings/$id/price-suggestion';
 
   /// `POST` — mark an active listing as sold. 200, plain envelope.
   ///
@@ -232,9 +279,11 @@ abstract final class SellerListingEndpoints {
     'breed',
     'age_value',
     'age_unit',
+    'age_information',
     'gender',
     'weight_value',
     'weight_unit',
+    'weight_information',
     'quantity',
     'asking_price',
     'location',
@@ -246,13 +295,20 @@ abstract final class SellerListingEndpoints {
 
   /// The fields the create request requires.
   ///
-  /// A subset of [writableFields]. The contract requires these four, so a draft
-  /// is a complete-but-unpublished record rather than a half-filled one.
+  /// A subset of [writableFields]. Age and weight are required with their
+  /// units and information types, so a draft is a complete-but-unpublished
+  /// record rather than a half-filled one.
   static const List<String> requiredFields = <String>[
     'livestock_type',
     'location',
     'asking_price',
     'quantity',
+    'age_value',
+    'age_unit',
+    'age_information',
+    'weight_value',
+    'weight_unit',
+    'weight_information',
   ];
 
   /// Page size used when the caller does not ask for a specific one.
@@ -277,10 +333,9 @@ abstract final class SellerListingEndpoints {
 /// and resolves the user from that token — no path takes a user id, and
 /// `buyer_id` / `seller_id` are refused as filters.
 ///
-/// There is deliberately **no `complete` path** here. The backend answers
-/// `POST /transactions/{id}/complete` with an explicit 501 (OQ-15: the
-/// confirming actor is undecided), and the client never calls it — hiding the
-/// affordance is safer than a button that always errors.
+/// Fulfillment and receipt-confirmation paths are listed below. The client
+/// calls them only when the same record's server-provided `permitted_actions`
+/// contains the matching action.
 abstract final class TransactionEndpoints {
   /// `GET` — the caller's transactions, newest first. 200, paginated.
   ///
@@ -302,11 +357,36 @@ abstract final class TransactionEndpoints {
   /// 404 for a transaction the caller is not party to.
   static String detail(int id) => '/transactions/$id';
 
-  /// `POST` — cancel a pending transaction. 200, plain envelope.
+  /// `POST` - cancel a pending transaction. 200, plain envelope.
   ///
-  /// Either party may cancel ([D-15] rule 5), pending-only, irreversible.
+  /// Either party may cancel before handover/dispatch, irreversible.
   /// The body allow-list is empty; any field is 422.
   static String cancel(int id) => '/transactions/$id/cancel';
+
+  /// Seller starts preparing the livestock.
+  static String preparing(int id) => '/transactions/$id/preparing';
+
+  /// Seller marks a pickup-flow transaction ready for pickup.
+  static String readyForPickup(int id) => '/transactions/$id/ready-for-pickup';
+
+  /// Seller confirms a pickup-flow handover.
+  static String pickedUp(int id) => '/transactions/$id/picked-up';
+
+  /// Seller marks a delivery-flow transaction on the way.
+  static String onTheWay(int id) => '/transactions/$id/on-the-way';
+
+  /// Seller marks a delivery-flow transaction delivered.
+  static String delivered(int id) => '/transactions/$id/delivered';
+
+  /// Buyer confirms receipt after pickup or delivery. Completes the sale.
+  static String complete(int id) => '/transactions/$id/complete';
+
+  /// The receipt of a completed transaction the caller is a party to.
+  ///
+  /// 200 for a completed record; 404 for a non-party/missing record; 409 while
+  /// the transaction is still pending or cancelled. The payload is the
+  /// server-owned historical snapshot, never client-assembled values.
+  static String receipt(int id) => '/transactions/$id/receipt';
 
   /// Page size used when the caller does not ask for a specific one.
   static const int defaultPerPage = 15;
@@ -416,7 +496,16 @@ abstract final class NotificationEndpoints {
   ];
 }
 
-
+/// Push notification registration, relative to the API root.
+abstract final class DeviceEndpoints {
+  /// `POST` — register this phone's FCM token for the signed-in session.
+  /// 200, `{ success, message }` with no `data`.
+  ///
+  /// The body is exactly `{ token }`; the owner is the bearer token's user and
+  /// a `user_id` is refused with `422`. There is no unregister route: the
+  /// server deletes the registration with the session's token on logout.
+  static const String register = '/devices';
+}
 
 /// Profile endpoints, relative to the API root.
 ///
@@ -467,10 +556,11 @@ abstract final class ProfileEndpoints {
 ///
 /// These are the routes implemented in `backend/routes/api.php` under the
 /// `inquiries`-creating mobile group: one write path, `POST /inquiries`, the
-/// buyer's structured contact with a seller about a listing. Reading received
-/// inquiries is the seller surface in [SellerInquiryEndpoints]; triaging and
-/// re-statusing an inquiry are the Admin Web's `/admin/inquiries*` flow and are
-/// not part of this app's contract.
+/// buyer's structured contact with a seller about a listing, plus the buyer's
+/// pre-check `GET /inquiries/listing/{listing}`. Reading received inquiries is
+/// the seller surface in [SellerInquiryEndpoints]; triaging and re-statusing an
+/// inquiry are the Admin Web's `/admin/inquiries*` flow and are not part of
+/// this app's contract.
 ///
 /// The route takes no user id. The buyer is the token and the seller is
 /// `listing.seller_id`, resolved server-side, so there is no parameter or body
@@ -484,6 +574,23 @@ abstract final class InquiryEndpoints {
   /// transaction.
   static const String create = '/inquiries';
 
+  /// `GET` - the caller's active inquiries on one side. 200, plain envelope.
+  ///
+  /// Query allow-list is `role` (`buyer`|`seller`, the active Account Mode).
+  /// Ownership filters are refused server-side with `422`. Inquiries already
+  /// converted to an accepted transaction are excluded.
+  static const String list = '/inquiries';
+
+  /// `GET` — the authenticated buyer's inquiry about one listing, or
+  /// `data: null`. 200, plain envelope.
+  ///
+  /// The pre-check the Inquire screen runs before rendering the form. The
+  /// buyer is the token, so the path carries only the listing id and no query
+  /// can widen it to another buyer's record. An inquiry in any status is
+  /// returned: the buyer may have only one per listing, whatever its status.
+  static String existingForListing(int listingId) =>
+      '/inquiries/listing/$listingId';
+
   /// The field names `StoreInquiryRequest` accepts.
   ///
   /// Listed as an explicit allow-list so the service body is visibly exactly
@@ -491,12 +598,13 @@ abstract final class InquiryEndpoints {
   /// later change to a model. `buyer_id`, `seller_id` and `status` are absent
   /// **by construction**: the server marks them `prohibited`.
   ///
-  /// `listing_id` and `message` are the two the server requires; everything
-  /// after them is a nullable preference the schema stores or does not, as the
-  /// buyer filled it in.
+  /// `listing_id`, `message`, `payment_method` and `collection_method` are the
+  /// four the server requires; everything after them is an optional preference
+  /// the schema stores or does not, as the buyer filled it in.
   static const List<String> writableFields = <String>[
     'listing_id',
     'message',
+    'collection_date_option',
     'subject',
     'purchase_interest',
     'transaction_method',
@@ -504,6 +612,8 @@ abstract final class InquiryEndpoints {
     'delivery_fee',
     'contact_method',
     'preferred_schedule',
+    'payment_method',
+    'collection_method',
   ];
 }
 
@@ -551,6 +661,60 @@ abstract final class SellerDashboardEndpoints {
   static const String summary = '/seller/dashboard';
 }
 
+abstract final class SellerActivityEndpoints {
+  /// `GET` - the seller's recent activity feed, newest first. 200, plain
+  /// envelope. Query allow-list is `limit` (1–20); ownership is the token.
+  static const String list = '/seller/activities';
+
+  /// Default number of events requested.
+  static const int defaultLimit = 5;
+
+  /// Default page size for the All Activities screen.
+  static const int defaultPageSize = 15;
+}
+
+/// Purchase-offer endpoints, relative to the API root.
+///
+/// These are the routes implemented in `backend/routes/api.php` under
+/// `auth:sanctum` + `ability:mobile`. Creating and withdrawing an offer also
+/// require the `seller` capability gate server-side; reading, accepting and
+/// declining are open to the buyer who is party to the offer.
+///
+/// An offer is tied to one inquiry (hence one listing) and one buyer–seller
+/// pair. Every route resolves the caller from the token, and the repository
+/// scopes the result to the caller's pair, so no path or query can widen it to
+/// another pair's offers.
+abstract final class OfferEndpoints {
+  /// `GET` — the caller's offers, newest first. 200, plain envelope.
+  ///
+  /// Query allow-list is `inquiry_id`, `listing_id`, `counterpart_id` and
+  /// `status`; ownership-shaped filters (`buyer_id`, `seller_id`, `user_id`)
+  /// are refused with a `422`. The list is not paginated.
+  static const String list = '/offers';
+
+  /// `POST` — create a purchase offer as the listing's seller. 201.
+  ///
+  /// Body allow-list is exactly `inquiry_id`, `listing_id` and
+  /// `proposed_amount`. `buyer_id`, `seller_id`, `status` and `responded_at`
+  /// are server-owned and refused with `422`.
+  static const String create = '/offers';
+
+  /// `GET` — one offer the caller is party to. 200, plain envelope.
+  static String detail(int id) => '/offers/$id';
+
+  /// `POST` — the buyer accepts a pending offer. 200.
+  ///
+  /// The response carries both the accepted offer and the `pending`
+  /// transaction the acceptance created.
+  static String accept(int id) => '/offers/$id/accept';
+
+  /// `POST` — the buyer declines a pending offer. 200, plain envelope.
+  static String decline(int id) => '/offers/$id/decline';
+
+  /// `POST` — the creating seller withdraws a pending offer. 200.
+  static String withdraw(int id) => '/offers/$id/withdraw';
+}
+
 /// Mobile authentication endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php`. They are
@@ -566,9 +730,22 @@ abstract final class AuthEndpoints {
   /// `POST` — exchanges credentials for a mobile token. 200.
   static const String login = '/auth/login';
 
+  /// `POST` — exchanges a Google ID token for a mobile token, creating a buyer
+  /// account for an unknown email. 200, 401 for a rejected token, 403 for an
+  /// administrator.
+  static const String google = '/auth/google';
+
   /// `GET` — the authenticated user's own resource. 200.
   static const String me = '/auth/me';
 
   /// `POST` — revokes the caller's current mobile token. 200.
   static const String logout = '/auth/logout';
+
+  /// `POST` — emails a reset code. The same 200 whether or not the email is
+  /// registered.
+  static const String forgotPassword = '/auth/forgot-password';
+
+  /// `POST` — sets a new password from a reset code. 200, or 422 for a wrong or
+  /// expired code.
+  static const String resetPassword = '/auth/reset-password';
 }

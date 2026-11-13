@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../widgets/nav_line_icon.dart';
+
 import '../../../models/transaction.dart';
 import '../../home/view/buyer_home_screen.dart';
 import '../../marketplace/views/marketplace_screen.dart';
@@ -33,6 +36,10 @@ class _BuyerShellState extends State<BuyerShell> {
   /// index is not a bare `1` in a list of widgets.
   static const int _browseIndex = 1;
 
+  /// The transactions tab's position, so returning to it can refresh its
+  /// loaded filters without rebuilding the screen.
+  static const int _transactionsIndex = 3;
+
   /// The profile tab's position, for the Home header's avatar action.
   static const int _profileIndex = 4;
 
@@ -42,7 +49,7 @@ class _BuyerShellState extends State<BuyerShell> {
     // so this shell rebuilds whenever the inbox state changes. That is what
     // makes the unread badge on the Messages tab update live.
     final ConversationsController messaging = MessagingScope.of(context);
-    final int unread = messaging.state.totalUnread;
+    final int unread = messaging.state.unreadCount(sellerMode: false);
 
     return Scaffold(
       body: IndexedStack(
@@ -53,55 +60,56 @@ class _BuyerShellState extends State<BuyerShell> {
             onOpenProfile: () => setState(() => _index = _profileIndex),
           ),
           const MarketplaceScreen(),
-          const ConversationsScreen(),
-          const TransactionsScreen(role: TransactionRole.buyer),
+          const ConversationsScreen(sellerMode: false),
+          TransactionsScreen(
+            role: TransactionRole.buyer,
+            isActive: _index == _transactionsIndex,
+          ),
           const ProfileScreen(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (int index) => setState(() => _index = index),
-        destinations: <NavigationDestination>[
-          const NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.search_outlined),
-            selectedIcon: Icon(Icons.search),
-            label: 'Browse',
-          ),
-          // Messages, with the unread count as an icon badge. The count is
-          // read from the ConversationsController watched above; the badge
-          // uses Material 3's built-in `Badge` widget rather than a custom
-          // one because it handles RTL, sizing and semantics correctly.
-          NavigationDestination(
-            icon: unread > 0
-                ? Badge(
-                    label: Text(unread > 99 ? '99+' : '$unread'),
-                    child: const Icon(Icons.chat_bubble_outline),
-                  )
-                : const Icon(Icons.chat_bubble_outline),
-            selectedIcon: unread > 0
-                ? Badge(
-                    label: Text(unread > 99 ? '99+' : '$unread'),
-                    child: const Icon(Icons.chat_bubble),
-                  )
-                : const Icon(Icons.chat_bubble),
-            label: 'Messages',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.swap_horiz_outlined),
-            selectedIcon: Icon(Icons.swap_horiz),
-            label: 'Transactions',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+      // A hairline separates the bar from the content, as on the app bar.
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (int index) => setState(() => _index = index),
+          // The proposal's line icons: a selected tab keeps the same outline
+          // and only turns brand green (the theme colours it).
+          destinations: <NavigationDestination>[
+            const NavigationDestination(
+              icon: NavLineIcon(NavGlyph.home),
+              label: 'Home',
+            ),
+            const NavigationDestination(
+              icon: NavLineIcon(NavGlyph.browse),
+              label: 'Browse',
+            ),
+            // Messages, with the unread count as an icon badge. The count is
+            // read from the ConversationsController watched above; the badge
+            // uses Material 3's built-in `Badge` widget rather than a custom
+            // one because it handles RTL, sizing and semantics correctly.
+            NavigationDestination(
+              icon: unread > 0
+                  ? Badge(
+                      label: Text(unread > 99 ? '99+' : '$unread'),
+                      child: const NavLineIcon(NavGlyph.messages),
+                    )
+                  : const NavLineIcon(NavGlyph.messages),
+              label: 'Messages',
+            ),
+            const NavigationDestination(
+              icon: NavLineIcon(NavGlyph.transactions),
+              label: 'Transactions',
+            ),
+            const NavigationDestination(
+              icon: NavLineIcon(NavGlyph.profile),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }

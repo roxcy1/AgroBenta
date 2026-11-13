@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
+import '../models/ai_price_estimate.dart';
 import '../models/listing.dart';
 import '../models/marketplace_page.dart';
 
@@ -129,6 +130,21 @@ class SellerListingService {
     );
   }
 
+  /// `POST /seller/listings/{id}/price-suggestion` — request an AI estimate.
+  ///
+  /// The endpoint carries no request body: the persisted listing is the input.
+  /// The response is the stored `AiPriceEstimateResource`. A `withheld` or
+  /// `invalid` refusal arrives as a `422` whose structured details are preserved
+  /// by [ApiException.details].
+  Future<AiPriceEstimate> requestPriceSuggestion(int id) {
+    return _apiClient.post<AiPriceEstimate>(
+      SellerListingEndpoints.priceSuggestion(id),
+      parse: (Object? data) => AiPriceEstimate.fromJson(
+        _asObject(data, 'POST /seller/listings/$id/price-suggestion'),
+      ),
+    );
+  }
+
   /// `POST /seller/listings/{id}/mark-sold` — mark an active listing as sold.
   ///
   /// Permitted only while the listing is `active`. The server answers `409`
@@ -143,8 +159,9 @@ class SellerListingService {
   Future<Listing> markSold(int id) {
     return _apiClient.post<Listing>(
       SellerListingEndpoints.markSold(id),
-      parse: (Object? data) =>
-          Listing.fromJson(_asObject(data, 'POST /seller/listings/$id/mark-sold')),
+      parse: (Object? data) => Listing.fromJson(
+        _asObject(data, 'POST /seller/listings/$id/mark-sold'),
+      ),
     );
   }
 
@@ -255,8 +272,9 @@ class SellerListingService {
     return _apiClient.postMultipart<Listing>(
       path: SellerListingEndpoints.photos(listingId),
       files: parts,
-      parse: (Object? data) =>
-          Listing.fromJson(_asObject(data, 'POST /seller/listings/$listingId/photos')),
+      parse: (Object? data) => Listing.fromJson(
+        _asObject(data, 'POST /seller/listings/$listingId/photos'),
+      ),
     );
   }
 
@@ -278,15 +296,13 @@ class SellerListingService {
   /// Throws [ApiException]:
   ///  * `notFound` on a `404` — the named photo is not on the listing.
   ///  * `conflict` on a `409` — the listing is not `draft` or `active`.
-  Future<Listing> removePhoto({
-    required int listingId,
-    required String photo,
-  }) {
+  Future<Listing> removePhoto({required int listingId, required String photo}) {
     return _apiClient.delete<Listing>(
       SellerListingEndpoints.deletePhoto(listingId),
       query: <String, dynamic>{'photo': photo},
-      parse: (Object? data) =>
-          Listing.fromJson(_asObject(data, 'DELETE /seller/listings/$listingId/photos')),
+      parse: (Object? data) => Listing.fromJson(
+        _asObject(data, 'DELETE /seller/listings/$listingId/photos'),
+      ),
     );
   }
 }

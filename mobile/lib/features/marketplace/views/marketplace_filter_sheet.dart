@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/listing_filters.dart';
 
 /// Opens the marketplace filter sheet and resolves to the applied filters, or
@@ -134,9 +135,9 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
                 controller: _livestockType,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: 'Livestock type',
+                  label: FieldLabel('Livestock type', hasPrefixIcon: true),
                   hintText: 'e.g. Cattle',
-                  prefixIcon: Icon(Icons.pets_outlined),
+                  prefixIcon: FieldIcon(Icon(Icons.pets_outlined)),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -150,9 +151,9 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
                 controller: _location,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: 'Location',
+                  label: FieldLabel('Location', hasPrefixIcon: true),
                   hintText: 'e.g. Nueva Ecija',
-                  prefixIcon: Icon(Icons.place_outlined),
+                  prefixIcon: FieldIcon(Icon(Icons.place_outlined)),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -174,7 +175,7 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
                       inputFormatters: <TextInputFormatter>[_decimalOnly],
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
-                        labelText: 'Min price',
+                        label: FieldLabel('Min price'),
                         hintText: '0',
                         prefixText: '₱ ',
                       ),
@@ -191,7 +192,7 @@ class _MarketplaceFilterSheetState extends State<_MarketplaceFilterSheet> {
                       textInputAction: TextInputAction.done,
                       onSubmitted: (String _) => _apply(),
                       decoration: const InputDecoration(
-                        labelText: 'Max price',
+                        label: FieldLabel('Max price'),
                         hintText: 'No limit',
                         prefixText: '₱ ',
                       ),

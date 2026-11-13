@@ -9,8 +9,8 @@ void main() {
 
   group('palette', () {
     test('primary is the AgroBenta brand green', () {
-      // #006B4F — the dark agricultural green in `mobile/DESIGN.md` §3.
-      expect(AppColors.primary, const Color(0xFF006B4F));
+      // #1B5E20 — the dark agricultural green in `mobile/DESIGN.md` §3.
+      expect(AppColors.primary, const Color(0xFF1B5E20));
     });
 
     test('exposes every semantic token the design system requires', () {
@@ -60,10 +60,14 @@ void main() {
       expect(theme.scaffoldBackgroundColor, AppColors.background);
     });
 
-    test('uses a solid brand app bar with no elevation', () {
-      expect(theme.appBarTheme.backgroundColor, AppColors.primary);
+    test('uses a white app bar with a hairline and no elevation', () {
+      expect(theme.appBarTheme.backgroundColor, AppColors.surface);
       expect(theme.appBarTheme.elevation, 0);
-      expect(theme.appBarTheme.foregroundColor, Colors.white);
+      expect(theme.appBarTheme.foregroundColor, AppColors.text);
+      expect(
+        theme.appBarTheme.shape,
+        const Border(bottom: BorderSide(color: AppColors.border)),
+      );
     });
 
     test('cards use a border and a moderate radius, not heavy elevation', () {
@@ -75,7 +79,7 @@ void main() {
         isA<RoundedRectangleBorder>().having(
           (RoundedRectangleBorder shape) => shape.borderRadius,
           'borderRadius',
-          BorderRadius.circular(AppRadius.lg),
+          BorderRadius.circular(AppRadius.md),
         ),
       );
     });
@@ -106,14 +110,11 @@ void main() {
       );
     });
 
-    test('uses the platform system font, with no bundled display font', () {
-      // Root DESIGN.md §4 requires a conventional system font. The theme must
-      // not override Flutter's platform default (Roboto on Android, SF on
-      // iOS), and `pubspec.yaml` declares no `fonts:` block.
-      expect(
-        theme.textTheme.bodyMedium?.fontFamily,
-        ThemeData.light().textTheme.bodyMedium?.fontFamily,
-      );
+    test('uses Public Sans, the one bundled UI typeface', () {
+      // mobile/DESIGN.md §4: Public Sans everywhere, no second display font.
+      expect(AppTheme.fontFamily, 'PublicSans');
+      expect(theme.textTheme.bodyMedium?.fontFamily, 'PublicSans');
+      expect(theme.textTheme.headlineSmall?.fontFamily, 'PublicSans');
     });
   });
 

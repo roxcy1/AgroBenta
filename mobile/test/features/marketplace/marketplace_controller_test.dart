@@ -288,11 +288,9 @@ void main() {
       );
       await pumpEventQueue();
 
-      expect(
-        controller.state.listings.map((Listing l) => l.breed),
-        <String>['Newer'],
-        reason: 'the stale response must be dropped',
-      );
+      expect(controller.state.listings.map((Listing l) => l.breed), <String>[
+        'Newer',
+      ], reason: 'the stale response must be dropped');
     });
 
     test('clearing the search re-requests without the term', () async {
@@ -324,14 +322,14 @@ void main() {
 
         await controller.applyFilters(
           const ListingFilters(
-            livestockType: 'Cattle',
+            livestockType: 'cattle',
             minPrice: '10000',
             maxPrice: '50000',
           ),
         );
 
         final Map<String, String> query = recorded.single.query;
-        expect(query['livestock_type'], 'Cattle');
+        expect(query['livestock_type'], 'cattle');
         expect(query['min_price'], '10000');
         expect(query['max_price'], '50000');
       },
@@ -356,7 +354,7 @@ void main() {
       expect(controller.state.currentPage, 2);
 
       await controller.applyFilters(
-        const ListingFilters(livestockType: 'Goat'),
+        const ListingFilters(livestockType: 'goat'),
       );
 
       expect(controller.state.currentPage, 1);
@@ -368,7 +366,7 @@ void main() {
         (_) async => marketplaceListResponse(),
       );
 
-      const ListingFilters filters = ListingFilters(livestockType: 'Cattle');
+      const ListingFilters filters = ListingFilters(livestockType: 'cattle');
       await controller.applyFilters(filters);
       expect(recorded, hasLength(1));
 
@@ -387,7 +385,7 @@ void main() {
       );
 
       await controller.applyFilters(
-        const ListingFilters(livestockType: 'Cattle', maxPrice: '50000'),
+        const ListingFilters(livestockType: 'cattle', maxPrice: '50000'),
       );
       await controller.clearFilters();
 
@@ -717,11 +715,10 @@ void main() {
 
       // One request, not one per cleared field.
       expect(recorded, hasLength(4));
-      expect(
-        recorded.last.query.keys,
-        <String>{'page', 'per_page'},
-        reason: 'the widened query sends no search or filter',
-      );
+      expect(recorded.last.query.keys, <String>{
+        'page',
+        'per_page',
+      }, reason: 'the widened query sends no search or filter');
       expect(harness.controller.state.searchText, isEmpty);
       expect(harness.controller.state.filters, ListingFilters.none);
     });

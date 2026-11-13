@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'app_input_border.dart';
 import 'app_spacing.dart';
 
 /// The single place the AgroBenta visual identity is expressed in Flutter.
@@ -16,6 +17,9 @@ import 'app_spacing.dart';
 abstract final class AppTheme {
   /// Build the light theme. The app is light-only for now; a dark theme is a
   /// separate decision and should not be introduced incidentally.
+  /// The bundled UI typeface, registered in `pubspec.yaml`.
+  static const String fontFamily = 'PublicSans';
+
   static ThemeData light() {
     final ColorScheme colorScheme =
         ColorScheme.fromSeed(seedColor: AppColors.primary).copyWith(
@@ -35,22 +39,28 @@ abstract final class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      // Public Sans, bundled in assets/fonts (mobile/DESIGN.md §4).
+      fontFamily: fontFamily,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.background,
       textTheme: textTheme,
       dividerColor: AppColors.border,
       splashFactory: InkSparkle.splashFactory,
 
+      // White app bars with a hairline underneath. Brand green is kept for
+      // actions, the selected tab and prices, so a solid green bar on every
+      // screen no longer competes with them.
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.text,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         toolbarHeight: AppSizes.appBarHeight,
+        shape: const Border(bottom: BorderSide(color: AppColors.border)),
         titleTextStyle: textTheme.titleLarge?.copyWith(
-          color: Colors.white,
+          color: AppColors.text,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -61,7 +71,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           side: const BorderSide(color: AppColors.border),
         ),
       ),
@@ -88,41 +98,89 @@ abstract final class AppTheme {
         ),
       ),
 
+      // The one floating action (Create listing) is a solid brand-green
+      // button with white text, as in the approved design, not the seed's
+      // pale tonal container.
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        focusElevation: 2,
+        hoverElevation: 2,
+        highlightElevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        extendedTextStyle: _textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+
       dividerTheme: const DividerThemeData(
         color: AppColors.border,
         thickness: 1,
         space: 1,
       ),
 
+      // Text fields, per the approved design: the label sits above a 46dp
+      // white box with a 1dp outline that turns brand green and 2dp thick on
+      // focus. See `LabelAboveInputBorder` for how the label is kept above
+      // the box rather than in a notch.
       inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: AppColors.surface,
+        // The border paints the box's fill itself, below the label band.
+        filled: false,
         // Labels stay visible above the field. Never hide a label inside a
         // placeholder — placeholders disappear the moment a user types.
         floatingLabelBehavior: FloatingLabelBehavior.always,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
+        // For a field with a label. A field without one passes
+        // `AppInputs.plainPadding`.
+        contentPadding: AppInputs.labelledPadding,
+        // Never drawn: its size only sets the gap from the label to the
+        // text. See `AppInputs.inlineLabelFontSize`.
+        labelStyle: const TextStyle(
+          fontSize: AppInputs.inlineLabelFontSize,
+          height: 1.3,
+          fontWeight: FontWeight.w600,
+          color: AppColors.text,
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.border),
+        // Drawn at 0.75 scale by Material, so this reads as 13.
+        floatingLabelStyle: const TextStyle(
+          fontSize: AppInputs.labelFontSize / AppInputs.floatingLabelScale,
+          height: 1.3,
+          fontWeight: FontWeight.w600,
+          color: AppColors.text,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.border),
+        hintStyle: textTheme.bodyMedium?.copyWith(color: AppColors.textHint),
+        helperStyle: textTheme.labelMedium?.copyWith(
+          color: AppColors.textSecondary,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        errorStyle: textTheme.labelMedium?.copyWith(color: AppColors.error),
+        errorMaxLines: 3,
+        prefixIconColor: AppColors.textHint,
+        suffixIconColor: AppColors.textHint,
+        // 40, not Material's 48, so an icon never makes the 46dp box taller.
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: AppInputs.iconSlotWidth,
+          minHeight: 40,
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.error),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: AppInputs.iconSlotWidth,
+          minHeight: 40,
         ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.error, width: 2),
+        border: const LabelAboveInputBorder(),
+        enabledBorder: const LabelAboveInputBorder(),
+        disabledBorder: const LabelAboveInputBorder(
+          borderSide: BorderSide(color: AppColors.border),
+          fillColor: AppColors.background,
+        ),
+        focusedBorder: const LabelAboveInputBorder(
+          borderSide: BorderSide(color: AppColors.primary, width: 2),
+        ),
+        errorBorder: const LabelAboveInputBorder(
+          borderSide: BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: const LabelAboveInputBorder(
+          borderSide: BorderSide(color: AppColors.error, width: 2),
         ),
       ),
 
@@ -200,23 +258,24 @@ abstract final class AppTheme {
 
       // The bottom navigation bar, introduced with the buyer shell.
       //
-      // The indicator defaults to the seed colour's `secondaryContainer`, which
-      // renders as a pale sage and fights the brand green, so it is pinned to
-      // [AppColors.primary]. That fixes the icon colours too: in Material 3 the
-      // selected icon sits *inside* the indicator pill and its label sits
-      // outside it, so the icon must be white-on-green while the label is
-      // green-on-surface. Making the selected icon the same green as the pill
-      // would hide it completely.
+      // The selected tab is marked by a thin green line and green icon and
+      // label, so it reads clearly without being the loudest thing on screen.
+      // The seed's default `secondaryContainer` (a pale sage) is not used.
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primary,
+        // No filled pill: the selected tab gets a short brand-green line
+        // above its icon and a green icon and label.
+        indicatorColor: Colors.transparent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+        indicatorShape: const Border(
+          top: BorderSide(color: AppColors.primary, width: 3),
         ),
         labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>(
           (Set<WidgetState> states) => _textTheme.labelMedium?.copyWith(
+            // 11, not the 12 of labelMedium: with five tabs on a 375-wide
+            // phone, a semibold "Transactions" at 12 wraps mid-word.
+            fontSize: 11,
             color: states.contains(WidgetState.selected)
                 ? AppColors.primary
                 : AppColors.textSecondary,
@@ -227,9 +286,11 @@ abstract final class AppTheme {
         ),
         iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
           (Set<WidgetState> states) => IconThemeData(
-            // On the indicator: white. Off it: the secondary text colour.
+            // The proposal draws the tab glyphs at 22, not Material's 24.
+            size: 22,
+            // Selected: brand green. Otherwise: secondary text.
             color: states.contains(WidgetState.selected)
-                ? Colors.white
+                ? AppColors.primary
                 : AppColors.textSecondary,
           ),
         ),
@@ -245,11 +306,18 @@ abstract final class AppTheme {
   /// most of the screen; the prototype keeps titles restrained so content and
   /// livestock imagery stay dominant.
   ///
-  /// Font family is deliberately unset: Flutter uses the platform UI font
-  /// (Roboto on Android, SF on iOS), which is the mobile equivalent of the
-  /// "conventional professional system font" the root `DESIGN.md` requires. Do
-  /// not add a bundled or downloaded display font.
+  /// The family is applied once, on [ThemeData.fontFamily]: Public Sans, the
+  /// single approved UI typeface. Do not add a second, display font.
   static const TextTheme _textTheme = TextTheme(
+    // Brand title - the AgroBenta wordmark on the sign-in and register headers.
+    // The only large style; no screen title uses it.
+    displaySmall: TextStyle(
+      fontSize: 28,
+      height: 1.2,
+      fontWeight: FontWeight.w800,
+      color: AppColors.text,
+    ),
+
     // Screen title — 18–20sp bold. Top of the band keeps it present without
     // swallowing the screen.
     headlineMedium: TextStyle(

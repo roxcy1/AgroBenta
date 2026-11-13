@@ -38,6 +38,8 @@ class SellerVerificationTest extends TestCase
 
         return SellerVerification::create(array_merge([
             'user_id' => $seller->id,
+            'phone' => '09171234567',
+            'address' => 'Trinidad, Bohol',
             'business_name' => 'Test Livestock Farm',
             'business_location' => 'Bukidnon',
             'business_description' => 'A test livestock farm',
@@ -53,6 +55,8 @@ class SellerVerificationTest extends TestCase
     {
         return SellerVerification::create(array_merge([
             'user_id' => $seller->id,
+            'phone' => '09171234567',
+            'address' => 'Trinidad, Bohol',
             'business_name' => 'Test Livestock Farm',
             'business_location' => 'Bukidnon',
             'business_description' => 'A test livestock farm',
@@ -107,6 +111,8 @@ class SellerVerificationTest extends TestCase
                     '*' => [
                         'id',
                         'seller',
+                        'phone',
+                        'address',
                         'business_name',
                         'business_location',
                         'business_description',
@@ -196,6 +202,38 @@ class SellerVerificationTest extends TestCase
         $nullable->assertJsonPath('data.id_document_ref', null);
     }
 
+    public function test_admin_resource_includes_id_snapshot_and_side_declaration(): void
+    {
+        $verification = $this->createVerification([
+            'government_id_type' => 'others',
+            'government_id_description' => 'Barangay ID',
+            'has_no_back_image' => true,
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/seller-verifications/{$verification->id}")
+            ->assertOk()
+            ->assertJsonPath('data.government_id_type', 'others')
+            ->assertJsonPath('data.government_id_description', 'Barangay ID')
+            ->assertJsonPath('data.has_no_back_image', true)
+            ->assertJsonPath('data.has_id_document_back', false);
+    }
+
+    public function test_phone_and_address_snapshots_are_exposed_to_admin_review(): void
+    {
+        $verification = $this->createVerification([
+            'phone' => '09987654321',
+            'address' => 'Poblacion, Trinidad, Bohol',
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/seller-verifications/{$verification->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('data.phone', '09987654321')
+            ->assertJsonPath('data.address', 'Poblacion, Trinidad, Bohol');
+    }
+
     public function test_filter_by_status(): void
     {
         $this->createVerification(['status' => SellerVerificationStatus::Submitted]);
@@ -250,6 +288,28 @@ class SellerVerificationTest extends TestCase
         $response->assertJsonPath('success', true);
         $response->assertJsonPath('data.status', 'approved');
         $response->assertJsonPath('data.admin_note', 'Verified successfully.');
+    }
+
+    public function test_admin_can_finish_reviewing_a_preserved_verification_after_account_deactivation(): void
+    {
+        $verification = $this->createVerification();
+        $token = $this->adminToken();
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->deleteJson("/api/admin/users/{$verification->user_id}")
+            ->assertOk();
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.seller.id', $verification->user_id);
+
+        $this->assertSoftDeleted('users', ['id' => $verification->user_id]);
+        $this->assertDatabaseHas('seller_verifications', [
+            'id' => $verification->id,
+            'status' => SellerVerificationStatus::Approved->value,
+        ]);
     }
 
     public function test_approval_sets_seller_capability(): void

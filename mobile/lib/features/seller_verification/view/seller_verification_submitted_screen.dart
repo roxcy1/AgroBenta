@@ -55,27 +55,27 @@ class SellerVerificationSubmittedScreen extends StatelessWidget {
                       color: AppColors.success,
                     ),
                     const SizedBox(height: AppSpacing.md),
-                     Image.asset(
-                       'assets/images/AgroBentaLogo.png',
-                       height: 48,
-                       fit: BoxFit.contain,
-                     ),
-                     const SizedBox(height: AppSpacing.md),
-                     Text(
-                       'Application Submitted!',
-                       textAlign: TextAlign.center,
-                       style: theme.textTheme.headlineSmall,
-                     ),
-                     const SizedBox(height: AppSpacing.xs),
-                     Text(
-                       'Your application has been received and is now under '
-                       'review.',
-                       textAlign: TextAlign.center,
-                       style: theme.textTheme.bodyMedium?.copyWith(
-                         color: AppColors.textSecondary,
-                       ),
-                     ),
-                     const SizedBox(height: AppSpacing.xl),
+                    Image.asset(
+                      'assets/images/AgroBentaLogo.png',
+                      height: 48,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'Application Submitted!',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Your application has been received and is now under '
+                      'review.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
                     const NoticeBanner(
                       accent: AppColors.warning,
                       icon: Icons.hourglass_empty,
@@ -98,17 +98,13 @@ class SellerVerificationSubmittedScreen extends StatelessWidget {
                       title: 'What happens next?',
                       children: <Widget>[
                         for (int i = 0; i < _nextSteps.length; i++)
-                          _NextStep(
-                            number: i + 1,
-                            text: _nextSteps[i],
-                          ),
+                          _NextStep(number: i + 1, text: _nextSteps[i]),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.xl),
                     FilledButton(
-                      onPressed: () => Navigator.of(context).popUntil(
-                        (Route<dynamic> route) => route.isFirst,
-                      ),
+                      onPressed: () => Navigator.of(context)
+                          .popUntil((Route<dynamic> route) => route.isFirst),
                       child: const Text('Back to Profile'),
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -156,7 +152,7 @@ class _NextStep extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.only(top: AppSpacing.xxxs),
               child: Text(text, style: theme.textTheme.bodyMedium),
             ),
           ),

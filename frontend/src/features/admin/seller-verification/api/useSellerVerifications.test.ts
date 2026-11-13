@@ -4,6 +4,7 @@ import api from '../../../../lib/api';
 import {
   fetchVerificationCounts,
   fetchVerificationDocument,
+  fetchVerificationFarmPhoto,
 } from './useSellerVerifications';
 
 const getSpy = vi.spyOn(api, 'get');
@@ -74,6 +75,28 @@ describe('fetchVerificationDocument', () => {
 
     expect(getSpy).toHaveBeenCalledWith(
       '/admin/seller-verifications/3/documents/id_document',
+      { responseType: 'blob' },
+    );
+  });
+
+  it('fetches the ID front and back using private authenticated document routes', async () => {
+    getSpy.mockResolvedValue({ data: new Blob() } as unknown as AxiosResponse);
+    await fetchVerificationDocument(5, 'id_document_front');
+    await fetchVerificationDocument(5, 'id_document_back');
+
+    expect(getSpy.mock.calls.map((call) => call[0])).toEqual([
+      '/admin/seller-verifications/5/documents/id_document_front',
+      '/admin/seller-verifications/5/documents/id_document_back',
+    ]);
+  });
+
+  it('fetches a farm photo by its id, as a blob', async () => {
+    getSpy.mockResolvedValue({ data: new Blob() } as unknown as AxiosResponse);
+
+    await fetchVerificationFarmPhoto(3, 'abc123');
+
+    expect(getSpy).toHaveBeenCalledWith(
+      '/admin/seller-verifications/3/documents/farm_photo/abc123',
       { responseType: 'blob' },
     );
   });

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "updated_at_utc": "2026-11-05T13:56:51Z",
+  "active": {
+    "model_version": "v1",
+    "model_file": "catboost_price_v1_20261105T064332748490Z.cbm",
+    "metadata_file": "catboost_price_v1_20261105T064332748490Z.metadata.json",
+    "safety_profile_file": "catboost_price_v1_20261105T064332748490Z.safety.json",
+    "sha256": "0971ccbaec34daaca134a00a2b1d27cfcc52b8d2da9411c0fb0b16f23de70816",
+    "provenance": "synthetic",
+    "status": "active",
+    "training_rows": 1597
+  },
+  "rollback": {
+    "available": false,
+    "target_model_file": null,
+    "reason": "v1 is the initial active model. v2 and v3 are candidates and must not be promoted automatically."
+  },
+  "candidates": [
+    {
+      "model_version": "v2-young-chicken",
+      "model_file": "candidate_catboost_young_chicken_v2_20261105T101535306149Z.cbm",
+      "metadata_file": "candidate_catboost_young_chicken_v2_20261105T101535306149Z.metadata.json",
+      "safety_profile_file": "candidate_catboost_young_chicken_v2_20261105T101535306149Z.safety.json",
+      "sha256": "904fd6a58d8c12439eb1032fe8177182b2d706e996b07238ac8cc48af550662e",
+      "provenance": "synthetic",
+      "status": "candidate",
+      "training_rows": 1697
+    },
+    {
+      "model_version": "v3-targeted",
+      "model_file": "candidate_catboost_targeted_v3_20261105T133811927044Z.cbm",
+      "metadata_file": "candidate_catboost_targeted_v3_20261105T133811927044Z.metadata.json",
+      "safety_profile_file": "candidate_catboost_targeted_v3_20261105T133811927044Z.safety.json",
+      "sha256": "ab80c619d08e1aa1f57ce8d0b09884396ee6ee1c00072560133d6f39227301cb",
+      "provenance": "synthetic",
+      "status": "candidate",
+      "training_rows": 1697
+    }
+  ],
+  "safety_policy": {
+    "hard_envelope": "observed category age/weight minimum and maximum",
+    "typical_range": "category and breed 1st-99th percentiles",
+    "joint_check": "observed weight minimum/maximum within each category age bin",
+    "missing_profile": "withhold prediction",
+    "note": "Data-derived prototype rules only; not authoritative biological limits or market evidence."
+  }
+}

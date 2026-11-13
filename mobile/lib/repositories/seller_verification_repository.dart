@@ -44,16 +44,26 @@ class SellerVerificationRepository {
   /// meaning of their own, and rewriting them here would be a second place for
   /// wording to drift. The controller branches on [ApiErrorKind] instead.
   Future<SellerVerification> submit({
-    required String businessName,
+    required String phone,
+    required String address,
+    String? businessName,
     String? businessLocation,
     String? businessDescription,
     String? idDocumentRef,
+    String governmentIdType = 'philippine_national_id',
+    String? governmentIdDescription,
+    bool hasNoBackImage = false,
   }) {
     return _service.submit(
+      phone: phone,
+      address: address,
       businessName: businessName,
       businessLocation: businessLocation,
       businessDescription: businessDescription,
       idDocumentRef: idDocumentRef,
+      governmentIdType: governmentIdType,
+      governmentIdDescription: governmentIdDescription,
+      hasNoBackImage: hasNoBackImage,
     );
   }
 
@@ -87,5 +97,21 @@ class SellerVerificationRepository {
   /// failure propagates.
   Future<Uint8List?> fetchDocument(VerificationDocumentType type) {
     return _service.fetchDocument(type);
+  }
+
+  /// Stages one farm photo and returns its id.
+  Future<String> uploadFarmPhoto({required XFile file}) {
+    return _service.uploadFarmPhoto(file: file);
+  }
+
+  /// Removes a staged farm photo. Throws [ApiException] `notFound` when no
+  /// staged photo has that id.
+  Future<void> deleteFarmPhoto(String photoId) {
+    return _service.deleteFarmPhoto(photoId);
+  }
+
+  /// The stored bytes of one farm photo, or `null` when it is not on file.
+  Future<Uint8List?> fetchFarmPhoto(String photoId) {
+    return _service.fetchFarmPhoto(photoId);
   }
 }

@@ -102,10 +102,12 @@ abstract final class AppConfig {
       'Physical Android build requires --dart-define=API_BASE_URL '
       'pointing to a reachable backend. Get your machine\'s LAN IP '
       '(e.g. `ipconfig` on Windows, `ip addr` on Linux/macOS) and run:'
-          ' flutter run --dart-define=API_BASE_URL=http://<your-LAN-IP>:8001/api';
+      ' flutter run --dart-define=API_BASE_URL=http://<your-LAN-IP>:8001/api';
+
   /// CHANGE_THIS_DEV_LAN_IP: the development machine's address in
   /// `ipconfig`.
-  static const String physicalAndroidApiBaseUrl = 'http://192.168.1.14:8001/api';
+  static const String physicalAndroidApiBaseUrl =
+      'http://192.168.1.14:8001/api';
 
   /// `10.0.2.2` is the Android emulator's alias for the host machine's loopback
   /// interface. Selected **only** when the build opts in with
@@ -187,9 +189,10 @@ abstract final class AppConfig {
             // looking like an unreachable backend. `kIsWeb` is a compile-time
             // constant about the platform being built, so device emulation
             // cannot influence it.
-            TargetPlatform.android when !isWeb => androidTarget == 'emulator'
-                ? androidEmulatorApiBaseUrl
-                : throw StateError(_missingPhysicalAndroidApiBaseUrlError),
+            TargetPlatform.android when !isWeb =>
+              androidTarget == 'emulator'
+                  ? androidEmulatorApiBaseUrl
+                  : throw StateError(_missingPhysicalAndroidApiBaseUrlError),
             _ => localApiBaseUrl,
           };
 
@@ -230,6 +233,53 @@ abstract final class AppConfig {
   /// request will fail — fix the URL rather than working around it.
   static bool get isUsingCleartextHttp =>
       Uri.parse(apiBaseUrl).scheme == 'http';
+
+  /// The Laravel Reverb WebSocket URL the real-time client connects to.
+  ///
+  /// Reverb is a separate server from the REST API: in Docker it listens on
+  /// port 8080 and is published as `${REVERB_PORT:-8083}` on the host. The
+  /// client connects to `ws://<host>:8083`, so the host follows the API base
+  /// URL (localhost, the Android emulator alias, or the machine's LAN IP) and
+  /// only the port/scheme differ.
+  ///
+  /// Override with `--dart-define=REVERB_WS_URL=wss://reverb.example.test`.
+  static const String _reverbWsUrlOverride = String.fromEnvironment(
+    'REVERB_WS_URL',
+  );
+
+  static String get reverbWsUrl {
+    if (_reverbWsUrlOverride.isNotEmpty) {
+      return _stripTrailingSlash(_reverbWsUrlOverride);
+    }
+
+    final Uri base = Uri.parse(apiBaseUrl);
+    // Android native builds that did not opt into the emulator alias and did
+    // not pass a URL throw before reaching here, so `base.host` is always a
+    // real host by this point.
+    return 'ws://${base.host}:8083';
+  }
+
+  /// The backend's Google OAuth "Web application" client ID, passed to Google
+  /// Sign-In as `serverClientId` so the ID token's audience is the one Laravel
+  /// checks (`GOOGLE_CLIENT_ID` in `backend/.env`). Not a secret.
+  ///
+  /// Passed per build with `--dart-define=GOOGLE_SERVER_CLIENT_ID=...`. When
+  /// empty, the Google button is not shown.
+  static const String googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+  );
+
+  /// The Reverb application key, used in the WebSocket path `/app/{key}` and
+  /// by the server to sign private-channel auth. It is not a secret — the
+  /// matching `REVERB_APP_SECRET` never leaves the server — but it must match
+  /// the backend's `REVERB_APP_KEY`.
+  ///
+  /// Passed per build with `--dart-define=REVERB_APP_KEY=...`; the default is
+  /// the local Docker development key from `backend/.env`.
+  static const String reverbAppKey = String.fromEnvironment(
+    'REVERB_APP_KEY',
+    defaultValue: 'de12af69703d6055c123e7a63469dee7',
+  );
 
   static String _stripTrailingSlash(String value) {
     var result = value;

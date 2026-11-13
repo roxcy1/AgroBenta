@@ -30,6 +30,8 @@
 	<string>Allow camera access to take listing photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow photo library access to choose listing photos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allow AgroBenta to save your purchase receipt to your photo library.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

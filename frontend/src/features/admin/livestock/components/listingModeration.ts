@@ -109,7 +109,5 @@ export function canReview(status: string): boolean {
   return moderationOptionsFor(status).length > 0;
 }
 
-/** The status a listing is expected to hold, for display. */
-export function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
+/** The name shown for a status. One source for every page: `src/lib/status.ts`. */
+export { statusLabel } from '../../../../lib/status';

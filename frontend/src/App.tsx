@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './features/auth/components/ProtectedRoute'
 import { AdminLayout } from './features/admin/components/AdminLayout'
+import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import AdminHomePage from './pages/AdminHomePage'
 import UsersPage from './pages/UsersPage'
@@ -10,14 +11,17 @@ import TransactionsPage from './pages/TransactionsPage'
 import ActivitiesPage from './pages/ActivitiesPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
+import './features/admin/components/AdminVisualSystem.css'
 
 export default function App() {
   return (
     <Routes>
+      {/* Public: the product home page. The admin console starts at /dashboard. */}
+      <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AdminLayout />}>
-          <Route path="/" element={<AdminHomePage />} />
+          <Route path="/dashboard" element={<AdminHomePage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/livestock" element={<LivestockPage />} />
           <Route path="/seller-verification" element={<SellerVerificationPage />} />

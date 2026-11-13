@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\ForgotPasswordRequest;
+use App\Http\Requests\Auth\GoogleLoginRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Services\MobileAuthService;
 use Illuminate\Http\JsonResponse;
@@ -67,6 +70,32 @@ class AuthController extends Controller
     }
 
     /**
+     * Sign in with a Google ID token and issue a mobile-scoped bearer token.
+     */
+    public function google(GoogleLoginRequest $request): JsonResponse
+    {
+        $result = $this->auth->loginWithGoogle($request->validated('id_token'));
+
+        if ($result['result'] === MobileAuthService::RESULT_INVALID_CREDENTIALS) {
+            abort(401, 'Google sign-in failed.');
+        }
+
+        if ($result['result'] === MobileAuthService::RESULT_NOT_PERMITTED) {
+            abort(403, 'This account may not sign in to the mobile application.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Logged in successfully.',
+            'data' => [
+                'token' => $result['token'],
+                'token_type' => 'Bearer',
+                'user' => new UserResource($result['user']),
+            ],
+        ], 200);
+    }
+
+    /**
      * Return the authenticated mobile user's own profile.
      */
     public function me(Request $request): JsonResponse
@@ -87,6 +116,47 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Logged out successfully.',
+        ], 200);
+    }
+
+    /**
+     * Send a password reset code. The reply is the same for every valid email,
+     * so it cannot show whether an account exists.
+     */
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
+    {
+        $this->auth->sendPasswordResetCode($request->validated('email'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'If an account with that email exists, a reset code has been sent.',
+        ], 200);
+    }
+
+    /**
+     * Set a new password from an emailed reset code.
+     */
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
+    {
+        $reset = $this->auth->resetPassword(
+            $request->validated('email'),
+            $request->validated('token'),
+            $request->validated('password'),
+        );
+
+        if (! $reset) {
+            $message = 'The reset code is invalid or has expired.';
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+                'errors' => ['token' => [$message]],
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Your password has been reset.',
         ], 200);
     }
 }

@@ -58,14 +58,19 @@ http.Response sellerListingSingleResponse({
       'listings': <Map<String, dynamic>>[
         <String, dynamic>{
           'id': listing.id,
-          'seller': <String, dynamic>{'id': listing.seller.id, 'name': listing.seller.name},
+          'seller': <String, dynamic>{
+            'id': listing.seller.id,
+            'name': listing.seller.name,
+          },
           'livestock_type': listing.livestockType,
           'breed': listing.breed,
           'age_value': listing.ageValue,
           'age_unit': listing.ageUnit,
+          'age_information': listing.ageInformation,
           'gender': listing.gender,
           'weight_value': listing.weightValue,
           'weight_unit': listing.weightUnit,
+          'weight_information': listing.weightInformation,
           'quantity': listing.quantity,
           'asking_price': listing.askingPrice,
           'location': listing.location,
@@ -92,10 +97,7 @@ http.Response sellerListingSingleResponse({
 );
 
 /// Build a [Listing] from [listingJson] fixture with an optional status.
-Listing fixtureListing({
-  int id = 1,
-  String status = 'active',
-}) =>
+Listing fixtureListing({int id = 1, String status = 'active'}) =>
     Listing.fromJson(listingJson(id: id, status: status));
 
 void main() {
@@ -112,7 +114,11 @@ void main() {
           return sellerListingSingleResponse(listing: draft);
         }
         return http.Response(
-          jsonEncode(<String, dynamic>{'success': true, 'message': null, 'data': null}),
+          jsonEncode(<String, dynamic>{
+            'success': true,
+            'message': null,
+            'data': null,
+          }),
           200,
           headers: <String, String>{'content-type': 'application/json'},
         );
@@ -120,10 +126,94 @@ void main() {
     );
 
     // Delete is present for drafts.
-    expect(find.widgetWithText(OutlinedButton, 'Delete listing'), findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, 'Delete listing'),
+      findsOneWidget,
+    );
 
     // Submit for review is present for drafts.
-    expect(find.widgetWithText(FilledButton, 'Submit for review'), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Submit for review'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows per-head pricing and the informational listing total', (
+    WidgetTester tester,
+  ) async {
+    final Listing active = fixtureListing(id: 6, status: 'active');
+
+    await pumpDetailScreen(
+      tester,
+      listing: active,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath == '/seller/listings') {
+          return sellerListingSingleResponse(listing: active);
+        }
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'success': true,
+            'message': null,
+            'data': null,
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      },
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Asking Price (₱) — Per Head'), findsOneWidget);
+    expect(find.text('Number of Animals Available'), findsOneWidget);
+    expect(find.text('Total listing value'), findsOneWidget);
+    expect(find.text('₱170,000.00 (informational only)'), findsOneWidget);
+  });
+
+  testWidgets('estimated measurements are clearly labelled for the seller', (
+    WidgetTester tester,
+  ) async {
+    final Listing estimated = Listing.fromJson(
+      listingJson(
+        id: 7,
+        status: 'active',
+        ageInformation: 'estimated',
+        weightInformation: 'estimated',
+      ),
+    );
+
+    await pumpDetailScreen(
+      tester,
+      listing: estimated,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath == '/seller/listings') {
+          return sellerListingSingleResponse(listing: estimated);
+        }
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'success': true,
+            'message': null,
+            'data': null,
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      },
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Estimated Age'), findsOneWidget);
+    expect(find.text('Estimated Weight'), findsOneWidget);
+    expect(
+      find.text(
+        'Estimated age or weight is provided by the seller and is not '
+        'independently verified.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('an active detail screen offers Mark as sold, not Delete', (
@@ -139,66 +229,82 @@ void main() {
           return sellerListingSingleResponse(listing: active);
         }
         return http.Response(
-          jsonEncode(<String, dynamic>{'success': true, 'message': null, 'data': null}),
+          jsonEncode(<String, dynamic>{
+            'success': true,
+            'message': null,
+            'data': null,
+          }),
           200,
           headers: <String, String>{'content-type': 'application/json'},
         );
       },
     );
 
-    expect(find.widgetWithText(OutlinedButton, 'Mark as sold'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Delete listing'), findsNothing);
   });
 
-  testWidgets('markSold on the detail screen requires confirmation before acting', (
-    WidgetTester tester,
-  ) async {
-    final Listing active = fixtureListing(id: 3, status: 'active');
+  testWidgets(
+    'markSold on the detail screen requires confirmation before acting',
+    (WidgetTester tester) async {
+      final Listing active = fixtureListing(id: 3, status: 'active');
 
-    await pumpDetailScreen(
-      tester,
-      listing: active,
-      handler: (RecordedRequest request) async {
-        if (request.apiPath == '/seller/listings') {
-          return sellerListingSingleResponse(listing: active);
-        }
-        if (request.apiPath.endsWith('/mark-sold')) {
-          return sellerListingResponse(
-            listing: listingJson(id: 3, status: 'sold'),
+      await pumpDetailScreen(
+        tester,
+        listing: active,
+        handler: (RecordedRequest request) async {
+          if (request.apiPath == '/seller/listings') {
+            return sellerListingSingleResponse(listing: active);
+          }
+          if (request.apiPath.endsWith('/mark-sold')) {
+            return sellerListingResponse(
+              listing: listingJson(id: 3, status: 'sold'),
+            );
+          }
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'success': true,
+              'message': null,
+              'data': null,
+            }),
+            200,
+            headers: <String, String>{'content-type': 'application/json'},
           );
-        }
-        return http.Response(
-          jsonEncode(<String, dynamic>{'success': true, 'message': null, 'data': null}),
-          200,
-          headers: <String, String>{'content-type': 'application/json'},
-        );
-      },
-    );
+        },
+      );
 
-    // Tap Mark as sold — confirmation dialog must appear before any API call.
-    expect(find.text('Mark this listing as sold?'), findsNothing);
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Mark as sold'));
-    await tester.pumpAndSettle();
+      // The bar's own button is filled too, so the dialog's confirm button is
+      // looked up inside the dialog.
+      final Finder dialogConfirm = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Mark as sold'),
+      );
 
-    // Dialog is shown with Cancel and Confirm.
-    expect(find.text('Mark this listing as sold?'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Cancel'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsOneWidget);
+      // Tap Mark as sold — confirmation dialog must appear before any API call.
+      expect(find.text('Mark this listing as sold?'), findsNothing);
+      await tester.tap(find.widgetWithText(FilledButton, 'Mark as sold'));
+      await tester.pumpAndSettle();
 
-    // Cancel closes the dialog without changing listing state.
-    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-    await tester.pumpAndSettle();
-    expect(find.text('Mark this listing as sold?'), findsNothing);
-    expect(find.text('Active'), findsOneWidget);
-    expect(find.text('Sold'), findsNothing);
+      // Dialog is shown with Cancel and Confirm.
+      expect(find.text('Mark this listing as sold?'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Cancel'), findsOneWidget);
+      expect(dialogConfirm, findsOneWidget);
 
-    // Confirm closes the dialog.
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Mark as sold'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Mark as sold'));
-    await tester.pumpAndSettle();
-    expect(find.text('Mark this listing as sold?'), findsNothing);
-  });
+      // Cancel closes the dialog without changing listing state.
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Mark this listing as sold?'), findsNothing);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('Sold'), findsNothing);
+
+      // Confirm closes the dialog.
+      await tester.tap(find.widgetWithText(FilledButton, 'Mark as sold'));
+      await tester.pumpAndSettle();
+      await tester.tap(dialogConfirm);
+      await tester.pumpAndSettle();
+      expect(find.text('Mark this listing as sold?'), findsNothing);
+    },
+  );
 
   testWidgets('an inactive detail screen offers Delete only', (
     WidgetTester tester,
@@ -213,16 +319,26 @@ void main() {
           return sellerListingSingleResponse(listing: inactive);
         }
         return http.Response(
-          jsonEncode(<String, dynamic>{'success': true, 'message': null, 'data': null}),
+          jsonEncode(<String, dynamic>{
+            'success': true,
+            'message': null,
+            'data': null,
+          }),
           200,
           headers: <String, String>{'content-type': 'application/json'},
         );
       },
     );
 
-    expect(find.widgetWithText(OutlinedButton, 'Delete listing'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Submit for review'), findsNothing);
-    expect(find.widgetWithText(OutlinedButton, 'Mark as sold'), findsNothing);
+    expect(
+      find.widgetWithText(OutlinedButton, 'Delete listing'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(FilledButton, 'Submit for review'),
+      findsNothing,
+    );
+    expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsNothing);
   });
 
   for (final String status in <String>['pending', 'sold']) {
@@ -239,16 +355,26 @@ void main() {
             return sellerListingSingleResponse(listing: listing);
           }
           return http.Response(
-            jsonEncode(<String, dynamic>{'success': true, 'message': null, 'data': null}),
+            jsonEncode(<String, dynamic>{
+              'success': true,
+              'message': null,
+              'data': null,
+            }),
             200,
             headers: <String, String>{'content-type': 'application/json'},
           );
         },
       );
 
-      expect(find.widgetWithText(OutlinedButton, 'Delete listing'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Submit for review'), findsNothing);
-      expect(find.widgetWithText(OutlinedButton, 'Mark as sold'), findsNothing);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Delete listing'),
+        findsNothing,
+      );
+      expect(
+        find.widgetWithText(FilledButton, 'Submit for review'),
+        findsNothing,
+      );
+      expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsNothing);
     });
   }
 }

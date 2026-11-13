@@ -206,11 +206,11 @@ void main() {
 
     expect(find.text('No completed purchases yet'), findsOneWidget);
     expect(
-      find.text('Completion is not yet available in the app.'),
+      find.text(
+        'Purchases completed after you confirm receipt will appear here.',
+      ),
       findsOneWidget,
-      reason:
-          'no path in the app can reach completed today (OQ-15); the empty '
-          'state says so rather than pretending',
+      reason: 'completion is available after seller-reported handover/delivery',
     );
     expect(recorded.last.query['role'], 'buyer');
     expect(recorded.last.query['status'], 'completed');
@@ -345,5 +345,51 @@ void main() {
     expect(recorded.last.query['role'], 'buyer');
     expect(recorded.last.query.containsKey('status'), isFalse);
     expect(find.text('No purchases yet'), findsOneWidget);
+  });
+
+  testWidgets('returning to the tab refreshes the loaded filter without '
+      'rebuilding the screen', (WidgetTester tester) async {
+    int calls = 0;
+    final TransactionRepository repository = buildTransactionRepository(
+      tokenStore,
+      (_) async {
+        calls++;
+        return emptyList();
+      },
+      recorded: recorded,
+    );
+
+    bool active = true;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      TransactionScope(
+        repository: repository,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              rebuild = setState;
+              return TransactionsScreen(
+                role: TransactionRole.buyer,
+                isActive: active,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+    expect(calls, 1);
+
+    // Leaving the tab changes nothing: the screen stays alive in the shell.
+    rebuild(() => active = false);
+    await tester.pump();
+    expect(calls, 1);
+
+    // Coming back refreshes what is already loaded, which is how a
+    // transaction created in a chat appears without a manual pull.
+    rebuild(() => active = true);
+    await settle(tester);
+    expect(calls, 2);
   });
 }

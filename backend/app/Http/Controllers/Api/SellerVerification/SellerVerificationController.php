@@ -53,10 +53,15 @@ class SellerVerificationController extends Controller
             $verification = $this->verifications->submit(
                 $request->user(),
                 $request->safe()->only([
+                    'phone',
+                    'address',
                     'business_name',
                     'business_location',
                     'business_description',
                     'id_document_ref',
+                    'government_id_type',
+                    'government_id_description',
+                    'has_no_back_image',
                 ]),
             );
         } catch (DomainException $exception) {
@@ -70,8 +75,19 @@ class SellerVerificationController extends Controller
 
             if ($exception->getMessage() === SellerVerificationService::DOCUMENTS_MISSING) {
                 return $this->missingDocumentsResponse(
-                    $this->documents->missingStaged($request->user()),
+                    $this->documents->missingStaged(
+                        $request->user(),
+                        $request->boolean('has_no_back_image'),
+                    ),
                 );
+            }
+
+            if ($exception->getMessage() === SellerVerificationService::BACK_IMAGE_CONTRADICTION) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Remove the staged back image or choose to upload the back image.',
+                    'errors' => ['has_no_back_image' => ['A back image is staged for this application.']],
+                ], 422);
             }
 
             throw $exception;
@@ -107,11 +123,12 @@ class SellerVerificationController extends Controller
     }
 
     /**
-     * `POST /api/seller-verification/documents` — stage one required document.
+     * `POST /api/seller-verification/documents` — stage one document.
      *
      * The response deliberately carries no path and no URL. The file is on a
      * private disk, and the only way to read it back is the authenticated
-     * endpoint below.
+     * endpoint below. A farm photo also gets a `photo_id`, the only way to name
+     * it among the application's other farm photos.
      */
     public function storeDocument(
         UploadSellerVerificationDocumentRequest $request,
@@ -134,6 +151,34 @@ class SellerVerificationController extends Controller
         }
 
         $type = $request->documentType();
+
+        if ($type->allowsMultiple()) {
+            $photoId = $this->documents->stageFarmPhoto($user, $request->file('document'));
+
+            if ($photoId === null) {
+                $message = sprintf(
+                    'You can upload up to %d farm photos.',
+                    SellerVerificationDocumentService::MAX_FARM_PHOTOS,
+                );
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'errors' => ['document' => [$message]],
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document uploaded.',
+                'data' => [
+                    'type' => $type->value,
+                    'uploaded' => true,
+                    'photo_id' => $photoId,
+                ],
+            ], 201);
+        }
+
         $this->documents->stage($user, $type, $request->file('document'));
 
         return response()->json([
@@ -187,11 +232,41 @@ class SellerVerificationController extends Controller
     }
 
     /**
+     * `DELETE /api/seller-verification/documents/farm_photo/{photo}` — remove
+     * one staged farm photo before submission. Only the caller's own staging
+     * area is searched, so another account's photo is simply not found.
+     */
+    public function destroyFarmPhoto(Request $request, string $photo): JsonResponse
+    {
+        if (! $this->documents->forgetStagedFarmPhoto($request->user(), $photo)) {
+            abort(404, 'No staged farm photo with that id exists.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Document removed.',
+        ], 200);
+    }
+
+    /**
+     * `GET /api/seller-verification/documents/farm_photo/{photo}` — stream one
+     * farm photo the caller submitted. Owner-only for the same reason as
+     * {@see showDocument()}: the record comes from the token.
+     */
+    public function showFarmPhoto(Request $request, string $photo): StreamedResponse
+    {
+        $verification = $this->verifications->currentFor($request->user());
+
+        abort_if($verification === null, 404);
+
+        return $this->documents->farmPhotoResponse($verification, $photo);
+    }
+
+    /**
      * A `422` naming the document fields the submission is missing.
      *
-     * The keys match the mobile form's two document cards (`id_document` and
-     * `selfie`), so the existing per-field error rendering applies without a
-     * second error shape.
+     * The keys match the mobile form's document cards, so the existing
+     * per-field error rendering applies without a second error shape.
      *
      * @param  list<SellerVerificationDocumentType>  $missing
      */
@@ -200,16 +275,12 @@ class SellerVerificationController extends Controller
         $errors = [];
 
         foreach ($missing as $type) {
-            $errors[$type->value] = [
-                $type === SellerVerificationDocumentType::IdDocument
-                    ? 'Upload a clear photo of your government-issued ID.'
-                    : 'Upload a selfie holding the same ID.',
-            ];
+            $errors[$type->value] = [$type->missingMessage()];
         }
 
         return response()->json([
             'success' => false,
-            'message' => 'Upload both required documents before submitting.',
+            'message' => 'Upload all required documents before submitting.',
             'errors' => $errors,
         ], 422);
     }

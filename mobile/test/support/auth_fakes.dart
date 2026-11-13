@@ -6,6 +6,7 @@ import 'package:agrobenta_mobile/models/auth_session.dart';
 import 'package:agrobenta_mobile/models/user.dart';
 import 'package:agrobenta_mobile/repositories/auth_repository.dart';
 import 'package:agrobenta_mobile/services/auth_service.dart';
+import 'package:agrobenta_mobile/services/google_sign_in_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -20,12 +21,16 @@ class FakeTokenStore implements TokenStore {
   int writeCount = 0;
   int clearCount = 0;
 
+  /// Whether the last write was remembered (`true`) or session-only.
+  bool? lastWritePersisted;
+
   @override
   Future<String?> read() async => token;
 
   @override
-  Future<void> write(String value) async {
+  Future<void> write(String value, {bool persist = true}) async {
     token = value;
+    lastWritePersisted = persist;
     writeCount++;
   }
 
@@ -33,6 +38,13 @@ class FakeTokenStore implements TokenStore {
   Future<void> clear() async {
     token = null;
     clearCount++;
+  }
+
+  @override
+  Future<bool> clearIfCurrent(String expectedToken) async {
+    if (token != expectedToken) return false;
+    await clear();
+    return true;
   }
 }
 
@@ -50,6 +62,10 @@ Map<String, dynamic> userJson({
   Object? emailVerifiedAt,
   Object? createdAt = '2026-09-25T08:15:00.000000Z',
   Object? updatedAt = '2026-09-25T08:15:00.000000Z',
+  Object? phone,
+  Object? location,
+  Object? avatarUrl,
+  Object? bio,
 }) {
   return <String, dynamic>{
     'id': id,
@@ -60,6 +76,10 @@ Map<String, dynamic> userJson({
     'email_verified_at': emailVerifiedAt,
     'created_at': createdAt,
     'updated_at': updatedAt,
+    'phone': phone,
+    'location': location,
+    'avatar_url': avatarUrl,
+    'bio': bio,
   };
 }
 
@@ -147,3 +167,36 @@ User fixtureUser({int id = 7, String name = 'Ana Reyes'}) =>
         user: userJson(id: id, name: name),
       ),
     ).user;
+
+/// A [GoogleSignInService] that never opens Google's account picker.
+///
+/// [idToken] is what the picker "returns": `null` means the user cancelled.
+/// Set [error] to make the picker fail instead.
+class FakeGoogleSignIn implements GoogleSignInService {
+  FakeGoogleSignIn({
+    this.isAvailable = true,
+    this.idToken = 'google-id-token',
+    this.error,
+  });
+
+  @override
+  final bool isAvailable;
+
+  @override
+  String get serverClientId => 'test-web-client-id';
+
+  final String? idToken;
+  final Object? error;
+
+  /// How many times the account picker was opened.
+  int calls = 0;
+
+  @override
+  Future<String?> obtainIdToken() async {
+    calls++;
+    if (error != null) {
+      throw error!;
+    }
+    return idToken;
+  }
+}

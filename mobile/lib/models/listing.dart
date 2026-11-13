@@ -1,5 +1,6 @@
 import '../core/config/app_config.dart';
 import '../core/utils/json_utils.dart';
+import 'livestock_type.dart';
 
 /// A listing's publication status, as stored in `listings.status`.
 ///
@@ -108,9 +109,11 @@ class Listing {
     required this.breed,
     required this.ageValue,
     required this.ageUnit,
+    required this.ageInformation,
     required this.gender,
     required this.weightValue,
     required this.weightUnit,
+    required this.weightInformation,
     required this.quantity,
     required this.askingPrice,
     required this.location,
@@ -122,6 +125,7 @@ class Listing {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.completedSales = 0,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
@@ -132,9 +136,11 @@ class Listing {
       breed: readString(json, 'breed'),
       ageValue: _readNullableDecimal(json, 'age_value'),
       ageUnit: readNullableString(json, 'age_unit'),
+      ageInformation: readNullableString(json, 'age_information'),
       gender: readNullableString(json, 'gender'),
       weightValue: _readNullableDecimal(json, 'weight_value'),
       weightUnit: readString(json, 'weight_unit'),
+      weightInformation: readNullableString(json, 'weight_information'),
       quantity: readInt(json, 'quantity'),
       askingPrice: readDecimalString(json, 'asking_price'),
       location: readString(json, 'location'),
@@ -143,12 +149,13 @@ class Listing {
       shortDescription: readString(json, 'short_description'),
       additionalNotes: readNullableString(json, 'additional_notes'),
       photos: readStringList(json, 'photos')
-          .map((String url) => Listing.resolvePhotoUrl(
-                url,
-                apiOrigin: AppConfig.apiOrigin,
-              ))
+          .map(
+            (String url) =>
+                Listing.resolvePhotoUrl(url, apiOrigin: AppConfig.apiOrigin),
+          )
           .toList(growable: false),
       status: ListingStatus.fromValue(readString(json, 'status')),
+      completedSales: readNullableInt(json, 'completed_sales') ?? 0,
       createdAt: readNullableDateTime(json, 'created_at'),
       updatedAt: readNullableDateTime(json, 'updated_at'),
     );
@@ -176,6 +183,10 @@ class Listing {
   /// `day`, `month` or `year`. Null when [ageValue] is null.
   final String? ageUnit;
 
+  /// `known` or `estimated`, or null for a legacy row that predates the
+  /// selector. The value is the seller's declaration, not a verification.
+  final String? ageInformation;
+
   /// `male` or `female`. Null when not recorded.
   final String? gender;
 
@@ -185,6 +196,10 @@ class Listing {
 
   /// `kg` or `lb`. Non-null in the schema (it defaults to `kg`).
   final String? weightUnit;
+
+  /// `measured` or `estimated`, or null for a legacy row that predates the
+  /// selector. The value is the seller's declaration, not a verification.
+  final String? weightInformation;
 
   /// Whole units available. Never negative.
   final int quantity;
@@ -221,6 +236,10 @@ class Listing {
 
   final ListingStatus status;
 
+  /// Completed transactions for this listing, from the marketplace API.
+  /// `0` is a real answer: no completed sale yet.
+  final int completedSales;
+
   final DateTime? createdAt;
 
   final DateTime? updatedAt;
@@ -256,6 +275,41 @@ class Listing {
     return unit == null ? _trimDecimal(value) : '${_trimDecimal(value)} $unit';
   }
 
+  /// Whether the seller declared the age as estimated.
+  bool get ageIsEstimated => ageInformation == 'estimated';
+
+  /// Whether the seller declared the weight as estimated.
+  bool get weightIsEstimated => weightInformation == 'estimated';
+
+  /// Whether at least one physical measurement is seller-estimated.
+  bool get hasEstimatedMeasurement => ageIsEstimated || weightIsEstimated;
+
+  /// The buyer-facing age label, distinguishing known, estimated and legacy
+  /// seller-provided values. Null when the age is not recorded.
+  String? get ageInformationLabel {
+    if (ageValue == null || ageUnit == null) {
+      return null;
+    }
+    return switch (ageInformation) {
+      'estimated' => 'Estimated Age',
+      'known' => 'Known Age',
+      _ => 'Age (seller-provided)',
+    };
+  }
+
+  /// The buyer-facing weight label, distinguishing measured, estimated and
+  /// legacy seller-provided values. Null when the weight is not recorded.
+  String? get weightInformationLabel {
+    if (weightValue == null) {
+      return null;
+    }
+    return switch (weightInformation) {
+      'estimated' => 'Estimated Weight',
+      'measured' => 'Measured Weight',
+      _ => 'Weight (seller-provided)',
+    };
+  }
+
   /// The gender as a buyer-facing label, e.g. `Female`, or `null`.
   ///
   /// The API stores the value lowercase (`female`); the attribute rows show it
@@ -274,11 +328,13 @@ class Listing {
   }
 
   /// A buyer-facing title for the listing: the breed when there is one,
-  /// otherwise the species.
+  /// otherwise a readable livestock-type label.
   ///
   /// Falls back rather than rendering an empty heading, because `breed` is a
-  /// non-null column but may legitimately be an empty string.
-  String get title => breed.trim().isEmpty ? livestockType : breed;
+  /// non-null column but may legitimately be an empty string. The raw API
+  /// value remains available through [livestockType]; this is display-only.
+  String get title =>
+      breed.trim().isEmpty ? LivestockType.titleCase(livestockType) : breed;
 
   /// Whether a photo path can be handed to `Image.network` as-is.
   ///
@@ -355,7 +411,9 @@ class Listing {
     // This covers '/storage/...' and 'storage/...'. A string containing
     // whitespace is not a valid path or URL (e.g. 'not a url') and is
     // returned unchanged rather than resolved into a bogus address.
-    if (!uri.hasScheme && uri.host.isEmpty && !trimmed.contains(RegExp(r'\s'))) {
+    if (!uri.hasScheme &&
+        uri.host.isEmpty &&
+        !trimmed.contains(RegExp(r'\s'))) {
       final String path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
       return '$apiOrigin$path';
     }

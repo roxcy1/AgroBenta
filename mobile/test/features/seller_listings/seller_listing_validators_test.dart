@@ -8,9 +8,9 @@ import '../../support/seller_listing_fakes.dart';
 
 void main() {
   group('validateAgeValue', () {
-    test('is optional', () {
-      expect(validateAgeValue(''), isNull);
-      expect(validateAgeValue(null), isNull);
+    test('is required', () {
+      expect(validateAgeValue(''), isNotNull);
+      expect(validateAgeValue(null), isNotNull);
     });
 
     test('accepts a whole number below every limit', () {
@@ -61,8 +61,9 @@ void main() {
   });
 
   group('validateWeightValue', () {
-    test('is optional', () {
-      expect(validateWeightValue(''), isNull);
+    test('is required', () {
+      expect(validateWeightValue(''), isNotNull);
+      expect(validateWeightValue(null), isNotNull);
     });
 
     test('accepts up to two decimal places', () {
@@ -84,6 +85,20 @@ void main() {
 
     test('rejects a negative weight', () {
       expect(validateWeightValue('-1'), isNotNull);
+    });
+  });
+
+  group('measurement units', () {
+    test('age unit is required', () {
+      expect(validateAgeUnit(''), isNotNull);
+      expect(validateAgeUnit(null), isNotNull);
+      expect(validateAgeUnit('year'), isNull);
+    });
+
+    test('weight unit is required', () {
+      expect(validateWeightUnit(''), isNotNull);
+      expect(validateWeightUnit(null), isNotNull);
+      expect(validateWeightUnit('kg'), isNull);
     });
   });
 
@@ -143,13 +158,16 @@ void main() {
           TextEditingValue(text: newText),
         );
 
-    test('accepts whole numbers, one or two decimals, and a trailing point', () {
-      expect(apply('', '42500').text, '42500');
-      expect(apply('42500', '42500.5').text, '42500.5');
-      expect(apply('42500.5', '42500.50').text, '42500.50');
-      expect(apply('42500', '42500.').text, '42500.');
-      expect(apply('42500.50', '').text, '');
-    });
+    test(
+      'accepts whole numbers, one or two decimals, and a trailing point',
+      () {
+        expect(apply('', '42500').text, '42500');
+        expect(apply('42500', '42500.5').text, '42500.5');
+        expect(apply('42500.5', '42500.50').text, '42500.50');
+        expect(apply('42500', '42500.').text, '42500.');
+        expect(apply('42500.50', '').text, '');
+      },
+    );
 
     test('rejects a third decimal instead of truncating it', () {
       expect(apply('42500.12', '42500.123').text, '42500.12');
@@ -175,7 +193,26 @@ void main() {
 
       final SellerListingDraft draft = SellerListingDraft.fromListing(listing);
       expect(draft.ageValue, '18');
+      expect(draft.ageInformation, 'known');
+      expect(draft.weightInformation, 'measured');
       expect(draft.toRequestBody()['age_value'], 18);
+      expect(draft.toRequestBody()['age_information'], 'known');
+      expect(draft.toRequestBody()['weight_information'], 'measured');
+    });
+
+    test('prefills estimated information types from the API', () {
+      final Listing listing = Listing.fromJson(
+        listingJson(
+          ageInformation: 'estimated',
+          weightInformation: 'estimated',
+        ),
+      );
+      final SellerListingDraft draft = SellerListingDraft.fromListing(listing);
+
+      expect(draft.ageInformation, 'estimated');
+      expect(draft.weightInformation, 'estimated');
+      expect(draft.toRequestBody()['age_information'], 'estimated');
+      expect(draft.toRequestBody()['weight_information'], 'estimated');
     });
 
     test('leaves a fractional age intact so the validators can reject it', () {
@@ -198,6 +235,20 @@ void main() {
       expect(body.containsKey('age_value'), isFalse);
       expect(body.containsKey('quantity'), isFalse);
       expect(body['asking_price'], '42500');
+    });
+
+    test('sends null only when an edit intentionally clears Breed', () {
+      const SellerListingDraft draft = SellerListingDraft(
+        livestockType: 'cattle',
+        clearBreed: true,
+        quantity: '1',
+        askingPrice: '42500',
+        location: 'Barangay Poblacion, Trinidad, Bohol',
+      );
+
+      final Map<String, dynamic> body = draft.toRequestBody();
+      expect(body.containsKey('breed'), isTrue);
+      expect(body['breed'], isNull);
     });
   });
 }

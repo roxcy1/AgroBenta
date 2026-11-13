@@ -2,9 +2,15 @@ import { Link } from 'react-router-dom';
 import {
   ArrowLeftRight,
   ArrowRight,
+  Beef,
+  ChartNoAxesCombined,
   Clock,
+  Home,
+  Layers,
   PackageCheck,
+  ShieldCheck,
   Store,
+  TrendingUp,
   Users as UsersIcon,
 } from 'lucide-react';
 import {
@@ -19,15 +25,41 @@ import {
   Pie,
   Cell,
   Legend,
+  LabelList,
 } from 'recharts';
 import { useDashboard } from '../api/useDashboard';
 import { useReports } from '../reports/api/useReports';
-import { formatDate } from './dashboardFormat';
+import { formatDateTime } from '../../../lib/format';
 import { RecentListingsTable } from './RecentListingsTable';
 import { RecentTransactionsTable } from './RecentTransactionsTable';
-import { TopNavBar } from './TopNavBar';
+import { Header } from './Header';
+import { statusLabel } from '../../../lib/status';
+import {
+  CHART_AXIS,
+  CHART_GRID,
+  CHART_TICK_SMALL,
+  CHART_TOOLTIP_STYLE,
+  livestockChartColor,
+} from '../../../lib/chartTheme';
+import './Dashboard.css';
 
-const PIE_COLORS = ['#1B5E20', '#2E7D32', '#4CAF50', '#66BB6A', '#81C784', '#A5D6A7', '#C8E6C9'];
+const LISTING_STATUS_COLORS = {
+  draft: '#94A3B8',
+  pending: '#F59E0B',
+  active: '#15803D',
+  sold: '#3B82F6',
+  inactive: '#64748B',
+} as const;
+
+const DASHBOARD_CHART_TOOLTIP_STYLE = {
+  ...CHART_TOOLTIP_STYLE,
+  backgroundColor: '#fff',
+  border: '1px solid #e5ebe7',
+  borderRadius: 10,
+  boxShadow: '0 8px 22px rgba(11, 39, 24, 0.13)',
+};
+
+const DASHBOARD_CHART_TICK = { ...CHART_TICK_SMALL, fill: '#718078' };
 
 export function Dashboard() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -37,25 +69,34 @@ export function Dashboard() {
     error: reportsError,
     refetch: refetchReports,
   } = useReports({});
+  const pageHeader = (
+    <Header
+      title="Dashboard"
+      subtitle="Overview of marketplace activity and key metrics"
+      pageIcon={Home}
+      profileRole="Administrator"
+      showProfileChevron
+    />
+  );
 
   if (isLoading) {
     return (
-      <>
-        <TopNavBar />
+      <div className="dashboard-page-shell">
+        {pageHeader}
         <div className="dashboard-content">
           <div className="dashboard-loading">
             <div className="loading-spinner" />
             <span>Loading dashboard data...</span>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <>
-        <TopNavBar />
+      <div className="dashboard-page-shell">
+        {pageHeader}
         <div className="dashboard-content">
           <div className="dashboard-error">
             <p className="dashboard-error-text">Failed to load dashboard data.</p>
@@ -64,20 +105,20 @@ export function Dashboard() {
             </button>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
   if (!data) {
     return (
-      <>
-        <TopNavBar />
+      <div className="dashboard-page-shell">
+        {pageHeader}
         <div className="dashboard-content">
           <div className="dashboard-empty">
             <p>No dashboard data available.</p>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -100,34 +141,35 @@ export function Dashboard() {
   });
   const transactionsThisMonth = transaction_trend[currentMonthIndex]?.count ?? 0;
 
-  const listingStatusData = [
-    { status: 'Draft', count: listings.draft, color: '#9E9E9E' },
-    { status: 'Pending', count: listings.pending, color: '#F57F17' },
-    { status: 'Active', count: listings.active, color: '#1B5E20' },
-    { status: 'Sold', count: listings.sold, color: '#1565C0' },
-    { status: 'Inactive', count: listings.inactive, color: '#BDBDBD' },
-  ];
+  const listingStatusData = (['draft', 'pending', 'active', 'sold', 'inactive'] as const).map((key) => ({
+    status: statusLabel(key),
+    count: listings[key],
+    color: LISTING_STATUS_COLORS[key],
+  }));
+
+  const totalLivestockListings = livestock_distribution.reduce((total, item) => total + item.count, 0);
 
   const approvedVerifications = reportsData?.seller_verifications.approved ?? 0;
   const rejectedVerifications = reportsData?.seller_verifications.rejected ?? 0;
   const verificationOutcomeData = [
-    { outcome: 'Approved', count: approvedVerifications, color: '#2E7D32' },
-    { outcome: 'Rejected', count: rejectedVerifications, color: '#C62828' },
+    {
+      outcome: statusLabel('approved'),
+      count: approvedVerifications,
+      color: '#16A34A',
+    },
+    {
+      outcome: statusLabel('rejected'),
+      count: rejectedVerifications,
+      color: '#DC2626',
+    },
   ];
 
   return (
-    <>
-      <TopNavBar />
-
+    <div className="dashboard-page-shell">
+      {pageHeader}
       <div className="dashboard-content">
-        <div className="dashboard-welcome">
-          <p className="dashboard-welcome-text">
-            Here is an overview of your marketplace activity and key metrics.
-          </p>
-        </div>
-
         <div className="dashboard-stats-grid dashboard-stats-grid--five">
-          <div className="dashboard-stat-card">
+          <div className="dashboard-stat-card dashboard-stat-card--tone-users">
             <div className="dashboard-stat-icon dashboard-stat-icon--users">
               <UsersIcon className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
@@ -137,7 +179,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="dashboard-stat-card">
+          <div className="dashboard-stat-card dashboard-stat-card--tone-sellers">
             <div className="dashboard-stat-icon dashboard-stat-icon--sellers">
               <Store className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
@@ -147,7 +189,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="dashboard-stat-card">
+          <div className="dashboard-stat-card dashboard-stat-card--tone-listings">
             <div className="dashboard-stat-icon dashboard-stat-icon--listings">
               <PackageCheck className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
@@ -159,7 +201,7 @@ export function Dashboard() {
 
           <Link
             to="/seller-verification?status=pending_review"
-            className="dashboard-stat-card dashboard-stat-card--pending dashboard-stat-card--link"
+            className="dashboard-stat-card dashboard-stat-card--pending dashboard-stat-card--link dashboard-stat-card--tone-pending"
           >
             <div className="dashboard-stat-icon dashboard-stat-icon--pending">
               <Clock className="dashboard-stat-icon-svg" aria-hidden="true" />
@@ -167,6 +209,7 @@ export function Dashboard() {
             <div className="dashboard-stat-info">
               <span className="dashboard-stat-value">{summary.pending_verifications ?? 0}</span>
               <span className="dashboard-stat-label">Pending Verifications</span>
+              <span className="dashboard-stat-sublabel">Seller accounts for review</span>
               <span className="dashboard-stat-pending-action">
                 Review queue
                 <ArrowRight className="dashboard-stat-pending-arrow" aria-hidden="true" />
@@ -174,7 +217,7 @@ export function Dashboard() {
             </div>
           </Link>
 
-          <div className="dashboard-stat-card">
+          <div className="dashboard-stat-card dashboard-stat-card--tone-transactions">
             <div className="dashboard-stat-icon dashboard-stat-icon--transactions">
               <ArrowLeftRight className="dashboard-stat-icon-svg" aria-hidden="true" />
             </div>
@@ -187,11 +230,17 @@ export function Dashboard() {
         </div>
 
         <div className="dashboard-section">
-          <h2 className="dashboard-section-title">Marketplace Overview</h2>
+          <h2 className="dashboard-section-title dashboard-section-title--icon">
+            <ChartNoAxesCombined aria-hidden="true" />
+            Marketplace Overview
+          </h2>
 
           <div className="dashboard-charts-grid dashboard-charts-grid--flow">
-            <div className="dashboard-chart-card">
-              <h3 className="dashboard-chart-title">Listings by Status</h3>
+            <div className="dashboard-chart-card dashboard-chart-card--bar-chart">
+              <h3 className="dashboard-chart-title dashboard-chart-title--icon">
+                <Layers aria-hidden="true" />
+                Listings by Status
+              </h3>
               {listings.total > 0 ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart
@@ -199,11 +248,15 @@ export function Dashboard() {
                     layout="vertical"
                     margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
-                    <YAxis type="category" dataKey="status" width={82} tick={{ fontSize: 12 }} stroke="#666666" />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={{ fontSize: 13 }} />
-                    <Bar dataKey="count" radius={[0, 2, 2, 0]} name="Listings">
+                    <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis type="category" dataKey="status" width={82} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip
+                      formatter={(value) => [String(value ?? 0), 'Listings']}
+                      contentStyle={DASHBOARD_CHART_TOOLTIP_STYLE}
+                      cursor={{ fill: 'rgba(21, 128, 61, 0.045)' }}
+                    />
+                    <Bar dataKey="count" barSize={26} radius={[6, 6, 6, 6]} name="Listings">
                       {listingStatusData.map((entry) => (
                         <Cell key={entry.status} fill={entry.color} />
                       ))}
@@ -221,8 +274,11 @@ export function Dashboard() {
               </p>
             </div>
 
-            <div className="dashboard-chart-card">
-              <h3 className="dashboard-chart-title">Verifications by Outcome</h3>
+            <div className="dashboard-chart-card dashboard-chart-card--bar-chart dashboard-chart-card--verification-outcome">
+              <h3 className="dashboard-chart-title dashboard-chart-title--icon">
+                <ShieldCheck aria-hidden="true" />
+                Verification Records by Outcome
+              </h3>
               {reportsLoading ? (
                 <div className="dashboard-chart-empty">
                   <div className="loading-spinner" />
@@ -238,16 +294,28 @@ export function Dashboard() {
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart
                     data={verificationOutcomeData}
+                    layout="vertical"
                     margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                    <XAxis dataKey="outcome" tick={{ fontSize: 12 }} stroke="#666666" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Verifications']} contentStyle={{ fontSize: 13 }} />
-                    <Bar dataKey="count" radius={[2, 2, 0, 0]} name="Verifications">
+                    <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis type="category" dataKey="outcome" width={82} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip
+                      formatter={(value) => [String(value ?? 0), 'Verifications']}
+                      contentStyle={DASHBOARD_CHART_TOOLTIP_STYLE}
+                      cursor={{ fill: 'rgba(21, 128, 61, 0.045)' }}
+                    />
+                    <Bar
+                      dataKey="count"
+                      radius={[6, 6, 6, 6]}
+                      barSize={26}
+                      background={{ fill: '#f3f7f4', radius: 8 }}
+                      name="Verifications"
+                    >
                       {verificationOutcomeData.map((entry) => (
-                        <Cell key={entry.outcome} fill={entry.color} />
+                        <Cell key={entry.outcome} fill={entry.color} stroke="#fff" strokeWidth={2} />
                       ))}
+                      <LabelList dataKey="count" position="right" fill="#203428" fontSize={12} fontWeight={700} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -257,21 +325,40 @@ export function Dashboard() {
                 </div>
               )}
               <p className="dashboard-chart-caption">
-                Approved versus rejected outcomes to date. Rejected applications may require
-                seller follow-up.
+                All-time approved and rejected submission records. Applicants may have multiple
+                verification records; the pending queue card uses each applicant's latest status.
               </p>
             </div>
 
-            <div className="dashboard-chart-card">
-              <h3 className="dashboard-chart-title">Transactions Over Time (Monthly, {now.getFullYear()})</h3>
+            <div className="dashboard-chart-card dashboard-chart-card--bar-chart">
+              <h3 className="dashboard-chart-title dashboard-chart-title--icon">
+                <TrendingUp aria-hidden="true" />
+                Transactions Over Time (Monthly, {now.getFullYear()})
+              </h3>
               {transaction_trend.some(item => item.count > 0) ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={transaction_trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#666666" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#666666" />
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Transactions']} contentStyle={{ fontSize: 13 }} />
-                    <Bar dataKey="count" fill="#1B5E20" radius={[2, 2, 0, 0]} name="Transactions" />
+                    <defs>
+                      <linearGradient id="dashboard-transaction-bar-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#22A35A" />
+                        <stop offset="100%" stopColor="#15803D" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 4" stroke={CHART_GRID} strokeOpacity={0.65} vertical={false} />
+                    <XAxis dataKey="month" interval={0} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <YAxis allowDecimals={false} tick={DASHBOARD_CHART_TICK} stroke={CHART_AXIS} />
+                    <Tooltip
+                      formatter={(value) => [String(value ?? 0), 'Transactions']}
+                      contentStyle={DASHBOARD_CHART_TOOLTIP_STYLE}
+                      cursor={{ fill: 'rgba(21, 128, 61, 0.045)' }}
+                    />
+                    <Bar
+                      dataKey="count"
+                      fill="url(#dashboard-transaction-bar-gradient)"
+                      barSize={18}
+                      radius={[6, 6, 0, 0]}
+                      name="Transactions"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -285,29 +372,48 @@ export function Dashboard() {
               </p>
             </div>
 
-            <div className="dashboard-chart-card">
-              <h3 className="dashboard-chart-title">Livestock Listings Overview</h3>
+            <div className="dashboard-chart-card dashboard-chart-card--livestock-overview">
+              <h3 className="dashboard-chart-title dashboard-chart-title--icon">
+                <Beef aria-hidden="true" />
+                Livestock Listings Overview
+              </h3>
               {livestock_distribution.length > 0 ? (
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={224}>
                   <PieChart>
                     <Pie
                       data={livestock_distribution}
-                      cx="50%"
+                      cx="35%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
+                      innerRadius={54}
+                      outerRadius={82}
                       paddingAngle={2}
                       dataKey="count"
                       nameKey="type"
-                      label={({ name, value }: { name?: string; value?: number }) => `${name ?? 'Unknown'}: ${value ?? 0}`}
+                      label={false}
                       labelLine={false}
                     >
-                      {livestock_distribution.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      {livestock_distribution.map((item, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={livestockChartColor(item.type, index)}
+                          stroke="#fff"
+                          strokeWidth={2}
+                        />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={{ fontSize: 13 }} />
-                    <Legend />
+                    <text x="35%" y="44%" textAnchor="middle" fill="#64748b" fontSize="11">Total</text>
+                    <text x="35%" y="55%" textAnchor="middle" fill="#0a2618" fontSize="22" fontWeight="700">
+                      {totalLivestockListings}
+                    </text>
+                    <text x="35%" y="64%" textAnchor="middle" fill="#64748b" fontSize="10">Listings</text>
+                    <Tooltip formatter={(value) => [String(value ?? 0), 'Listings']} contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Legend
+                      layout="vertical"
+                      verticalAlign="middle"
+                      align="right"
+                      iconType="circle"
+                      wrapperStyle={{ width: '39%', right: 0, fontSize: 11, lineHeight: '22px' }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
@@ -315,13 +421,19 @@ export function Dashboard() {
                   <p>No livestock listings data available.</p>
                 </div>
               )}
+              <p className="dashboard-chart-caption">
+                Current listings grouped by livestock type (all-time).
+              </p>
             </div>
           </div>
         </div>
 
         <div className="dashboard-section">
           <div className="dashboard-section-header">
-            <h2 className="dashboard-section-title">Recent Livestock Listings</h2>
+            <h2 className="dashboard-section-title dashboard-section-title--icon">
+              <Layers aria-hidden="true" />
+              Recent Livestock Listings
+            </h2>
             <Link to="/livestock" className="dashboard-view-all">View all</Link>
           </div>
 
@@ -363,7 +475,7 @@ export function Dashboard() {
                       </td>
                       <td className="dashboard-activity-description">{activity.description}</td>
                       <td>{activity.user?.name ?? '—'}</td>
-                      <td className="dashboard-activity-date">{formatDate(activity.created_at)}</td>
+                      <td className="dashboard-activity-date">{formatDateTime(activity.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -444,6 +556,6 @@ export function Dashboard() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

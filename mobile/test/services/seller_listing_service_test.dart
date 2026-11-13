@@ -62,7 +62,7 @@ void main() {
     test('keeps every contract field and drops nothing else', () {
       final Map<String, dynamic> body =
           SellerListingService.writableBody(<String, dynamic>{
-            'livestock_type': 'Cattle',
+            'livestock_type': 'cattle',
             'breed': 'Holstein',
             'age_value': 18,
             'age_unit': 'month',
@@ -102,13 +102,13 @@ void main() {
         <String, dynamic>{
           'status': 'active',
           'seller_id': 3,
-          'livestock_type': 'Cattle',
+          'livestock_type': 'cattle',
         },
       );
 
       expect(body.containsKey('status'), isFalse);
       expect(body.containsKey('seller_id'), isFalse);
-      expect(body['livestock_type'], 'Cattle');
+      expect(body['livestock_type'], 'cattle');
     });
 
     test('photos is excluded until D-10 is resolved', () {
@@ -121,6 +121,30 @@ void main() {
       );
 
       expect(body.containsKey('photos'), isFalse);
+    });
+  });
+
+  group('price suggestion', () {
+    test('posts to the exact endpoint with no body', () async {
+      final FakeTokenStore tokenStore = FakeTokenStore('1|test-mobile-token');
+      final List<RecordedRequest> recorded = <RecordedRequest>[];
+      final SellerListingRepository repository = buildSellerListingRepository(
+        tokenStore,
+        (RecordedRequest request) async => aiPriceSuggestionResponse(),
+        recorded: recorded,
+      );
+
+      final estimate = await repository.requestPriceSuggestion(7);
+
+      expect(estimate.listingId, 7);
+      expect(estimate.estimatedValue, '9798.00');
+      expect(estimate.modelVersion, 'v3-targeted');
+      expect(estimate.provenance, 'synthetic');
+
+      final RecordedRequest sent = recorded.single;
+      expect(sent.method, 'POST');
+      expect(sent.apiPath, '/seller/listings/7/price-suggestion');
+      expect(sent.request.body, isEmpty);
     });
   });
 

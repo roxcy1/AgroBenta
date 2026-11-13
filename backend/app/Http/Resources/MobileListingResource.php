@@ -34,9 +34,11 @@ class MobileListingResource extends JsonResource
             'breed' => $this->breed,
             'age_value' => $this->age_value,
             'age_unit' => $this->age_unit,
+            'age_information' => $this->age_information,
             'gender' => $this->gender,
             'weight_value' => $this->weight_value,
             'weight_unit' => $this->weight_unit,
+            'weight_information' => $this->weight_information,
             'quantity' => $this->quantity,
             'asking_price' => $this->asking_price,
             'location' => $this->location,
@@ -46,6 +48,10 @@ class MobileListingResource extends JsonResource
             'additional_notes' => $this->additional_notes,
             'photos' => $this->photoUrls(),
             'status' => $this->status?->value,
+            // Completed transactions for THIS listing. The count is supplied by
+            // the marketplace queries via `withCount`; other callers (seller
+            // screens reusing this resource) simply report zero.
+            'completed_sales' => (int) ($this->completed_sales ?? 0),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

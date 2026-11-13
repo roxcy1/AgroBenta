@@ -5,6 +5,8 @@
 /// in different phases.
 abstract final class AppSpacing {
   /// 4dp — icon-to-label gaps, badge padding.
+  /// Hairline offsets - a 2px nudge between a label and its neighbour.
+  static const double xxxs = 2;
   static const double xxs = 4;
 
   /// 8dp — gap between tightly related elements (label to field).
@@ -31,22 +33,21 @@ abstract final class AppSpacing {
 
 /// Corner radius tokens.
 ///
-/// AgroBenta uses moderate radius. Do not make cards excessively rounded, and
-/// do not reach for fully circular pills except for genuine status chips.
+/// The professional theme uses one moderate 8dp radius for fields, buttons,
+/// chips and cards (mobile/DESIGN.md §6). Do not use fully circular pills.
 abstract final class AppRadius {
   /// 8dp — inputs, primary/secondary buttons, chips. (DESIGN: fields and
   /// buttons 8–10.)
   static const double sm = 8;
 
-  /// 10dp — list tiles, image containers, the navigation indicator. (DESIGN:
-  /// image containers 10–12.)
-  static const double md = 10;
+  /// 8dp — list tiles, image containers, the navigation indicator.
+  static const double md = 8;
 
-  /// 12dp — cards. This is the default for surfaces. (DESIGN: cards 10–12.)
-  static const double lg = 12;
+  /// 8dp — cards. Same as every other surface in the professional theme.
+  static const double lg = 8;
 
-  /// 16dp — dialogs and bottom sheets. (DESIGN: dialogs 12–16.)
-  static const double xl = 16;
+  /// 12dp — dialogs and bottom sheets. (DESIGN: dialogs 12–16.)
+  static const double xl = 12;
 }
 
 /// Sizing tokens.

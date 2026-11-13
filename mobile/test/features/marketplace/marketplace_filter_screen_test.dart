@@ -1,8 +1,19 @@
+import 'dart:convert';
+
+import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/listing_filters.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/marketplace_filter_screen.dart';
+import 'package:agrobenta_mobile/repositories/livestock_type_repository.dart';
+import 'package:agrobenta_mobile/services/livestock_type_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+import '../../support/auth_fakes.dart';
 
 /// Captures what the screen resolves to, so a test can tell "cancelled"
 /// (`returned` true, `value` null) from "never came back".
@@ -23,6 +34,41 @@ void main() {
     ListingFilters initial = ListingFilters.none,
   }) async {
     final _Result result = _Result();
+    final LivestockTypeRepository catalogRepository = LivestockTypeRepository(
+      LivestockTypeService(
+        ApiClient(
+          tokenStorage: FakeTokenStore('test-token'),
+          httpClient: MockClient(
+            (_) async => http.Response(
+              jsonEncode({
+                'data': [
+                  {'value': 'cattle', 'label': 'Cattle'},
+                  {'value': 'carabao', 'label': 'Carabao'},
+                  {'value': 'goat', 'label': 'Goat'},
+                  {'value': 'swine', 'label': 'Swine'},
+                  {
+                    'value': 'chicken',
+                    'label': 'Chicken',
+                    'breeds': [
+                      'boholano_native_chicken',
+                      'broiler',
+                      'improved_native_chicken',
+                      'layer',
+                    ],
+                  },
+                ],
+              }),
+              200,
+              headers: const {'content-type': 'application/json'},
+            ),
+          ),
+        ),
+      ),
+    );
+    final LivestockTypesController catalog = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalog.dispose);
 
     // The default 800x600 surface is shorter than the form, and the lazy list
     // only builds what is on screen — so Condition, Health Status and Sort By
@@ -33,20 +79,24 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light(),
-        home: Builder(
-          builder: (BuildContext context) => Scaffold(
-            body: Center(
-              child: ElevatedButton(
-                onPressed: () async {
-                  result.value = await showMarketplaceFilterScreen(
-                    context: context,
-                    filters: initial,
-                  );
-                  result.returned = true;
-                },
-                child: const Text('Open filters'),
+      LivestockTypesScope(
+        repository: catalogRepository,
+        controller: catalog,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Builder(
+            builder: (BuildContext context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result.value = await showMarketplaceFilterScreen(
+                      context: context,
+                      filters: initial,
+                    );
+                    result.returned = true;
+                  },
+                  child: const Text('Open filters'),
+                ),
               ),
             ),
           ),
@@ -90,6 +140,7 @@ void main() {
         'Swine',
         'Goat',
         'Carabao',
+        'Chicken',
       ]) {
         expect(find.text(animal), findsOneWidget, reason: animal);
       }
@@ -122,10 +173,7 @@ void main() {
     ) async {
       await open(tester);
 
-      expect(
-        find.textContaining('cannot filter by condition'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('cannot filter by condition'), findsOneWidget);
       expect(
         find.textContaining('cannot filter by health status'),
         findsOneWidget,
@@ -153,7 +201,7 @@ void main() {
       final _Result result = await open(tester);
 
       await tester.tap(
-        find.byKey(const ValueKey<String>('animal-type-Cattle')),
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
       );
       await tester.pump();
       await tester.enterText(
@@ -166,7 +214,7 @@ void main() {
       expect(result.returned, isTrue);
       expect(
         result.value,
-        const ListingFilters(livestockType: 'Cattle', minPrice: '10000'),
+        const ListingFilters(livestockType: 'cattle', minPrice: '10000'),
       );
     });
 
@@ -176,11 +224,11 @@ void main() {
       final _Result result = await open(tester);
 
       await tester.tap(
-        find.byKey(const ValueKey<String>('animal-type-Cattle')),
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
       );
       await tester.pump();
       await tester.tap(
-        find.byKey(const ValueKey<String>('animal-type-Cattle')),
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
       );
       await tester.pump();
       await tester.tap(find.text('Apply Filters'));
@@ -228,7 +276,7 @@ void main() {
       final _Result result = await open(
         tester,
         initial: const ListingFilters(
-          livestockType: 'Cattle',
+          livestockType: 'cattle',
           minPrice: '10000',
         ),
       );
@@ -259,7 +307,7 @@ void main() {
       final _Result result = await open(tester);
 
       await tester.tap(
-        find.byKey(const ValueKey<String>('animal-type-Cattle')),
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
       );
       await tester.pump();
       await tester.tap(find.text('Cancel'));

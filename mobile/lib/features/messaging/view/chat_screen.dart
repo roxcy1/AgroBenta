@@ -1,8 +1,19 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
+import '../../../core/utils/app_formatters.dart';
+import '../../../models/conversation.dart';
 import '../../../models/message.dart';
+import '../../../models/offer.dart';
+import '../../offers/state/chat_offers_controller.dart';
+import '../../offers/state/offer_scope.dart';
+import '../../offers/state/offer_state.dart';
+import '../../offers/view/make_offer_screen.dart';
+import '../../offers/widgets/chat_offer_panel.dart';
+import '../../transactions/views/transaction_detail_screen.dart';
 import '../state/chat_controller.dart';
 import '../state/messaging_scope.dart';
 import '../state/messaging_state.dart';
@@ -25,6 +36,11 @@ class ChatScreen extends StatefulWidget {
     required this.counterpart,
     required this.currentUserId,
     this.listingId,
+    this.listingTitle,
+    this.listingPrice,
+    this.messageListingId,
+    this.offerInquiry,
+    this.counterpartRole,
     super.key,
   });
 
@@ -35,8 +51,28 @@ class ChatScreen extends StatefulWidget {
   /// caller because [AuthScope] cannot be reached from `initState`.
   final int currentUserId;
 
-  /// The listing this thread is about, if any.
+  /// The listing this thread is filtered to, if any.
   final int? listingId;
+
+  /// The thread's listing name and asking price, as the conversation list
+  /// already knows them. When given, a strip under the app bar names the
+  /// livestock the conversation is about.
+  final String? listingTitle;
+  final String? listingPrice;
+  /// The listing to tag new messages with when opened from a listing's detail
+  /// screen. The thread itself still shows the whole buyer–seller history.
+  final int? messageListingId;
+
+  /// The server-provided inquiry the seller can still answer with an offer.
+  ///
+  /// `null` for the buyer side, for a thread with no open inquiry, and for
+  /// chats opened outside Messages — the action is only offered where the
+  /// server said it is eligible.
+  final ConversationEligibleInquiry? offerInquiry;
+
+  /// The counterpart's role in this thread (`Buyer`/`Seller`), when the
+  /// conversation has exactly one side. `null` means "do not guess".
+  final String? counterpartRole;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -44,6 +80,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   late final ChatController _controller;
+  late final ChatOffersController _offers;
 
   @override
   void initState() {
@@ -52,49 +89,310 @@ class _ChatScreenState extends State<ChatScreen> {
     // is registered, so it is safe from `initState`.
     final repository = MessagingScope.readRepositoryOf(context);
 
+    // Real-time is optional: the controllers subscribe only when a scope is
+    // installed (always in the app; absent in some widget tests).
+    final realtime = RealtimeScope.maybeOf(context);
+
     _controller = ChatController(
       repository,
       counterpartId: widget.counterpart.id,
       currentUserId: widget.currentUserId,
       listingId: widget.listingId,
+      messageListingId: widget.messageListingId,
+      realtimeEvents: realtime?.events,
+      connection: realtime?.connected,
     );
     _controller.load();
     // Mark read on open — the user is looking at the thread, so unread
     // messages are read from their perspective.
     _controller.markRead();
+
+    // The offer panel is per-thread state. The list is scoped by counterpart
+    // because a conversation is the buyer–seller pair, not one listing.
+    _offers = ChatOffersController(
+      OfferScope.readOf(context),
+      counterpartId: widget.counterpart.id,
+      realtimeEvents: realtime?.events,
+      connection: realtime?.connected,
+    );
+    _offers.load();
   }
 
   @override
   void dispose() {
+    _offers.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   Future<bool> _onSend(String body) => _controller.send(body);
 
+  /// Opens the seller's offer form for the eligible inquiry, then refreshes
+  /// this thread's offer panel when an offer was actually created.
+  Future<void> _openMakeOffer(ConversationEligibleInquiry inquiry) async {
+    final int? listingId = inquiry.listingId;
+    if (listingId == null) {
+      return;
+    }
+
+    final bool? created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (BuildContext context) => MakeOfferScreen.forConversation(
+          inquiryId: inquiry.id,
+          listingId: listingId,
+          buyerName: widget.counterpart.name,
+          listingTitle: inquiry.listingTitle,
+          askingPrice: inquiry.askingPrice,
+          photoUrl: inquiry.photoUrl,
+          paymentMethod: inquiry.paymentMethod,
+          collectionMethod: inquiry.collectionMethod,
+          preferredSchedule: inquiry.preferredSchedule,
+        ),
+      ),
+    );
+
+    if (created == true && mounted) {
+      await _offers.load();
+    }
+  }
+
+  /// Asks the buyer to confirm, then accepts the offer and shows the
+  /// transaction the acceptance created, with the one honest link the app can
+  /// offer. An already-accepted offer loaded from the list cannot be linked:
+  /// `OfferResource` carries no transaction id.
+  ///
+  /// Accepting creates a real pending transaction in one request, so it is
+  /// confirmed first, as Decline and Withdraw are; a mis-tap must not create one.
+  Future<void> _acceptOffer(Offer offer) async {
+    final String offerAmount =
+        AppFormatters.formatMoney(offer.proposedAmount) ?? offer.proposedAmount;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Accept this offer?'),
+        content: Text(
+          'Accepting creates a pending transaction for $offerAmount with the '
+          'seller. Payment and receipt are handled directly between you and '
+          'the seller.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Accept offer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final OfferAcceptance? result = await _offers.accept(offer);
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final String amount =
+        AppFormatters.formatMoney(result.offer.proposedAmount) ??
+        result.offer.proposedAmount;
+    final bool? view = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Offer accepted'),
+        content: Text(
+          'A pending transaction for $amount was created. '
+          'The seller will see it in My Sales.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('View transaction'),
+          ),
+        ],
+      ),
+    );
+
+    if (view == true && mounted) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) =>
+              TransactionDetailScreen(transactionId: result.transaction.id),
+        ),
+      );
+    }
+  }
+
+  Future<void> _declineOffer(Offer offer) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Decline this offer?'),
+        content: const Text(
+          'The offer will be declined and cannot be accepted later. '
+          'The seller can still make a new offer.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep offer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Decline'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _offers.decline(offer);
+    }
+  }
+
+  Future<void> _withdrawOffer(Offer offer) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Withdraw this offer?'),
+        content: const Text(
+          'The buyer will no longer be able to accept it. '
+          'You can make a new offer afterwards.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep offer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Withdraw'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _offers.withdraw(offer);
+    }
+  }
+
+  void _showProfile() {
+    final ChatUser user = widget.counterpart;
+    final String? role = widget.counterpartRole;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        final ThemeData theme = Theme.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.screenGutter,
+              AppSpacing.xs,
+              AppSpacing.screenGutter,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    _ProfileAvatar(user: user),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(user.name, style: theme.textTheme.titleLarge),
+                          if (role != null) ...<Widget>[
+                            const SizedBox(height: 2),
+                            Text(
+                              role,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Only the profile details AgroBenta shares with chat '
+                  'participants are shown here.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final String? role = widget.counterpartRole;
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            _SmallAvatar(user: widget.counterpart),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                widget.counterpart.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+        titleSpacing: 0,
+        title: InkWell(
+          onTap: _showProfile,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: 4,
             ),
-          ],
+            child: Row(
+              children: <Widget>[
+                _SmallAvatar(user: widget.counterpart),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        widget.counterpart.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (role != null)
+                        Text(
+                          role,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: _controller,
+          listenable: Listenable.merge(<Listenable>[_controller, _offers]),
           builder: (BuildContext context, Widget? child) {
             final ChatState state = _controller.state;
+            final ChatOffersState offers = _offers.state;
 
             // A send error is shown as a snackbar, once.
             final String? sendError = state.sendErrorMessage;
@@ -110,8 +408,27 @@ class _ChatScreenState extends State<ChatScreen> {
               });
             }
 
+            // An offer action failure is shown the same way, once.
+            final String? offerError = offers.actionErrorMessage;
+            if (offerError != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(offerError)));
+                _offers.clearActionError();
+              });
+            }
+
             return Column(
               children: <Widget>[
+                if (widget.listingTitle != null)
+                  _ListingStrip(
+                    title: widget.listingTitle!,
+                    price: widget.listingPrice,
+                  ),
                 Expanded(
                   child: switch (state.status) {
                     ChatStatus.initial || ChatStatus.loading => const Center(
@@ -129,6 +446,19 @@ class _ChatScreenState extends State<ChatScreen> {
                               currentUserId: widget.currentUserId,
                             ),
                   },
+                ),
+                if (widget.offerInquiry != null)
+                  _MakeOfferBar(
+                    inquiry: widget.offerInquiry!,
+                    onPressed: () => _openMakeOffer(widget.offerInquiry!),
+                  ),
+                ChatOfferPanel(
+                  state: offers,
+                  currentUserId: widget.currentUserId,
+                  onAccept: _acceptOffer,
+                  onDecline: _declineOffer,
+                  onWithdraw: _withdrawOffer,
+                  onRetry: _offers.load,
                 ),
                 ChatInputBar(onSend: _onSend, isSending: state.isSending),
               ],
@@ -174,14 +504,11 @@ class _SmallAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? url = user.avatarUrl;
-    if (url == null || url.isEmpty) {
-      return CircleAvatar(
-        radius: 16,
-        child: Text(user.initial, style: const TextStyle(fontSize: 12)),
-      );
-    }
-    return CircleAvatar(radius: 16, backgroundImage: NetworkImage(url));
+    return InitialsAvatar(
+      name: user.name,
+      imageUrl: user.avatarUrl,
+      radius: 16,
+    );
   }
 }
 
@@ -238,6 +565,139 @@ class _ErrorState extends StatelessWidget {
             FilledButton(onPressed: onRetry, child: const Text('Try again')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The larger avatar in the profile sheet: the real photo when the account has
+/// one, the same initials fallback the chat list uses otherwise.
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.user});
+
+  final ChatUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    return InitialsAvatar(
+      name: user.name,
+      imageUrl: user.avatarUrl,
+      radius: 32,
+    );
+  }
+}
+
+/// The seller's in-chat action for the inquiry the server marked eligible.
+///
+/// It sits above the existing offer panel and above the composer: the seller
+/// answers the inquiry without leaving the conversation. The inquiry id is
+/// never inferred here — it comes from `ConversationResource.eligible_inquiry`,
+/// which already excludes inquiries with a pending offer and inquiries where
+/// the caller is the buyer.
+class _MakeOfferBar extends StatelessWidget {
+  const _MakeOfferBar({required this.inquiry, required this.onPressed});
+
+  final ConversationEligibleInquiry inquiry;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String? listing = inquiry.listingTitle;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenGutter,
+        AppSpacing.xs,
+        AppSpacing.screenGutter,
+        AppSpacing.xs,
+      ),
+      color: AppColors.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            listing == null ? 'Answer this inquiry' : 'Inquiry · $listing',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          FilledButton.tonalIcon(
+            onPressed: onPressed,
+            icon: const Icon(Icons.local_offer_outlined, size: 18),
+            label: const Text('Make an Offer'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The livestock this conversation is about: name and asking price, on a
+/// light strip under the app bar.
+class _ListingStrip extends StatelessWidget {
+  const _ListingStrip({required this.title, this.price});
+
+  final String title;
+  final String? price;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String? formatted = price == null
+        ? null
+        : AppFormatters.formatMoney(price);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.screenGutter,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.primarySurface,
+              borderRadius: BorderRadius.circular(AppRadius.sm - 2),
+            ),
+            child: const Icon(
+              Icons.pets_outlined,
+              size: 20,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (formatted != null)
+                  Text(
+                    formatted,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

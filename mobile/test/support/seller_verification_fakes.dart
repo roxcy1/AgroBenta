@@ -22,25 +22,43 @@ import 'auth_fakes.dart';
 /// `seller_verification_test.dart` asserts the model rejects them if they appear.
 Map<String, dynamic> sellerVerificationJson({
   Object? id = 4,
-  String businessName = 'Rizal Farms',
+  Object? phone = '09171234567',
+  Object? address = 'Barangay Poblacion, Trinidad, Bohol',
+  String? businessName = 'Rizal Farms',
   Object? businessLocation = 'Mabalacat, Pampanga',
   Object? businessDescription = 'Family-run cattle farm, trading since 2011.',
   Object? idDocumentRef = 'PHL-ID-88213',
+  Object? governmentIdType = 'philippine_national_id',
+  Object? governmentIdDescription,
+  Object? hasNoBackImage = false,
   String status = 'submitted',
   Object? adminNote,
   Object? submittedAt = '2026-09-26T09:30:00.000000Z',
   Object? reviewedAt,
   bool hasIdDocument = true,
+  bool? hasIdDocumentFront,
+  bool hasIdDocumentBack = false,
   bool hasSelfie = true,
+  bool hasProofOfAddress = true,
+  List<String> farmPhotoIds = const <String>[],
 }) {
   return <String, dynamic>{
     'id': id,
+    'phone': phone,
+    'address': address,
     'business_name': businessName,
     'business_location': businessLocation,
     'business_description': businessDescription,
     'id_document_ref': idDocumentRef,
+    'government_id_type': governmentIdType,
+    'government_id_description': governmentIdDescription,
+    'has_no_back_image': hasNoBackImage,
     'has_id_document': hasIdDocument,
+    'has_id_document_front': hasIdDocumentFront ?? hasIdDocument,
+    'has_id_document_back': hasIdDocumentBack,
     'has_selfie': hasSelfie,
+    'has_proof_of_address': hasProofOfAddress,
+    'farm_photo_ids': farmPhotoIds,
     'status': status,
     'admin_note': adminNote,
     'submitted_at': submittedAt,
@@ -83,12 +101,17 @@ http.Response sellerVerificationConflictResponse({
 /// with `{ type, uploaded: true }` and no path.
 http.Response sellerVerificationDocumentUploadedResponse({
   String type = 'id_document',
+  String? photoId,
   int statusCode = 201,
 }) => http.Response(
   jsonEncode(
     successEnvelope(
       message: 'Document uploaded.',
-      data: <String, dynamic>{'type': type, 'uploaded': true},
+      data: <String, dynamic>{
+        'type': type,
+        'uploaded': true,
+        'photo_id': ?photoId,
+      },
     ),
   ),
   statusCode,
@@ -135,11 +158,12 @@ http.Response sellerVerificationForbiddenResponse({
 
 /// A `422` with per-field errors, as `SubmitSellerVerificationRequest` produces.
 http.Response sellerVerificationValidationResponse({
+  String message = 'The given data was invalid.',
   Map<String, Object> errors = const <String, Object>{
     'business_name': <String>['The business name is required.'],
   },
 }) => http.Response(
-  jsonEncode(validationErrorBody(errors: errors)),
+  jsonEncode(validationErrorBody(message: message, errors: errors)),
   422,
   headers: <String, String>{'content-type': 'application/json'},
 );

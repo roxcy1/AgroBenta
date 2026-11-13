@@ -46,17 +46,25 @@ class SellerInquirySummary {
 /// The API deliberately exposes no completed, cancelled, revenue, or
 /// conversion figure. This model therefore cannot display one.
 class SellerTransactionSummary {
-  const SellerTransactionSummary({required this.total, required this.pending});
+  const SellerTransactionSummary({
+    required this.total,
+    required this.pending,
+    required this.completed,
+  });
 
   factory SellerTransactionSummary.fromJson(Map<String, dynamic> json) {
     return SellerTransactionSummary(
       total: readInt(json, 'total'),
       pending: readInt(json, 'pending'),
+      completed: readInt(json, 'completed'),
     );
   }
 
   final int total;
   final int pending;
+
+  /// Genuinely completed transactions only (server aggregate).
+  final int completed;
 }
 
 /// The `data` payload of `GET /api/seller/dashboard`.

@@ -15,9 +15,19 @@ abstract interface class TokenStore {
   Future<String?> read();
 
   /// Stores the bearer token, replacing any previous value.
-  Future<void> write(String token);
+  ///
+  /// With [persist] false ("Remember me" unticked) the token is kept only for
+  /// the life of the app process and any previously saved token is removed,
+  /// so closing the app signs the user out. It is never written unencrypted.
+  Future<void> write(String token, {bool persist = true});
 
   /// Removes the stored bearer token. Must be safe to call when nothing is
   /// stored.
   Future<void> clear();
+
+  /// Removes [expectedToken] only if it is still the current token.
+  ///
+  /// A delayed response from an old session must not clear a token that was
+  /// written for a newer account while that response was in flight.
+  Future<bool> clearIfCurrent(String expectedToken);
 }

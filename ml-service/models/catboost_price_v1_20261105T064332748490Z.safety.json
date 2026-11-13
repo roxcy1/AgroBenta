@@ -1,0 +1,704 @@
+{
+  "schema_version": 1,
+  "model_file": "catboost_price_v1_20261105T064332748490Z.cbm",
+  "provenance": "synthetic",
+  "source_rows": 1597,
+  "categories": {
+    "carabao": {
+      "rows": 240,
+      "age_months": {
+        "min": 19.0,
+        "max": 99.0,
+        "p01": 20.0,
+        "p99": 97.60999999999999
+      },
+      "weight_kg": {
+        "min": 228.4,
+        "max": 682.2,
+        "p01": 238.519,
+        "p99": 669.6719999999999
+      },
+      "breeds": {
+        "murrah": {
+          "rows": 80,
+          "age_months": {
+            "min": 20.0,
+            "max": 95.0,
+            "p01": 20.79,
+            "p99": 94.21
+          },
+          "weight_kg": {
+            "min": 270.5,
+            "max": 682.2,
+            "p01": 276.425,
+            "p99": 676.986
+          }
+        },
+        "native_murrah_cross": {
+          "rows": 80,
+          "age_months": {
+            "min": 19.0,
+            "max": 97.0,
+            "p01": 19.79,
+            "p99": 94.62999999999998
+          },
+          "weight_kg": {
+            "min": 237.7,
+            "max": 650.0,
+            "p01": 239.359,
+            "p99": 631.5139999999999
+          }
+        },
+        "philippine_native_carabao": {
+          "rows": 80,
+          "age_months": {
+            "min": 21.0,
+            "max": 99.0,
+            "p01": 21.79,
+            "p99": 99.0
+          },
+          "weight_kg": {
+            "min": 228.4,
+            "max": 576.2,
+            "p01": 234.72,
+            "p99": 554.6329999999998
+          }
+        }
+      },
+      "age_bins": [
+        {
+          "min": 19.0,
+          "max": 36.0,
+          "max_inclusive": false,
+          "rows": 45,
+          "weight_kg": {
+            "min": 228.4,
+            "max": 360.1,
+            "p01": 231.92000000000002,
+            "p99": 360.012
+          }
+        },
+        {
+          "min": 36.0,
+          "max": 50.0,
+          "max_inclusive": false,
+          "rows": 48,
+          "weight_kg": {
+            "min": 270.1,
+            "max": 441.9,
+            "p01": 271.087,
+            "p99": 437.529
+          }
+        },
+        {
+          "min": 50.0,
+          "max": 66.4,
+          "max_inclusive": false,
+          "rows": 51,
+          "weight_kg": {
+            "min": 319.1,
+            "max": 546.5,
+            "p01": 325.1,
+            "p99": 541.05
+          }
+        },
+        {
+          "min": 66.4,
+          "max": 81.0,
+          "max_inclusive": false,
+          "rows": 47,
+          "weight_kg": {
+            "min": 364.4,
+            "max": 598.4,
+            "p01": 367.022,
+            "p99": 586.6239999999999
+          }
+        },
+        {
+          "min": 81.0,
+          "max": 99.0,
+          "max_inclusive": true,
+          "rows": 49,
+          "weight_kg": {
+            "min": 432.6,
+            "max": 682.2,
+            "p01": 435.81600000000003,
+            "p99": 679.032
+          }
+        }
+      ]
+    },
+    "cattle": {
+      "rows": 320,
+      "age_months": {
+        "min": 12.0,
+        "max": 84.0,
+        "p01": 13.0,
+        "p99": 84.0
+      },
+      "weight_kg": {
+        "min": 155.4,
+        "max": 707.4,
+        "p01": 171.608,
+        "p99": 665.772
+      },
+      "breeds": {
+        "brahman": {
+          "rows": 80,
+          "age_months": {
+            "min": 12.0,
+            "max": 84.0,
+            "p01": 14.370000000000001,
+            "p99": 83.21
+          },
+          "weight_kg": {
+            "min": 220.7,
+            "max": 707.4,
+            "p01": 233.261,
+            "p99": 685.7539999999998
+          }
+        },
+        "brahman_cross": {
+          "rows": 80,
+          "age_months": {
+            "min": 12.0,
+            "max": 84.0,
+            "p01": 12.79,
+            "p99": 84.0
+          },
+          "weight_kg": {
+            "min": 214.6,
+            "max": 643.4,
+            "p01": 221.078,
+            "p99": 636.132
+          }
+        },
+        "holstein_friesian": {
+          "rows": 80,
+          "age_months": {
+            "min": 14.0,
+            "max": 84.0,
+            "p01": 14.79,
+            "p99": 83.21
+          },
+          "weight_kg": {
+            "min": 249.3,
+            "max": 675.6,
+            "p01": 256.88399999999996,
+            "p99": 649.5299999999999
+          }
+        },
+        "philippine_native_cattle": {
+          "rows": 80,
+          "age_months": {
+            "min": 12.0,
+            "max": 84.0,
+            "p01": 12.79,
+            "p99": 83.21
+          },
+          "weight_kg": {
+            "min": 155.4,
+            "max": 492.3,
+            "p01": 162.431,
+            "p99": 473.5769999999999
+          }
+        }
+      },
+      "age_bins": [
+        {
+          "min": 12.0,
+          "max": 26.0,
+          "max_inclusive": false,
+          "rows": 61,
+          "weight_kg": {
+            "min": 155.4,
+            "max": 331.5,
+            "p01": 160.74,
+            "p99": 321.11999999999995
+          }
+        },
+        {
+          "min": 26.0,
+          "max": 40.0,
+          "max_inclusive": false,
+          "rows": 65,
+          "weight_kg": {
+            "min": 204.6,
+            "max": 405.0,
+            "p01": 210.61599999999999,
+            "p99": 403.848
+          }
+        },
+        {
+          "min": 40.0,
+          "max": 55.0,
+          "max_inclusive": false,
+          "rows": 64,
+          "weight_kg": {
+            "min": 276.3,
+            "max": 516.9,
+            "p01": 276.993,
+            "p99": 506.50499999999994
+          }
+        },
+        {
+          "min": 55.0,
+          "max": 72.0,
+          "max_inclusive": false,
+          "rows": 63,
+          "weight_kg": {
+            "min": 295.0,
+            "max": 613.6,
+            "p01": 301.82,
+            "p99": 608.826
+          }
+        },
+        {
+          "min": 72.0,
+          "max": 84.0,
+          "max_inclusive": true,
+          "rows": 67,
+          "weight_kg": {
+            "min": 341.2,
+            "max": 707.4,
+            "p01": 348.856,
+            "p99": 689.316
+          }
+        }
+      ]
+    },
+    "chicken": {
+      "rows": 317,
+      "age_months": {
+        "min": 1.0,
+        "max": 30.0,
+        "p01": 1.0,
+        "p99": 29.839999999999975
+      },
+      "weight_kg": {
+        "min": 0.86,
+        "max": 4.0,
+        "p01": 0.9132,
+        "p99": 3.5435999999999988
+      },
+      "breeds": {
+        "boholano_native_chicken": {
+          "rows": 80,
+          "age_months": {
+            "min": 2.0,
+            "max": 24.0,
+            "p01": 2.0,
+            "p99": 24.0
+          },
+          "weight_kg": {
+            "min": 0.86,
+            "max": 3.48,
+            "p01": 0.8916000000000001,
+            "p99": 3.2982999999999985
+          }
+        },
+        "broiler": {
+          "rows": 78,
+          "age_months": {
+            "min": 1.0,
+            "max": 4.0,
+            "p01": 1.0,
+            "p99": 4.0
+          },
+          "weight_kg": {
+            "min": 1.05,
+            "max": 3.5,
+            "p01": 1.05,
+            "p99": 3.5
+          }
+        },
+        "improved_native_chicken": {
+          "rows": 80,
+          "age_months": {
+            "min": 2.0,
+            "max": 20.0,
+            "p01": 2.0,
+            "p99": 20.0
+          },
+          "weight_kg": {
+            "min": 1.11,
+            "max": 4.0,
+            "p01": 1.1179000000000001,
+            "p99": 3.8261999999999983
+          }
+        },
+        "layer": {
+          "rows": 79,
+          "age_months": {
+            "min": 4.0,
+            "max": 30.0,
+            "p01": 4.0,
+            "p99": 30.0
+          },
+          "weight_kg": {
+            "min": 1.21,
+            "max": 3.2,
+            "p01": 1.2334,
+            "p99": 3.2
+          }
+        }
+      },
+      "age_bins": [
+        {
+          "min": 1.0,
+          "max": 3.0,
+          "max_inclusive": false,
+          "rows": 47,
+          "weight_kg": {
+            "min": 0.91,
+            "max": 2.0,
+            "p01": 0.9192,
+            "p99": 1.9908
+          }
+        },
+        {
+          "min": 3.0,
+          "max": 7.0,
+          "max_inclusive": false,
+          "rows": 74,
+          "weight_kg": {
+            "min": 0.86,
+            "max": 3.5,
+            "p01": 0.8892,
+            "p99": 3.5
+          }
+        },
+        {
+          "min": 7.0,
+          "max": 13.0,
+          "max_inclusive": false,
+          "rows": 67,
+          "weight_kg": {
+            "min": 1.19,
+            "max": 2.61,
+            "p01": 1.2824,
+            "p99": 2.577
+          }
+        },
+        {
+          "min": 13.0,
+          "max": 18.0,
+          "max_inclusive": false,
+          "rows": 58,
+          "weight_kg": {
+            "min": 1.68,
+            "max": 3.38,
+            "p01": 1.6914,
+            "p99": 3.3116
+          }
+        },
+        {
+          "min": 18.0,
+          "max": 30.0,
+          "max_inclusive": true,
+          "rows": 71,
+          "weight_kg": {
+            "min": 2.02,
+            "max": 4.0,
+            "p01": 2.0620000000000003,
+            "p99": 3.845999999999999
+          }
+        }
+      ]
+    },
+    "goat": {
+      "rows": 320,
+      "age_months": {
+        "min": 3.0,
+        "max": 48.0,
+        "p01": 3.0,
+        "p99": 48.0
+      },
+      "weight_kg": {
+        "min": 15.1,
+        "max": 95.0,
+        "p01": 17.223,
+        "p99": 86.31
+      },
+      "breeds": {
+        "anglo_nubian": {
+          "rows": 80,
+          "age_months": {
+            "min": 3.0,
+            "max": 48.0,
+            "p01": 3.0,
+            "p99": 48.0
+          },
+          "weight_kg": {
+            "min": 18.6,
+            "max": 80.0,
+            "p01": 19.153000000000002,
+            "p99": 78.815
+          }
+        },
+        "boer": {
+          "rows": 80,
+          "age_months": {
+            "min": 3.0,
+            "max": 48.0,
+            "p01": 3.0,
+            "p99": 47.209999999999994
+          },
+          "weight_kg": {
+            "min": 23.5,
+            "max": 95.0,
+            "p01": 24.369,
+            "p99": 90.18099999999997
+          }
+        },
+        "saanen": {
+          "rows": 80,
+          "age_months": {
+            "min": 3.0,
+            "max": 46.0,
+            "p01": 3.79,
+            "p99": 46.0
+          },
+          "weight_kg": {
+            "min": 18.6,
+            "max": 67.6,
+            "p01": 18.758,
+            "p99": 67.44200000000001
+          }
+        },
+        "ubay_boholano_native_goat": {
+          "rows": 80,
+          "age_months": {
+            "min": 3.0,
+            "max": 48.0,
+            "p01": 3.0,
+            "p99": 48.0
+          },
+          "weight_kg": {
+            "min": 15.1,
+            "max": 59.6,
+            "p01": 15.732000000000001,
+            "p99": 56.75599999999998
+          }
+        }
+      },
+      "age_bins": [
+        {
+          "min": 3.0,
+          "max": 11.0,
+          "max_inclusive": false,
+          "rows": 60,
+          "weight_kg": {
+            "min": 15.1,
+            "max": 32.9,
+            "p01": 15.572,
+            "p99": 32.605
+          }
+        },
+        {
+          "min": 11.0,
+          "max": 21.0,
+          "max_inclusive": false,
+          "rows": 66,
+          "weight_kg": {
+            "min": 21.5,
+            "max": 49.8,
+            "p01": 21.759999999999998,
+            "p99": 48.36999999999999
+          }
+        },
+        {
+          "min": 21.0,
+          "max": 32.0,
+          "max_inclusive": false,
+          "rows": 64,
+          "weight_kg": {
+            "min": 30.1,
+            "max": 66.1,
+            "p01": 30.478,
+            "p99": 65.785
+          }
+        },
+        {
+          "min": 32.0,
+          "max": 41.0,
+          "max_inclusive": false,
+          "rows": 63,
+          "weight_kg": {
+            "min": 36.3,
+            "max": 74.7,
+            "p01": 37.602,
+            "p99": 73.212
+          }
+        },
+        {
+          "min": 41.0,
+          "max": 48.0,
+          "max_inclusive": true,
+          "rows": 67,
+          "weight_kg": {
+            "min": 42.3,
+            "max": 95.0,
+            "p01": 43.488,
+            "p99": 90.97400000000002
+          }
+        }
+      ]
+    },
+    "swine": {
+      "rows": 400,
+      "age_months": {
+        "min": 2.0,
+        "max": 24.0,
+        "p01": 2.0,
+        "p99": 24.0
+      },
+      "weight_kg": {
+        "min": 22.4,
+        "max": 159.4,
+        "p01": 25.188,
+        "p99": 150.90200000000002
+      },
+      "breeds": {
+        "duroc": {
+          "rows": 80,
+          "age_months": {
+            "min": 2.0,
+            "max": 24.0,
+            "p01": 2.79,
+            "p99": 24.0
+          },
+          "weight_kg": {
+            "min": 36.0,
+            "max": 159.4,
+            "p01": 39.080999999999996,
+            "p99": 158.29399999999998
+          }
+        },
+        "duroc_landrace_cross": {
+          "rows": 80,
+          "age_months": {
+            "min": 2.0,
+            "max": 24.0,
+            "p01": 2.0,
+            "p99": 23.209999999999994
+          },
+          "weight_kg": {
+            "min": 32.8,
+            "max": 151.1,
+            "p01": 35.723,
+            "p99": 146.99199999999996
+          }
+        },
+        "landrace": {
+          "rows": 80,
+          "age_months": {
+            "min": 2.0,
+            "max": 24.0,
+            "p01": 2.0,
+            "p99": 24.0
+          },
+          "weight_kg": {
+            "min": 28.1,
+            "max": 145.2,
+            "p01": 28.89,
+            "p99": 144.331
+          }
+        },
+        "large_white_yorkshire": {
+          "rows": 80,
+          "age_months": {
+            "min": 2.0,
+            "max": 24.0,
+            "p01": 2.0,
+            "p99": 24.0
+          },
+          "weight_kg": {
+            "min": 28.5,
+            "max": 154.6,
+            "p01": 29.369,
+            "p99": 149.54399999999995
+          }
+        },
+        "native_pig": {
+          "rows": 80,
+          "age_months": {
+            "min": 2.0,
+            "max": 24.0,
+            "p01": 2.0,
+            "p99": 24.0
+          },
+          "weight_kg": {
+            "min": 22.4,
+            "max": 114.8,
+            "p01": 23.032,
+            "p99": 113.773
+          }
+        }
+      },
+      "age_bins": [
+        {
+          "min": 2.0,
+          "max": 6.0,
+          "max_inclusive": false,
+          "rows": 66,
+          "weight_kg": {
+            "min": 22.4,
+            "max": 55.6,
+            "p01": 22.919999999999998,
+            "p99": 54.62499999999999
+          }
+        },
+        {
+          "min": 6.0,
+          "max": 10.0,
+          "max_inclusive": false,
+          "rows": 76,
+          "weight_kg": {
+            "min": 35.2,
+            "max": 80.4,
+            "p01": 38.2,
+            "p99": 78.675
+          }
+        },
+        {
+          "min": 10.0,
+          "max": 15.0,
+          "max_inclusive": false,
+          "rows": 93,
+          "weight_kg": {
+            "min": 45.8,
+            "max": 103.6,
+            "p01": 48.652,
+            "p99": 100.288
+          }
+        },
+        {
+          "min": 15.0,
+          "max": 20.0,
+          "max_inclusive": false,
+          "rows": 63,
+          "weight_kg": {
+            "min": 59.6,
+            "max": 132.0,
+            "p01": 62.762,
+            "p99": 129.70600000000002
+          }
+        },
+        {
+          "min": 20.0,
+          "max": 24.0,
+          "max_inclusive": true,
+          "rows": 102,
+          "weight_kg": {
+            "min": 76.9,
+            "max": 159.4,
+            "p01": 82.826,
+            "p99": 157.96599999999998
+          }
+        }
+      ]
+    }
+  },
+  "warning": "Data-derived prototype safety envelope. It is based only on synthetic training rows, not authoritative biological limits or market evidence."
+}

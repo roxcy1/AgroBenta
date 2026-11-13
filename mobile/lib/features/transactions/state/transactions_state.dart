@@ -58,7 +58,8 @@ class TransactionsState {
 
   bool get hasMorePages => pagination?.hasNextPage ?? false;
 
-  bool get isEmpty => status == TransactionsStatus.ready && transactions.isEmpty;
+  bool get isEmpty =>
+      status == TransactionsStatus.ready && transactions.isEmpty;
 
   bool get isBusy =>
       status == TransactionsStatus.loading ||

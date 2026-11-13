@@ -19,11 +19,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * What is included, and why each is safe:
  *
- *  - `id`, and the four business fields the client itself just submitted. The
- *    client is echoing its own input back.
+ *  - `id`, the applicant's phone/address snapshots, and the business fields
+ *    supplied for this verification. They are the caller's own submitted data.
  *  - `status`, so the app can render pending, rejected, or approved.
- *  - `has_id_document` / `has_selfie`, so the app can show that both required
- *    documents are on file without being handed their private paths.
+ *  - `has_id_document`, `has_selfie` and `has_proof_of_address`, so the app can
+ *    show which documents are on file without being handed their private paths,
+ *    and `farm_photo_ids`, which name farm photos on the streaming endpoint.
  *  - `admin_note`, explicitly required by contract §5.3 so a rejected user can
  *    be told *why* without inventing a reason. It is written for the user, so it
  *    is not administrator-internal despite the column name.
@@ -53,15 +54,24 @@ class MobileSellerVerificationResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'phone' => $this->phone,
+            'address' => $this->address,
             'business_name' => $this->business_name,
             'business_location' => $this->business_location,
             'business_description' => $this->business_description,
             'id_document_ref' => $this->id_document_ref,
+            'government_id_type' => $this->government_id_type,
+            'government_id_description' => $this->government_id_description,
+            'has_no_back_image' => $this->has_no_back_image,
             // Existence, never the path or a URL: the file is on private
             // storage and is read back only through the authenticated
             // document endpoint.
-            'has_id_document' => filled($this->id_document_path),
+            'has_id_document' => filled($this->id_document_front_path) || filled($this->id_document_path),
+            'has_id_document_front' => filled($this->id_document_front_path) || filled($this->id_document_path),
+            'has_id_document_back' => filled($this->id_document_back_path),
             'has_selfie' => filled($this->selfie_path),
+            'has_proof_of_address' => filled($this->proof_of_address_path),
+            'farm_photo_ids' => $this->resource->farmPhotoIds(),
             'status' => $this->status?->value,
             'admin_note' => $this->admin_note,
             'submitted_at' => $this->submitted_at?->toISOString(),

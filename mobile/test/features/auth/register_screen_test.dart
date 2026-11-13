@@ -4,6 +4,7 @@ import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/auth/view/register_screen.dart';
+import 'package:agrobenta_mobile/widgets/temporary_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -26,9 +27,11 @@ void main() {
     WidgetTester tester, {
     required Future<http.Response> Function(RecordedRequest request) handler,
     List<RecordedRequest>? recorded,
+    FakeGoogleSignIn? googleSignIn,
   }) async {
     final AuthController controller = AuthController(
       buildAuthRepository(tokenStore, handler, recorded: recorded),
+      googleSignIn: googleSignIn ?? FakeGoogleSignIn(isAvailable: false),
     );
     addTearDown(controller.dispose);
 
@@ -52,7 +55,10 @@ void main() {
     String confirmation = 'correct horse',
   }) async {
     await tester.enterText(find.byType(TextFormField).at(0), 'Ana Reyes');
-    await tester.enterText(find.byType(TextFormField).at(1), 'ana@example.test');
+    await tester.enterText(
+      find.byType(TextFormField).at(1),
+      'ana@example.test',
+    );
     await tester.enterText(find.byType(TextFormField).at(2), password);
     await tester.enterText(find.byType(TextFormField).at(3), confirmation);
   }
@@ -91,34 +97,95 @@ void main() {
   testWidgets('renders the branded hero, heading and account link', (
     WidgetTester tester,
   ) async {
-    await pumpRegister(tester, handler: (_) async => fail('no request expected'));
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+    );
 
     expect(find.text('Create Your Account'), findsOneWidget);
-    expect(find.text('AgroBenta'), findsOneWidget);
+    expect(find.byType(TemporaryLogo), findsOneWidget);
     expect(find.text('Buy. Sell. Grow. Together.'), findsOneWidget);
     expect(find.text('Already have an account?'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Log In'), findsOneWidget);
   });
 
-  testWidgets('social sign-up is shown but disabled', (
+  testWidgets('Google is the only social sign-up option', (
     WidgetTester tester,
   ) async {
-    await pumpRegister(tester, handler: (_) async => fail('no request expected'));
-
-    final OutlinedButton google = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Google'),
-    );
-    final OutlinedButton facebook = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Facebook'),
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+      googleSignIn: FakeGoogleSignIn(),
     );
 
-    expect(google.onPressed, isNull, reason: 'Google OAuth is not implemented');
     expect(
-      facebook.onPressed,
-      isNull,
-      reason: 'Facebook OAuth is not implemented',
+      find.widgetWithText(OutlinedButton, 'Continue with Google'),
+      findsOneWidget,
     );
-    expect(find.text('Social sign-up is not available yet.'), findsOneWidget);
+    expect(find.text('Facebook'), findsNothing);
+    expect(find.text('Social sign-up is not available yet.'), findsNothing);
+  });
+
+  testWidgets('Google sign-up is hidden where it is unavailable', (
+    WidgetTester tester,
+  ) async {
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+    );
+
+    expect(find.text('or sign up with'), findsNothing);
+    expect(find.text('Continue with Google'), findsNothing);
+  });
+
+  testWidgets('Google sign-up needs consent before Google is opened', (
+    WidgetTester tester,
+  ) async {
+    final FakeGoogleSignIn google = FakeGoogleSignIn();
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+      googleSignIn: google,
+    );
+
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await tester.pump();
+
+    expect(google.calls, 0);
+    expect(
+      find.text('Please agree to the Terms and Privacy Policy to continue.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Google sign-up with consent sends the ID token', (
+    WidgetTester tester,
+  ) async {
+    final List<RecordedRequest> recorded = <RecordedRequest>[];
+    final AuthController controller = await pumpRegister(
+      tester,
+      recorded: recorded,
+      googleSignIn: FakeGoogleSignIn(idToken: 'id-token-from-google'),
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: authSessionJson())),
+        200,
+      ),
+    );
+
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.tap(find.byType(Checkbox));
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    for (int i = 0; i < 8; i++) {
+      await tester.pump();
+    }
+
+    expect(recorded.single.apiPath, '/auth/google');
+    expect(recorded.single.body, <String, dynamic>{
+      'id_token': 'id-token-from-google',
+    });
+    expect(controller.state.isSignedIn, isTrue);
   });
 
   testWidgets('will not submit a valid form until consent is given', (
@@ -232,7 +299,10 @@ void main() {
   testWidgets('password and confirmation visibility toggle independently', (
     WidgetTester tester,
   ) async {
-    await pumpRegister(tester, handler: (_) async => fail('no request expected'));
+    await pumpRegister(
+      tester,
+      handler: (_) async => fail('no request expected'),
+    );
 
     expect(obscureOf(tester, 2), isTrue);
     expect(obscureOf(tester, 3), isTrue);

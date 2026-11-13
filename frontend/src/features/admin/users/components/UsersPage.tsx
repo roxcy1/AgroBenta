@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { KeyboardEvent } from 'react';
+import { UsersRound } from 'lucide-react';
 import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
 import { useAdminUser, useUserCounts, useUsers } from '../api/useUsers';
 import type { AdminUser } from '../api/useUsers';
@@ -10,7 +11,14 @@ import { Header } from '../../components/Header';
 import UserStatsCards from './UserStatsCards';
 import type { UserCardKey } from './UserStatsCards';
 import UserDetailsDialog from './UserDetailsDialog';
+import EditUserDialog from './EditUserDialog';
+import DeleteUserDialog from './DeleteUserDialog';
+import UserActionsMenu from './UserActionsMenu';
 import VerificationDetailsDialog from '../../seller-verification/components/VerificationDetailsDialog';
+import { statusBadgeClass, statusLabel } from '../../../../lib/status';
+import { formatDate } from '../../../../lib/format';
+import { emptyListMessage } from '../../../../lib/emptyState';
+import './UsersPage.css';
 
 const ROLE_OPTIONS = [
   { value: '', label: 'All Roles' },
@@ -24,41 +32,23 @@ const SELLER_OPTIONS = [
   { value: 'seller', label: 'Seller' },
 ] as const;
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function statusLabel(status: string | null): string {
-  switch (status) {
-    case 'submitted':
-      return 'Submitted';
-    case 'pending_review':
-      return 'Pending Review';
-    case 'approved':
-      return 'Approved';
-    case 'rejected':
-      return 'Rejected';
-    default:
-      return '—';
-  }
-}
+const ROWS_PER_PAGE_OPTIONS = [10, 15, 25, 50, 100] as const;
 
 export function UsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [sellerFilter, setSellerFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(15);
   const [searchInput, setSearchInput] = useState('');
   const [verificationFilter, setVerificationFilter] = useState<
     '' | 'submitted' | 'pending_review' | 'approved' | 'rejected' | 'none'
   >('');
   const [detailsId, setDetailsId] = useState<number | null>(null);
   const [detailsUser, setDetailsUser] = useState<AdminUser | null>(null);
+  const [actionsUserId, setActionsUserId] = useState<number | null>(null);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
   const [searchParams] = useSearchParams();
   const linkedUserId = parsePositiveInt(searchParams.get('user'));
   const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
@@ -82,7 +72,7 @@ export function UsersPage() {
     role: roleFilter || undefined,
     seller_capability: sellerFilter || undefined,
     page,
-    per_page: 15,
+    per_page: perPage,
   });
 
   // Join with latest verification records per user (deduped server-side)
@@ -91,6 +81,15 @@ export function UsersPage() {
   });
 
   const { data: counts } = useUserCounts();
+  const pageHeader = (
+    <Header
+      title="Users"
+      subtitle="Manage platform users"
+      pageIcon={UsersRound}
+      profileRole="Administrator"
+      showProfileChevron
+    />
+  );
 
   const handleSearch = () => {
     setSearch(searchInput);
@@ -176,6 +175,13 @@ export function UsersPage() {
     setPage(newPage);
   };
 
+  const handlePerPageChange = (value: string) => {
+    const nextPerPage = Number(value);
+    if (!ROWS_PER_PAGE_OPTIONS.includes(nextPerPage as (typeof ROWS_PER_PAGE_OPTIONS)[number])) return;
+    setPerPage(nextPerPage);
+    setPage(1);
+  };
+
   const handleVerificationClick = (verificationId: number | null) => {
     if (verificationId !== null) {
       setDetailsId(verificationId);
@@ -206,24 +212,24 @@ export function UsersPage() {
 
   if (isLoading || verificationsLoading) {
     return (
-      <>
-        <Header title="Users" subtitle="Manage platform users" />
-        <div className="users-content">
+      <div className="users-page-shell">
+        {pageHeader}
+        <div className="users-content lv-content">
           <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
           <div className="users-loading">
             <div className="loading-spinner" />
             <span>Loading users...</span>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <>
-        <Header title="Users" subtitle="Manage platform users" />
-        <div className="users-content">
+      <div className="users-page-shell">
+        {pageHeader}
+        <div className="users-content lv-content">
           <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
           <div className="users-error">
             <p className="users-error-text">Failed to load users.</p>
@@ -232,12 +238,18 @@ export function UsersPage() {
             </button>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
   const users = data?.users ?? [];
   const pagination = data?.pagination;
+  const resultStart = pagination && pagination.total > 0
+    ? (pagination.current_page - 1) * pagination.per_page + 1
+    : 0;
+  const resultEnd = pagination && pagination.total > 0
+    ? Math.min((pagination.current_page - 1) * pagination.per_page + users.length, pagination.total)
+    : 0;
 
   let displayUsers = users;
   if (verificationFilter) {
@@ -253,20 +265,20 @@ export function UsersPage() {
   const filtersActive = Boolean(
     search || deepLinkedEmail || roleFilter || sellerFilter || verificationFilter,
   );
-
   return (
     <>
-      <Header title="Users" subtitle="Manage platform users" />
+      <div className="users-page-shell">
+        {pageHeader}
 
-      <div className="users-content">
+        <div className="users-content lv-content">
         <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
 
-        <div className="users-controls">
-          <div className="users-search-row">
-            <div className="users-search-wrapper">
+        <div className="users-controls lv-controls">
+          <div className="users-search-row lv-search-row">
+            <div className="users-search-wrapper lv-search-wrapper">
               <input
                 type="text"
-                className="users-search-input"
+                className="users-search-input lv-search-input"
                 placeholder="Search by name or email..."
                 aria-label="Search users by name or email"
                 value={searchInput || deepLinkedEmail}
@@ -275,16 +287,16 @@ export function UsersPage() {
               />
               <button
                 type="button"
-                className="users-search-button"
+                className="users-search-button lv-search-button"
                 onClick={handleSearch}
               >
                 Search
               </button>
             </div>
 
-            <div className="users-filters">
+            <div className="users-filters lv-filters">
               <select
-                className="users-filter-select"
+                className="users-filter-select lv-filter-select"
                 aria-label="Filter by role"
                 value={roleFilter}
                 onChange={(e) => handleRoleChange(e.target.value)}
@@ -297,7 +309,7 @@ export function UsersPage() {
               </select>
 
               <select
-                className="users-filter-select"
+                className="users-filter-select lv-filter-select"
                 aria-label="Filter by seller capability"
                 value={sellerFilter}
                 onChange={(e) => handleSellerChange(e.target.value)}
@@ -310,7 +322,7 @@ export function UsersPage() {
               </select>
 
               <select
-                className="users-filter-select"
+                className="users-filter-select lv-filter-select"
                 aria-label="Filter by verification status"
                 value={verificationFilter}
                 onChange={(e) =>
@@ -336,7 +348,7 @@ export function UsersPage() {
               {filtersActive && (
                 <button
                   type="button"
-                  className="users-search-button"
+                  className="users-search-button lv-search-button"
                   onClick={handleClearFilters}
                 >
                   Clear filters
@@ -368,7 +380,7 @@ export function UsersPage() {
 
         {users.length === 0 ? (
           <div className="users-empty">
-            <p>{filtersActive ? 'No users found matching your criteria.' : 'No users found.'}</p>
+            <p>{emptyListMessage('users', filtersActive)}</p>
           </div>
         ) : (
           <>
@@ -378,10 +390,10 @@ export function UsersPage() {
               </div>
             ) : (
               <div
-                className={`users-table-container${isFetching ? ' users-table-container--fetching' : ''}`}
+                className={`users-table-container lv-table-container${isFetching ? ' users-table-container--fetching' : ''}`}
                 aria-busy={isFetching}
               >
-                <table className="users-table">
+                <table className="users-table lv-table">
                   <thead>
                     <tr>
                       <th>Name</th>
@@ -390,38 +402,39 @@ export function UsersPage() {
                       <th>Seller Capability</th>
                       <th>Verification Status</th>
                       <th>Created At</th>
+                      <th className="users-actions-heading">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {displayUsers.map((user) => {
                       const v = verificationMap.get(user.id);
                       const vStatus = v?.status ?? null;
-                      const vLabel = statusLabel(vStatus);
+                      const vLabel = vStatus ? statusLabel(vStatus) : '—';
                       return (
                         <tr
                           key={user.id}
-                          className="users-row--clickable"
+                          className="users-row--clickable lv-listings-row"
                           tabIndex={0}
                           aria-label={`View details for ${user.name}`}
                           onClick={() => setDetailsUser(user)}
                           onKeyDown={(event) => handleRowKeyDown(event, user)}
                         >
-                          <td className="users-name-cell">{user.name}</td>
-                          <td className="users-email-cell">{user.email}</td>
-                          <td>
+                          <td className="users-name-cell lv-name-cell" data-label="Name" title={user.name}>{user.name}</td>
+                          <td className="users-email-cell" data-label="Email" title={user.email}>{user.email}</td>
+                          <td data-label="Role">
                             <span className={`users-badge users-badge--${user.role === 'admin' ? 'admin' : 'user'}`}>
                               {user.role === 'admin' ? 'Administrator' : 'User'}
                             </span>
                           </td>
-                          <td>
+                          <td data-label="Seller Capability">
                             <span className={`users-badge users-badge--${user.seller_capability}`}>
                               {user.seller_capability === 'seller' ? 'Seller' : 'Buyer'}
                             </span>
                           </td>
-                          <td>
+                          <td data-label="Verification Status">
                             {v && v.status && v.verificationId !== null ? (
                               <span
-                                className={`lv-badge lv-badge--${vStatus}`}
+                                className={statusBadgeClass(v.status)}
                                 role="button"
                                 tabIndex={0}
                                 style={{ cursor: 'pointer' }}
@@ -441,7 +454,23 @@ export function UsersPage() {
                               <span className="users-date-cell">—</span>
                             )}
                           </td>
-                          <td className="users-date-cell">{formatDate(user.created_at)}</td>
+                          <td className="users-date-cell" data-label="Created At">{formatDate(user.created_at)}</td>
+                          <td
+                            className="users-actions-cell"
+                            data-label="Actions"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <UserActionsMenu
+                              user={user}
+                              isOpen={actionsUserId === user.id}
+                              onToggle={() =>
+                                setActionsUserId((current) => current === user.id ? null : user.id)
+                              }
+                              onClose={() => setActionsUserId(null)}
+                              onEdit={() => setEditingUser(user)}
+                              onDelete={() => setDeletingUser(user)}
+                            />
+                          </td>
                         </tr>
                       );
                     })}
@@ -450,65 +479,79 @@ export function UsersPage() {
               </div>
             )}
 
-            {pagination && pagination.last_page > 1 && (
+            {pagination && (
               <nav className="users-pagination" aria-label="Users pagination">
-                <button
-                  type="button"
-                  className="users-page-button"
-                  disabled={isFetching || pagination.current_page <= 1}
-                  onClick={() => handlePageChange(pagination.current_page - 1)}
-                  aria-label="Go to previous page"
-                >
-                  Previous
-                </button>
-
-                {buildPageWindow(pagination.current_page, pagination.last_page).map(
-                  (item, index) =>
-                    item === PAGE_ELLIPSIS ? (
-                      <span
-                        key={`ellipsis-${index}`}
-                        className="users-page-ellipsis"
-                        aria-hidden="true"
-                      >
-                        &hellip;
-                      </span>
-                    ) : (
-                      <button
-                        key={item}
-                        type="button"
-                        className={`users-page-number${
-                          item === pagination.current_page ? ' users-page-number--active' : ''
-                        }`}
-                        disabled={isFetching}
-                        aria-label={`Go to page ${item}`}
-                        aria-current={item === pagination.current_page ? 'page' : undefined}
-                        onClick={() => handlePageChange(item)}
-                      >
-                        {item}
-                      </button>
-                    ),
-                )}
-
-                <button
-                  type="button"
-                  className="users-page-button"
-                  disabled={isFetching || pagination.current_page >= pagination.last_page}
-                  onClick={() => handlePageChange(pagination.current_page + 1)}
-                  aria-label="Go to next page"
-                >
-                  Next
-                </button>
-
                 <span className="users-page-info" aria-live="polite">
-                  Page {pagination.current_page} of {pagination.last_page}
-                  {' '}
-                  <span className="users-page-total">({pagination.total} users)</span>
-                  {isFetching && <span className="users-page-updating"> Updating…</span>}
+                  Showing {resultStart}–{resultEnd} of {pagination.total} users
+                  {isFetching && <span className="users-page-updating"> · Updating…</span>}
                 </span>
+                <div className="users-pagination-actions">
+                  <label className="users-rows-per-page">
+                    <span>Rows per page:</span>
+                    <select
+                      aria-label="Rows per page"
+                      value={perPage}
+                      onChange={(event) => handlePerPageChange(event.target.value)}
+                    >
+                      {ROWS_PER_PAGE_OPTIONS.map((value) => (
+                        <option key={value} value={value}>{value}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="users-pagination-buttons">
+                    <button
+                      type="button"
+                      className="users-page-button"
+                      disabled={isFetching || pagination.current_page <= 1}
+                      onClick={() => handlePageChange(pagination.current_page - 1)}
+                      aria-label="Go to previous page"
+                    >
+                      Previous
+                    </button>
+
+                    {pagination.last_page > 1 && buildPageWindow(pagination.current_page, pagination.last_page).map(
+                      (item, index) =>
+                        item === PAGE_ELLIPSIS ? (
+                          <span
+                            key={`ellipsis-${index}`}
+                            className="users-page-ellipsis"
+                            aria-hidden="true"
+                          >
+                            &hellip;
+                          </span>
+                        ) : (
+                          <button
+                            key={item}
+                            type="button"
+                            className={`users-page-number${
+                              item === pagination.current_page ? ' users-page-number--active' : ''
+                            }`}
+                            disabled={isFetching}
+                            aria-label={`Go to page ${item}`}
+                            aria-current={item === pagination.current_page ? 'page' : undefined}
+                            onClick={() => handlePageChange(item)}
+                          >
+                            {item}
+                          </button>
+                        ),
+                    )}
+
+                    <button
+                      type="button"
+                      className="users-page-button"
+                      disabled={isFetching || pagination.current_page >= pagination.last_page}
+                      onClick={() => handlePageChange(pagination.current_page + 1)}
+                      aria-label="Go to next page"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               </nav>
             )}
           </>
         )}
+        </div>
       </div>
 
       {detailsId !== null && (
@@ -523,6 +566,25 @@ export function UsersPage() {
           user={detailsUser}
           verificationStatus={verificationMap.get(detailsUser.id)?.status ?? null}
           onClose={() => setDetailsUser(null)}
+        />
+      )}
+
+      {editingUser !== null && (
+        <EditUserDialog
+          key={editingUser.id}
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+        />
+      )}
+
+      {deletingUser !== null && (
+        <DeleteUserDialog
+          key={deletingUser.id}
+          user={deletingUser}
+          onClose={() => setDeletingUser(null)}
+          onDeleted={() => {
+            if (data?.users.length === 1 && page > 1) setPage(page - 1);
+          }}
         />
       )}
     </>

@@ -11,6 +11,10 @@ import type { Transaction } from '../api/useTransactions';
 import { buildTransactionsCsv, buildTransactionsFilename, downloadCsv } from '../csv';
 import TransactionDetailDialog from './TransactionDetailDialog';
 import TransactionStatsCards from './TransactionStatsCards';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDate, formatPeso } from '../../../../lib/format';
+import { emptyListMessage } from '../../../../lib/emptyState';
+import { livestockTypeLabel, useLivestockTypes } from '../../livestock/api/useLivestockTypes';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -18,21 +22,6 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ] as const;
-
-function formatCurrency(value: string): string {
-  const num = parseFloat(value);
-  if (isNaN(num)) return '\u20B10';
-  return `\u20B1${num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 export function TransactionsPage() {
   const [search, setSearch] = useState('');
@@ -48,6 +37,7 @@ export function TransactionsPage() {
   const [searchParams] = useSearchParams();
   const linkedTransactionId = parsePositiveInt(searchParams.get('transaction'));
   const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
+  const { data: livestockTypes } = useLivestockTypes();
 
   const { data, isLoading, error, refetch } = useTransactions({
     search: search || undefined,
@@ -175,6 +165,7 @@ export function TransactionsPage() {
                 <input
                   type="text"
                   className="lv-search-input"
+                  aria-label="Search transactions"
                   placeholder="Search by ID, buyer, seller, or livestock..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
@@ -188,6 +179,7 @@ export function TransactionsPage() {
               <div className="lv-filters">
                 <select
                   className="lv-filter-select"
+                  aria-label="Filter by status"
                   value={statusFilter}
                   onChange={(e) => handleStatusChange(e.target.value)}
                 >
@@ -266,12 +258,12 @@ export function TransactionsPage() {
 
           {transactions.length === 0 ? (
             <div className="lv-empty">
-              <p>No transactions found.</p>
+              <p>{emptyListMessage('transactions', Boolean(search || statusFilter || dateFrom || dateTo))}</p>
             </div>
           ) : (
             <>
               <div className="lv-table-container">
-                <table className="lv-table">
+                <table className="lv-table lv-table--transactions">
                   <thead>
                     <tr>
                       <th>Transaction ID</th>
@@ -288,16 +280,16 @@ export function TransactionsPage() {
                   <tbody>
                     {transactions.map((tx) => (
                       <tr key={tx.id}>
-                        <td className="lv-name-cell">#{tx.id}</td>
-                        <td className="lv-seller-cell">{tx.buyer.name}</td>
-                        <td className="lv-seller-cell">{tx.seller.name}</td>
-                        <td>{tx.listing.livestock_type} / {tx.listing.breed}</td>
+                        <td className="lv-name-cell" title={`Transaction #${tx.id}`}>#{tx.id}</td>
+                        <td className="lv-seller-cell" title={tx.buyer.name}>{tx.buyer.name}</td>
+                        <td className="lv-seller-cell" title={tx.seller.name}>{tx.seller.name}</td>
+                        <td title={`${livestockTypeLabel(tx.listing.livestock_type, livestockTypes)} / ${tx.listing.breed}`}>
+                          {livestockTypeLabel(tx.listing.livestock_type, livestockTypes)} / {tx.listing.breed}
+                        </td>
                         <td>{tx.quantity}</td>
-                        <td className="lv-price-cell">{formatCurrency(tx.total_amount)}</td>
+                        <td className="lv-price-cell">{formatPeso(tx.total_amount)}</td>
                         <td>
-                          <span className={`lv-badge lv-badge--${tx.status}`}>
-                            {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
-                          </span>
+                          <StatusBadge status={tx.status} />
                         </td>
                         <td className="lv-date-cell">{formatDate(tx.created_at)}</td>
                         <td>
@@ -350,6 +342,7 @@ export function TransactionsPage() {
       {activeTransaction && (
         <TransactionDetailDialog
           transaction={activeTransaction}
+          livestockTypes={livestockTypes ?? []}
           onClose={handleCloseTransaction}
         />
       )}

@@ -21,21 +21,21 @@ import 'package:flutter/material.dart';
 abstract final class AppColors {
   // --- Brand ---------------------------------------------------------------
 
-  /// Primary brand green. App bars, primary buttons, selected navigation,
-  /// links and important actions. (`#006B4F`)
-  static const Color primary = Color(0xFF006B4F);
+  /// Primary brand green. Primary buttons, the selected tab, links, prices
+  /// and important actions. App bars are white, not green. (`#1B5E20`)
+  static const Color primary = Color(0xFF1B5E20);
 
   /// Primary-action green ("marketplace green"). Brighter accent used for
-  /// pressed/hovered brand states and tonal highlights. (`#008A5A`)
-  static const Color primaryLight = Color(0xFF008A5A);
+  /// pressed/hovered brand states and tonal highlights. (`#2E7D32`)
+  static const Color primaryLight = Color(0xFF2E7D32);
 
   /// Darkest brand green — the "dark header" deep green, for header bands and
-  /// brand surfaces that must read darker than [primary]. (`#005A43`)
-  static const Color primaryDark = Color(0xFF005A43);
+  /// brand surfaces that must read darker than [primary]. (`#134417`)
+  static const Color primaryDark = Color(0xFF134417);
 
   /// Very light green surface. Information panels, selected/active surfaces,
-  /// seller-related highlights and AI suggestion backgrounds. (`#EAF7F0`)
-  static const Color primarySurface = Color(0xFFEAF7F0);
+  /// seller-related highlights and AI suggestion backgrounds. (`#EAF2E8`)
+  static const Color primarySurface = Color(0xFFEAF2E8);
 
   // --- Illustration (auth hero) -------------------------------------------
   //
@@ -55,40 +55,48 @@ abstract final class AppColors {
 
   // --- Semantic status -----------------------------------------------------
 
-  /// Success, and semantically "approved / active / completed". (`#168A4A`)
-  static const Color success = Color(0xFF168A4A);
+  /// Success, and semantically "approved / active / completed". (`#2E7D32`)
+  static const Color success = Color(0xFF2E7D32);
 
-  /// "sold" status, blue. (`#1565C0`)
-  static const Color sold = Color(0xFF1565C0);
+  /// "sold" status, blue. (`#1D5385`)
+  static const Color sold = Color(0xFF1D5385);
 
-  /// Warning, and semantically "pending / awaiting review". (`#D98B00`)
-  static const Color warning = Color(0xFFD98B00);
+  /// Warning, and semantically "pending / awaiting review". (`#8A5A00`)
+  static const Color warning = Color(0xFF8A5A00);
 
   /// Very light amber surface for a pending/awaiting status panel. The
   /// counterpart to [primarySurface] for [warning]: the Inquiry Sent screen's
   /// status card needs a pale amber that pairs with the amber clock icon, and
-  /// tinting [warning] itself would put body text below contrast. (`#FDF3E3`)
-  static const Color warningSurface = Color(0xFFFDF3E3);
+  /// tinting [warning] itself would put body text below contrast. (`#FBF0D9`)
+  static const Color warningSurface = Color(0xFFFBF0D9);
 
-  /// Error, and semantically "rejected / failed / invalid". (`#C93636`)
-  static const Color error = Color(0xFFC93636);
+  /// Error, and semantically "rejected / failed / invalid". (`#A3302A`)
+  static const Color error = Color(0xFFA3302A);
 
   // --- Surfaces ------------------------------------------------------------
 
   /// Screen background. Light neutral, not white, so cards can sit on top.
-  static const Color background = Color(0xFFF7F8F7);
+  static const Color background = Color(0xFFF5F6F4);
 
   /// Card, sheet and dialog surface.
   static const Color surface = Color(0xFFFFFFFF);
 
   /// Hairline borders and dividers. Prefer this over shadows for separation.
-  static const Color border = Color(0xFFD9DEE3);
+  static const Color border = Color(0xFFE2E6E0);
+
+  /// A text field's outline. A step darker than [border] so an empty field
+  /// still reads as a control on a white page. (`#CFD8CA`)
+  static const Color fieldBorder = Color(0xFFCFD8CA);
 
   // --- Text ----------------------------------------------------------------
 
   /// Primary body and heading text.
-  static const Color text = Color(0xFF202124);
+  static const Color text = Color(0xFF16241A);
 
   /// Secondary text: captions, helper copy, metadata.
-  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color textSecondary = Color(0xFF5B665E);
+
+  /// Placeholder text and the small icons inside a text field. Lighter than
+  /// [textSecondary]; never used for copy a user has to read. (`#8B948D`)
+  static const Color textHint = Color(0xFF8B948D);
 }

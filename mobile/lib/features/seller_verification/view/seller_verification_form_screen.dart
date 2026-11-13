@@ -1,18 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
+import '../../auth/state/auth_controller.dart';
+import '../../auth/state/auth_scope.dart';
 import '../../../models/seller_verification.dart';
+import '../../../models/trinidad_location.dart';
+import '../../../models/user.dart';
+import '../../../features/profile/state/profile_scope.dart';
+import '../../trinidad_location/state/trinidad_location_controller.dart';
+import '../../trinidad_location/state/trinidad_location_scope.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
+import '../../../widgets/trinidad_location_selector.dart';
 import '../state/seller_verification_controller.dart';
 import '../state/seller_verification_documents_controller.dart';
 import '../state/seller_verification_documents_state.dart';
 import '../state/seller_verification_scope.dart';
 import '../state/seller_verification_state.dart';
 import '../widgets/seller_verification_document_card.dart';
+import '../widgets/seller_verification_farm_photos_card.dart';
 import 'seller_verification_documents.dart';
 import 'seller_verification_submitted_screen.dart';
 import 'seller_verification_validators.dart';
@@ -34,14 +46,13 @@ import 'seller_verification_views.dart';
 ///
 /// ## Only supported fields
 ///
-/// The form submits `business_name`, `business_location` and
-/// `business_description` — the allow-listed fields
-/// `SubmitSellerVerificationRequest` accepts. Full name is shown read-only from
-/// the account ([accountName]) because it comes from `/auth/me`, not the
-/// application. Phone number is not collected: there is no column. The two
-/// required evidence documents are uploaded through
+/// The form submits required phone and address snapshots alongside the optional
+/// `business_name`, `business_location` and `business_description` fields. Full
+/// name is shown read-only from the account ([accountName]) because it comes
+/// from `/auth/me`, not the application. The evidence documents are uploaded through
 /// `/seller-verification/documents` before submission, because the submit
-/// endpoint refuses an application whose documents are missing (a `422`). The app
+/// endpoint refuses an application whose required documents are missing (a
+/// `422`). The app
 /// never sends `role` or `seller_capability`.
 ///
 /// The same screen serves a first application and a resubmission;
@@ -93,12 +104,27 @@ class _SellerVerificationFormScreenState
   ];
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> _governmentIdFormKey = GlobalKey<FormState>();
+  final TextEditingController _phone = TextEditingController();
   final TextEditingController _businessName = TextEditingController();
   final TextEditingController _businessLocation = TextEditingController();
   final TextEditingController _businessDescription = TextEditingController();
+  final TextEditingController _governmentIdDescription =
+      TextEditingController();
 
   late final SellerVerificationController _controller;
   late final SellerVerificationDocumentsController _documents;
+  late final TrinidadLocationController _locationCatalog;
+  AuthController? _authController;
+  int? _authenticatedUserId;
+  bool _authIdentityInitialized = false;
+  bool _phonePrefilled = false;
+  bool _addressPrefilled = false;
+  String? _pendingAddress;
+  TrinidadLocation? _location;
+  String? _legacyAddress;
+  SellerVerification? _previousVerification;
+  GovernmentIdType? _governmentIdType;
 
   /// Zero-based index of the step being shown.
   int _step = 0;
@@ -106,6 +132,103 @@ class _SellerVerificationFormScreenState
   /// The field errors currently on screen, so a repeat of the same server error
   /// does not re-validate for nothing.
   Map<String, List<String>> _displayedErrors = const <String, List<String>>{};
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final AuthController? authController = AuthScope.maybeOf(context);
+    if (!identical(authController, _authController)) {
+      _authController?.removeListener(_handleAuthChanged);
+      _authController = authController;
+      _authController?.addListener(_handleAuthChanged);
+    }
+    _syncAuthenticatedUser();
+    _prefillContactFields();
+  }
+
+  void _handleAuthChanged() => _syncAuthenticatedUser();
+
+  void _syncAuthenticatedUser() {
+    final AuthController? authController = _authController;
+    final int? userId = authController?.state.isSignedIn == true
+        ? authController?.state.user?.id
+        : null;
+
+    if (!_authIdentityInitialized) {
+      _authenticatedUserId = userId;
+      _authIdentityInitialized = true;
+      return;
+    }
+
+    if (userId != _authenticatedUserId) {
+      _authenticatedUserId = userId;
+      _documents.resetForAccountChange();
+      _previousVerification = null;
+      _businessName.clear();
+      _businessLocation.clear();
+      _businessDescription.clear();
+      _governmentIdDescription.clear();
+      _governmentIdType = null;
+      _phone.text = authController?.state.user?.phone ?? '';
+      _queueAddress(
+        ProfileScope.maybeReadOf(context)?.state.user?.location ??
+            authController?.state.user?.location,
+      );
+      _phonePrefilled = true;
+      _addressPrefilled = true;
+    }
+  }
+
+  void _prefillContactFields() {
+    final User? user = _authController?.state.user;
+    if (user == null) {
+      return;
+    }
+
+    if (!_phonePrefilled) {
+      _phone.text = _previousVerification?.phone ?? user.phone ?? '';
+      _phonePrefilled = true;
+    }
+    if (!_addressPrefilled) {
+      _queueAddress(
+        _previousVerification?.address ??
+            ProfileScope.maybeReadOf(context)?.state.user?.location ??
+            user.location,
+      );
+      _addressPrefilled = true;
+    }
+  }
+
+  void _queueAddress(String? rawAddress) {
+    _pendingAddress = rawAddress?.trim();
+    _restoreQueuedAddress();
+  }
+
+  void _restoreQueuedAddress() {
+    final String? rawAddress = _pendingAddress;
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final TrinidadLocation? parsed = catalog?.parseAddress(rawAddress);
+    _location = parsed;
+    _legacyAddress =
+        rawAddress != null && rawAddress.isNotEmpty && parsed == null
+        ? rawAddress
+        : null;
+  }
+
+  void _handleLocationCatalogChanged() {
+    if (_pendingAddress != null && _locationCatalog.state.isReady && mounted) {
+      setState(_restoreQueuedAddress);
+    }
+  }
+
+  void _handleLocationChanged(TrinidadLocation? value) {
+    setState(() {
+      _location = value;
+      _legacyAddress = null;
+      _pendingAddress = null;
+      _addressPrefilled = true;
+    });
+  }
 
   @override
   void initState() {
@@ -116,22 +239,39 @@ class _SellerVerificationFormScreenState
     _documents = SellerVerificationDocumentsController(
       SellerVerificationScope.repositoryOf(context),
     );
+    _locationCatalog = TrinidadLocationScope.readOf(context);
+    _locationCatalog.addListener(_handleLocationCatalogChanged);
 
     final SellerVerification? previous = _controller.state.verification;
+    _previousVerification = previous;
 
     // A resubmission starts from what was rejected, so the seller corrects the
     // fields that were the problem instead of retyping them. These are the
     // server's own values from the record already on screen — no local copy of
     // the application is kept anywhere.
     if (widget.isResubmission && previous != null) {
-      _businessName.text = previous.businessName;
+      _businessName.text = previous.businessName ?? '';
       _businessLocation.text = previous.businessLocation ?? '';
       _businessDescription.text = previous.businessDescription ?? '';
+      _governmentIdType = previous.governmentIdType;
+      _governmentIdDescription.text = previous.governmentIdDescription ?? '';
+      if (previous.phone != null) {
+        _phone.text = previous.phone!;
+        _phonePrefilled = true;
+      }
+      if (previous.address != null) {
+        _queueAddress(previous.address);
+        _addressPrefilled = true;
+      }
     }
 
-    // Seed the document slots from the record so a resubmission shows which
-    // documents the server still holds. On a first application this is a no-op.
-    _documents.seedFrom(previous);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _locationCatalog.ensureLoaded();
+    });
+
+    // Historical documents remain previewable but are not staged for a new
+    // resubmission; the controller seeds them as requiring a fresh upload.
+    unawaited(_documents.seedFrom(previous));
   }
 
   /// A `TextFormField` runs its validator when its value changes and when
@@ -149,27 +289,35 @@ class _SellerVerificationFormScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _formKey.currentState?.validate();
+        _governmentIdFormKey.currentState?.validate();
       }
     });
   }
 
   @override
   void dispose() {
+    _authController?.removeListener(_handleAuthChanged);
     _businessName.dispose();
     _businessLocation.dispose();
     _businessDescription.dispose();
+    _governmentIdDescription.dispose();
+    _phone.dispose();
     _documents.dispose();
+    _locationCatalog.removeListener(_handleLocationCatalogChanged);
     super.dispose();
   }
 
   void _goToDocuments() {
-    if (_formKey.currentState?.validate() ?? false) {
+    if (_locationCatalog.state.isReady &&
+        (_formKey.currentState?.validate() ?? false)) {
       setState(() => _step = 1);
     }
   }
 
   void _goToReview() {
-    if (_documents.state.bothUploaded) {
+    final bool idInformationValid =
+        _governmentIdFormKey.currentState?.validate() ?? false;
+    if (idInformationValid && _documents.state.allRequiredUploaded) {
       setState(() => _step = 2);
     }
   }
@@ -188,11 +336,44 @@ class _SellerVerificationFormScreenState
     await _documents.pickAndUpload(type: type, file: file);
   }
 
+  Future<void> _pickFarmPhoto() async {
+    final Future<XFile?> Function(VerificationDocumentType) picker =
+        widget.pickImage ?? pickVerificationImage;
+    final XFile? file = await picker(VerificationDocumentType.farmPhoto);
+    if (file == null || !mounted) {
+      return;
+    }
+    await _documents.addFarmPhoto(file);
+  }
+
+  Future<void> _chooseAndPickBackImage() async {
+    final bool uploadSelected = await _documents.chooseBackImage(
+      hasNoBackImage: false,
+    );
+    if (uploadSelected && mounted) {
+      await _pick(VerificationDocumentType.idDocumentBack);
+    }
+  }
+
   Future<void> _submit() async {
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
     final bool created = await _controller.submit(
+      phone: _phone.text.trim(),
+      address: catalog == null
+          ? ''
+          : (_location?.formattedAddress(
+                  municipality: catalog.municipality,
+                  province: catalog.province,
+                ) ??
+                ''),
       businessName: _businessName.text,
       businessLocation: _businessLocation.text,
       businessDescription: _businessDescription.text,
+      governmentIdType: _governmentIdType?.value ?? '',
+      governmentIdDescription: _governmentIdType == GovernmentIdType.others
+          ? _governmentIdDescription.text
+          : null,
+      hasNoBackImage: _documents.state.hasNoBackImage == true,
     );
 
     if (!mounted) {
@@ -213,17 +394,44 @@ class _SellerVerificationFormScreenState
       return;
     }
 
-    // A `422` names fields that live on the first step, so return there and
-    // reset the error cache so the field validators run once the fields mount.
+    // Return to the step containing the rejected fields, then validate after
+    // that step's form has mounted again.
     if (_controller.state.validationErrors.isNotEmpty) {
+      final Set<VerificationDocumentType> documentsNeedingUpload = _controller
+          .state
+          .validationErrors
+          .keys
+          .map(
+            (String key) => VerificationDocumentType.values.where(
+              (VerificationDocumentType type) => type.value == key,
+            ),
+          )
+          .expand((Iterable<VerificationDocumentType> matches) => matches)
+          .where(
+            (VerificationDocumentType type) =>
+                type != VerificationDocumentType.farmPhoto,
+          )
+          .toSet();
+      if (documentsNeedingUpload.isNotEmpty) {
+        _documents.markDocumentsForReupload(documentsNeedingUpload);
+      }
+      final bool governmentIdError =
+          _controller.state.validationErrors.containsKey(
+            'government_id_type',
+          ) ||
+          _controller.state.validationErrors.containsKey(
+            'government_id_description',
+          );
       setState(() {
-        // Document field errors (`id_document`, `selfie`) belong on the
-        // Documents step; business field errors on Basic Information.
-        _step = _controller.state.validationErrors.keys.any(
-          (String key) =>
-              key == VerificationDocumentType.idDocument.value ||
-              key == VerificationDocumentType.selfie.value,
-        )
+        // ID metadata and document errors belong on Documents; the contact and
+        // business snapshot fields belong on Basic Information.
+        _step =
+            governmentIdError ||
+                _controller.state.validationErrors.keys.any(
+                  (String key) => VerificationDocumentType.values.any(
+                    (VerificationDocumentType type) => type.value == key,
+                  ),
+                )
             ? 1
             : 0;
         _displayedErrors = const <String, List<String>>{};
@@ -237,11 +445,14 @@ class _SellerVerificationFormScreenState
       appBar: AppBar(title: const Text('Seller Application')),
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge(<Listenable>[_controller, _documents]),
+          listenable: Listenable.merge(<Listenable>[
+            _controller,
+            _documents,
+            _locationCatalog,
+          ]),
           builder: (BuildContext context, Widget? child) {
             final SellerVerificationState state = _controller.state;
-            final SellerVerificationDocumentsState documents =
-                _documents.state;
+            final SellerVerificationDocumentsState documents = _documents.state;
             final bool isSubmitting =
                 state.status == SellerVerificationUiStatus.submitting;
 
@@ -278,7 +489,7 @@ class _SellerVerificationFormScreenState
                         ],
                         ...switch (_step) {
                           0 => _basicInformation(isSubmitting),
-                          1 => _documentsStep(documents),
+                          1 => _documentsStep(documents, isSubmitting),
                           _ => _review(isSubmitting, documents),
                         },
                       ],
@@ -295,6 +506,8 @@ class _SellerVerificationFormScreenState
 
   List<Widget> _basicInformation(bool isSubmitting) {
     final ThemeData theme = Theme.of(context);
+    final String? accountName =
+        widget.accountName ?? _authController?.state.user?.name;
 
     return <Widget>[
       Text('Basic Information', style: theme.textTheme.titleLarge),
@@ -313,18 +526,43 @@ class _SellerVerificationFormScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            if (widget.accountName != null) ...<Widget>[
+            if (accountName != null) ...<Widget>[
               TextFormField(
-                initialValue: widget.accountName,
+                initialValue: accountName,
                 readOnly: true,
                 decoration: const InputDecoration(
-                  labelText: 'Full name',
+                  label: FieldLabel('Full name'),
                   helperText: 'From your account — cannot be changed here.',
-                  suffixIcon: Icon(Icons.lock_outline),
+                  suffixIcon: FieldIcon(Icon(Icons.lock_outline)),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
             ],
+            TextFormField(
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              maxLength: kSellerVerificationPhoneMax,
+              enabled: !isSubmitting,
+              decoration: const InputDecoration(
+                label: FieldLabel('Phone number'),
+                helperText: 'Required for seller verification.',
+              ),
+              validator: (String? value) =>
+                  validateVerificationPhone(value) ??
+                  _controller.state.errorFor('phone'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TrinidadLocationSelector(
+              value: _location,
+              legacyAddress: _legacyAddress,
+              maxFormattedLength: kSellerVerificationAddressMax,
+              isRequired: true,
+              enabled: !isSubmitting,
+              externalError: _controller.state.errorFor('address'),
+              onChanged: _handleLocationChanged,
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _businessName,
               textCapitalization: TextCapitalization.words,
@@ -332,8 +570,8 @@ class _SellerVerificationFormScreenState
               maxLength: kSellerVerificationShortFieldMax,
               enabled: !isSubmitting,
               decoration: const InputDecoration(
-                labelText: 'Business name',
-                helperText: 'Required.',
+                label: FieldLabel('Business name'),
+                helperText: 'Optional. Your farm or business name.',
               ),
               validator: (String? value) =>
                   validateBusinessName(value) ??
@@ -347,7 +585,7 @@ class _SellerVerificationFormScreenState
               maxLength: kSellerVerificationShortFieldMax,
               enabled: !isSubmitting,
               decoration: const InputDecoration(
-                labelText: 'Business location',
+                label: FieldLabel('Business location'),
                 helperText: 'Optional. Town, city or province.',
               ),
               validator: (String? value) =>
@@ -364,7 +602,7 @@ class _SellerVerificationFormScreenState
               maxLength: kSellerVerificationDescriptionMax,
               enabled: !isSubmitting,
               decoration: const InputDecoration(
-                labelText: 'Business description',
+                label: FieldLabel('Business description'),
                 alignLabelWithHint: true,
                 helperText:
                     'Optional. What you sell, and how long you have been '
@@ -387,23 +625,84 @@ class _SellerVerificationFormScreenState
     ];
   }
 
-  List<Widget> _documentsStep(SellerVerificationDocumentsState documents) {
+  List<Widget> _documentsStep(
+    SellerVerificationDocumentsState documents,
+    bool isSubmitting,
+  ) {
     final ThemeData theme = Theme.of(context);
-    final bool bothUploaded = documents.bothUploaded;
+    final bool allRequiredUploaded = documents.allRequiredUploaded;
 
     return <Widget>[
-      Text('Upload Required Documents', style: theme.textTheme.titleLarge),
+      Text('Government ID Verification', style: theme.textTheme.titleLarge),
       const SizedBox(height: AppSpacing.xs),
       Text(
-        'Upload both documents below. Each is uploaded as soon as you choose '
-        'it, and you can continue once both show as uploaded.',
+        'Upload the required documents below. Each is uploaded as soon as you '
+        'choose it, and you can continue once all show as uploaded.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: AppColors.textSecondary,
         ),
       ),
       const SizedBox(height: AppSpacing.lg),
+      Form(
+        key: _governmentIdFormKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            DropdownButtonFormField<GovernmentIdType>(
+              icon: const FieldDropdownIcon(),
+              initialValue: _governmentIdType,
+              isExpanded: true,
+              decoration: InputDecoration(
+                label: FieldLabel('Government ID Type'),
+                errorText: _controller.state.errorFor('government_id_type'),
+              ),
+              items: GovernmentIdType.values
+                  .map(
+                    (GovernmentIdType type) =>
+                        DropdownMenuItem<GovernmentIdType>(
+                          value: type,
+                          child: Text(
+                            type.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                  )
+                  .toList(growable: false),
+              onChanged: isSubmitting
+                  ? null
+                  : (GovernmentIdType? value) =>
+                        setState(() => _governmentIdType = value),
+              validator: (GovernmentIdType? value) => value == null
+                  ? 'Select a Government ID type.'
+                  : _controller.state.errorFor('government_id_type'),
+            ),
+            if (_governmentIdType == GovernmentIdType.others) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              TextFormField(
+                controller: _governmentIdDescription,
+                enabled: !isSubmitting,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  label: FieldLabel('Specify Government ID'),
+                  errorText: _controller.state.errorFor(
+                    'government_id_description',
+                  ),
+                ),
+                validator: (String? value) =>
+                    _governmentIdType == GovernmentIdType.others &&
+                        (value == null || value.trim().isEmpty)
+                    ? 'Specify your Government ID.'
+                    : _controller.state.errorFor('government_id_description'),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.md),
       SellerVerificationDocumentCard(
-        title: 'Valid Government-Issued ID',
+        title: 'Government ID — Front',
         instruction:
             'Upload a clear photo or scan of an accepted government-issued ID. '
             'The name and details must be readable.',
@@ -411,11 +710,88 @@ class _SellerVerificationFormScreenState
             'The entire ID must be visible, with readable text and no blur, '
             'glare or cropped edges.',
         document: documents.idDocument,
+        pickLabel: 'Upload Front ID Image',
+        changeLabel: 'Change',
+        onPick: () => _pick(VerificationDocumentType.idDocumentFront),
+        onRemove: () =>
+            _documents.remove(VerificationDocumentType.idDocumentFront),
+        onRetry: () =>
+            _documents.retry(VerificationDocumentType.idDocumentFront),
+        onRetryPreview: () =>
+            _documents.loadPreview(VerificationDocumentType.idDocumentFront),
+      ),
+      if (documents.idDocument.hasFile) ...<Widget>[
+        const SizedBox(height: AppSpacing.md),
+        Text('Back ID image', style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.xs),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: <Widget>[
+            OutlinedButton(
+              onPressed: documents.isBusy ? null : _chooseAndPickBackImage,
+              child: const Text('Upload Back ID Image'),
+            ),
+            OutlinedButton(
+              onPressed: documents.isBusy
+                  ? null
+                  : () => _documents.chooseBackImage(hasNoBackImage: true),
+              child: const Text('My ID Has No Back Image'),
+            ),
+          ],
+        ),
+        if (documents.hasNoBackImage == true)
+          const Text('You declared that your Government ID has no back image.'),
+        if (documents.hasNoBackImage == false &&
+            (documents.idDocumentBack.hasFile ||
+                documents
+                    .idDocumentBack
+                    .hasPreviousRecordDocument)) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          SellerVerificationDocumentCard(
+            title: 'Government ID — Back',
+            instruction:
+                'Upload a clear image of the back of your Government ID.',
+            qualityGuidance: 'Keep the full ID visible and readable.',
+            document: documents.idDocumentBack,
+            pickLabel: 'Upload Back ID Image',
+            changeLabel: 'Replace',
+            onPick: () => _pick(VerificationDocumentType.idDocumentBack),
+            onRemove: () =>
+                _documents.remove(VerificationDocumentType.idDocumentBack),
+            onRetry: () =>
+                _documents.retry(VerificationDocumentType.idDocumentBack),
+            onRetryPreview: () =>
+                _documents.loadPreview(VerificationDocumentType.idDocumentBack),
+          ),
+        ],
+        if (documents.hasNoBackImage == null)
+          Text(
+            'Choose whether your ID has a back image before continuing.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+      ],
+      const SizedBox(height: AppSpacing.md),
+      SellerVerificationDocumentCard(
+        title: 'Proof of Address',
+        instruction:
+            'Upload a clear photo of a document showing your address, such as '
+            'a utility bill or barangay certificate.',
+        qualityGuidance:
+            'Your name and address must be readable, with no blur, glare or '
+            'cropped edges.',
+        document: documents.proofOfAddress,
         pickLabel: 'Take Photo',
         changeLabel: 'Change',
-        onPick: () => _pick(VerificationDocumentType.idDocument),
-        onRemove: () => _documents.remove(VerificationDocumentType.idDocument),
-        onRetry: () => _documents.retry(VerificationDocumentType.idDocument),
+        onPick: () => _pick(VerificationDocumentType.proofOfAddress),
+        onRemove: () =>
+            _documents.remove(VerificationDocumentType.proofOfAddress),
+        onRetry: () =>
+            _documents.retry(VerificationDocumentType.proofOfAddress),
+        onRetryPreview: () =>
+            _documents.loadPreview(VerificationDocumentType.proofOfAddress),
       ),
       const SizedBox(height: AppSpacing.md),
       SellerVerificationDocumentCard(
@@ -432,6 +808,15 @@ class _SellerVerificationFormScreenState
         onPick: () => _pick(VerificationDocumentType.selfie),
         onRemove: () => _documents.remove(VerificationDocumentType.selfie),
         onRetry: () => _documents.retry(VerificationDocumentType.selfie),
+        onRetryPreview: () =>
+            _documents.loadPreview(VerificationDocumentType.selfie),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      SellerVerificationFarmPhotosCard(
+        documents: documents,
+        onAdd: _pickFarmPhoto,
+        onRemove: _documents.removeFarmPhoto,
+        onRetry: _documents.retryFarmPhoto,
       ),
       const SizedBox(height: AppSpacing.lg),
       Row(
@@ -445,19 +830,21 @@ class _SellerVerificationFormScreenState
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: FilledButton(
-              // Gated on both documents being _persisted_, not merely picked:
+              // Gated on the documents being _persisted_, not merely picked:
               // the submit endpoint refuses an application whose documents are
               // missing, so a locally-selected file must not advance the flow.
-              onPressed: bothUploaded && !documents.isBusy ? _goToReview : null,
+              onPressed: allRequiredUploaded && !documents.isBusy
+                  ? _goToReview
+                  : null,
               child: const Text('Next'),
             ),
           ),
         ],
       ),
-      if (!bothUploaded) ...<Widget>[
+      if (!allRequiredUploaded) ...<Widget>[
         const SizedBox(height: AppSpacing.sm),
         Text(
-          'Both documents must be uploaded before you can continue.',
+          'All required documents must be uploaded before you can continue.',
           style: theme.textTheme.labelSmall?.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -471,8 +858,20 @@ class _SellerVerificationFormScreenState
     SellerVerificationDocumentsState documents,
   ) {
     final ThemeData theme = Theme.of(context);
-    final String location = _businessLocation.text.trim();
+    final String? accountName =
+        widget.accountName ?? _authController?.state.user?.name;
     final String description = _businessDescription.text.trim();
+    final String businessName = _businessName.text.trim();
+    final String location = _businessLocation.text.trim();
+    final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
+    final String address = catalog == null
+        ? (_legacyAddress ?? 'Not provided')
+        : (_location?.formattedAddress(
+                municipality: catalog.municipality,
+                province: catalog.province,
+              ) ??
+              _legacyAddress ??
+              'Not provided');
 
     return <Widget>[
       Text('Review Your Information', style: theme.textTheme.titleLarge),
@@ -488,9 +887,19 @@ class _SellerVerificationFormScreenState
       SectionCard(
         title: 'Basic Information',
         children: <Widget>[
-          if (widget.accountName != null)
-            DetailRow(label: 'Full name', value: widget.accountName!),
-          DetailRow(label: 'Business name', value: _businessName.text.trim()),
+          if (accountName != null)
+            DetailRow(label: 'Full name', value: accountName),
+          DetailRow(
+            label: 'Phone number',
+            value: _phone.text.trim().isEmpty
+                ? 'Not provided'
+                : _phone.text.trim(),
+          ),
+          DetailRow(label: 'Address', value: address),
+          DetailRow(
+            label: 'Business name',
+            value: businessName.isEmpty ? 'Not provided' : businessName,
+          ),
           DetailRow(
             label: 'Business location',
             value: location.isEmpty ? 'Not provided' : location,
@@ -514,13 +923,37 @@ class _SellerVerificationFormScreenState
         title: 'Uploaded Documents',
         children: <Widget>[
           _DocumentSummaryRow(
-            label: 'Government-Issued ID',
+            label: 'Government ID front',
             document: documents.idDocument,
+          ),
+          _DocumentSummaryRow(
+            label: 'Government ID back',
+            document: documents.idDocumentBack,
+          ),
+          DetailRow(
+            label: 'Back image declaration',
+            value: documents.hasNoBackImage == true
+                ? 'Applicant declared no back image'
+                : documents.hasNoBackImage == false
+                ? 'Back image uploaded'
+                : 'Not selected',
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _DocumentSummaryRow(
+            label: 'Proof of Address',
+            document: documents.proofOfAddress,
           ),
           const SizedBox(height: AppSpacing.xs),
           _DocumentSummaryRow(
             label: 'Selfie Holding ID',
             document: documents.selfie,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          DetailRow(
+            label: 'Farm photos',
+            value: documents.uploadedFarmPhotoCount == 0
+                ? 'Not provided'
+                : '${documents.uploadedFarmPhotoCount} uploaded',
           ),
           const SizedBox(height: AppSpacing.xs),
           Align(

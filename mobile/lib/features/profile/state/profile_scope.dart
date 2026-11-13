@@ -45,6 +45,11 @@ class ProfileScope extends InheritedWidget {
     return scope!.controller;
   }
 
+  /// The controller, without subscribing, when a feature can optionally use an
+  /// already-loaded profile snapshot without starting another profile request.
+  static ProfileController? maybeReadOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<ProfileScope>()?.controller;
+
   @override
   bool updateShouldNotify(ProfileScope oldWidget) =>
       repository != oldWidget.repository || controller != oldWidget.controller;

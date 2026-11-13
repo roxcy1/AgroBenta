@@ -2,6 +2,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/constants/api_constants.dart';
 import '../core/network/api_exception.dart';
+import '../models/ai_price_estimate.dart';
 import '../models/listing.dart';
 import '../models/marketplace_page.dart';
 import '../services/seller_listing_service.dart';
@@ -52,6 +53,10 @@ class SellerListingRepository {
   Future<Listing> update(int id, Map<String, dynamic> fields) =>
       _service.update(id, fields);
 
+  /// Requests an AI price suggestion for a draft the caller owns.
+  Future<AiPriceEstimate> requestPriceSuggestion(int id) =>
+      _service.requestPriceSuggestion(id);
+
   /// Submits a draft for review.
   Future<Listing> submit(int id) => _service.submit(id);
 
@@ -71,20 +76,18 @@ class SellerListingRepository {
     required int listingId,
     required List<XFile> files,
     required void Function(int sent, int total) onProgress,
-  }) =>
-      _service.uploadPhotos(
-        listingId: listingId,
-        files: files,
-        onProgress: onProgress,
-      );
+  }) => _service.uploadPhotos(
+    listingId: listingId,
+    files: files,
+    onProgress: onProgress,
+  );
 
   /// Removes one photo from a listing by the value the client was served
   /// (URL or bare filename; never by index).
   Future<Listing> removePhoto({
     required int listingId,
     required String photo,
-  }) =>
-      _service.removePhoto(listingId: listingId, photo: photo);
+  }) => _service.removePhoto(listingId: listingId, photo: photo);
 
   static int _clampPerPage(int? perPage) {
     final int requested = perPage ?? SellerListingEndpoints.defaultPerPage;

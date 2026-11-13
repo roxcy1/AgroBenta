@@ -164,7 +164,11 @@ class DashboardService
      */
     private function getRecentListings(): Collection
     {
-        return Listing::with('seller:id,name,email')
+        return Listing::with([
+            'seller' => fn ($seller) => $seller
+                ->withTrashed()
+                ->select(['id', 'name', 'email']),
+        ])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit(self::RECENT_LIMIT)

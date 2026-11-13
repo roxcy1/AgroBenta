@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/user.dart';
+import '../../../widgets/field_label.dart';
 import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
@@ -37,7 +38,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _name;
   late final TextEditingController _email;
   late final TextEditingController _phone;
-  late final TextEditingController _location;
   late final TextEditingController _avatarUrl;
   late final TextEditingController _bio;
 
@@ -53,7 +53,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _name.dispose();
     _email.dispose();
     _phone.dispose();
-    _location.dispose();
     _avatarUrl.dispose();
     _bio.dispose();
     super.dispose();
@@ -88,7 +87,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String name = _name.text.trim();
     final String email = _email.text.trim();
     final String phone = _phone.text.trim();
-    final String location = _location.text.trim();
     final String avatarUrl = _avatarUrl.text.trim();
     final String bio = _bio.text.trim();
 
@@ -99,7 +97,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         name: name == _initial.name ? null : name,
         email: emailChanged ? email : null,
         phone: phone == (_initial.phone ?? '') ? null : phone,
-        location: location == (_initial.location ?? '') ? null : location,
         avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
         bio: bio == (_initial.bio ?? '') ? null : bio,
         currentPassword: currentPassword,
@@ -168,7 +165,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _name = TextEditingController(text: _initial.name);
     _email = TextEditingController(text: _initial.email);
     _phone = TextEditingController(text: _initial.phone ?? '');
-    _location = TextEditingController(text: _initial.location ?? '');
     _avatarUrl = TextEditingController(text: _initial.avatarUrl ?? '');
     _bio = TextEditingController(text: _initial.bio ?? '');
   }
@@ -212,7 +208,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 maxLength: 120,
                                 enabled: !isSaving,
                                 decoration: const InputDecoration(
-                                  labelText: 'Full name',
+                                  label: FieldLabel('Full name'),
                                   helperText: 'Required.',
                                 ),
                                 validator: (String? value) {
@@ -231,7 +227,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 maxLength: 191,
                                 enabled: !isSaving,
                                 decoration: const InputDecoration(
-                                  labelText: 'Email address',
+                                  label: FieldLabel('Email address'),
                                   helperText: 'Required.',
                                 ),
                                 validator: (String? value) {
@@ -251,26 +247,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 maxLength: 32,
                                 enabled: !isSaving,
                                 decoration: const InputDecoration(
-                                  labelText: 'Phone number',
+                                  label: FieldLabel('Phone number'),
                                   helperText: 'Optional.',
                                 ),
                                 validator: (String? value) =>
                                     state.errorFor('phone'),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              TextFormField(
-                                controller: _location,
-                                textCapitalization: TextCapitalization.words,
-                                textInputAction: TextInputAction.next,
-                                maxLength: 191,
-                                enabled: !isSaving,
-                                decoration: const InputDecoration(
-                                  labelText: 'Location',
-                                  helperText:
-                                      'Optional. Town, city or province.',
-                                ),
-                                validator: (String? value) =>
-                                    state.errorFor('location'),
                               ),
                               const SizedBox(height: AppSpacing.md),
                               TextFormField(
@@ -280,7 +261,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 maxLength: 2048,
                                 enabled: !isSaving,
                                 decoration: const InputDecoration(
-                                  labelText: 'Avatar URL',
+                                  label: FieldLabel('Avatar URL'),
                                   helperText:
                                       'Optional. A link to an image of you or '
                                       'your farm.',
@@ -299,7 +280,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 maxLength: 1000,
                                 enabled: !isSaving,
                                 decoration: const InputDecoration(
-                                  labelText: 'Bio',
+                                  label: FieldLabel('Bio'),
                                   alignLabelWithHint: true,
                                   helperText:
                                       'Optional. A short description of your '
@@ -404,7 +385,7 @@ class _CurrentPasswordDialogState extends State<_CurrentPasswordDialog> {
             obscureText: true,
             autofocus: true,
             decoration: InputDecoration(
-              labelText: 'Current password',
+              label: FieldLabel('Current password'),
               errorText: widget.error,
             ),
           ),

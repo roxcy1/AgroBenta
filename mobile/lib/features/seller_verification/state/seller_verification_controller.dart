@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/seller_verification.dart';
 import '../../../repositories/seller_verification_repository.dart';
 import 'seller_verification_state.dart';
@@ -43,12 +44,21 @@ class SellerVerificationController extends ChangeNotifier {
   SellerVerificationController(
     this._repository, {
     Future<bool> Function()? onCapabilityMayHaveChanged,
+    this.realtimeEvents,
     // An initializing formal cannot be used for a named parameter — Dart
     // forbids a leading underscore in one — so the assignment is spelled out.
     // ignore: prefer_initializing_formals
-  }) : _onCapabilityMayHaveChanged = onCapabilityMayHaveChanged;
+  }) : _onCapabilityMayHaveChanged = onCapabilityMayHaveChanged {
+    _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
+  }
 
   final SellerVerificationRepository _repository;
+
+  /// The session's decoded events. When supplied, an approval/rejection
+  /// notification reloads the caller's verification status.
+  final Stream<RealtimeEvent>? realtimeEvents;
+
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
 
   /// Re-reads `/auth/me` when a read shows an approved verification.
   ///
@@ -157,10 +167,15 @@ class SellerVerificationController extends ChangeNotifier {
   /// On success the screen moves to the pending state. `seller_capability` is
   /// untouched — see the class documentation.
   Future<bool> submit({
-    required String businessName,
+    required String phone,
+    required String address,
+    String? businessName,
     String? businessLocation,
     String? businessDescription,
     String? idDocumentRef,
+    String governmentIdType = 'philippine_national_id',
+    String? governmentIdDescription,
+    bool hasNoBackImage = false,
   }) async {
     if (_state.isBusy) {
       return false;
@@ -177,10 +192,15 @@ class SellerVerificationController extends ChangeNotifier {
 
     try {
       final SellerVerification verification = await _repository.submit(
+        phone: phone,
+        address: address,
         businessName: businessName,
         businessLocation: businessLocation,
         businessDescription: businessDescription,
         idDocumentRef: idDocumentRef,
+        governmentIdType: governmentIdType,
+        governmentIdDescription: governmentIdDescription,
+        hasNoBackImage: hasNoBackImage,
       );
 
       if (_disposed) {
@@ -348,8 +368,20 @@ class SellerVerificationController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// An approval/rejection notification reloads the caller's own verification
+  /// status. Scoped to the `seller_verification` notification type so unrelated
+  /// notifications do not spend a request.
+  void _onRealtimeEvent(RealtimeEvent event) {
+    if (event.name == 'notification.created' &&
+        event.data['type'] == 'seller_verification') {
+      unawaited(load());
+    }
+  }
+
   @override
   void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
     _disposed = true;
     super.dispose();
   }

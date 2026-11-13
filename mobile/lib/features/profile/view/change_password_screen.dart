@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
@@ -60,9 +61,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     );
 
     if (changed && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password changed.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Password changed.')));
       Navigator.of(context).pop();
     }
   }
@@ -104,7 +105,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                                 obscureText: true,
                                 enabled: !isChanging,
                                 decoration: const InputDecoration(
-                                  labelText: 'Current password',
+                                  label: FieldLabel('Current password'),
                                 ),
                                 validator: (String? value) {
                                   if (value == null || value.isEmpty) {
@@ -119,7 +120,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                                 obscureText: true,
                                 enabled: !isChanging,
                                 decoration: const InputDecoration(
-                                  labelText: 'New password',
+                                  label: FieldLabel('New password'),
                                   helperText: 'At least 8 characters.',
                                 ),
                                 validator: (String? value) {
@@ -135,7 +136,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                                 obscureText: true,
                                 enabled: !isChanging,
                                 decoration: const InputDecoration(
-                                  labelText: 'Confirm new password',
+                                  label: FieldLabel('Confirm new password'),
                                 ),
                                 validator: (String? value) {
                                   if (value != _next.text) {

@@ -2,19 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
 import '../../../models/message.dart';
-import '../../../models/transaction.dart';
 import '../../../repositories/marketplace_repository.dart';
-import '../../../repositories/transaction_repository.dart';
 import '../../../widgets/detail_row.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../inquiries/view/inquire_screen.dart';
 import '../../messaging/view/chat_screen.dart';
-import '../../transactions/state/transaction_scope.dart';
-import '../../transactions/views/transaction_detail_screen.dart';
-import '../../transactions/widgets/buy_sheet.dart';
 import '../state/listing_detail_controller.dart';
 import '../state/listing_detail_state.dart';
 import '../state/marketplace_scope.dart';
@@ -35,12 +31,20 @@ class ListingDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No app bar: the photo runs to the top of the screen and a round back
+    // button floats over it, as in the approved design. The bottom inset is
+    // reserved so the pinned action bar clears the system navigation area.
     return Scaffold(
-      appBar: AppBar(title: const Text('Listing Details')),
-      // The gallery deliberately runs under the app bar's lower edge, so the
-      // top inset is not reserved here; the bottom inset is, so the pinned
-      // action bar clears the system navigation area.
-      body: SafeArea(top: false, child: _ListingDetailBody(listingId: listingId)),
+      body: Stack(
+        children: <Widget>[
+          SafeArea(top: false, child: _ListingDetailBody(listingId: listingId)),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + AppSpacing.xs,
+            left: AppSpacing.sm,
+            child: const _FloatingBackButton(),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -137,7 +141,7 @@ class _DetailContent extends StatelessWidget {
   static const double _galleryHeight = 260;
 
   /// How far the details panel rides up over the gallery's lower edge.
-  static const double _panelOverlap = 16;
+  static const double _panelOverlap = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -147,10 +151,7 @@ class _DetailContent extends StatelessWidget {
           child: SingleChildScrollView(
             child: Stack(
               children: <Widget>[
-                ListingPhotoCarousel(
-                  listing: listing,
-                  height: _galleryHeight,
-                ),
+                ListingPhotoCarousel(listing: listing, height: _galleryHeight),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
@@ -184,52 +185,53 @@ class _DetailsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final String? additionalNotes = listing.additionalNotes;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.xl),
+    return ColoredBox(
+      color: AppColors.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.screenGutter,
+          AppSpacing.md,
+          AppSpacing.screenGutter,
+          AppSpacing.lg,
         ),
-        border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _SummarySection(listing: listing),
-          const _PanelDivider(),
-          _AttributesSection(listing: listing),
-          if (listing.healthStatus != null || listing.vaccination != null) ...<Widget>[
-            const _PanelDivider(),
-            _FactsSection(listing: listing),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _SummarySection(listing: listing),
+            const SizedBox(height: AppSpacing.md),
+            _FactsGrid(listing: listing),
+            if (listing.hasEstimatedMeasurement) ...<Widget>[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Estimated age or weight is provided by the seller and is not '
+                'independently verified.',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+            if (listing.shortDescription.trim().isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.lg),
+              _TextSection(
+                title: 'Description',
+                body: listing.shortDescription,
+              ),
+            ],
+            if (additionalNotes != null &&
+                additionalNotes.trim().isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.lg),
+              _TextSection(title: 'Seller’s notes', body: additionalNotes),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            _SellerSection(listing: listing),
           ],
-          if (listing.shortDescription.trim().isNotEmpty) ...<Widget>[
-            const _PanelDivider(),
-            _TextSection(
-              title: 'Description',
-              body: listing.shortDescription,
-            ),
-          ],
-          if (additionalNotes != null && additionalNotes.trim().isNotEmpty) ...<Widget>[
-            const _PanelDivider(),
-            _TextSection(title: 'Seller’s notes', body: additionalNotes),
-          ],
-          const _PanelDivider(),
-          _SellerSection(listing: listing),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _PanelDivider extends StatelessWidget {
-  const _PanelDivider();
-
-  @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: AppColors.border);
-}
-
-/// Type, title, price, availability and location — the top of the panel.
+/// Name, where and when, then the price — the figure the buyer decides on.
 class _SummarySection extends StatelessWidget {
   const _SummarySection({required this.listing});
 
@@ -238,106 +240,129 @@ class _SummarySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final String type = listing.livestockType.trim();
+    final String species = type.isEmpty
+        ? ''
+        : '${type[0].toUpperCase()}${type.substring(1)}';
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenGutter,
-        AppSpacing.lg,
-        AppSpacing.screenGutter,
-        AppSpacing.md,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (species.isNotEmpty)
+          Text(species, style: theme.textTheme.labelMedium),
+        Text(listing.title, style: theme.textTheme.headlineSmall),
+        if (listing.location.trim().isNotEmpty) ...<Widget>[
+          const SizedBox(height: AppSpacing.xxs),
+          Row(
+            children: <Widget>[
+              const Icon(
+                Icons.location_on_outlined,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              Flexible(
+                child: Text(listing.location, style: theme.textTheme.bodySmall),
+              ),
+              Text(
+                ' · Posted ${AppFormatters.formatRelative(listing.createdAt)}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sm),
+        // The exact amount, to the cent. A card rounds for space; here there
+        // is room, and this is the figure the buyer is deciding on.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: <Widget>[
+            Flexible(
+              child: Text(
+                AppFormatters.formatMoney(listing.askingPrice) ??
+                    listing.askingPrice,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: AppColors.primary,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const <FontFeature>[
+                    FontFeature.tabularFigures(),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xxs),
+            Text('per head', style: theme.textTheme.labelMedium),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Six facts in a bordered three-column grid: Age, Weight, Gender, Health,
+/// Vaccination and Quantity. A missing fact shows a dash rather than hiding,
+/// so the grid keeps its shape.
+class _FactsGrid extends StatelessWidget {
+  const _FactsGrid({required this.listing});
+
+  final Listing listing;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<(String, String?)> facts = <(String, String?)>[
+      // "Estimated Age" / "Measured Weight" when the seller said which.
+      (listing.ageInformationLabel ?? 'Age', listing.ageLabel),
+      (listing.weightInformationLabel ?? 'Weight', listing.weightLabel),
+      ('Gender', listing.genderLabel),
+      ('Health', listing.healthStatus),
+      ('Vaccination', listing.vaccination),
+      (
+        'Quantity',
+        listing.quantity > 0
+            ? '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}'
+            : null,
+      ),
+    ];
+
+    Widget row(int from) => IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          for (int i = from; i < from + 3; i++) ...<Widget>[
+            if (i > from)
+              const VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: AppColors.border,
+              ),
+            Expanded(
+              child: _Fact(label: facts[i].$1, value: facts[i].$2),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            listing.livestockType.toUpperCase(),
-            style: theme.textTheme.labelMedium,
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(listing.title, style: theme.textTheme.headlineSmall),
-          const SizedBox(height: AppSpacing.sm),
-          // The exact amount, to the cent. A card rounds for space; here there
-          // is room, and this is the figure the buyer is deciding on.
-          Text(
-            AppFormatters.formatMoney(listing.askingPrice) ??
-                listing.askingPrice,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              color: AppColors.primary,
-            ),
-          ),
-          if (listing.quantity > 0) ...<Widget>[
-            const SizedBox(height: AppSpacing.xxs),
-            Text(
-              '${listing.quantity} '
-              '${listing.quantity == 1 ? 'head' : 'heads'} available',
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-          if (listing.location.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: <Widget>[
-                const Icon(
-                  Icons.location_on_outlined,
-                  size: 16,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: AppSpacing.xxs),
-                Expanded(
-                  child: Text(
-                    listing.location,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ],
+          row(0),
+          const Divider(height: 1, thickness: 1, color: AppColors.border),
+          row(3),
         ],
       ),
     );
   }
 }
 
-/// Age, Weight and Gender across three columns with hairline separators.
-///
-/// Every column is shown; a value the API did not supply renders as an em dash
-/// rather than being invented.
-class _AttributesSection extends StatelessWidget {
-  const _AttributesSection({required this.listing});
-
-  final Listing listing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenGutter,
-        vertical: AppSpacing.md,
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Expanded(
-              child: _Attribute(label: 'Age', value: listing.ageLabel),
-            ),
-            const _AttributeSeparator(),
-            Expanded(
-              child: _Attribute(label: 'Weight', value: listing.weightLabel),
-            ),
-            const _AttributeSeparator(),
-            Expanded(
-              child: _Attribute(label: 'Gender', value: listing.genderLabel),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Attribute extends StatelessWidget {
-  const _Attribute({required this.label, required this.value});
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.value});
 
   final String label;
   final String? value;
@@ -347,70 +372,28 @@ class _Attribute extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final String? value = this.value;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        Text(label, style: theme.textTheme.labelMedium),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          value ?? '—',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: value == null ? AppColors.textSecondary : AppColors.text,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AttributeSeparator extends StatelessWidget {
-  const _AttributeSeparator();
-
-  @override
-  Widget build(BuildContext context) => const VerticalDivider(
-        width: AppSpacing.md,
-        thickness: 1,
-        color: AppColors.border,
-      );
-}
-
-/// Health and vaccination, when the listing records them.
-///
-/// Not part of the three-column attribute row, but kept so the screen does not
-/// silently lose data the API supplies.
-class _FactsSection extends StatelessWidget {
-  const _FactsSection({required this.listing});
-
-  final Listing listing;
-
-  @override
-  Widget build(BuildContext context) {
-    final String? healthStatus = listing.healthStatus;
-    final String? vaccination = listing.vaccination;
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenGutter,
-        AppSpacing.md,
-        AppSpacing.screenGutter,
-        AppSpacing.xs,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          if (healthStatus != null)
-            DetailRow(label: 'Health', value: healthStatus),
-          if (vaccination != null)
-            DetailRow(label: 'Vaccination', value: vaccination),
+          Text(label, style: theme.textTheme.labelMedium),
+          const SizedBox(height: AppSpacing.xxxs),
+          Text(
+            value ?? '—',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: value == null ? AppColors.textSecondary : AppColors.text,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// A titled block of prose — the description or the seller's notes.
 class _TextSection extends StatelessWidget {
   const _TextSection({required this.title, required this.body});
 
@@ -421,25 +404,18 @@ class _TextSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.screenGutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(title, style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.xs),
-          DetailRow.body(body),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(title, style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.xs),
+        DetailRow.body(body),
+      ],
     );
   }
 }
 
-/// Who is selling, reduced to what the marketplace API discloses.
-///
-/// The seller projection is `{ id, name }` — no avatar, no verification flag,
-/// no email — so this shows an initials avatar and the name, and does not
-/// imply a "Verified Seller" badge the API never sends.
+/// The seller, as one bordered row.
 class _SellerSection extends StatelessWidget {
   const _SellerSection({required this.listing});
 
@@ -449,52 +425,29 @@ class _SellerSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.screenGutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
         children: <Widget>[
-          Text('Seller', style: theme.textTheme.labelMedium),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            children: <Widget>[
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppColors.primarySurface,
-                child: Text(
-                  _initial(listing.seller.name),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
+          InitialsAvatar(name: listing.seller.name, radius: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Seller', style: theme.textTheme.labelSmall),
+                Text(
                   listing.seller.name,
-                  style: theme.textTheme.titleMedium,
+                  style: theme.textTheme.titleSmall,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: <Widget>[
-              const Icon(
-                Icons.schedule_outlined,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: AppSpacing.xxs),
-              Expanded(
-                child: Text(
-                  'Posted ${AppFormatters.formatRelative(listing.createdAt)}',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -502,23 +455,19 @@ class _SellerSection extends StatelessWidget {
   }
 }
 
-/// The pinned Message / Inquire / Buy bar.
+/// The pinned Ask Seller / I'm Interested bar.
 ///
-/// Three separate paths, because they are three separate things: a free-form
-/// chat thread, the structured inquiry form, and transaction creation. The
-/// middle one used to open the Buy sheet, which left a button labelled
-/// "Inquire" creating a transaction — a buyer who wanted to *ask* something
-/// could not, and a buyer who wanted to buy was taken to a sheet they did not
-/// ask for. Each button now does what it says.
+/// Two separate paths: **Ask Seller** opens the existing buyer–seller
+/// conversation without creating an inquiry, offer, transaction or
+/// reservation; **I'm Interested** opens the existing structured inquiry form.
 ///
-/// The labels are text-only on purpose: three icon-plus-label buttons overflow
-/// on a 320dp phone once each button's padding is counted, and the label is
-/// the part that carries the meaning (mobile/DESIGN.md: the word, not the
-/// decoration).
+/// The thread is loaded as the full buyer–seller conversation, while a new
+/// message started here is tagged with this listing. That keeps replies the
+/// seller sent from the normal Messages inbox visible instead of hiding them
+/// behind a listing filter.
 ///
-/// Renders nothing when the viewer owns the listing — a seller has no create
-/// endpoint, cannot transact with themselves (§6.2), and cannot message
-/// themselves either.
+/// Renders nothing when the viewer owns the listing — a seller cannot message
+/// or inquire with themselves.
 class _ActionBar extends StatelessWidget {
   const _ActionBar({required this.listing});
 
@@ -547,26 +496,16 @@ class _ActionBar extends StatelessWidget {
           Expanded(
             child: OutlinedButton(
               style: _barButtonStyle,
-              onPressed: viewerId == null
-                  ? null
-                  : () => _openThread(context, viewerId),
-              child: const Text('Message'),
+              onPressed: () => _openMessages(context, viewerId),
+              child: const Text('Ask Seller'),
             ),
           ),
-          const SizedBox(width: AppSpacing.xs),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: FilledButton(
               style: _barButtonStyle,
               onPressed: () => _openInquiry(context),
-              child: const Text('Inquire'),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: OutlinedButton(
-              style: _barButtonStyle,
-              onPressed: () => _openBuy(context),
-              child: const Text('Buy'),
+              child: const Text('I\'m Interested'),
             ),
           ),
         ],
@@ -574,21 +513,24 @@ class _ActionBar extends StatelessWidget {
     );
   }
 
-  /// Tighter horizontal padding so all three labels fit at the narrowest
+  /// Tighter horizontal padding so the single button fits at the narrowest
   /// widths the app supports, without shrinking the touch target's height.
-  /// Shared by all three buttons, so the row stays even.
   static final ButtonStyle _barButtonStyle = ButtonStyle(
     padding: WidgetStatePropertyAll<EdgeInsets>(
       const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
     ),
   );
 
-  /// Opens the existing chat thread with the seller, tied to this listing.
+  /// Opens the existing conversation with the listing's seller.
   ///
-  /// `MessagingScope` is read by [ChatScreen] in its own `initState`, not here:
-  /// this screen must build without a messaging scope so the marketplace tests
-  /// that mount it do not need one.
-  void _openThread(BuildContext context, int viewerId) {
+  /// Nothing is created until the buyer actually sends a message. The thread is
+  /// not narrowed to this listing, so prior buyer–seller history remains
+  /// visible; a new message sent here carries the listing id.
+  void _openMessages(BuildContext context, int? viewerId) {
+    if (viewerId == null) {
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (BuildContext context) => ChatScreen(
@@ -598,7 +540,8 @@ class _ActionBar extends StatelessWidget {
             avatarUrl: null,
           ),
           currentUserId: viewerId,
-          listingId: listing.id,
+          messageListingId: listing.id,
+          counterpartRole: 'Seller',
         ),
       ),
     );
@@ -614,25 +557,6 @@ class _ActionBar extends StatelessWidget {
         builder: (BuildContext context) => InquireScreen(listing: listing),
       ),
     );
-  }
-
-  /// Opens the existing Buy sheet and, on success, the created transaction.
-  /// The sheet is the single create path; this button only opens it.
-  Future<void> _openBuy(BuildContext context) async {
-    final TransactionRepository repository = TransactionScope.readOf(context);
-    final Transaction? created = await BuySheet.show(
-      context,
-      listing: listing,
-      repository: repository,
-    );
-    if (created != null && context.mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              TransactionDetailScreen(transactionId: created.id),
-        ),
-      );
-    }
   }
 }
 
@@ -680,8 +604,21 @@ class _UnavailableNotice extends StatelessWidget {
   }
 }
 
-/// The fallback avatar letter for a seller with no image.
-String _initial(String name) {
-  final String trimmed = name.trim();
-  return trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
+/// The round white back button that sits on top of the photo.
+class _FloatingBackButton extends StatelessWidget {
+  const _FloatingBackButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface.withValues(alpha: 0.94),
+      shape: const CircleBorder(side: BorderSide(color: AppColors.border)),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        tooltip: 'Back',
+        icon: const Icon(Icons.arrow_back, color: AppColors.text),
+        onPressed: () => Navigator.of(context).maybePop(),
+      ),
+    );
+  }
 }

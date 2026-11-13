@@ -5,6 +5,7 @@ import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
+import 'reset_password_screen.dart';
 import 'session_status_screens.dart';
 import 'sign_in_screen.dart';
 
@@ -35,8 +36,15 @@ class _AuthGateState extends State<AuthGate> {
   bool _showRegistration = false;
   bool _showForgotPassword = false;
 
+  /// The email a reset code was requested for. Set while the reset form shows.
+  String? _resetEmail;
+
+  /// A confirmation for the sign-in form, set after a password reset.
+  String? _signInNotice;
+
   bool _restoreStarted = false;
   bool _wasSignedIn = false;
+  int? _lastUserId;
   AuthController? _controller;
 
   @override
@@ -73,17 +81,38 @@ class _AuthGateState extends State<AuthGate> {
   void _handleAuthChanged() {
     final AuthState state = _controller!.state;
     final bool signedIn = state.isSignedIn;
+    final int? userId = signedIn ? state.user?.id : null;
+    final bool statusChanged = signedIn != _wasSignedIn;
+    final bool identityChanged =
+        _wasSignedIn && signedIn && userId != _lastUserId;
+    final bool sessionEnded = (_wasSignedIn && !signedIn) || identityChanged;
 
-    if (signedIn != _wasSignedIn) {
-      _wasSignedIn = signedIn;
-      if (!signedIn) {
-        if (_showRegistration || _showForgotPassword) {
-          setState(() {
-            _showRegistration = false;
-            _showForgotPassword = false;
-          });
+    _wasSignedIn = signedIn;
+    _lastUserId = userId;
+    if (sessionEnded) {
+      // Pushed detail/form routes are siblings of AuthGate in the Navigator.
+      // Pop them on logout or account replacement so Back cannot reveal a
+      // screen built under the previous user's session.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(
+            context,
+            rootNavigator: true,
+          ).popUntil((Route<dynamic> route) => route.isFirst);
         }
+      });
+    }
+
+    if (statusChanged) {
+      if (!signedIn) {
+        if (_showRegistration || _showForgotPassword || _resetEmail != null) {
+          _showSignIn();
+        }
+      } else {
+        _signInNotice = null;
       }
+    } else if (identityChanged) {
+      _signInNotice = null;
     }
   }
 
@@ -94,30 +123,61 @@ class _AuthGateState extends State<AuthGate> {
     return switch (state.status) {
       AuthStatus.restoring => const RestoringSessionScreen(),
       AuthStatus.restoreFailed => RestoreFailedScreen(state: state),
-      AuthStatus.signedOut => _showForgotPassword
-          ? ForgotPasswordScreen(onBackToSignIn: _showSignIn)
-          : _showRegistration
-              ? RegisterScreen(onSignIn: _showSignIn)
-              : SignInScreen(
-                  onRegister: _showRegister,
-                  onForgotPassword: _goToForgotPassword,
-                ),
-      AuthStatus.signedIn => widget.authenticatedView(context),
+      AuthStatus.signedOut =>
+        _resetEmail != null
+            ? ResetPasswordScreen(
+                email: _resetEmail!,
+                onBackToSignIn: _showSignIn,
+                onPasswordReset: _finishPasswordReset,
+              )
+            : _showForgotPassword
+            ? ForgotPasswordScreen(
+                onBackToSignIn: _showSignIn,
+                onCodeRequested: _goToResetPassword,
+              )
+            : _showRegistration
+            ? RegisterScreen(onSignIn: _showSignIn)
+            : SignInScreen(
+                onRegister: _showRegister,
+                onForgotPassword: _goToForgotPassword,
+                notice: _signInNotice,
+              ),
+      AuthStatus.signedIn => KeyedSubtree(
+        // Rebuild the complete tab shell when an authenticated identity
+        // changes without an intervening signed-out frame.
+        key: ValueKey<int>(state.user!.id),
+        child: Builder(builder: widget.authenticatedView),
+      ),
     };
   }
 
   void _showRegister() => setState(() {
-        _showRegistration = true;
-        _showForgotPassword = false;
-      });
+    _showRegistration = true;
+    _showForgotPassword = false;
+    _signInNotice = null;
+  });
 
   void _goToForgotPassword() => setState(() {
-        _showForgotPassword = true;
-        _showRegistration = false;
-      });
+    _showForgotPassword = true;
+    _showRegistration = false;
+    _signInNotice = null;
+  });
+
+  void _goToResetPassword(String email) => setState(() {
+    _resetEmail = email;
+  });
+
+  void _finishPasswordReset() {
+    _showSignIn();
+    setState(() {
+      _signInNotice =
+          'Your password has been reset. Sign in with your new password.';
+    });
+  }
 
   void _showSignIn() => setState(() {
-        _showRegistration = false;
-        _showForgotPassword = false;
-      });
+    _showRegistration = false;
+    _showForgotPassword = false;
+    _resetEmail = null;
+  });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../models/transaction.dart';
 
 /// The lifecycle badge for a transaction.
@@ -43,10 +44,13 @@ class TransactionStatusBadge extends StatelessWidget {
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(1000),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: foreground.withValues(alpha: 0.4)),
       ),
       child: Text(

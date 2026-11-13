@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
@@ -19,7 +20,15 @@ class _FakeTokenStore implements TokenStore {
   Future<String?> read() async => token;
 
   @override
-  Future<void> write(String value) async => token = value;
+  Future<void> write(String value, {bool persist = true}) async =>
+      token = value;
+
+  @override
+  Future<bool> clearIfCurrent(String expectedToken) async {
+    if (token != expectedToken) return false;
+    token = null;
+    return true;
+  }
 }
 
 void main() {
@@ -253,6 +262,51 @@ void main() {
       },
     );
 
+    test(
+      'a delayed old-session 401 cannot clear the replacement token',
+      () async {
+        tokenStore.token = 'user-a-token';
+        final Completer<http.Response> response = Completer<http.Response>();
+        final ApiClient client = buildClient((_) => response.future);
+
+        final Future<Object?> pending = client.get<Object?>(
+          '/profile',
+          parse: (Object? data) => data,
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(captured.single.headers['Authorization'], 'Bearer user-a-token');
+
+        tokenStore.token = 'user-b-token';
+        response.complete(http.Response(jsonEncode('Unauthenticated.'), 401));
+
+        await expectLater(pending, throwsA(isA<ApiException>()));
+        expect(tokenStore.token, 'user-b-token');
+      },
+    );
+
+    test(
+      'a 401 without a request token does not clear a concurrently stored token',
+      () async {
+        final Completer<http.Response> response = Completer<http.Response>();
+        final ApiClient client = buildClient((_) => response.future);
+        final Future<Object?> pending = client.post<Object?>(
+          '/auth/login',
+          body: <String, dynamic>{'email': 'b@example.test'},
+          parse: (Object? data) => data,
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(captured.single.headers.containsKey('Authorization'), isFalse);
+
+        tokenStore.token = 'user-b-token';
+        response.complete(
+          http.Response(jsonEncode('Invalid credentials.'), 401),
+        );
+
+        await expectLater(pending, throwsA(isA<ApiException>()));
+        expect(tokenStore.token, 'user-b-token');
+      },
+    );
+
     test('a 401 while signed out reads as a rejected password', () async {
       // With no token stored, a 401 can only be about the submitted
       // credentials — it must not be reported as an ended session.
@@ -346,6 +400,25 @@ void main() {
 
       expect(error.validationErrors['email'], <String>[
         'The email field is required.',
+      ]);
+    });
+
+    test('422 preserves structured top-level details', () async {
+      final ApiException error = await captureStatus(422, <String, dynamic>{
+        'success': false,
+        'message': 'A price suggestion cannot be generated for this listing.',
+        'status': 'withheld',
+        'warnings': <String>['Outside the supported model envelope.'],
+        'reason_codes': <String>['insufficient_model_support'],
+      });
+
+      expect(error.kind, ApiErrorKind.validation);
+      expect(error.details['status'], 'withheld');
+      expect(error.details['warnings'], <String>[
+        'Outside the supported model envelope.',
+      ]);
+      expect(error.details['reason_codes'], <String>[
+        'insufficient_model_support',
       ]);
     });
 

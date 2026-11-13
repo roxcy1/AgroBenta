@@ -2,12 +2,17 @@
 
 namespace App\Repositories\Inquiry;
 
+use App\Enums\InquiryCollectionMethod;
 use App\Enums\InquiryContactMethod;
+use App\Enums\InquiryPaymentMethod;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryTransactionMethod;
+use App\Enums\OfferStatus;
 use App\Models\Inquiry;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * Data access for inquiries.
@@ -40,7 +45,8 @@ class InquiryRepository
         return Inquiry::query()
             ->with([
                 'buyer:id,name',
-                'listing:id,livestock_type,breed',
+                'listing:id,livestock_type,breed,asking_price,photos',
+                'offers:id,inquiry_id,status',
             ])
             ->where('seller_id', $seller->getKey())
             // A total order, so two inquiries written in the same second cannot
@@ -48,6 +54,49 @@ class InquiryRepository
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($perPage);
+    }
+
+    /**
+     * The caller's active inquiries, on the side they are asking for.
+     *
+     * Used by the Messages "Inquiries" tab: individual inquiries that still
+     * need negotiation or a buyer decision. An inquiry whose offer was
+     * accepted is excluded — it has become a transaction, which the
+     * Transactions tab owns.
+     *
+     * @return Collection<int, Inquiry>
+     */
+    public function listActiveForUser(User $user, ?string $role = null): Collection
+    {
+        return Inquiry::query()
+            ->with([
+                'listing:id,livestock_type,breed,asking_price,photos',
+                'buyer:id,name',
+                'seller:id,name',
+                'offers:id,inquiry_id,status,proposed_amount,created_at',
+            ])
+            ->where('status', InquiryStatus::Open)
+            ->whereDoesntHave('offers', function (Builder $query): void {
+                $query->where('status', OfferStatus::Accepted);
+            })
+            ->when(
+                $role === 'buyer',
+                fn (Builder $query) => $query->where('buyer_id', $user->getKey()),
+            )
+            ->when(
+                $role === 'seller',
+                fn (Builder $query) => $query->where('seller_id', $user->getKey()),
+            )
+            ->when(
+                $role === null,
+                fn (Builder $query) => $query->where(function (Builder $query) use ($user): void {
+                    $query->where('buyer_id', $user->getKey())
+                        ->orWhere('seller_id', $user->getKey());
+                }),
+            )
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
     }
 
     /**
@@ -63,6 +112,29 @@ class InquiryRepository
     }
 
     /**
+     * Find the inquiry one buyer already sent about one listing.
+     *
+     * The buyer is the token's user and the listing is the route's listing, so
+     * the lookup cannot be widened to another buyer's records. A listing that
+     * has since been deleted nulls `listing_id` and therefore no longer matches
+     * - which is correct: a new inquiry about a different listing is a different
+     * conversation.
+     *
+     * Newest first because the unique index below is the real guarantee; this
+     * method must stay useful even if a database predates it and still holds a
+     * duplicate pair.
+     */
+    public function findForBuyerAndListing(User $buyer, int $listingId): ?Inquiry
+    {
+        return Inquiry::query()
+            ->with(['listing:id,livestock_type,breed'])
+            ->where('buyer_id', $buyer->getKey())
+            ->where('listing_id', $listingId)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
      * Persist a new inquiry.
      *
      * @param  array<string, mixed>  $preferences  The allow-listed form fields from `StoreInquiryRequest`.
@@ -71,7 +143,7 @@ class InquiryRepository
         User $buyer,
         int $sellerId,
         int $listingId,
-        string $message,
+        ?string $message,
         array $preferences,
     ): Inquiry {
         return Inquiry::query()->create([
@@ -79,7 +151,7 @@ class InquiryRepository
             'seller_id' => $sellerId,
             'listing_id' => $listingId,
             'subject' => $preferences['subject'] ?? null,
-            'message' => $message,
+            'message' => $message === null || trim($message) === '' ? null : trim($message),
             'purchase_interest' => $preferences['purchase_interest'] ?? null,
             'transaction_method' => isset($preferences['transaction_method'])
                 ? InquiryTransactionMethod::from($preferences['transaction_method'])
@@ -90,6 +162,13 @@ class InquiryRepository
                 ? InquiryContactMethod::from($preferences['contact_method'])
                 : null,
             'preferred_schedule' => $preferences['preferred_schedule'] ?? null,
+            'payment_method' => isset($preferences['payment_method'])
+                ? InquiryPaymentMethod::from($preferences['payment_method'])
+                : null,
+            'collection_method' => isset($preferences['collection_method'])
+                ? InquiryCollectionMethod::from($preferences['collection_method'])
+                : null,
+            'collection_date_option' => $preferences['collection_date_option'] ?? null,
             'status' => InquiryStatus::Open,
         ]);
     }

@@ -65,7 +65,11 @@ void main() {
     test('posts to the submission endpoint', () async {
       service = build((_) async => sellerVerificationCreatedResponse());
 
-      await service.submit(businessName: 'Rizal Farms');
+      await service.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: 'Rizal Farms',
+      );
 
       expect(recorded.single.method, 'POST');
       expect(recorded.single.apiPath, '/seller-verification');
@@ -75,6 +79,8 @@ void main() {
       service = build((_) async => sellerVerificationCreatedResponse());
 
       await service.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
         businessLocation: 'Mabalacat, Pampanga',
         businessDescription: 'Cattle and goats.',
@@ -82,10 +88,14 @@ void main() {
       );
 
       expect(recorded.single.body.keys, <String>{
+        'phone',
+        'address',
         'business_name',
         'business_location',
         'business_description',
         'id_document_ref',
+        'government_id_type',
+        'has_no_back_image',
       });
     });
 
@@ -95,6 +105,8 @@ void main() {
         service = build((_) async => sellerVerificationCreatedResponse());
 
         await service.submit(
+          phone: ' 09171234567 ',
+          address: ' Barangay Poblacion, Trinidad, Bohol ',
           businessName: 'Rizal Farms',
           businessLocation: '   ',
           businessDescription: '',
@@ -104,7 +116,11 @@ void main() {
         // An empty string would be stored and later read as "they said nothing"
         // rather than "they did not say". Only the required key is sent.
         expect(recorded.single.body, <String, dynamic>{
+          'phone': '09171234567',
+          'address': 'Barangay Poblacion, Trinidad, Bohol',
           'business_name': 'Rizal Farms',
+          'government_id_type': 'philippine_national_id',
+          'has_no_back_image': false,
         });
       },
     );
@@ -112,15 +128,26 @@ void main() {
     test('trims values before sending', () async {
       service = build((_) async => sellerVerificationCreatedResponse());
 
-      await service.submit(businessName: '  Rizal Farms  ');
+      await service.submit(
+        phone: ' 09171234567 ',
+        address: ' Barangay Poblacion, Trinidad, Bohol ',
+        businessName: '  Rizal Farms  ',
+      );
 
       expect(recorded.single.body['business_name'], 'Rizal Farms');
+      expect(recorded.single.body['phone'], '09171234567');
+      expect(
+        recorded.single.body['address'],
+        'Barangay Poblacion, Trinidad, Bohol',
+      );
     });
 
     test('never sends a server-owned field', () async {
       service = build((_) async => sellerVerificationCreatedResponse());
 
       await service.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
         businessLocation: 'Pampanga',
       );
@@ -150,7 +177,11 @@ void main() {
       service = build((_) async => sellerVerificationConflictResponse());
 
       await expectLater(
-        service.submit(businessName: 'Rizal Farms'),
+        service.submit(
+          phone: '09171234567',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
+          businessName: 'Rizal Farms',
+        ),
         throwsA(
           isA<ApiException>()
               .having((ApiException e) => e.kind, 'kind', ApiErrorKind.conflict)
@@ -173,7 +204,11 @@ void main() {
       );
 
       await expectLater(
-        service.submit(businessName: ''),
+        service.submit(
+          phone: '09171234567',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
+          businessName: '',
+        ),
         throwsA(
           isA<ApiException>()
               .having(
@@ -194,7 +229,11 @@ void main() {
       service = build((_) async => sellerVerificationForbiddenResponse());
 
       await expectLater(
-        service.submit(businessName: 'Rizal Farms'),
+        service.submit(
+          phone: '09171234567',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
+          businessName: 'Rizal Farms',
+        ),
         throwsA(
           isA<ApiException>().having(
             (ApiException e) => e.kind,
@@ -213,6 +252,8 @@ void main() {
       );
 
       final SellerVerification created = await service.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
 

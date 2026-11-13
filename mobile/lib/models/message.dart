@@ -1,4 +1,5 @@
 import '../core/utils/json_utils.dart';
+import 'inquiry.dart';
 
 /// A minimal user summary, as embedded in a message or conversation.
 ///
@@ -28,6 +29,73 @@ class ChatUser {
   String get initial => name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();
 }
 
+/// The structured inquiry payload attached to the message that opened it.
+///
+/// Mirrors the `inquiry` object `MessageResource` sends. Values are the raw
+/// API strings/enums; the widget layer renders their human labels.
+class MessageInquiry {
+  const MessageInquiry({
+    required this.id,
+    required this.listing,
+    required this.paymentMethod,
+    required this.collectionMethod,
+    required this.preferredSchedule,
+    required this.message,
+  });
+
+  factory MessageInquiry.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic>? listing = readNullableObject(json, 'listing');
+
+    return MessageInquiry(
+      id: readInt(json, 'id'),
+      listing: listing == null ? null : MessageInquiryListing.fromJson(listing),
+      paymentMethod: readNullableEnum(
+        json,
+        'payment_method',
+        InquiryPaymentMethod.fromValue,
+      ),
+      collectionMethod: readNullableEnum(
+        json,
+        'collection_method',
+        InquiryCollectionMethod.fromValue,
+      ),
+      preferredSchedule: readNullableDateTime(json, 'preferred_schedule'),
+      message: readString(json, 'message'),
+    );
+  }
+
+  final int id;
+  final MessageInquiryListing? listing;
+  final InquiryPaymentMethod? paymentMethod;
+  final InquiryCollectionMethod? collectionMethod;
+  final DateTime? preferredSchedule;
+  final String message;
+}
+
+/// The listing facts an inquiry card shows.
+class MessageInquiryListing {
+  const MessageInquiryListing({
+    required this.id,
+    required this.title,
+    required this.askingPrice,
+    required this.photoUrl,
+  });
+
+  factory MessageInquiryListing.fromJson(Map<String, dynamic> json) {
+    return MessageInquiryListing(
+      id: readInt(json, 'id'),
+      title: readString(json, 'title'),
+      askingPrice: readNullableDecimalString(json, 'asking_price'),
+      photoUrl: readNullableString(json, 'photo_url'),
+    );
+  }
+
+  final int id;
+  final String title;
+  final String? askingPrice;
+  final String? photoUrl;
+}
+
 /// One message in a thread.
 ///
 /// Mirrors `MessageResource` on the backend. `sender` and `receiver` are
@@ -45,9 +113,10 @@ class Message {
     required this.createdAt,
     required this.sender,
     required this.receiver,
+    this.inquiry,
   });
 
-    factory Message.fromJson(Map<String, dynamic> json) {
+  factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
       id: readInt(json, 'id'),
       body: readString(json, 'body'),
@@ -59,6 +128,9 @@ class Message {
       createdAt: readNullableDateTime(json, 'created_at'),
       sender: ChatUser.fromJson(readObject(json, 'sender')),
       receiver: ChatUser.fromJson(readObject(json, 'receiver')),
+      inquiry: json['inquiry'] is Map<String, dynamic>
+          ? MessageInquiry.fromJson(json['inquiry'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -73,13 +145,16 @@ class Message {
   final ChatUser sender;
   final ChatUser receiver;
 
+  /// The inquiry this message opened, when the server attached one.
+  final MessageInquiry? inquiry;
+
   /// Whether `userId` sent this message.
   bool isSentBy(int userId) => senderId == userId;
 
   /// The other party — who this message is *to*, from `userId`'s perspective.
-  ChatUser counterpartOf(int userId) =>
-      senderId == userId ? receiver : sender;
+  ChatUser counterpartOf(int userId) => senderId == userId ? receiver : sender;
 
   @override
-  String toString() => 'Message($id, from=$senderId, to=$receiverId, read=$read)';
+  String toString() =>
+      'Message($id, from=$senderId, to=$receiverId, read=$read)';
 }

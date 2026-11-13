@@ -1,0 +1,559 @@
+/*
+ * Public home page. Uses the Admin Web's tokens from index.css (dark
+ * agricultural green, white surfaces, subtle borders, system font) so the
+ * public page and the admin console read as one product. DESIGN.md: restrained
+ * shadows, moderate radius, no glass effects, no decorative animation.
+ */
+
+.home {
+  --home-orange: #ef6c00;
+  --home-nav-height: 64px;
+  --home-max-width: 1120px;
+
+  min-height: 100vh;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 16px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.home) {
+    scroll-behavior: smooth;
+  }
+}
+
+.home-container {
+  width: 100%;
+  max-width: var(--home-max-width);
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.home [id] {
+  scroll-margin-top: calc(var(--home-nav-height) + 16px);
+}
+
+/* Visible only when focused, for keyboard users. */
+.home-skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 30;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.home-skip-link:focus {
+  top: 12px;
+}
+
+.home a:focus-visible,
+.home button:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* ── Navigation ─────────────────────────────────────────────────────────── */
+
+.home-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: var(--shadow-header);
+}
+
+.home-nav-inner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: var(--home-nav-height);
+}
+
+.home-brand {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.home-brand-agro {
+  color: #fff;
+}
+
+.home-brand-benta {
+  color: #ffa040;
+}
+
+.home-nav-links {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.home-nav-links a {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.home-nav-links a:hover {
+  background: var(--color-sidebar-active);
+  color: #fff;
+}
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+
+.home-hero {
+  background: var(--color-primary-dark);
+  color: #fff;
+}
+
+.home-hero-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: center;
+  gap: 48px;
+  padding-top: 72px;
+  padding-bottom: 80px;
+}
+
+.home-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #a5d6a7;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.home-eyebrow-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.home-hero-title {
+  margin-top: 16px;
+  font-size: clamp(30px, 4.2vw, 44px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.home-hero-lead {
+  max-width: 34rem;
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.home-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.home-hero-note {
+  max-width: 30rem;
+  margin-top: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.home-hero-art {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* The logo file has a black backdrop; `screen` drops it on the dark hero, the
+   same treatment the login page uses. */
+.home-hero-logo {
+  width: min(100%, 440px);
+  height: auto;
+  mix-blend-mode: screen;
+  /* The file's glow is cut off at its top edge; fade the edges so no hard
+     rectangle shows against the hero. */
+  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 78%, transparent 100%);
+  mask-image: radial-gradient(ellipse closest-side, #000 78%, transparent 100%);
+}
+
+.home-hero-tagline {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.home-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 22px;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.home-button--ghost {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  color: #fff;
+}
+
+.home-button--ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Download: a real, disabled button. It keeps full contrast (no global
+   opacity fade) so the label stays readable; the dashed border, the "Coming
+   soon" line and the not-allowed cursor mark it as unavailable. */
+.home-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: not-allowed;
+}
+
+.home-download-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.home-download-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.home-download-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.home-download-status {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.home-download--on-dark {
+  border: 1px dashed rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.home-download--on-dark .home-download-status {
+  color: #ffcc80;
+}
+
+.home-download--on-light {
+  border: 1px dashed var(--color-primary);
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.home-download--on-light .home-download-status {
+  color: #b75400;
+}
+
+/* ── Sections ───────────────────────────────────────────────────────────── */
+
+.home-section {
+  padding: 72px 0;
+}
+
+.home-section--tinted {
+  background: #f4f8f4;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.home-section-header {
+  max-width: 40rem;
+  margin: 0 auto 40px;
+  text-align: center;
+}
+
+.home-section-header--left {
+  margin: 0;
+  text-align: left;
+}
+
+.home-section-title {
+  color: var(--color-primary-dark);
+  font-size: clamp(24px, 3vw, 30px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.home-section-lead {
+  margin-top: 10px;
+  color: var(--color-text-secondary);
+  font-size: 17px;
+}
+
+/* Features */
+
+.home-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  list-style: none;
+}
+
+.home-feature {
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.home-feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+}
+
+.home-feature-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.home-feature-title {
+  margin-top: 16px;
+  color: var(--color-text);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.home-feature-text {
+  margin-top: 8px;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* How it works */
+
+.home-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.home-steps {
+  padding: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.home-steps-title {
+  color: var(--color-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.home-steps-list {
+  margin-top: 20px;
+  list-style: none;
+  counter-reset: home-step;
+}
+
+.home-steps-list li {
+  position: relative;
+  min-height: 32px;
+  padding: 4px 0 4px 48px;
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 1.55;
+  counter-increment: home-step;
+}
+
+.home-steps-list li + li {
+  margin-top: 14px;
+}
+
+.home-steps-list li::before {
+  content: counter(home-step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Livestock types */
+
+.home-livestock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 40px;
+}
+
+.home-livestock-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+}
+
+.home-livestock-list li {
+  padding: 12px 20px;
+  border: 1px solid #c8e6c9;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-tint);
+  color: var(--color-primary-dark);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Download call to action */
+
+.home-cta {
+  padding: 56px 0;
+  background: var(--color-primary-tint);
+  border-top: 1px solid #c8e6c9;
+}
+
+.home-cta-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.home-cta-title {
+  color: var(--color-primary-dark);
+  font-size: clamp(22px, 2.6vw, 26px);
+  font-weight: 700;
+}
+
+.home-cta-text {
+  max-width: 36rem;
+  margin-top: 8px;
+  color: #33523a;
+  font-size: 16px;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+.home-footer {
+  padding: 40px 0;
+  background: var(--color-primary-dark);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.home-brand--footer {
+  font-size: 20px;
+}
+
+.home-footer-text {
+  max-width: 36rem;
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── Smaller screens ────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .home-nav-links {
+    display: none;
+  }
+
+  .home-hero-inner {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding-top: 48px;
+    padding-bottom: 56px;
+  }
+
+  .home-hero-art {
+    order: -1;
+  }
+
+  .home-hero-logo {
+    width: min(100%, 300px);
+  }
+
+  .home-feature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-livestock {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .home-cta-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Sides only: sections that are also containers keep their own top and
+     bottom padding. */
+  .home-container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .home-section {
+    padding: 48px 0;
+  }
+
+  .home-feature-grid,
+  .home-steps-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-steps {
+    padding: 20px;
+  }
+
+  .home-hero-actions > * {
+    width: 100%;
+  }
+}

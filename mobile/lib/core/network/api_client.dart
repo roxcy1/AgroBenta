@@ -20,7 +20,7 @@ import 'api_exception.dart';
 ///  * enforce a request timeout;
 ///  * unwrap the `{ success, message, data }` envelope;
 ///  * translate transport and HTTP failures into [ApiException];
-///  * clear the stored token on 401.
+///  * clear the stored token on 401 only when it is still the token that failed.
 ///
 /// It knows nothing about any particular endpoint or feature. Endpoint paths
 /// live with the feature that calls them.
@@ -70,6 +70,81 @@ class ApiClient {
     return _send<T>(method: 'GET', path: path, parse: parse, query: query);
   }
 
+  /// Performs a `GET` for a JSON body that is **not** wrapped in the standard
+  /// `{success, message, data}` envelope.
+  ///
+  /// This exists for exactly one contract: `GET /livestock-types`, whose
+  /// controller returns `{ "data": [...] }` directly. Keeping the exception
+  /// local means every other endpoint still goes through [get] and cannot
+  /// accidentally lose envelope validation.
+  ///
+  /// The method still owns the parts that must never be duplicated: the bearer
+  /// token, the timeout, and the translation of failures into [ApiException]
+  /// (including clearing a dead token on `401`). A `2xx` returns the decoded
+  /// body as-is; the caller is responsible for reading its shape.
+  Future<Object?> getRawJson(String path, {Map<String, dynamic>? query}) async {
+    final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
+
+    final Map<String, String> headers = <String, String>{
+      'Accept': ApiConstants.acceptJson,
+    };
+
+    final String? token = await _tokenStorage.read();
+    final String? requestToken = token != null && token.isNotEmpty
+        ? token
+        : null;
+    if (requestToken != null) {
+      headers[ApiConstants.authorizationHeader] =
+          '${ApiConstants.bearerPrefix} $requestToken';
+    }
+
+    final http.Request request = http.Request('GET', uri)
+      ..headers.addAll(headers);
+
+    http.StreamedResponse streamed;
+    try {
+      streamed = await _httpClient.send(request).timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException.network(
+        message:
+            'The request timed out after ${_timeout.inSeconds}s. '
+            'Check that the API is reachable at $baseUrl.',
+      );
+    } on http.ClientException catch (error) {
+      throw ApiException.network(
+        message:
+            'Could not reach the server. Check your connection and that the '
+            'API is running at $baseUrl.',
+        cause: error,
+      );
+    }
+
+    final http.Response response = await http.Response.fromStream(streamed);
+
+    bool decodeFailed = false;
+    Object? decoded;
+    try {
+      decoded = _decodeBody(response);
+    } on ApiException {
+      decodeFailed = true;
+    }
+
+    if (_isSuccessStatus(response.statusCode)) {
+      if (decodeFailed) {
+        throw const ApiException.malformedResponse(
+          message: 'The server returned a response that was not valid JSON.',
+        );
+      }
+      return decoded;
+    }
+
+    throw await _toApiException(
+      response,
+      decodeFailed ? null : decoded,
+      requestToken: requestToken,
+    );
+  }
+
   /// Performs a `GET` for a raw binary body — an image, a document — rather than
   /// a JSON envelope.
   ///
@@ -84,10 +159,7 @@ class ApiClient {
   /// handler even on a route whose success path is a stream — so the same
   /// [ApiException] surface applies, and a caller can distinguish "no document"
   /// (`notFound`) from "could not fetch" without inspecting a status code.
-  Future<Uint8List> getBytes(
-    String path, {
-    Map<String, dynamic>? query,
-  }) async {
+  Future<Uint8List> getBytes(String path, {Map<String, dynamic>? query}) async {
     final Uri uri = Uri.parse(AppConfig.resolve(path, query: query));
 
     final Map<String, String> headers = <String, String>{
@@ -95,10 +167,12 @@ class ApiClient {
     };
 
     final String? token = await _tokenStorage.read();
-    final bool authenticated = token != null && token.isNotEmpty;
-    if (authenticated) {
+    final String? requestToken = token != null && token.isNotEmpty
+        ? token
+        : null;
+    if (requestToken != null) {
       headers[ApiConstants.authorizationHeader] =
-          '${ApiConstants.bearerPrefix} $token';
+          '${ApiConstants.bearerPrefix} $requestToken';
     }
 
     final http.Request request = http.Request('GET', uri)
@@ -141,7 +215,7 @@ class ApiClient {
     throw await _toApiException(
       response,
       decodeFailed ? null : decoded,
-      authenticated: authenticated,
+      requestToken: requestToken,
     );
   }
 
@@ -244,10 +318,12 @@ class ApiClient {
     // legitimate (a login request, for instance), so a missing token is not an
     // error here — the server decides.
     final String? token = await _tokenStorage.read();
-    final bool authenticated = token != null && token.isNotEmpty;
-    if (authenticated) {
+    final String? requestToken = token != null && token.isNotEmpty
+        ? token
+        : null;
+    if (requestToken != null) {
       headers[ApiConstants.authorizationHeader] =
-          '${ApiConstants.bearerPrefix} $token';
+          '${ApiConstants.bearerPrefix} $requestToken';
     }
 
     final http.Request request = http.Request(method, uri)
@@ -259,7 +335,7 @@ class ApiClient {
 
     return _dispatch<T>(
       request: request,
-      authenticated: authenticated,
+      requestToken: requestToken,
       parse: parse,
     );
   }
@@ -272,7 +348,7 @@ class ApiClient {
   /// place.
   Future<T> _dispatch<T>({
     required http.BaseRequest request,
-    required bool authenticated,
+    required String? requestToken,
     required T Function(Object? data) parse,
   }) async {
     http.StreamedResponse streamed;
@@ -347,7 +423,7 @@ class ApiClient {
     throw await _toApiException(
       response,
       decodeFailed ? null : decoded,
-      authenticated: authenticated,
+      requestToken: requestToken,
     );
   }
 
@@ -374,10 +450,12 @@ class ApiClient {
     };
 
     final String? token = await _tokenStorage.read();
-    final bool authenticated = token != null && token.isNotEmpty;
-    if (authenticated) {
+    final String? requestToken = token != null && token.isNotEmpty
+        ? token
+        : null;
+    if (requestToken != null) {
       headers[ApiConstants.authorizationHeader] =
-          '${ApiConstants.bearerPrefix} $token';
+          '${ApiConstants.bearerPrefix} $requestToken';
     }
 
     final http.MultipartRequest request = http.MultipartRequest('POST', uri)
@@ -391,7 +469,7 @@ class ApiClient {
 
     return _dispatch<T>(
       request: request,
-      authenticated: authenticated,
+      requestToken: requestToken,
       parse: parse,
     );
   }
@@ -449,17 +527,14 @@ class ApiClient {
   Future<ApiException> _toApiException(
     http.Response response,
     Object? decoded, {
-    required bool authenticated,
+    required String? requestToken,
   }) async {
-    // A revoked or expired token must never be retried, so a `401` clears
-    // storage and the rest of the app observes a signed-out state.
-    //
-    // Clearing is unconditional. `ApiClient` attaches the stored token to every
-    // request it makes, so a `401` either means that token is dead or the
-    // submitted credentials were rejected — and a token worth keeping survives
-    // neither case, so there is nothing to be gained by conditioning it.
+    // Only clear the credential this request actually used. A delayed 401 from
+    // an old account must not erase a token written after that request started.
     if (response.statusCode == 401) {
-      await _tokenStorage.clear();
+      if (requestToken != null) {
+        await _tokenStorage.clearIfCurrent(requestToken);
+      }
       return ApiException(
         kind: ApiErrorKind.unauthorized,
         message:
@@ -467,11 +542,12 @@ class ApiClient {
             // Distinguish the two cases for the user: a token that stopped
             // working versus a password that was simply wrong. Laravel
             // normally supplies the message, so this is the fallback.
-            (authenticated
+            (requestToken != null
                 ? 'Your session has ended. Please sign in again.'
                 : 'The email or password is incorrect.'),
         statusCode: 401,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       );
     }
 
@@ -486,18 +562,21 @@ class ApiClient {
             _messageFrom(decoded) ?? 'You do not have permission to do that.',
         statusCode: 403,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       404 => ApiException(
         kind: ApiErrorKind.notFound,
         message: _messageFrom(decoded) ?? 'The requested item was not found.',
         statusCode: 404,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       409 => ApiException(
         kind: ApiErrorKind.conflict,
         message: _messageFrom(decoded) ?? _defaultConflictMessage,
         statusCode: 409,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       422 => ApiException(
         kind: ApiErrorKind.validation,
@@ -506,6 +585,7 @@ class ApiClient {
         statusCode: 422,
         serverMessage: _messageFrom(decoded),
         validationErrors: _validationErrorsFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       429 => ApiException(
         kind: ApiErrorKind.rateLimited,
@@ -514,6 +594,7 @@ class ApiClient {
             'Too many attempts. Please wait a moment and try again.',
         statusCode: 429,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       // The server's own text for a 5xx is an exception message such as
       // "Target class [...] does not exist". It stays in [serverMessage] for
@@ -523,14 +604,27 @@ class ApiClient {
         message: 'Something went wrong on the server.',
         statusCode: response.statusCode,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
       _ => ApiException(
         kind: ApiErrorKind.server,
         message: _messageFrom(decoded) ?? 'The request failed.',
         statusCode: response.statusCode,
         serverMessage: _messageFrom(decoded),
+        details: _detailsFrom(decoded),
       ),
     };
+  }
+
+  /// Returns the decoded error body as a details map, or an empty map.
+  ///
+  /// A Laravel `abort()` response may be a bare JSON string rather than an
+  /// object; that case has no structured detail to preserve.
+  static Map<String, dynamic> _detailsFrom(Object? decoded) {
+    if (decoded is Map) {
+      return decoded.cast<String, dynamic>();
+    }
+    return const <String, dynamic>{};
   }
 
   /// Fallback wording for a `409` that carried no message.

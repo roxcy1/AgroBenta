@@ -7,6 +7,7 @@ import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
 import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
+import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
 import 'package:agrobenta_mobile/features/transactions/views/transaction_status_screen.dart';
 import 'package:agrobenta_mobile/repositories/messaging_repository.dart';
@@ -17,6 +18,7 @@ import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
 import '../../support/messaging_fakes.dart';
+import '../../support/offer_fakes.dart';
 import '../../support/transaction_fakes.dart';
 
 void main() {
@@ -66,6 +68,12 @@ void main() {
     );
     addTearDown(messaging.controller.dispose);
 
+    // The chat screen reads this scope for its offer panel.
+    final offerRepository = buildOfferRepository(
+      tokenStore,
+      (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
+    );
+
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -76,11 +84,14 @@ void main() {
         child: MessagingScope(
           repository: messaging.repository,
           conversationsController: messaging.controller,
-          child: TransactionScope(
-            repository: repository,
-            child: MaterialApp(
-              theme: AppTheme.light(),
-              home: TransactionStatusScreen(transactionId: transactionId),
+          child: OfferScope(
+            repository: offerRepository,
+            child: TransactionScope(
+              repository: repository,
+              child: MaterialApp(
+                theme: AppTheme.light(),
+                home: TransactionStatusScreen(transactionId: transactionId),
+              ),
             ),
           ),
         ),
@@ -114,19 +125,62 @@ void main() {
     expect(find.textContaining('2026'), findsWidgets);
   });
 
-  testWidgets('maps a pending status to the real in-progress tracker', (
+  testWidgets('maps a confirmed pickup to the collection-specific tracker', (
     WidgetTester tester,
   ) async {
     await pumpStatus(tester, (_) async => transactionDetailResponse());
 
     expect(find.text('Transaction Progress'), findsOneWidget);
-    expect(find.text('Purchase request submitted'), findsOneWidget);
-    expect(find.text('In progress'), findsOneWidget);
-    // The pending record's outcome is not yet known: never shown as completed.
-    expect(
-      find.textContaining('No outcome has been recorded yet'),
-      findsOneWidget,
+    expect(find.text('Confirmed'), findsOneWidget);
+    expect(find.text('Preparing'), findsOneWidget);
+    expect(find.text('Ready for Pickup'), findsOneWidget);
+    expect(find.text('Picked Up'), findsOneWidget);
+    // "Completed" is a future marker, not a claim that the sale is done.
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Personal Pickup'), findsOneWidget);
+  });
+
+  testWidgets('seller-arranged delivery uses the delivery tracker', (
+    WidgetTester tester,
+  ) async {
+    await pumpStatus(
+      tester,
+      (_) async => transactionDetailResponse(
+        transaction: transactionJson(
+          status: 'pending',
+          collectionMethod: 'seller_arranged_delivery',
+          fulfillmentStatus: 'on_the_way',
+          permittedActions: const <String>[],
+        ),
+      ),
     );
+
+    expect(find.text('Seller-Arranged Delivery'), findsOneWidget);
+    expect(find.text('On the Way'), findsOneWidget);
+    expect(find.text('Delivered'), findsOneWidget);
+    expect(find.text('Ready for Pickup'), findsNothing);
+    expect(find.text('Picked Up'), findsNothing);
+  });
+
+  testWidgets('an unknown fulfillment stage shows Status unavailable', (
+    WidgetTester tester,
+  ) async {
+    await pumpStatus(
+      tester,
+      (_) async => transactionDetailResponse(
+        transaction: transactionJson(
+          status: 'pending',
+          fulfillmentStatus: 'future_stage',
+          permittedActions: const <String>['cancel'],
+        ),
+      ),
+    );
+
+    expect(find.text('Status unavailable'), findsOneWidget);
+    expect(find.textContaining('does not recognize'), findsOneWidget);
+    expect(find.text('Confirmed'), findsNothing);
+    expect(find.text('Preparing'), findsNothing);
+    expect(find.text('Ready for Pickup'), findsNothing);
   });
 
   testWidgets('a seller sees sale wording and messages the buyer', (
@@ -154,8 +208,8 @@ void main() {
     expect(find.text('Request ID'), findsNothing);
     expect(find.text('Recorded'), findsOneWidget);
     expect(find.text('Requested'), findsNothing);
-    expect(find.text('Sale recorded'), findsOneWidget);
-    expect(find.text('Purchase request submitted'), findsNothing);
+    expect(find.text('Confirmed'), findsOneWidget);
+    expect(find.textContaining('The sale is confirmed'), findsOneWidget);
     expect(find.text('Message Buyer'), findsOneWidget);
     expect(find.text('Message Seller'), findsNothing);
 
@@ -180,10 +234,7 @@ void main() {
     );
 
     expect(find.text('Completed'), findsWidgets);
-    expect(
-      find.textContaining('recorded as complete and cannot change'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('This sale is complete'), findsWidgets);
   });
 
   testWidgets('maps a cancelled status to a terminal, non-completed outcome', (

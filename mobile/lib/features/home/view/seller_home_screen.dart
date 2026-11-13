@@ -1,15 +1,24 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../models/conversation.dart';
+import '../../../models/listing.dart';
 import '../../../models/transaction.dart';
 import '../../../models/user.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../auth/state/auth_state.dart';
+import '../../inquiries/state/inquiry_scope.dart';
 import '../../inquiries/view/received_inquiries_screen.dart';
+import '../../messaging/state/messaging_scope.dart';
+import '../../messaging/view/chat_screen.dart';
 import '../../notifications/state/notifications_scope.dart';
+import '../../seller_dashboard/state/seller_activity_scope.dart';
+import '../../seller_dashboard/view/all_activities_screen.dart';
 import '../../seller_dashboard/view/seller_dashboard_view.dart';
+import '../../seller_listings/state/seller_listing_scope.dart';
+import '../../seller_listings/view/seller_listing_form_screen.dart';
 import '../../seller_listings/view/seller_listings_screen.dart';
+import '../../transactions/views/transaction_detail_screen.dart';
 import '../../transactions/views/transactions_screen.dart';
 import '../widgets/home_header.dart';
 
@@ -59,6 +68,114 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
     final AuthState state = AuthScope.of(context).state;
     final User? user = state.user;
 
+    /// The existing create-listing form, opened from Home. The My Listings list
+    /// is refreshed afterwards so a draft created here appears in its tab.
+    Future<void> addListing() async {
+      await Navigator.of(context).push<Listing>(
+        MaterialPageRoute<Listing>(
+          builder: (BuildContext context) => const SellerListingFormScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+      if (!context.mounted) {
+        return;
+      }
+      await SellerListingScope.readOf(context).refresh();
+    }
+
+    /// Opens the buyer conversation behind an offer activity when the session
+    /// already knows that pair; otherwise falls back to the inquiry inbox,
+    /// where the Open Conversation action resolves it safely.
+    void openOfferActivity(int buyerId, int? transactionId) {
+      final conversations = MessagingScope.readOf(context).state.conversations;
+      Conversation? match;
+      for (final Conversation conversation in conversations) {
+        if (conversation.counterpart.id == buyerId) {
+          match = conversation;
+          break;
+        }
+      }
+
+      if (match == null) {
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (BuildContext context) => const ReceivedInquiriesScreen(),
+          ),
+        );
+        return;
+      }
+
+      final Conversation conversation = match;
+      final int currentUserId = AuthScope.of(context).state.user?.id ?? 0;
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => ChatScreen(
+            counterpart: conversation.counterpart,
+            currentUserId: currentUserId,
+            counterpartRole: 'Buyer',
+          ),
+        ),
+      );
+    }
+
+    void openTransactionActivity(int transactionId) {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) =>
+              TransactionDetailScreen(transactionId: transactionId),
+        ),
+      );
+    }
+
+    void openInquiries() {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const ReceivedInquiriesScreen(),
+        ),
+      );
+    }
+
+    void openListings() {
+      final VoidCallback? injected = widget.onOpenListings;
+      if (injected != null) {
+        injected();
+        return;
+      }
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const SellerListingsScreen(),
+        ),
+      );
+    }
+
+    void openTransactions() {
+      final VoidCallback? injected = widget.onOpenTransactions;
+      if (injected != null) {
+        injected();
+        return;
+      }
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) =>
+              const TransactionsScreen(role: TransactionRole.seller),
+        ),
+      );
+    }
+
+    void openAllActivities() {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => AllActivitiesScreen(
+            onOpenInquiries: openInquiries,
+            onOpenListings: openListings,
+            onOpenTransactions: openTransactions,
+            onOpenOffer: openOfferActivity,
+            onOpenTransaction: openTransactionActivity,
+          ),
+        ),
+      );
+    }
+
     if (user == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Home')),
@@ -74,73 +191,30 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            HomeHeader(user: user, onOpenProfile: widget.onOpenProfile),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenGutter,
-                AppSpacing.xs,
-                AppSpacing.screenGutter,
-                AppSpacing.sm,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'Seller Mode',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        'Hello, ${user.name}!',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        'Manage your livestock listings and sales.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            HomeHeader(
+              user: user,
+              eyebrow: 'Seller Mode',
+              onOpenProfile: widget.onOpenProfile,
             ),
+            const SizedBox(height: AppSpacing.sm),
             Expanded(
-              child: Center(
+              // Top-centred, not `Center`: the dashboard shrinks to its content
+              // when it is shorter than the screen, and `Center` would float it
+              // down from the header with a blank band above the counts.
+              child: Align(
+                alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: SellerDashboardView(
-                    onOpenListings:
-                        widget.onOpenListings ??
-                        () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (BuildContext context) =>
-                                const SellerListingsScreen(),
-                          ),
-                        ),
-                    onOpenInquiries: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (BuildContext context) =>
-                            const ReceivedInquiriesScreen(),
-                      ),
-                    ),
-                    onOpenTransactions:
-                        widget.onOpenTransactions ??
-                        () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (BuildContext context) =>
-                                const TransactionsScreen(
-                                  role: TransactionRole.seller,
-                                ),
-                          ),
-                        ),
+                    onAddListing: addListing,
+                    inquiriesRepository: InquiryScope.readOf(context),
+                    activityRepository: SellerActivityScope.readOf(context),
+                    onOpenOffer: openOfferActivity,
+                    onOpenTransaction: openTransactionActivity,
+                    onOpenListings: openListings,
+                    onOpenInquiries: openInquiries,
+                    onOpenTransactions: openTransactions,
+                    onSeeAllActivities: openAllActivities,
                   ),
                 ),
               ),

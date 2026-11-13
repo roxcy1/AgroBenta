@@ -11,20 +11,33 @@ use App\Http\Controllers\Api\Admin\TransactionController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
+use App\Http\Controllers\Api\Device\DeviceTokenController;
 use App\Http\Controllers\Api\Inquiry\InquiryController as MobileInquiryController;
+use App\Http\Controllers\Api\LivestockTypeController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
+use App\Http\Controllers\Api\Marketplace\PopularLivestockController;
 use App\Http\Controllers\Api\Messaging\ConversationController;
 use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
+use App\Http\Controllers\Api\Offer\OfferController;
 use App\Http\Controllers\Api\Profile\ProfileController;
+use App\Http\Controllers\Api\SellerActivity\SellerActivityController;
 use App\Http\Controllers\Api\SellerDashboard\SellerDashboardController;
 use App\Http\Controllers\Api\SellerInquiry\SellerInquiryController;
+use App\Http\Controllers\Api\SellerListing\PriceSuggestionController;
 use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
+use App\Http\Controllers\Api\TrinidadLocationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
+
+// Shared reference data for both mobile and admin tokens. Deliberately outside
+// the `ability:mobile` and `ability:admin` groups so either token can read it.
+Route::middleware('auth:sanctum')->get('/livestock-types', LivestockTypeController::class);
+Route::middleware('auth:sanctum', 'ability:mobile')
+    ->get('/locations/trinidad/barangays', TrinidadLocationController::class);
 
 Route::post('/admin/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');
@@ -37,6 +50,15 @@ Route::prefix('auth')->group(function (): void {
         ->middleware('throttle:5,1');
     Route::post('/login', [MobileAuthController::class, 'login'])
         ->middleware('throttle:10,1');
+    Route::post('/google', [MobileAuthController::class, 'google'])
+        ->middleware('throttle:10,1,google-login');
+
+    // Password recovery, for a signed-out user. Each route names its throttle
+    // bucket, because `throttle:5,1` alone is shared with `/register`.
+    Route::post('/forgot-password', [MobileAuthController::class, 'forgotPassword'])
+        ->middleware('throttle:5,1,forgot-password');
+    Route::post('/reset-password', [MobileAuthController::class, 'resetPassword'])
+        ->middleware('throttle:5,1,reset-password');
 
     Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
         Route::get('/me', [MobileAuthController::class, 'me']);
@@ -52,6 +74,10 @@ Route::prefix('auth')->group(function (): void {
 Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
     Route::get('/listings', [MarketplaceListingController::class, 'index']);
     Route::get('/listings/{listing}', [MarketplaceListingController::class, 'show']);
+    // Buyer Home ranking: completed sales in the last 30 days, canonical
+    // categories only. Declared under its own prefix so it can never be
+    // shadowed by `/listings/{listing}`.
+    Route::get('/marketplace/popular-livestock', [PopularLivestockController::class, 'index']);
 });
 
 // Seller verification, for the caller's own account. `/me` is declared before
@@ -73,12 +99,13 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification
     Route::get('/me', [MobileSellerVerificationController::class, 'me']);
     Route::post('/', [MobileSellerVerificationController::class, 'store']);
 
-    // Document upload (government ID + selfie). Staged under the caller's own
-    // id before submission, replaced or deleted while the application is still
-    // being assembled, and promoted onto the record when `POST /` succeeds.
+    // Document upload (see SellerVerificationDocumentType). Staged under the
+    // caller's own id before submission, replaced or deleted while the application
+    // is still being assembled, and promoted onto the record when `POST /` succeeds.
     //
-    // Neither route takes an id: the account is the token, so there is no path
-    // that could stage a file against somebody else's application. The file
+    // No route takes an account or record id: the account is the token, so there
+    // is no path that could stage a file against somebody else's application. A
+    // farm photo's `{photo}` is only matched against the caller's own files. The file
     // rules live in UploadSellerVerificationDocumentRequest and are enforced on
     // the bytes, not the client's filename. The response never carries a path
     // or URL — the file is on private storage and is read back only through
@@ -86,6 +113,8 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification
     Route::post('/documents', [MobileSellerVerificationController::class, 'storeDocument']);
     Route::get('/documents/{type}', [MobileSellerVerificationController::class, 'showDocument']);
     Route::delete('/documents/{type}', [MobileSellerVerificationController::class, 'destroyDocument']);
+    Route::get('/documents/farm_photo/{photo}', [MobileSellerVerificationController::class, 'showFarmPhoto']);
+    Route::delete('/documents/farm_photo/{photo}', [MobileSellerVerificationController::class, 'destroyFarmPhoto']);
 });
 
 // Seller listing management, for the caller's own account. `seller` is the
@@ -114,6 +143,12 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/li
     // another seller's id is a 404 here, never a 403 that confirms it exists.
     Route::post('/{listing}/photos', [SellerListingController::class, 'storePhotos']);
     Route::delete('/{listing}/photos', [SellerListingController::class, 'destroyPhoto']);
+
+    // Optional decision support for a seller's own draft listing. The listing
+    // carries the model inputs; the endpoint accepts no request body and never
+    // writes asking_price or a listing status.
+    Route::post('/{listing}/price-suggestion', [PriceSuggestionController::class, 'store'])
+        ->whereNumber('listing');
 });
 
 // Inquiries received by the caller as a seller. Read-only in this phase:
@@ -139,6 +174,15 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
         Route::get('/', [SellerDashboardController::class, 'show']);
     });
 
+// The seller's recent activity: allow-listed, genuinely recorded events from
+// the existing `activities` audit table. Ownership is applied in the repository
+// from the token; `limit` is the only accepted parameter.
+Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
+    ->prefix('seller/activities')
+    ->group(function (): void {
+        Route::get('/', [SellerActivityController::class, 'index']);
+    });
+
 // Transactions — the caller's own transactions as buyer or seller.
 //
 // No route here takes a user id. Both counterparties are resolved from the
@@ -147,15 +191,32 @@ Route::middleware('auth:sanctum', 'ability:mobile', 'seller')
 // write at a foreign row. `role` narrows to one side of the caller's own
 // records; `buyer_id` / `seller_id` are refused.
 //
-// The `complete` route exists only to answer 501 explicitly: [D-15] rule 4
-// leaves the confirming actor undecided (OQ-15), so the transition stays
-// unimplemented rather than guessed. The mobile client never calls it.
+// Fulfillment is a separate progression from `status`. The seller controls
+// preparation, pickup/dispatch and handover; the buyer alone confirms receipt,
+// which is the `complete` transition. Five named actions keep the state machine
+// explicit rather than accepting a client-named target status.
 Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->group(function (): void {
     Route::get('/', [MobileTransactionController::class, 'index']);
     Route::post('/', [MobileTransactionController::class, 'store']);
     Route::get('/{transaction}', [MobileTransactionController::class, 'show']);
+    Route::get('/{transaction}/receipt', [MobileTransactionController::class, 'receipt'])
+        ->whereNumber('transaction');
     Route::post('/{transaction}/cancel', [MobileTransactionController::class, 'cancel']);
-    Route::post('/{transaction}/complete', [MobileTransactionController::class, 'complete']);
+    Route::post('/{transaction}/complete', [MobileTransactionController::class, 'complete'])
+        ->whereNumber('transaction');
+
+    Route::middleware('seller')->group(function (): void {
+        Route::post('/{transaction}/preparing', [MobileTransactionController::class, 'preparing'])
+            ->whereNumber('transaction');
+        Route::post('/{transaction}/ready-for-pickup', [MobileTransactionController::class, 'readyForPickup'])
+            ->whereNumber('transaction');
+        Route::post('/{transaction}/picked-up', [MobileTransactionController::class, 'pickedUp'])
+            ->whereNumber('transaction');
+        Route::post('/{transaction}/on-the-way', [MobileTransactionController::class, 'onTheWay'])
+            ->whereNumber('transaction');
+        Route::post('/{transaction}/delivered', [MobileTransactionController::class, 'delivered'])
+            ->whereNumber('transaction');
+    });
 });
 
 // Inquiries — the buyer's structured contact with a seller about a listing.
@@ -176,7 +237,15 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('transactions')->gro
 // 500-character message ceiling and `auth:sanctum` are the abuse bounds that
 // exist today. Revisit under D-09 if a limit is decided.
 Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    // The buyer's pre-check: the inquiry they already sent about one listing,
+    // or `data: null`. Buyer-scoped from the token, so it cannot read another
+    // buyer's record. Declared before the write route for readability; the
+    // verbs differ, so neither shadows the other.
+    Route::get('/inquiries/listing/{listing}', [MobileInquiryController::class, 'existing']);
     Route::post('/inquiries', [MobileInquiryController::class, 'store']);
+    // The Messages "Inquiries" tab: the caller's own active inquiries, on the
+    // side the active Account Mode selects.
+    Route::get('/inquiries', [MobileInquiryController::class, 'index']);
 });
 
 // Profile — the caller's own account details and credentials.
@@ -218,6 +287,29 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
         ->whereNumber('id');
 });
 
+// Offers - a seller's purchase offer to a buyer within a conversation.
+//
+// An offer is tied to one inquiry (hence one listing) and one buyer-seller
+// pair. Only the listing's seller may create one; only the inquiry's buyer
+// may accept or decline it; only the creating seller may withdraw it. Every
+// route resolves the caller from the token.
+//
+// Only creation and withdrawal sit behind the `seller` capability gate. The
+// buyer is not an approved seller by definition, so the read, accept and
+// decline routes must not require that capability — ownership is enforced by
+// the repository's party scope and the service's state checks instead.
+Route::middleware('auth:sanctum', 'ability:mobile')->prefix('offers')->group(function (): void {
+    Route::get('/', [OfferController::class, 'index']);
+    Route::get('/{offer}', [OfferController::class, 'show'])->whereNumber('offer');
+    Route::post('/{offer}/accept', [OfferController::class, 'accept'])->whereNumber('offer');
+    Route::post('/{offer}/decline', [OfferController::class, 'decline'])->whereNumber('offer');
+
+    Route::middleware('seller')->group(function (): void {
+        Route::post('/', [OfferController::class, 'store']);
+        Route::post('/{offer}/withdraw', [OfferController::class, 'withdraw'])->whereNumber('offer');
+    });
+});
+
 // Notifications — the caller's own notification feed.
 //
 // No route here takes a user id. The record is resolved from the token, so
@@ -236,12 +328,21 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('notifications')->gr
     Route::delete('/{id}', [NotificationController::class, 'destroy']);
 });
 
+// Push notifications — the calling phone's FCM registration token. The row is
+// owned by the token's user and session, and is deleted with the session's
+// access token on logout, so there is no unregister route.
+Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    Route::post('/devices', [DeviceTokenController::class, 'store']);
+});
+
 Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->group(function (): void {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{user}', [UserController::class, 'show']);
+    Route::put('/users/{user}', [UserController::class, 'update']);
+    Route::delete('/users/{user}', [UserController::class, 'destroy']);
     Route::get('/listings', [ListingController::class, 'index']);
     // Listing moderation. [D-02 rule 8] makes administrator approval the only
     // route to `active`, and the transition table reserves `pending -> inactive`
@@ -261,6 +362,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     // by this group's admin ability, and never by a public URL — the web server
     // has no route to the storage root.
     Route::get('/seller-verifications/{sellerVerification}/documents/{type}', [SellerVerificationController::class, 'document']);
+    Route::get('/seller-verifications/{sellerVerification}/documents/farm_photo/{photo}', [SellerVerificationController::class, 'farmPhoto']);
     Route::post('/seller-verifications/{sellerVerification}/approve', [SellerVerificationController::class, 'approve']);
     Route::post('/seller-verifications/{sellerVerification}/reject', [SellerVerificationController::class, 'reject']);
     Route::get('/transactions', [TransactionController::class, 'index']);

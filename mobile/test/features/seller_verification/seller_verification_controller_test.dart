@@ -177,7 +177,11 @@ void main() {
       addTearDown(controller.dispose);
 
       await controller.load();
-      final bool created = await controller.submit(businessName: 'Rizal Farms');
+      final bool created = await controller.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: 'Rizal Farms',
+      );
       await Future<void>.delayed(Duration.zero);
 
       expect(created, isTrue);
@@ -202,7 +206,11 @@ void main() {
       addTearDown(controller.dispose);
       await controller.load();
 
-      final bool created = await controller.submit(businessName: 'Rizal Farms');
+      final bool created = await controller.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: 'Rizal Farms',
+      );
 
       expect(created, isTrue);
       expect(controller.state.verification!.id, 12);
@@ -227,8 +235,16 @@ void main() {
       addTearDown(controller.dispose);
       await controller.load();
 
-      final Future<bool> first = controller.submit(businessName: 'Rizal Farms');
-      final bool second = await controller.submit(businessName: 'Rizal Farms');
+      final Future<bool> first = controller.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: 'Rizal Farms',
+      );
+      final bool second = await controller.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: 'Rizal Farms',
+      );
 
       expect(second, isFalse);
 
@@ -259,7 +275,11 @@ void main() {
       addTearDown(controller.dispose);
       await controller.load();
 
-      final bool created = await controller.submit(businessName: '');
+      final bool created = await controller.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: '',
+      );
 
       expect(created, isFalse);
       expect(
@@ -289,7 +309,11 @@ void main() {
         addTearDown(controller.dispose);
         await controller.load();
 
-        await controller.submit(businessName: '');
+        await controller.submit(
+          phone: '09171234567',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
+          businessName: '',
+        );
 
         expect(controller.state.status, SellerVerificationUiStatus.rejected);
         expect(controller.state.verification!.adminNote, isNotNull);
@@ -313,7 +337,11 @@ void main() {
       addTearDown(controller.dispose);
       await controller.load();
 
-      final bool created = await controller.submit(businessName: 'Rizal Farms');
+      final bool created = await controller.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: 'Rizal Farms',
+      );
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
 
@@ -335,7 +363,11 @@ void main() {
       addTearDown(controller.dispose);
       await controller.load();
 
-      await controller.submit(businessName: 'Rizal Farms');
+      await controller.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: 'Rizal Farms',
+      );
 
       expect(controller.state.errorMessage, contains('approved seller'));
       expect(controller.state.validationErrors, isEmpty);
@@ -352,7 +384,11 @@ void main() {
       });
       addTearDown(controller.dispose);
       await controller.load();
-      await controller.submit(businessName: 'Rizal Farms');
+      await controller.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
+        businessName: 'Rizal Farms',
+      );
 
       controller.clearError();
 

@@ -3,6 +3,7 @@
 namespace App\Services\SellerVerification;
 
 use App\Enums\ActivityAction;
+use App\Enums\SellerVerificationDocumentType;
 use App\Enums\SellerVerificationStatus;
 use App\Models\SellerVerification;
 use App\Models\User;
@@ -34,11 +35,13 @@ class SellerVerificationService
     public const string OPEN_EXISTS = 'seller_verification.open_exists';
 
     /**
-     * `@throws DomainException` with this code when the required ID or selfie
-     * has not been staged. The controller normally answers that with a 422
+     * `@throws DomainException` with this code when a required document has
+     * not been staged. The controller normally answers that with a 422
      * before reaching this method; this is the safety net for a direct call.
      */
     public const string DOCUMENTS_MISSING = 'seller_verification.documents_missing';
+
+    public const string BACK_IMAGE_CONTRADICTION = 'seller_verification.back_image_contradiction';
 
     public function __construct(
         private readonly SellerVerificationRepository $verifications,
@@ -55,7 +58,7 @@ class SellerVerificationService
      * seller is refused earlier, by the request class, with `403` — that is a
      * different situation (nothing to submit) from a duplicate.
      *
-     * @param  array{business_name: string, business_location?: string|null, business_description?: string|null, id_document_ref?: string|null}  $input
+     * @param  array{phone: string, address: string, business_name?: string|null, business_location?: string|null, business_description?: string|null, id_document_ref?: string|null, government_id_type: string, government_id_description?: string|null, has_no_back_image: bool}  $input
      *
      * @throws DomainException when the user already has an open verification.
      */
@@ -79,10 +82,14 @@ class SellerVerificationService
                     throw new DomainException(self::OPEN_EXISTS);
                 }
 
-                // Both documents are mandatory. Checking inside the transaction,
+                // The required documents are mandatory. Checking inside the transaction,
                 // after the user row is locked, means two submissions racing cannot
                 // both consume the same staged files.
-                if ($this->documents->missingStaged($locked) !== []) {
+                if ($input['has_no_back_image'] && $this->documents->hasStaged($locked, SellerVerificationDocumentType::IdDocumentBack)) {
+                    throw new DomainException(self::BACK_IMAGE_CONTRADICTION);
+                }
+
+                if ($this->documents->missingStaged($locked, $input['has_no_back_image']) !== []) {
                     throw new DomainException(self::DOCUMENTS_MISSING);
                 }
 
@@ -93,10 +100,17 @@ class SellerVerificationService
                 // (functional documentation §2.6).
                 $verification = SellerVerification::create([
                     'user_id' => $locked->id,
-                    'business_name' => $input['business_name'],
+                    'phone' => $input['phone'],
+                    'address' => $input['address'],
+                    'business_name' => $input['business_name'] ?? null,
                     'business_location' => $input['business_location'] ?? null,
                     'business_description' => $input['business_description'] ?? null,
                     'id_document_ref' => $input['id_document_ref'] ?? null,
+                    'government_id_type' => $input['government_id_type'],
+                    'government_id_description' => $input['government_id_type'] === 'others'
+                        ? ($input['government_id_description'] ?? null)
+                        : null,
+                    'has_no_back_image' => $input['has_no_back_image'],
                     'status' => SellerVerificationStatus::Submitted,
                     'admin_note' => null,
                     'reviewed_by' => null,
@@ -121,7 +135,7 @@ class SellerVerificationService
                 $this->activity->log(
                     $locked,
                     ActivityAction::SellerVerificationSubmitted,
-                    sprintf('Seller verification submitted for "%s".', $verification->business_name),
+                    sprintf('Seller verification submitted for "%s".', $verification->business_name ?? $locked->name),
                     [
                         'target_type' => 'seller_verification',
                         'target_id' => $verification->getKey(),

@@ -1,8 +1,17 @@
 import { useEffect } from 'react';
+import type { ReactNode } from 'react';
+import { Beef, CalendarDays, ClipboardList, UsersRound } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { Transaction } from '../api/useTransactions';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDateTime, formatPeso } from '../../../../lib/format';
+import { livestockTypeLabel } from '../../livestock/api/useLivestockTypes';
+import type { LivestockTypeOption } from '../../livestock/api/useLivestockTypes';
+import { AdminDetailModalHeader } from '../../components/AdminDetailModalHeader';
 
 interface TransactionDetailDialogProps {
   transaction: Transaction;
+  livestockTypes: LivestockTypeOption[];
   onClose: () => void;
 }
 
@@ -25,36 +34,15 @@ function contactLabel(name?: string | null, email?: string | null): string {
   return parts.length > 0 ? parts.join(' ') : '\u2014';
 }
 
-/**
- * The ₱ prefix is added to the exact amount string the API returned.
- *
- * The backend already casts the amount to a two-decimal string, so the value is
- * displayed as-is: no parsing, formatting, or re-rounding happens here.
- */
-function formatAmount(value: string | null | undefined): string {
-  if (value === null || value === undefined || value === '') return '\u2014';
-  return `\u20B1${value}`;
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '\u2014';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '\u2014';
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+interface DetailSection {
+  title: string;
+  Icon: LucideIcon;
+  rows: Array<[string, ReactNode]>;
 }
 
 export default function TransactionDetailDialog({
   transaction,
+  livestockTypes,
   onClose,
 }: TransactionDetailDialogProps) {
   useEffect(() => {
@@ -65,63 +53,86 @@ export default function TransactionDetailDialog({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  const rows: Array<[string, string]> = [
-    ['Buyer', contactLabel(transaction.buyer?.name, transaction.buyer?.email)],
-    ['Seller', contactLabel(transaction.seller?.name, transaction.seller?.email)],
-    ['Livestock type', orDash(transaction.listing?.livestock_type)],
-    ['Breed', orDash(transaction.listing?.breed)],
-    ['Quantity', orDash(transaction.quantity)],
-    ['Total amount', formatAmount(transaction.total_amount)],
-    ['Created', formatDateTime(transaction.created_at)],
-    ['Updated', formatDateTime(transaction.updated_at)],
+  const sections: DetailSection[] = [
+    {
+      title: 'Summary',
+      Icon: ClipboardList,
+      rows: [
+        ['Transaction ID', `#${transaction.id}`],
+        ['Status', <StatusBadge key="status" status={transaction.status} />],
+        ['Quantity', orDash(transaction.quantity)],
+        ['Total amount', formatPeso(transaction.total_amount)],
+      ],
+    },
+    {
+      title: 'Parties',
+      Icon: UsersRound,
+      rows: [
+        ['Buyer', contactLabel(transaction.buyer?.name, transaction.buyer?.email)],
+        ['Seller', contactLabel(transaction.seller?.name, transaction.seller?.email)],
+      ],
+    },
+    {
+      title: 'Livestock',
+      Icon: Beef,
+      rows: [
+        ['Type', orDash(livestockTypeLabel(transaction.listing?.livestock_type, livestockTypes))],
+        ['Breed', orDash(transaction.listing?.breed)],
+      ],
+    },
+    {
+      title: 'Record',
+      Icon: CalendarDays,
+      rows: [
+        ['Created', formatDateTime(transaction.created_at)],
+        ['Updated', formatDateTime(transaction.updated_at)],
+      ],
+    },
   ];
 
   return (
-    <div className="lv-action-modal-overlay" onClick={onClose}>
+    <div className="lv-action-modal-overlay listing-details-overlay" onClick={onClose}>
       <div
-        className="lv-action-modal"
+        className="lv-action-modal lv-action-modal--detail lv-action-modal--listing-details"
         role="dialog"
         aria-modal="true"
         aria-labelledby="transaction-detail-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="lv-action-modal-title" id="transaction-detail-title">
-          Transaction #{transaction.id}
-        </h2>
-        <p className="lv-action-modal-desc">
-          Buyer and seller details recorded for this transaction.
-        </p>
+        <AdminDetailModalHeader
+          title={`Transaction #${transaction.id}`}
+          subtitle="Buyer and seller details recorded for this transaction."
+          titleId="transaction-detail-title"
+          closeLabel="Close transaction details"
+          onClose={onClose}
+        />
 
-        <div className="lv-table-container">
-          <table className="lv-table">
-            <tbody>
-              <tr>
-                <th>Status</th>
-                <td>
-                  <span className={`lv-badge lv-badge--${transaction.status}`}>
-                    {statusLabel(transaction.status)}
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <th>Transaction ID</th>
-                <td>#{orDash(transaction.id)}</td>
-              </tr>
-              {rows.map(([label, value]) => (
-                <tr key={label}>
-                  <th>{label}</th>
-                  <td>{value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="lv-detail-body">
+          <div className="lv-detail-grid">
+            {sections.map(({ title, Icon, rows }) => (
+              <section className="lv-detail-section" key={title}>
+                <h3 className="lv-detail-section-title">
+                  <Icon aria-hidden="true" />
+                  {title}
+                </h3>
+                <dl className="lv-detail-list">
+                  {rows.map(([label, value]) => (
+                    <div className="lv-detail-item" key={label}>
+                      <dt className="lv-detail-label">{label}</dt>
+                      <dd className="lv-detail-value">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
+          </div>
         </div>
 
-        <div className="lv-action-modal-buttons">
-          <button type="button" className="lv-action-cancel" onClick={onClose}>
+        <footer className="lv-detail-footer listing-details-footer">
+          <button type="button" className="listing-details-footer-close" onClick={onClose}>
             Close
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   );

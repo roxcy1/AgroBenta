@@ -24,6 +24,7 @@ Map<String, dynamic> messageJson({
   Object? createdAt = '2026-10-01T08:15:00.000000Z',
   Map<String, dynamic>? sender,
   Map<String, dynamic>? receiver,
+  Map<String, dynamic>? inquiry,
 }) {
   return <String, dynamic>{
     'id': id,
@@ -36,6 +37,34 @@ Map<String, dynamic> messageJson({
     'created_at': createdAt,
     'sender': sender ?? chatUserJson(id: senderId, name: 'Ana Reyes'),
     'receiver': receiver ?? chatUserJson(id: receiverId, name: 'Rizal Farms'),
+    'inquiry': inquiry,
+  };
+}
+
+/// The `inquiry` card payload `MessageResource` attaches to the opener.
+Map<String, dynamic> inquiryCardJson({
+  Object? id = 55,
+  Object? listingId = 12,
+  String title = 'Holstein Heifer',
+  String? askingPrice = '50000.00',
+  String? photoUrl,
+  String? paymentMethod = 'gcash',
+  String? collectionMethod = 'farm_pickup',
+  String? preferredSchedule = '2026-11-10',
+  String message = 'Still available? I can pick it up.',
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'listing': <String, dynamic>{
+      'id': listingId,
+      'title': title,
+      'asking_price': askingPrice,
+      'photo_url': photoUrl,
+    },
+    'payment_method': paymentMethod,
+    'collection_method': collectionMethod,
+    'preferred_schedule': preferredSchedule,
+    'message': message,
   };
 }
 
@@ -59,14 +88,68 @@ Map<String, dynamic> conversationJson({
   String lastMessage = 'Still available?',
   Object? lastMessageAt = '2026-10-01T08:15:00.000000Z',
   Object? unreadCount = 0,
+  bool hasInquiry = false,
+  bool hasTransaction = false,
+  String? listingPrice,
+  List<String> roles = const <String>['buyer', 'seller'],
+  int listingCount = 1,
+  Map<String, dynamic>? latestOffer,
+  Map<String, dynamic>? eligibleInquiry,
 }) {
   return <String, dynamic>{
     'counterpart': counterpart ?? chatUserJson(),
     'listing_id': listingId,
     'listing_title': listingTitle,
+    'listing_price': listingPrice,
     'last_message': lastMessage,
     'last_message_at': lastMessageAt,
     'unread_count': unreadCount,
+    'has_inquiry': hasInquiry,
+    'has_transaction': hasTransaction,
+    'roles': roles,
+    'listing_count': listingCount,
+    'latest_offer': latestOffer,
+    'eligible_inquiry': eligibleInquiry,
+  };
+}
+
+/// The `latest_offer` projection `ConversationResource` sends.
+Map<String, dynamic> conversationOfferJson({
+  Object? id = 41,
+  String status = 'pending',
+  String proposedAmount = '47500.00',
+  Object? listingId = 12,
+  String? listingTitle = 'Holstein Heifer',
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'status': status,
+    'proposed_amount': proposedAmount,
+    'listing_id': listingId,
+    'listing_title': listingTitle,
+  };
+}
+
+/// The `eligible_inquiry` projection `ConversationResource` sends.
+Map<String, dynamic> eligibleInquiryJson({
+  Object? id = 55,
+  Object? listingId = 12,
+  String? listingTitle = 'Holstein Heifer',
+  String? askingPrice = '50000.00',
+  String? listingPhotoUrl,
+  String? paymentMethod = 'gcash',
+  String? collectionMethod = 'farm_pickup',
+  String? preferredSchedule = '2026-11-10',
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'listing_id': listingId,
+    'listing_title': listingTitle,
+    'asking_price': askingPrice,
+    'listing_photo_url': listingPhotoUrl,
+    'payment_method': paymentMethod,
+    'collection_method': collectionMethod,
+    'preferred_schedule': preferredSchedule,
   };
 }
 

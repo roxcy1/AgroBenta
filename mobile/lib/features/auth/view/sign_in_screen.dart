@@ -1,44 +1,47 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
+import '../widgets/auth_notice_banner.dart';
 import '../widgets/auth_scenic_header.dart';
+import '../widgets/google_sign_in_button.dart';
 import 'auth_validators.dart';
 
-/// `POST /auth/login`.
+/// `POST /auth/login`, or `POST /auth/google`.
 ///
-/// Email and password only. There is no "forgot password", no "remember me" and
-/// no social sign-in: this app has one account per person and one way in, so
-/// there is no role choice here either.
+/// Email and password, or Google on Android. There is no role choice: this app
+/// has one account per person.
 ///
 /// The layout follows `AgroBenta_Login_DESIGN.md` — the branded landscape hero
 /// overlapped by the white login card, mirroring the registration screen so the
-/// two read as one experience. Three controls the reference shows are **not**
-/// backed by the backend, and are handled honestly rather than faked:
+/// two read as one experience. Notes on the reference's controls:
 ///
-///  * **Remember me** — a Sanctum token is always kept until logout, so there is
-///    no "remembered" versus "session" distinction to switch. The checkbox is
-///    rendered inert.
-///  * **Forgot Password?** — there is no password-recovery endpoint, so the
-///    label is styled but not navigable; no destination is invented.
-///  * **Social sign-in** — the backend implements no Google/Facebook OAuth, so
-///    the buttons are rendered disabled rather than implying a capability that
-///    is not there.
+///  * **Remember me** — ticked by default. Ticked keeps the user signed in
+///    after the app is closed; unticked ends the session when the app is
+///    closed (project decision, MS-11, 2026-11-11). It applies to both email
+///    and Google sign-in.
+///  * **Social sign-in** — Google only; Facebook was removed (project decision,
+///    MS-11, 2026-11-10). The Google button and its divider are hidden where
+///    Google sign-in is unavailable (web, or no `GOOGLE_SERVER_CLIENT_ID`).
 class SignInScreen extends StatefulWidget {
   const SignInScreen({
     required this.onRegister,
     required this.onForgotPassword,
+    this.notice,
     super.key,
   });
 
   /// Switches to the registration form.
   final VoidCallback onRegister;
   final VoidCallback onForgotPassword;
+
+  /// A confirmation to show above the form, such as after a password reset.
+  final String? notice;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -51,6 +54,9 @@ class _SignInScreenState extends State<SignInScreen> {
 
   /// Password visibility. Hidden by default, per the design.
   bool _obscurePassword = true;
+
+  /// "Remember me". Ticked by default, so ignoring it keeps the user signed in.
+  bool _rememberMe = true;
 
   /// The field errors currently on screen, so a repeat of the same server error
   /// does not re-validate for nothing.
@@ -90,9 +96,11 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
-    final bool signedIn = await AuthScope.of(
-      context,
-    ).signIn(email: _email.text.trim(), password: _password.text);
+    final bool signedIn = await AuthScope.of(context).signIn(
+      email: _email.text.trim(),
+      password: _password.text,
+      remember: _rememberMe,
+    );
 
     if (!signedIn && mounted) {
       _password.clear();
@@ -111,15 +119,19 @@ class _SignInScreenState extends State<SignInScreen> {
       context,
     ).scale(1).clamp(1.0, 1.8).toDouble();
     final double heroHeight =
-        (MediaQuery.sizeOf(context).height * 0.30 * textScale)
-            .clamp(200.0, 300.0)
+        // Just tall enough for the logo and tagline, so the brand sits close
+        // to the form instead of floating above an empty band.
+        (MediaQuery.sizeOf(context).height * 0.22 * textScale)
+            .clamp(160.0, 240.0)
             .toDouble();
 
     // How far the white panel rides up over the hero's bottom edge.
-    const double overlap = 28;
+    // The form panel sits directly under the white brand band.
+    const double overlap = 0;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      // White to the bottom edge, as in the approved design.
+      backgroundColor: AppColors.surface,
       // The header sits below the status bar rather than under it; the bottom
       // inset is applied inside the scroll content instead, so the panel can
       // run to the very bottom of the screen.
@@ -153,19 +165,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: AppColors.surface),
       child: Center(
         child: ConstrainedBox(
           // A phone is narrower than this, so the constraint only matters on a
@@ -182,27 +182,16 @@ class _SignInScreenState extends State<SignInScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Text(
-                  'Welcome Back!',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineMedium,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Sign in to continue',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
                 if (state.errorMessage != null) ...<Widget>[
                   AuthErrorBanner(message: state.errorMessage!),
+                  const SizedBox(height: AppSpacing.lg),
+                ] else if (widget.notice != null) ...<Widget>[
+                  AuthNoticeBanner(message: widget.notice!),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 _buildFields(state),
                 const SizedBox(height: AppSpacing.sm),
-                _buildRememberForgotRow(theme),
+                _buildRememberForgotRow(theme, busy),
                 const SizedBox(height: AppSpacing.xl),
                 FilledButton(
                   onPressed: busy ? null : _submit,
@@ -216,16 +205,18 @@ class _SignInScreenState extends State<SignInScreen> {
                         )
                       : const Text('Log In'),
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                _buildDivider(theme),
-                const SizedBox(height: AppSpacing.lg),
-                _buildSocialRow(),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Social sign-in is not available yet.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
+                if (AuthScope.of(context).isGoogleSignInAvailable) ...<Widget>[
+                  const SizedBox(height: AppSpacing.xl),
+                  _buildDivider(theme),
+                  const SizedBox(height: AppSpacing.lg),
+                  GoogleSignInButton(
+                    onPressed: busy
+                        ? null
+                        : () => AuthScope.of(
+                            context,
+                          ).signInWithGoogle(remember: _rememberMe),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 _buildFooter(theme, state),
               ],
@@ -250,8 +241,8 @@ class _SignInScreenState extends State<SignInScreen> {
             autofillHints: const <String>[AutofillHints.email],
             autocorrect: false,
             decoration: const InputDecoration(
-              labelText: 'Email Address',
-              prefixIcon: Icon(Icons.mail_outline),
+              label: FieldLabel('Email Address', hasPrefixIcon: true),
+              prefixIcon: FieldIcon(Icon(Icons.mail_outline)),
             ),
             validator: (String? value) =>
                 // A server 422 for this field outranks the local check: it is
@@ -266,8 +257,8 @@ class _SignInScreenState extends State<SignInScreen> {
             autofillHints: const <String>[AutofillHints.password],
             onFieldSubmitted: (_) => _submit(),
             decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
+              label: FieldLabel('Password', hasPrefixIcon: true),
+              prefixIcon: const FieldIcon(Icon(Icons.lock_outline)),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscurePassword,
                 onPressed: () =>
@@ -281,46 +272,51 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildRememberForgotRow(ThemeData theme) {
-    // Neither control is backed by the API: a token does not distinguish a
-    // "remembered" session and there is no recovery endpoint. They are shown to
-    // match the approved layout but are deliberately inert, so the screen never
-    // implies a capability the backend does not have.
+  Widget _buildRememberForgotRow(ThemeData theme, bool busy) {
+    void toggle() => setState(() => _rememberMe = !_rememberMe);
+
     return Row(
       children: <Widget>[
         Expanded(
-          child: Row(
-            children: <Widget>[
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: Checkbox(
-                  value: false,
-                  // Remember-me is not supported, so the control is inert.
-                  onChanged: null,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Flexible(
-                child: Text(
-                  'Remember me',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
+          child: InkWell(
+            // The label toggles too, so the target is not just a 24 px box.
+            onTap: busy ? null : toggle,
+            child: Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(
+                    value: _rememberMe,
+                    onChanged: busy ? null : (_) => toggle(),
+                    visualDensity: VisualDensity.compact,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: AppSpacing.xs),
+                Flexible(
+                  child: Text(
+                    'Remember me',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
-        // Styled as a link but deliberately not navigable: no approved
-        // password-recovery destination exists, and inventing one is forbidden.
-        Text(
-          'Forgot Password?',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w700,
+        InkWell(
+          onTap: widget.onForgotPassword,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: Text(
+              'Forgot Password?',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ),
       ],
@@ -336,42 +332,6 @@ class _SignInScreenState extends State<SignInScreen> {
           child: Text('or continue with', style: theme.textTheme.bodySmall),
         ),
         const Expanded(child: Divider()),
-      ],
-    );
-  }
-
-  Widget _buildSocialRow() {
-    // Disabled, not absent: the buttons are part of the approved layout, but the
-    // backend implements no OAuth. A disabled control states the feature is not
-    // available; a working-looking one would imply it is. The brand marks come
-    // from Font Awesome — the project ships no Google/Facebook asset and
-    // Material has no Google glyph — and keep their brand colours even while
-    // disabled, because a greyed-out logo is no longer that logo.
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: OutlinedButton(
-            onPressed: null,
-            child: const FaIcon(
-              FontAwesomeIcons.google,
-              size: 26,
-              color: Color(0xFF4285F4),
-              semanticLabel: 'Continue with Google — unavailable',
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: OutlinedButton(
-            onPressed: null,
-            child: const FaIcon(
-              FontAwesomeIcons.facebook,
-              size: 26,
-              color: Color(0xFF1877F2),
-              semanticLabel: 'Continue with Facebook — unavailable',
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -412,12 +372,15 @@ class _PasswordVisibilityToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(
-        visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+    return FieldIcon(
+      IconButton(
+        onPressed: onPressed,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(
+          visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        ),
+        tooltip: visible ? 'Hide password' : 'Show password',
       ),
-      tooltip: visible ? 'Hide password' : 'Show password',
     );
   }
 }

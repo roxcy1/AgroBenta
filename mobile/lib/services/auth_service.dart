@@ -66,6 +66,18 @@ class AuthService {
     );
   }
 
+  /// `POST /auth/google` — exchanges a Google ID token for a session.
+  ///
+  /// A `401` means the token was rejected; a `403` means the account is an
+  /// administrator, which may not use the mobile app.
+  Future<AuthSession> loginWithGoogle({required String idToken}) {
+    return _apiClient.post<AuthSession>(
+      AuthEndpoints.google,
+      body: <String, dynamic>{'id_token': idToken},
+      parse: (Object? data) => AuthSession.fromJson(_asObject(data, 'google')),
+    );
+  }
+
   /// `GET /auth/me` — the authenticated user's own profile.
   ///
   /// Used on session restoration to prove a stored token is still valid and to
@@ -88,6 +100,41 @@ class AuthService {
       AuthEndpoints.logout,
       // The endpoint returns no payload; the empty body of this callback is the
       // result.
+      parse: (Object? _) {},
+    );
+  }
+
+  /// `POST /auth/forgot-password` — asks the server to email a reset code.
+  ///
+  /// Success says nothing about whether [email] is registered. A `429` means
+  /// too many requests from this device.
+  Future<void> forgotPassword({required String email}) {
+    return _apiClient.post<void>(
+      AuthEndpoints.forgotPassword,
+      body: <String, dynamic>{'email': email},
+      parse: (Object? _) {},
+    );
+  }
+
+  /// `POST /auth/reset-password` — sets a new password from an emailed code.
+  ///
+  /// The server's field for [code] is `token`. A `422` means the code is wrong
+  /// or expired, or the password was refused. Success revokes every token the
+  /// account holds, so the user must sign in again.
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+    required String passwordConfirmation,
+  }) {
+    return _apiClient.post<void>(
+      AuthEndpoints.resetPassword,
+      body: <String, dynamic>{
+        'email': email,
+        'token': code,
+        'password': password,
+        'password_confirmation': passwordConfirmation,
+      },
       parse: (Object? _) {},
     );
   }

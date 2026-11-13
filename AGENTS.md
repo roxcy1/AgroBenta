@@ -185,3 +185,49 @@ Do not introduce a different visual style unless explicitly instructed.
 Do not make the interface look like a generic AI-generated SaaS dashboard.
 
 Maintain a practical, professional, restrained administrative-system design.
+
+## Reverb Integration Workflow
+
+Real-time (WebSocket) work is implemented in six ordered phases. The
+authoritative phase-by-phase plan, acceptance criteria, progress log, stop
+conditions, and resume instructions live in
+`docs/features/reverb-integration.md`. Read that file before starting, and
+update its progress log after every phase.
+
+Rules for this work (in addition to the general rules above):
+
+* Execute phases strictly in order. Do not start a phase until the previous one
+  is verified complete and recorded in the progress log.
+* Inspect the existing Laravel, Flutter, React, and Docker code before editing.
+  Follow established patterns; do not add a parallel client, event system, or
+  configuration.
+* Preserve Sanctum authentication, token abilities, route authorization, API
+  contracts, database transactions, and existing business behavior. Real-time
+  is additive only.
+* Keep changes minimal and scoped to the current phase. No unrelated refactors,
+  dependency upgrades, or cross-phase work.
+* Broadcast only after a successful database commit; never make a real-time
+  event part of a write path's correctness.
+* Add tests matching the existing test style. Never weaken or delete a test to
+  make it pass.
+* Run the documented validation and report actual results. Do not claim a check
+  passed unless it actually ran.
+* Never commit, push, merge, rebase, or run destructive operations without
+  explicit approval.
+* Stop at any boundary defined in the integration doc (missing requirements,
+  architectural decisions, security/contract changes, data-loss risk,
+  unresolved failures, or out-of-scope work).
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.

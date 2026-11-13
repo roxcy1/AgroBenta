@@ -91,10 +91,14 @@ void main() {
       );
 
       final SellerVerification created = await repository.submit(
+        phone: '09171234567',
+        address: 'Barangay Poblacion, Trinidad, Bohol',
         businessName: 'Rizal Farms',
       );
 
       expect(created.id, 8);
+      expect(created.phone, '09171234567');
+      expect(created.address, 'Barangay Poblacion, Trinidad, Bohol');
     });
 
     test('passes a 409 through untouched', () async {
@@ -106,7 +110,11 @@ void main() {
       );
 
       await expectLater(
-        repository.submit(businessName: 'Rizal Farms'),
+        repository.submit(
+          phone: '09171234567',
+          address: 'Barangay Poblacion, Trinidad, Bohol',
+          businessName: 'Rizal Farms',
+        ),
         throwsA(
           isA<ApiException>().having(
             (ApiException e) => e.kind,

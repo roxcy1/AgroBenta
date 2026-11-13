@@ -74,7 +74,9 @@ class AdminSellerVerificationService
         return DB::transaction(function () use ($verification, $to, $reviewer, $adminNote): SellerVerification {
             // Lock the applicant so concurrent review decisions serialise per
             // applicant and a resubmission cannot race the decision.
-            $applicant = User::query()->lockForUpdate()->findOrFail($verification->user_id);
+            $applicant = User::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($verification->user_id);
 
             $latest = $this->verifications->latestForUser($applicant->id);
 
@@ -132,7 +134,7 @@ class AdminSellerVerificationService
             $this->activity->log(
                 $reviewer,
                 $action,
-                sprintf('%s for "%s".', $action->label(), $latest->business_name),
+                sprintf('%s for "%s".', $action->label(), $latest->business_name ?? $applicant->name),
                 [
                     'target_type' => 'seller_verification',
                     'target_id' => $latest->getKey(),

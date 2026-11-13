@@ -9,6 +9,7 @@ import '../state/seller_listing_scope.dart';
 import '../state/seller_listing_state.dart';
 import 'seller_listing_form_screen.dart';
 import 'seller_listing_views.dart';
+import '../../marketplace/widgets/listing_photo_carousel.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
 
@@ -128,9 +129,7 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.sold,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.sold),
             child: const Text('Mark as sold'),
           ),
         ],
@@ -183,28 +182,16 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
     }
   }
 
+  /// The gallery's height. Shorter than the buyer's, because the seller is
+  /// here for the status and the actions rather than the photographs.
+  static const double _galleryHeight = 200;
+
   @override
   Widget build(BuildContext context) {
+    // No app bar: as in the approved design the photo runs to the top edge and
+    // the back and edit buttons float over it.
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Listing'),
-        actions: <Widget>[
-          ListenableBuilder(
-            listenable: _controller,
-            builder: (BuildContext context, Widget? child) {
-              final Listing listing = _current();
-              if (!SellerListingController.canEdit(listing)) {
-                return const SizedBox.shrink();
-              }
-              return IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                tooltip: 'Edit listing',
-                onPressed: _edit,
-              );
-            },
-          ),
-        ],
-      ),
+      backgroundColor: AppColors.surface,
       body: ListenableBuilder(
         listenable: _controller,
         builder: (BuildContext context, Widget? child) {
@@ -212,131 +199,168 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
           final SellerListingState state = _controller.state;
           final bool busy =
               state.isActioning && state.actionListingId == listing.id;
+          final bool canEdit = SellerListingController.canEdit(listing);
+          // An active listing carries Edit in the bottom bar, beside Mark as
+          // sold; every other editable state keeps it over the photo.
+          final bool editInBar =
+              canEdit && SellerListingController.canMarkSold(listing);
+          final double topInset = MediaQuery.paddingOf(context).top;
 
-          return SafeArea(
-            child: Column(
-              children: <Widget>[
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(AppSpacing.screenGutter),
-                    children: <Widget>[
-                      _StatusPanel(
-                        listing: listing,
-                        message: state.actionMessage,
-                        conflict: state.conflictMessage,
-                        error: state.actionErrorMessage,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      SectionCard(
-                        title: 'Listing',
-                        children: <Widget>[
-                          DetailRow(
-                            label: 'Type',
-                            value: listing.livestockType,
+          return Column(
+            children: <Widget>[
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: <Widget>[
+                    Stack(
+                      children: <Widget>[
+                        ListingPhotoCarousel(
+                          listing: listing,
+                          height: _galleryHeight + topInset,
+                        ),
+                        Positioned(
+                          left: AppSpacing.sm,
+                          right: AppSpacing.sm,
+                          top: topInset + AppSpacing.xs,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: <Widget>[
+                              _FloatingButton(
+                                icon: Icons.arrow_back,
+                                tooltip: 'Back',
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                              ),
+                              if (canEdit && !editInBar)
+                                _FloatingButton(
+                                  icon: Icons.edit_outlined,
+                                  tooltip: 'Edit listing',
+                                  onPressed: _edit,
+                                ),
+                            ],
                           ),
-                          if (listing.breed.trim().isNotEmpty)
-                            DetailRow(label: 'Breed', value: listing.breed),
-                          DetailRow(
-                            label: 'Quantity',
-                            value:
-                                '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
-                          ),
-                          if (listing.ageLabel != null)
-                            DetailRow(label: 'Age', value: listing.ageLabel!),
-                          if (listing.gender != null)
-                            DetailRow(label: 'Gender', value: listing.gender!),
-                          if (listing.weightLabel != null)
-                            DetailRow(
-                              label: 'Weight',
-                              value: listing.weightLabel!,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      SectionCard(
-                        title: 'Price and location',
+                        ),
+                      ],
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(AppSpacing.screenGutter),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          DetailRow(
-                            label: 'Asking price',
-                            value:
-                                AppFormatters.formatMoney(
-                                  listing.askingPrice,
-                                ) ??
-                                listing.askingPrice,
+                          _Summary(
+                            listing: listing,
+                            message: state.actionMessage,
+                            conflict: state.conflictMessage,
+                            error: state.actionErrorMessage,
                           ),
-                          DetailRow(label: 'Location', value: listing.location),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      SectionCard(
-                        title: 'Details',
-                        children: <Widget>[
-                          if (listing.shortDescription.trim().isNotEmpty)
-                            DetailRow(
-                              label: 'Description',
-                              value: listing.shortDescription,
-                            ),
-                          if (listing.healthStatus != null &&
-                              listing.healthStatus!.trim().isNotEmpty)
-                            DetailRow(
-                              label: 'Health',
-                              value: listing.healthStatus!,
-                            ),
-                          if (listing.vaccination != null &&
-                              listing.vaccination!.trim().isNotEmpty)
-                            DetailRow(
-                              label: 'Vaccination',
-                              value: listing.vaccination!,
-                            ),
-                          if (listing.additionalNotes != null &&
-                              listing.additionalNotes!.trim().isNotEmpty)
-                            DetailRow(
-                              label: 'Notes',
-                              value: listing.additionalNotes!,
-                            ),
-                          if (listing.shortDescription.trim().isEmpty &&
-                              (listing.healthStatus == null ||
-                                  listing.healthStatus!.trim().isEmpty) &&
-                              (listing.vaccination == null ||
-                                  listing.vaccination!.trim().isEmpty) &&
-                              (listing.additionalNotes == null ||
-                                  listing.additionalNotes!.trim().isEmpty))
+                          const SizedBox(height: AppSpacing.md),
+                          _FactsGrid(listing: listing),
+                          if (listing.hasEstimatedMeasurement) ...<Widget>[
+                            const SizedBox(height: AppSpacing.xs),
                             Text(
-                              'No further details recorded.',
+                              'Estimated age or weight is provided by the '
+                              'seller and is not independently verified.',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(color: AppColors.textSecondary),
+                            ),
+                          ],
+                          ..._details(listing),
+                          if (listing.createdAt != null) ...<Widget>[
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              'Created '
+                              '${AppFormatters.formatDateTime(listing.createdAt!)}'
+                              '${listing.updatedAt != null ? ' · updated ${AppFormatters.formatDateTime(listing.updatedAt!)}' : ''}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      if (listing.createdAt != null)
-                        Text(
-                          'Created '
-                          '${AppFormatters.formatDateTime(listing.createdAt!)}'
-                          '${listing.updatedAt != null ? ' · updated ${AppFormatters.formatDateTime(listing.updatedAt!)}' : ''}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                _ActionBar(
-                  listing: listing,
-                  busy: busy,
-                  onSubmit: _submit,
-                  onMarkSold: _markSold,
-                  onDelete: _delete,
-                ),
-              ],
-            ),
+              ),
+              _ActionBar(
+                listing: listing,
+                busy: busy,
+                onEdit: editInBar ? _edit : null,
+                onSubmit: _submit,
+                onMarkSold: _markSold,
+                onDelete: _delete,
+              ),
+            ],
           );
         },
       ),
     );
   }
+
+  /// The facts that do not fit the six-cell grid, as one "Details" section.
+  /// Empty when the listing records none of them.
+  List<Widget> _details(Listing listing) {
+    bool filled(String? value) => value != null && value.trim().isNotEmpty;
+
+    final String? totalValue = _totalListingValueFor(listing);
+
+    final List<Widget> rows = <Widget>[
+      DetailRow(
+        label: 'Number of Animals Available',
+        value:
+            '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
+      ),
+      // The asking price is per head; the total is shown for reference only.
+      if (totalValue != null)
+        DetailRow(
+          label: 'Total listing value',
+          value: '$totalValue (informational only)',
+        ),
+      if (filled(listing.shortDescription))
+        DetailRow(label: 'Description', value: listing.shortDescription),
+      if (filled(listing.genderLabel))
+        DetailRow(label: 'Gender', value: listing.genderLabel!),
+      if (filled(listing.vaccination))
+        DetailRow(label: 'Vaccination', value: listing.vaccination!),
+      if (filled(listing.additionalNotes))
+        DetailRow(label: 'Notes', value: listing.additionalNotes!),
+    ];
+    return <Widget>[
+      const SizedBox(height: AppSpacing.md),
+      SectionCard(title: 'Details', children: rows),
+    ];
+  }
 }
 
-/// The status, what it means, and any message from the last action.
-class _StatusPanel extends StatelessWidget {
-  const _StatusPanel({
+/// A round white button that sits on top of the photo.
+class _FloatingButton extends StatelessWidget {
+  const _FloatingButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface.withValues(alpha: 0.94),
+      shape: const CircleBorder(side: BorderSide(color: AppColors.border)),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        tooltip: tooltip,
+        icon: Icon(icon, color: AppColors.text),
+        onPressed: onPressed,
+      ),
+    );
+  }
+}
+
+/// The name and status, what the status means, any message from the last
+/// action, then the price and where the animal is.
+class _Summary extends StatelessWidget {
+  const _Summary({
     required this.listing,
     required this.message,
     required this.conflict,
@@ -352,44 +376,170 @@ class _StatusPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                ListingStatusChip(status: listing.status),
-                const Spacer(),
-                if (listing.photos.isEmpty)
-                  Text(
-                    'No photos',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
+            Expanded(
+              child: Text(listing.title, style: theme.textTheme.headlineSmall),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              listingStatusExplanation(listing.status),
-              style: theme.textTheme.bodyMedium,
-            ),
-            if (conflict != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.md),
-              ListingConflictNotice(message: conflict!),
-            ],
-            if (error != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.md),
-              ListingActionErrorBanner(message: error!),
-            ],
-            if (message != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.sm),
-              Text(message!, style: theme.textTheme.bodySmall),
-            ],
+            const SizedBox(width: AppSpacing.sm),
+            ListingStatusChip(status: listing.status),
           ],
         ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          listingStatusExplanation(listing.status),
+          style: theme.textTheme.bodySmall,
+        ),
+        if (conflict != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          ListingConflictNotice(message: conflict!),
+        ],
+        if (error != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          ListingActionErrorBanner(message: error!),
+        ],
+        if (message != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          Text(message!, style: theme.textTheme.bodySmall),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'Asking Price (₱) — Per Head',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: <Widget>[
+            Text(
+              AppFormatters.formatMoney(listing.askingPrice) ??
+                  listing.askingPrice,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                color: AppColors.primary,
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                listing.location,
+                style: theme.textTheme.bodySmall,
+                textAlign: TextAlign.end,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Six facts in a bordered three-column grid: Type, Breed, Quantity, Age,
+/// Weight and Health. A missing fact shows a dash rather than hiding, so the
+/// grid keeps its shape.
+class _FactsGrid extends StatelessWidget {
+  const _FactsGrid({required this.listing});
+
+  final Listing listing;
+
+  static String? _present(String? value) =>
+      value == null || value.trim().isEmpty ? null : value.trim();
+
+  static String? _capitalised(String? value) {
+    final String? text = _present(value);
+    return text == null ? null : '${text[0].toUpperCase()}${text.substring(1)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<(String, String?)> facts = <(String, String?)>[
+      ('Type', _capitalised(listing.livestockType)),
+      ('Breed', _present(listing.breed)),
+      (
+        'Quantity',
+        '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
+      ),
+      // "Estimated Age" / "Measured Weight" when the seller said which.
+      (listing.ageInformationLabel ?? 'Age', listing.ageLabel),
+      (listing.weightInformationLabel ?? 'Weight', listing.weightLabel),
+      ('Health', _present(listing.healthStatus)),
+    ];
+
+    Widget row(int from) => IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          for (int i = from; i < from + 3; i++) ...<Widget>[
+            if (i > from)
+              const VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: AppColors.border,
+              ),
+            Expanded(
+              child: _Fact(label: facts[i].$1, value: facts[i].$2),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        children: <Widget>[
+          row(0),
+          const Divider(height: 1, thickness: 1, color: AppColors.border),
+          row(3),
+        ],
+      ),
+    );
+  }
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.value});
+
+  final String label;
+  final String? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String? value = this.value;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: theme.textTheme.labelMedium),
+          const SizedBox(height: AppSpacing.xxxs),
+          Text(
+            value ?? '—',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: value == null ? AppColors.textSecondary : AppColors.text,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -399,8 +549,9 @@ class _StatusPanel extends StatelessWidget {
 ///
 /// Bottom rather than in the app bar, and pinned rather than at the end of the
 /// scroll: a seller who has scrolled to the bottom of a long notes field should
-/// not have to scroll back up to submit or delete. The app bar carries Edit
-/// alone, because that one is a modification rather than a decision.
+/// not have to scroll back up to submit or delete. An active listing pairs
+/// Edit with Mark as sold here, as the approved design does; other editable
+/// states keep Edit over the photo.
 ///
 /// A listing with no available action shows the reason instead of a row of
 /// disabled buttons. There is a difference between "you may not" and "there is
@@ -410,6 +561,7 @@ class _ActionBar extends StatelessWidget {
   const _ActionBar({
     required this.listing,
     required this.busy,
+    required this.onEdit,
     required this.onSubmit,
     required this.onMarkSold,
     required this.onDelete,
@@ -417,6 +569,9 @@ class _ActionBar extends StatelessWidget {
 
   final Listing listing;
   final bool busy;
+
+  /// Null when Edit is not offered in the bar.
+  final VoidCallback? onEdit;
   final VoidCallback onSubmit;
   final VoidCallback onMarkSold;
   final VoidCallback onDelete;
@@ -452,13 +607,26 @@ class _ActionBar extends StatelessWidget {
               // them in priority order avoids enumerating impossible boolean
               // combinations or hiding one behind a wildcard.
               if (canMarkSold)
-                OutlinedButton.icon(
-                  onPressed: busy ? null : onMarkSold,
-                  icon: const Icon(Icons.done_outline, size: 18),
-                  label: const Text('Mark as sold'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.sold,
-                  ),
+                Row(
+                  children: <Widget>[
+                    if (onEdit != null) ...<Widget>[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: busy ? null : onEdit,
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          label: const Text('Edit listing'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                    ],
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: busy ? null : onMarkSold,
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('Mark as sold'),
+                      ),
+                    ),
+                  ],
                 )
               else if (canSubmit)
                 // A draft may be deleted or submitted for review; both buttons
@@ -507,4 +675,15 @@ class _ActionBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The informational total for one listing, or `null` when either value is
+/// missing or invalid. This never replaces the server's transaction calculation.
+String? _totalListingValueFor(Listing listing) {
+  final double? unitPrice = AppFormatters.parseDecimal(listing.askingPrice);
+  if (unitPrice == null || unitPrice < 0 || listing.quantity < 1) {
+    return null;
+  }
+  final String raw = (unitPrice * listing.quantity).toStringAsFixed(2);
+  return AppFormatters.formatMoney(raw) ?? raw;
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/message.dart';
+import 'inquiry_message_card.dart';
 
 /// One message bubble in a chat thread.
 ///
@@ -25,11 +26,18 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    final Color bubbleColor = isMine
-        ? AppColors.primary
-        : theme.colorScheme.surfaceContainerHighest;
+    // The opening inquiry message renders as a structured card, not as the
+    // generated prose body the server also stores.
+    final MessageInquiry? inquiry = message.inquiry;
+    if (inquiry != null) {
+      return InquiryMessageCard(inquiry: inquiry, isMine: isMine);
+    }
 
-    final Color textColor = isMine ? Colors.white : theme.colorScheme.onSurface;
+    // Sent: brand green. Received: white with a hairline border, as in the
+    // approved design.
+    final Color bubbleColor = isMine ? AppColors.primary : AppColors.surface;
+
+    final Color textColor = isMine ? Colors.white : AppColors.text;
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -38,7 +46,7 @@ class MessageBubble extends StatelessWidget {
           maxWidth: MediaQuery.sizeOf(context).width * 0.75,
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxxs),
           child: Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
@@ -46,7 +54,14 @@ class MessageBubble extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: bubbleColor.withValues(alpha: isPlaceholder ? 0.7 : 1),
-              borderRadius: BorderRadius.circular(14),
+              border: isMine ? null : Border.all(color: AppColors.border),
+              // The corner nearest the sender is tighter, like a speech tail.
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(12),
+                topRight: const Radius.circular(12),
+                bottomLeft: Radius.circular(isMine ? 12 : 4),
+                bottomRight: Radius.circular(isMine ? 4 : 12),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,7 +79,6 @@ class MessageBubble extends StatelessWidget {
                       _timeLabel(message.createdAt),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: textColor.withValues(alpha: 0.7),
-                        fontSize: 10,
                       ),
                     ),
                     if (isPlaceholder) ...<Widget>[

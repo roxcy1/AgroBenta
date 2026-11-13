@@ -1,11 +1,9 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/local_image_preview.dart';
 import '../state/seller_verification_documents_state.dart';
 
 /// One required-document card in the application form: a title, an instruction,
@@ -24,6 +22,7 @@ class SellerVerificationDocumentCard extends StatelessWidget {
     required this.onPick,
     required this.onRemove,
     required this.onRetry,
+    this.onRetryPreview,
     this.pickLabel = 'Choose Image',
     this.changeLabel = 'Change',
     super.key,
@@ -50,6 +49,9 @@ class SellerVerificationDocumentCard extends StatelessWidget {
   /// Retries a failed upload.
   final VoidCallback onRetry;
 
+  /// Retries loading an already-uploaded document preview after a fetch failure.
+  final VoidCallback? onRetryPreview;
+
   /// Label for the first pick action, e.g. "Take Photo".
   final String pickLabel;
 
@@ -68,16 +70,14 @@ class SellerVerificationDocumentCard extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Expanded(
-                  child: Text(title, style: theme.textTheme.titleSmall),
-                ),
+                Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
                 const _RequiredChip(),
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(instruction, style: theme.textTheme.bodySmall),
             const SizedBox(height: AppSpacing.sm),
-            _Preview(document: document),
+            _Preview(document: document, onRetryPreview: onRetryPreview),
             const SizedBox(height: AppSpacing.xs),
             _StatusLine(document: document),
             const SizedBox(height: AppSpacing.sm),
@@ -120,9 +120,9 @@ class _RequiredChip extends StatelessWidget {
       ),
       child: Text(
         'Required',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: AppColors.textSecondary,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
       ),
     );
   }
@@ -130,9 +130,10 @@ class _RequiredChip extends StatelessWidget {
 
 /// A neutral placeholder, a local-file preview, or an uploaded indicator.
 class _Preview extends StatelessWidget {
-  const _Preview({required this.document});
+  const _Preview({required this.document, this.onRetryPreview});
 
   final VerificationDocument document;
+  final VoidCallback? onRetryPreview;
 
   static const double _height = 160;
 
@@ -148,14 +149,48 @@ class _Preview extends StatelessWidget {
         color: AppColors.background,
         child: switch (document.status) {
           VerificationDocumentStatus.uploading => const _UploadingOverlay(),
-          _ => file == null
-              ? (document.isUploaded
-                    ? const _UploadedPlaceholder()
-                    : const _EmptyPlaceholder())
-              : _FilePreview(file: file),
+          _ when file != null => LocalImagePreview(
+            file: file,
+            fit: BoxFit.contain,
+            fallback: const _EmptyPlaceholder(),
+          ),
+          _ when document.hasPreviousRecordDocument => _remotePreview(),
+          _ when !document.isUploaded => const _EmptyPlaceholder(),
+          _ => _remotePreview(),
         },
       ),
     );
+  }
+
+  Widget _remotePreview() {
+    return switch (document.previewStatus) {
+      VerificationDocumentPreviewStatus.loading => const _PreviewLoading(),
+      VerificationDocumentPreviewStatus.loaded =>
+        document.previewBytes == null
+            ? const _UnavailablePlaceholder(
+                message: 'This document could not be displayed.',
+              )
+            : Image.memory(
+                document.previewBytes!,
+                fit: BoxFit.contain,
+                errorBuilder:
+                    (BuildContext context, Object error, StackTrace? _) =>
+                        const _UnavailablePlaceholder(
+                          message: 'This document could not be displayed.',
+                        ),
+                excludeFromSemantics: true,
+              ),
+      VerificationDocumentPreviewStatus.failed => _PreviewFailure(
+        message: document.previewError ?? 'Could not load this document.',
+        retryable: document.previewRetryable,
+        onRetry: onRetryPreview,
+      ),
+      VerificationDocumentPreviewStatus.missing =>
+        const _UnavailablePlaceholder(
+          message: 'This document is not available.',
+        ),
+      VerificationDocumentPreviewStatus.idle => const _UploadedPlaceholder(),
+    };
   }
 }
 
@@ -176,9 +211,9 @@ class _EmptyPlaceholder extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'No image selected',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -199,9 +234,9 @@ class _UploadedPlaceholder extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Uploaded',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.success,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: AppColors.success),
           ),
         ],
       ),
@@ -209,25 +244,91 @@ class _UploadedPlaceholder extends StatelessWidget {
   }
 }
 
-class _FilePreview extends StatelessWidget {
-  const _FilePreview({required this.file});
+class _UnavailablePlaceholder extends StatelessWidget {
+  const _UnavailablePlaceholder({required this.message});
 
-  final XFile file;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    // `Image.file` is unavailable on the web. A web build is not a target for
-    // this app, but falling back keeps the widget honest rather than crashing.
-    if (kIsWeb) {
-      return const _EmptyPlaceholder();
-    }
-    return Image.file(
-      File(file.path),
-      fit: BoxFit.contain,
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? _) =>
-              const _EmptyPlaceholder(),
-      excludeFromSemantics: true,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(
+              Icons.image_not_supported_outlined,
+              size: 32,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewLoading extends StatelessWidget {
+  const _PreviewLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: SizedBox.square(
+        dimension: 24,
+        child: CircularProgressIndicator(strokeWidth: 2.5),
+      ),
+    );
+  }
+}
+
+class _PreviewFailure extends StatelessWidget {
+  const _PreviewFailure({
+    required this.message,
+    required this.retryable,
+    required this.onRetry,
+  });
+
+  final String message;
+  final bool retryable;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(
+              Icons.cloud_off_outlined,
+              color: AppColors.textSecondary,
+              size: 28,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelSmall,
+            ),
+            if (retryable && onRetry != null)
+              TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Retry preview'),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -257,24 +358,29 @@ class _StatusLine extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
 
     final (String label, Color color) = switch (document.status) {
-      VerificationDocumentStatus.empty => ('Not selected', AppColors.textSecondary),
+      VerificationDocumentStatus.empty => (
+        'Not selected',
+        AppColors.textSecondary,
+      ),
       VerificationDocumentStatus.selected => (
         'Selected — not yet uploaded',
         AppColors.textSecondary,
       ),
       VerificationDocumentStatus.uploading => ('Uploading…', AppColors.primary),
       VerificationDocumentStatus.uploaded => ('Uploaded', AppColors.success),
+      VerificationDocumentStatus.needsUpload => (
+        'Upload required',
+        AppColors.error,
+      ),
       VerificationDocumentStatus.failed => ('Upload failed', AppColors.error),
     };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: theme.textTheme.labelMedium?.copyWith(color: color),
-        ),
-        if (document.status == VerificationDocumentStatus.failed &&
+        Text(label, style: theme.textTheme.labelMedium?.copyWith(color: color)),
+        if ((document.status == VerificationDocumentStatus.failed ||
+                document.status == VerificationDocumentStatus.needsUpload) &&
             document.error != null) ...<Widget>[
           const SizedBox(height: AppSpacing.xxs),
           Text(
@@ -316,12 +422,26 @@ class _Actions extends StatelessWidget {
     final bool hasFile = document.hasFile;
     final bool isUploaded = document.isUploaded;
     final bool hasFailed = document.status == VerificationDocumentStatus.failed;
+    final bool needsUpload =
+        document.status == VerificationDocumentStatus.needsUpload;
 
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.xs,
       children: <Widget>[
-        if (hasFailed)
+        if (needsUpload && hasFile)
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.upload_outlined, size: 18),
+            label: const Text('Upload again'),
+          )
+        else if (needsUpload)
+          FilledButton.icon(
+            onPressed: onPick,
+            icon: const Icon(Icons.photo_camera_outlined, size: 18),
+            label: Text(pickLabel),
+          )
+        else if (hasFailed)
           FilledButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 18),

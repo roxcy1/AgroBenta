@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\FulfillmentStatus;
 use App\Enums\ListingStatus;
 use App\Enums\SellerCapability;
 use App\Enums\TransactionStatus;
@@ -71,7 +72,7 @@ class TransactionSeeder extends Seeder
         1 => [
             ['swine', 'Landrace', 20, 12000.00, 'Negros Occidental'],
             ['cattle', 'Holstein', 3, 62000.00, 'Negros Occidental'],
-            ['chicken', 'Broiler', 200, 180.00, 'Negros Occidental'],
+            ['swine', 'Duroc', 40, 15000.00, 'Negros Occidental'],
         ],
         2 => [
             ['cattle', 'Angus', 4, 55000.00, 'Lanao del Norte'],
@@ -259,7 +260,14 @@ class TransactionSeeder extends Seeder
             return false;
         }
 
+        $fulfillment = match ($status) {
+            TransactionStatus::Completed => FulfillmentStatus::Completed,
+            TransactionStatus::Pending => FulfillmentStatus::Confirmed,
+            TransactionStatus::Cancelled => null,
+        };
+
         $transaction->forceFill([
+            'fulfillment_status' => $fulfillment,
             'created_at' => $createdAt,
             'updated_at' => $createdAt,
         ])->save();

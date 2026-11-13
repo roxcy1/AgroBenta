@@ -3,22 +3,27 @@ import 'dart:convert';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
+import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
+import 'package:agrobenta_mobile/features/inquiries/view/inquire_screen.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
 import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
 import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
-import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
+import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
+import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
+import 'package:agrobenta_mobile/repositories/messaging_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
+import '../../support/inquiry_fakes.dart';
 import '../../support/marketplace_fakes.dart';
 import '../../support/messaging_fakes.dart';
-import '../../support/transaction_fakes.dart';
+import '../../support/offer_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -37,12 +42,15 @@ void main() {
 
   /// Pumps the listing detail as the app does: every scope it can reach sits
   /// above `MaterialApp`, one transport answers every endpoint the screen and
-  /// the chat it can push will hit.
+  /// the inquiry form it can push will hit.
   Future<void> pumpDetail(
     WidgetTester tester, {
     required int sellerId,
     required int viewerId,
     List<Object?>? photos,
+    int completedSales = 0,
+    String? ageInformation = 'known',
+    String? weightInformation = 'measured',
   }) async {
     Future<http.Response> transport(RecordedRequest request) async {
       final String path = request.apiPath;
@@ -52,23 +60,11 @@ void main() {
           listing: listingJson(
             seller: sellerJson(id: sellerId),
             photos: photos,
+            completedSales: completedSales,
+            ageInformation: ageInformation,
+            weightInformation: weightInformation,
           ),
         );
-      }
-      // ChatScreen opens the thread with the seller and marks it read.
-      if (path == '/conversations/$sellerId/messages') {
-        return messageThreadResponse();
-      }
-      if (path == '/conversations/$sellerId/read') {
-        return threadReadResponse();
-      }
-      if (path == '/transactions') {
-        return request.method == 'POST'
-            ? transactionCreatedResponse(transaction: transactionJson(id: 1))
-            : transactionListResponse();
-      }
-      if (path == '/transactions/1') {
-        return transactionDetailResponse(transaction: transactionJson(id: 1));
       }
       return marketplaceListResponse();
     }
@@ -93,20 +89,37 @@ void main() {
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
 
-    final transactionRepository = buildTransactionRepository(
+    // The screen's Inquire action pushes a form over this route, so the
+    // repository it reads must be in scope exactly as `main.dart` installs it.
+    final InquiryRepository inquiryRepository = buildInquiryRepository(
       tokenStore,
-      transport,
+      (RecordedRequest request) async => request.method == 'POST'
+          ? inquiryCreatedResponse()
+          : marketplaceListResponse(),
       recorded: recorded,
     );
 
-    final messagingRepository = buildMessagingRepository(
+    final MessagingRepository messagingRepository = buildMessagingRepository(
       tokenStore,
-      transport,
+      (RecordedRequest request) async {
+        if (request.apiPath.contains('/read')) {
+          return threadReadResponse();
+        }
+        if (request.apiPath.contains('/messages')) {
+          return messageThreadResponse();
+        }
+        return conversationsResponse();
+      },
       recorded: recorded,
     );
     final ConversationsController conversationsController =
         ConversationsController(messagingRepository);
     addTearDown(conversationsController.dispose);
+
+    final offerRepository = buildOfferRepository(
+      tokenStore,
+      (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
+    );
 
     tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1.0;
@@ -118,14 +131,17 @@ void main() {
         child: MarketplaceScope(
           repository: marketplaceRepository,
           controller: marketplaceController,
-          child: TransactionScope(
-            repository: transactionRepository,
+          child: InquiryScope(
+            repository: inquiryRepository,
             child: MessagingScope(
               repository: messagingRepository,
               conversationsController: conversationsController,
-              child: MaterialApp(
-                theme: AppTheme.light(),
-                home: const ListingDetailScreen(listingId: 12),
+              child: OfferScope(
+                repository: offerRepository,
+                child: MaterialApp(
+                  theme: AppTheme.light(),
+                  home: const ListingDetailScreen(listingId: 12),
+                ),
               ),
             ),
           ),
@@ -142,16 +158,16 @@ void main() {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
       // Summary: species, title, price, availability, location.
-      expect(find.text('CATTLE'), findsOneWidget);
+      expect(find.text('Cattle'), findsOneWidget);
       expect(find.text('Holstein'), findsOneWidget);
       expect(find.text('₱42,500.00'), findsOneWidget);
-      expect(find.text('4 heads available'), findsOneWidget);
+      expect(find.text('4 heads'), findsOneWidget);
       expect(find.text('Mabalacat, Pampanga'), findsOneWidget);
 
       // Attributes.
-      expect(find.text('Age'), findsOneWidget);
+      expect(find.text('Known Age'), findsOneWidget);
       expect(find.text('18 months'), findsOneWidget);
-      expect(find.text('Weight'), findsOneWidget);
+      expect(find.text('Measured Weight'), findsOneWidget);
       expect(find.text('320.5 kg'), findsOneWidget);
       expect(find.text('Gender'), findsOneWidget);
       expect(find.text('Female'), findsOneWidget);
@@ -162,6 +178,35 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Rizal Farms'), findsOneWidget);
+    });
+
+    testWidgets('labels seller-estimated measurements and explains them', (
+      WidgetTester tester,
+    ) async {
+      await pumpDetail(
+        tester,
+        sellerId: 3,
+        viewerId: 7,
+        ageInformation: 'estimated',
+        weightInformation: 'estimated',
+      );
+
+      expect(find.text('Estimated Age'), findsOneWidget);
+      expect(find.text('Estimated Weight'), findsOneWidget);
+      expect(
+        find.text(
+          'Estimated age or weight is provided by the seller and is not '
+          'independently verified.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows no placeholder rating', (WidgetTester tester) async {
+      await pumpDetail(tester, sellerId: 3, viewerId: 7, completedSales: 3);
+
+      expect(find.text('4.8 · 24 reviews'), findsNothing);
+      expect(find.byIcon(Icons.star_rounded), findsNothing);
     });
 
     testWidgets('shows a neutral placeholder when there is no photo', (
@@ -217,47 +262,61 @@ void main() {
   });
 
   group('listing detail actions', () {
-    testWidgets('a non-owner gets Message, Inquire and Buy', (
+    testWidgets('a non-owner gets Ask Seller and I am Interested', (
       WidgetTester tester,
     ) async {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
-      expect(find.widgetWithText(OutlinedButton, 'Message'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Inquire'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'Buy'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Ask Seller'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, "I'm Interested"),
+        findsOneWidget,
+      );
+      expect(find.text('Inquire'), findsNothing);
     });
 
     testWidgets('the owner gets no actions', (WidgetTester tester) async {
       await pumpDetail(tester, sellerId: 7, viewerId: 7);
 
-      expect(find.text('Message'), findsNothing);
-      expect(find.text('Inquire'), findsNothing);
-      expect(find.text('Buy'), findsNothing);
+      expect(find.text('Ask Seller'), findsNothing);
+      expect(find.text("I'm Interested"), findsNothing);
     });
 
-    testWidgets('Message opens the existing chat thread with the seller', (
+    testWidgets('Ask Seller opens the conversation and creates nothing', (
       WidgetTester tester,
     ) async {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Message'));
-      await settle(tester, frames: 16);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Ask Seller'));
+      await settle(tester);
 
       expect(find.byType(ChatScreen), findsOneWidget);
+      expect(find.byType(InquireScreen), findsNothing);
       expect(
-        recorded.any(
-          (RecordedRequest r) => r.apiPath == '/conversations/3/messages',
-        ),
-        isTrue,
-        reason: 'the existing thread endpoint is reused, not invented',
-      );
-      expect(
-        recorded.any(
+        recorded.where(
           (RecordedRequest r) =>
-              r.method == 'POST' && r.apiPath == '/conversations/3/read',
+              r.method == 'POST' &&
+              (r.apiPath == '/messages' || r.apiPath == '/inquiries'),
         ),
-        isTrue,
-        reason: 'opening the chat marks it read, as the chat feature does',
+        isEmpty,
+        reason: 'opening chat is navigation, not a message or an inquiry',
+      );
+    });
+
+    testWidgets("I'm Interested opens the inquiry form and sends nothing", (
+      WidgetTester tester,
+    ) async {
+      await pumpDetail(tester, sellerId: 3, viewerId: 7);
+
+      await tester.tap(find.widgetWithText(FilledButton, "I'm Interested"));
+      await settle(tester);
+
+      expect(find.byType(InquireScreen), findsOneWidget);
+      expect(find.text('Message (optional)'), findsOneWidget);
+      expect(
+        recorded.where((RecordedRequest r) => r.method == 'POST'),
+        isEmpty,
+        reason: 'opening the form is navigation, not a submission',
       );
     });
   });

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/temporary_logo.dart';
 
 /// The shared layout for the sign-in and registration forms.
 ///
@@ -119,20 +120,9 @@ class _AuthBrandHeader extends StatelessWidget {
 
     return Column(
       children: <Widget>[
-        Image.asset(
-          'assets/images/AgroBentaLogo.png',
-          height: 64,
-          fit: BoxFit.contain,
-        ),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          'AgroBenta',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: AppColors.primaryDark,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xxs),
+        // The logo carries the AgroBenta wordmark, so the name is not repeated.
+        const TemporaryLogo(size: 72),
+        const SizedBox(height: AppSpacing.xs),
         Text(
           'Buy. Sell. Grow. Together.',
           style: theme.textTheme.bodyMedium?.copyWith(

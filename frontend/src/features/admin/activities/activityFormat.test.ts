@@ -192,7 +192,7 @@ describe('hasActiveActivityFilters', () => {
 describe('emptyActivitiesMessage', () => {
   it('distinguishes filtered from unfiltered empty states', () => {
     expect(emptyActivitiesMessage(true)).toBe('No activities match the current filters.');
-    expect(emptyActivitiesMessage(false)).toBe('No activities have been recorded yet.');
+    expect(emptyActivitiesMessage(false)).toBe('No activities available yet.');
   });
 });
 

@@ -2,10 +2,15 @@
 
 namespace App\Http\Requests\SellerListing;
 
+use App\Enums\AgeInformation;
 use App\Enums\ListingStatus;
+use App\Enums\LivestockType;
+use App\Enums\WeightInformation;
 use App\Models\Listing;
 use App\Rules\MaximumAgeForUnit;
+use App\Rules\TrinidadLocationAddressRule;
 use App\Services\SettingService;
+use Illuminate\Validation\Rule;
 
 /**
  * The field rules for seller listing creation and update.
@@ -33,7 +38,10 @@ trait SellerListingRules
     protected function contentRules(): array
     {
         return [
-            'livestock_type' => ['string', 'max:255'],
+            // New and updated listings may only use the approved vocabulary.
+            // Historical rows are not normalized, so reads and admin searches
+            // stay permissive elsewhere.
+            'livestock_type' => [Rule::enum(LivestockType::class)],
 
             // `breed` and `short_description` are NOT NULL columns with no
             // database default, so they are optional at the API boundary but
@@ -54,6 +62,9 @@ trait SellerListingRules
             // selected (25 years / 300 months / 9,125 days) [DEC-01].
             'age_value' => ['integer', 'min:0', 'max:9125', new MaximumAgeForUnit],
             'age_unit' => ['in:day,month,year'],
+            // Nullable for a legacy PATCH; the required measurement rules below
+            // make both fields mandatory on create and submission.
+            'age_information' => ['nullable', Rule::enum(AgeInformation::class)],
 
             'gender' => ['in:male,female'],
 
@@ -64,6 +75,7 @@ trait SellerListingRules
             // the seller typed is the amount stored [DEC-02].
             'weight_value' => ['numeric', 'decimal:0,2', 'min:0', 'max:99999999.99'],
             'weight_unit' => ['in:kg,lb'],
+            'weight_information' => ['nullable', Rule::enum(WeightInformation::class)],
 
             'quantity' => ['integer', 'min:1'],
 
@@ -72,7 +84,7 @@ trait SellerListingRules
             // (`decimal(14,2)`) supplies the fallback when the setting is absent.
             'asking_price' => ['numeric', 'decimal:0,2', 'min:0', 'max:'.$this->maxAskingPrice()],
 
-            'location' => ['string', 'max:255'],
+            'location' => ['string', 'max:255', $this->locationAddressRule()],
             'health_status' => ['nullable', 'string', 'max:255'],
             'vaccination' => ['nullable', 'string', 'max:255'],
             'short_description' => ['nullable', 'string', 'max:255'],
@@ -115,17 +127,49 @@ trait SellerListingRules
     }
 
     /**
+     * New locations must be canonical. An update request may allow its exact
+     * unchanged legacy string; publication always uses the strict default.
+     */
+    protected function locationAddressRule(): TrinidadLocationAddressRule
+    {
+        return new TrinidadLocationAddressRule;
+    }
+
+    /**
      * The four fields a listing cannot be created without.
      *
-     * @return array<string, list<string>>
+     * @return array<string, list<mixed>>
      */
     protected function requiredFieldRules(): array
     {
         return [
-            'livestock_type' => ['string', 'max:255'],
+            'livestock_type' => [Rule::enum(LivestockType::class)],
             'location' => ['string', 'max:255'],
             'asking_price' => ['numeric', 'min:0', 'max:'.$this->maxAskingPrice()],
             'quantity' => ['integer', 'min:1'],
+        ];
+    }
+
+    /**
+     * The two physical measurements a listing cannot be created or submitted
+     * without.
+     *
+     * The columns remain nullable for historical rows, so this is deliberately
+     * separate from [contentRules()]: an update request can omit an untouched
+     * legacy measurement, while create and submission require the complete
+     * value, unit and information type.
+     *
+     * @return array<string, list<string>>
+     */
+    protected function requiredMeasurementRules(): array
+    {
+        return [
+            'age_value' => ['required'],
+            'age_unit' => ['required'],
+            'age_information' => ['required'],
+            'weight_value' => ['required'],
+            'weight_unit' => ['required'],
+            'weight_information' => ['required'],
         ];
     }
 
@@ -170,6 +214,7 @@ trait SellerListingRules
             $this->contentRules(),
             $this->pairRules(),
             $this->requiredFieldRules(),
+            $this->requiredMeasurementRules(),
         );
     }
 

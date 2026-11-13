@@ -5,25 +5,16 @@ import {
   useRejectVerification,
 } from '../api/useSellerVerifications';
 import type { VerificationActionConfig } from './verificationModeration';
-import { statusLabel, verificationErrorMessage } from './verificationModeration';
+import { verificationErrorMessage } from './verificationModeration';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDateTime } from '../../../../lib/format';
+import { VerificationModalHeader } from './VerificationModalHeader';
+import './VerificationReviewDialog.css';
 
 interface VerificationReviewDialogProps {
   verification: SellerVerification;
   action: VerificationActionConfig;
   onClose: () => void;
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 /**
@@ -76,96 +67,106 @@ export default function VerificationReviewDialog({
   const rows: Array<[string, string]> = [
     ['Applicant', verification.seller?.name ?? '—'],
     ['Email', verification.seller?.email ?? '—'],
-    ['Business', verification.business_name],
+    ['Phone number', verification.phone ?? '—'],
+    ['Address', verification.address ?? '—'],
+    ['Business', verification.business_name ?? '—'],
     ['Location', verification.business_location ?? '—'],
     ['Submitted', formatDateTime(verification.submitted_at)],
   ];
 
   return (
     <div
-      className="lv-action-modal-overlay"
+      className="lv-action-modal-overlay listing-details-overlay verification-review-overlay"
       onClick={() => {
         if (!isPending) onClose();
       }}
     >
       <div
-        className="lv-action-modal"
+        className="lv-action-modal lv-action-modal--review lv-action-modal--listing-details verification-review-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="verification-review-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="lv-action-modal-title" id="verification-review-title">
-          {action.confirmTitle}
-        </h2>
-        <p className="lv-action-modal-desc">{action.confirmMessage}</p>
+        <VerificationModalHeader
+          title={action.confirmTitle}
+          subtitle="Review seller verification request."
+          titleId="verification-review-title"
+          closeLabel="Close verification review"
+          closeDisabled={isPending}
+          onClose={onClose}
+        />
 
-        <div className="lv-table-container">
-          <table className="lv-table">
-            <tbody>
-              <tr>
-                <th>Status</th>
-                <td>
-                  <span className={`lv-badge lv-badge--${verification.status}`}>
-                    {statusLabel(verification.status)}
-                  </span>
-                </td>
-              </tr>
-              {rows.map(([label, value]) => (
-                <tr key={label}>
-                  <th>{label}</th>
-                  <td>{value}</td>
-                </tr>
-              ))}
-              {verification.admin_note && (
+        <div className="verification-review-body">
+          <p className="verification-review-message">{action.confirmMessage}</p>
+
+          <div className="lv-table-container">
+            <table className="lv-table">
+              <tbody>
                 <tr>
-                  <th>Previous admin note</th>
-                  <td>{verification.admin_note}</td>
+                  <th>Status</th>
+                  <td>
+                    <StatusBadge status={verification.status} />
+                  </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="lv-action-modal-field">
-          <label className="lv-action-modal-label" htmlFor="verification-admin-note">
-            {action.noteRequired ? 'Admin note (required)' : 'Admin note (optional)'}
-          </label>
-          <textarea
-            id="verification-admin-note"
-            className="lv-action-modal-textarea"
-            value={adminNote}
-            maxLength={2000}
-            disabled={isPending}
-            placeholder="Add a note for this decision..."
-            onChange={(event) => setAdminNote(event.target.value)}
-          />
-        </div>
-
-        {errorMessage && (
-          <div className="lv-error">
-            <p className="lv-error-text">{errorMessage}</p>
+                {rows.map(([label, value]) => (
+                  <tr key={label}>
+                    <th>{label}</th>
+                    <td>{value}</td>
+                  </tr>
+                ))}
+                {verification.admin_note && (
+                  <tr>
+                    <th>Previous admin note</th>
+                    <td>{verification.admin_note}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
 
-        <div className="lv-action-modal-buttons">
-          <button
-            type="button"
-            className="lv-action-cancel"
-            disabled={isPending}
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={`lv-action-confirm lv-action-confirm--${action.variant}`}
-            disabled={!canConfirm}
-            onClick={handleConfirm}
-          >
-            {isPending ? 'Working…' : action.confirmLabel}
-          </button>
+          <div className="lv-action-modal-field">
+            <label className="lv-action-modal-label" htmlFor="verification-admin-note">
+              {action.noteRequired ? 'Admin note (required)' : 'Admin note (optional)'}
+            </label>
+            <textarea
+              id="verification-admin-note"
+              className="lv-action-modal-textarea"
+              value={adminNote}
+              maxLength={2000}
+              disabled={isPending}
+              placeholder="Add a note for this decision..."
+              onChange={(event) => setAdminNote(event.target.value)}
+            />
+          </div>
+
+          {errorMessage && (
+            <div className="lv-error">
+              <p className="lv-error-text">{errorMessage}</p>
+            </div>
+          )}
         </div>
+
+        <footer className="lv-detail-footer listing-details-footer verification-review-footer">
+          <div className="lv-action-modal-buttons">
+            <button
+              type="button"
+              className="lv-action-cancel"
+              disabled={isPending}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={`lv-action-confirm lv-action-confirm--${action.variant}`}
+              disabled={!canConfirm}
+              onClick={handleConfirm}
+            >
+              {isPending ? 'Working…' : action.confirmLabel}
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   );

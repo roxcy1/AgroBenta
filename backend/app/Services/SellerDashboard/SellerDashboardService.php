@@ -28,7 +28,7 @@ class SellerDashboardService
      * @return array{
      *     listings: array{total: int, draft: int, pending: int, active: int, sold: int, inactive: int},
      *     inquiries: array{total: int},
-     *     transactions: array{total: int, pending: int}
+     *     transactions: array{total: int, pending: int, completed: int}
      * }
      */
     public function getDashboardForSeller(User $seller): array

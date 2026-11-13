@@ -1,11 +1,11 @@
 {
-    "name": "agrobenta_mobile",
-    "short_name": "agrobenta_mobile",
+    "name": "AgroBenta",
+    "short_name": "AgroBenta",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#006B4F",
+    "description": "AgroBenta: a mobile livestock trading application for the Municipality of Trinidad, Bohol.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

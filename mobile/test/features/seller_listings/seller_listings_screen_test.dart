@@ -57,7 +57,16 @@ void main() {
       matching: find.text(text),
     );
 
-    expect(inCards('Cattle'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byWidgetPredicate(
+          (Widget widget) =>
+              widget.runtimeType.toString() == 'SellerListingCard',
+        ),
+        matching: find.textContaining('Cattle'),
+      ),
+      findsOneWidget,
+    );
     expect(inCards('Draft'), findsOneWidget);
     expect(inCards('Pending review'), findsOneWidget);
 
@@ -106,6 +115,61 @@ void main() {
     expect(find.byType(SellerListingFormScreen), findsOneWidget);
   });
 
+  testWidgets('offers All, Drafts, Pending, Active, Sold and Inactive filters', (
+    WidgetTester tester,
+  ) async {
+    final harness = await SellerListingsHarness.pump(
+      tester,
+      handler: (_) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[listingJson(id: 1, status: 'active')],
+      ),
+    );
+
+    for (final String label in <String>[
+      'All',
+      'Drafts',
+      'Pending review',
+      'Active',
+      'Sold',
+      'Inactive',
+    ]) {
+      expect(find.text(label), findsWidgets, reason: 'missing $label chip');
+    }
+
+    await tester.tap(find.text('Inactive'));
+    await tester.pumpAndSettle();
+    expect(harness.recorded.last.query['status'], 'inactive');
+
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+    expect(harness.recorded.last.query.containsKey('status'), isFalse);
+  });
+
+  testWidgets('compact actions fit a narrow screen without overflow', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (_) async => sellerListingListResponse(
+        listings: <Map<String, dynamic>>[
+          listingJson(id: 1, status: 'active'),
+          listingJson(id: 2, status: 'pending'),
+          listingJson(id: 3, status: 'sold'),
+        ],
+        total: 3,
+      ),
+    );
+
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Mark sold'), findsOneWidget);
+    expect(find.text('View'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tapping a card opens its detail', (WidgetTester tester) async {
     await SellerListingsHarness.pump(
       tester,
@@ -117,7 +181,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Cattle'));
+    await tester.tap(find.textContaining('Cattle').first);
     await sellerListingsSettle(tester);
 
     expect(find.byType(SellerListingDetailScreen), findsOneWidget);
@@ -138,7 +202,7 @@ void main() {
 
     expect(find.text(listingPhotoRequirementMessage), findsOneWidget);
     final TextButton submit = tester.widget<TextButton>(
-      find.widgetWithText(TextButton, 'Submit for review'),
+      find.widgetWithText(TextButton, 'Submit'),
     );
     expect(submit.onPressed, isNull);
   });
@@ -163,9 +227,131 @@ void main() {
 
     expect(find.text(listingPhotoRequirementMessage), findsNothing);
     final TextButton submit = tester.widget<TextButton>(
-      find.widgetWithText(TextButton, 'Submit for review'),
+      find.widgetWithText(TextButton, 'Submit'),
     );
     expect(submit.onPressed, isNotNull);
+  });
+
+  testWidgets(
+    'submit confirmation actions stay horizontal on a narrow screen and Cancel does not submit',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final SellerListingsHarness harness = await SellerListingsHarness.pump(
+        tester,
+        handler: (RecordedRequest request) async => sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(
+              id: 1,
+              livestockType: 'Cattle',
+              status: 'draft',
+              photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+            ),
+          ],
+          total: 1,
+        ),
+      );
+
+      await tester.tap(find.widgetWithText(TextButton, 'Submit'));
+      await sellerListingsSettle(tester);
+
+      expect(find.text('Submit for review?'), findsOneWidget);
+      expect(
+        find.text(
+          'An administrator will review this listing. Once submitted you cannot '
+          'change or resubmit it yourself.',
+        ),
+        findsOneWidget,
+      );
+
+      final Finder submitButton = find.byKey(
+        const ValueKey<String>('submit-for-review-confirm'),
+      );
+      final Finder cancelButton = find.byKey(
+        const ValueKey<String>('cancel-submit-for-review'),
+      );
+      expect(submitButton, findsOneWidget);
+      expect(cancelButton, findsOneWidget);
+      expect(
+        tester.getCenter(submitButton).dx,
+        lessThan(tester.getCenter(cancelButton).dx),
+      );
+      expect(
+        tester.getRect(submitButton).height,
+        tester.getRect(cancelButton).height,
+      );
+      expect(
+        tester.getRect(submitButton).width,
+        greaterThan(tester.getRect(cancelButton).width),
+      );
+      expect(tester.takeException(), isNull);
+
+      final int requestCount = harness.recorded.length;
+      await tester.tap(cancelButton);
+      await sellerListingsSettle(tester);
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(harness.recorded.length, requestCount);
+      expect(
+        harness.recorded.where(
+          (RecordedRequest request) =>
+              request.apiPath.endsWith('/submit') && request.method == 'POST',
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets('Submit for review still invokes the existing submission flow', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/1/submit') {
+          return sellerListingResponse(
+            listing: listingJson(
+              id: 1,
+              livestockType: 'Cattle',
+              status: 'pending',
+              photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+            ),
+          );
+        }
+
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(
+              id: 1,
+              livestockType: 'Cattle',
+              status: 'draft',
+              photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+            ),
+          ],
+          total: 1,
+        );
+      },
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, 'Submit'));
+    await sellerListingsSettle(tester);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('submit-for-review-confirm')),
+    );
+    await sellerListingsSettle(tester);
+
+    expect(
+      harness.recorded.where(
+        (RecordedRequest request) =>
+            request.method == 'POST' &&
+            request.apiPath == '/seller/listings/1/submit',
+      ),
+      hasLength(1),
+    );
+    expect(find.text('Pending review'), findsWidgets);
   });
 
   testWidgets('the detail screen blocks submit for a draft without photos', (
@@ -181,7 +367,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Cattle'));
+    await tester.tap(find.textContaining('Cattle').first);
     await sellerListingsSettle(tester);
 
     expect(find.text(listingPhotoRequirementMessage), findsOneWidget);
@@ -204,7 +390,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Mark as sold'), findsOneWidget);
+    expect(find.text('Mark sold'), findsOneWidget);
   });
 
   testWidgets('a pending listing does not offer Mark as sold', (
@@ -220,7 +406,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Mark as sold'), findsNothing);
+    expect(find.text('Mark sold'), findsNothing);
   });
 
   testWidgets('confirming Mark as sold shows sold status', (
@@ -243,7 +429,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.text('Mark as sold'));
+    await tester.tap(find.text('Mark sold'));
     await sellerListingsSettle(tester);
 
     // Confirmation dialog appears.

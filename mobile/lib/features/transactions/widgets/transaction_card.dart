@@ -5,6 +5,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
 import '../../../models/transaction.dart';
+import '../../../widgets/livestock_type_icon.dart';
 import 'transaction_status_badge.dart';
 
 /// One transaction in My Purchases or My Sales.
@@ -45,71 +46,84 @@ class TransactionCard extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              _Thumbnail(photoUrl: photoUrl),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    // Reference and date in one compact secondary row: they
-                    // identify the record without competing with the title.
-                    Row(
+              Row(
+                children: <Widget>[
+                  _Thumbnail(
+                    photoUrl: photoUrl,
+                    type: transaction.listing.livestockType,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            transaction.displayId,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        Text(
+                          transaction.listing.title,
+                          style: theme.textTheme.titleSmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        if (date.isNotEmpty) ...<Widget>[
-                          const SizedBox(width: AppSpacing.xs),
-                          Text(date, style: theme.textTheme.labelSmall),
-                        ],
+                        Text(
+                          '${transaction.role == TransactionRole.buyer ? 'Seller' : 'Buyer'}: '
+                          '${transaction.counterparty.name}',
+                          style: theme.textTheme.bodySmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        // The reference identifies the record in support
+                        // conversations without competing with the title.
+                        Text(
+                          transaction.displayId,
+                          style: theme.textTheme.labelSmall,
+                        ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(
-                      transaction.listing.title,
-                      style: theme.textTheme.titleSmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    // The label is not decoration: it distinguishes the
-                    // persisted transaction amount from a listing's asking
-                    // price, which this screen never shows.
-                    Text('Agreed price', style: theme.textTheme.labelSmall),
-                    Text(
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  TransactionStatusBadge(status: transaction.status),
+                  // The card opens the existing detail route, so it says so.
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
+                ],
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                child: Divider(height: 1),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: <Widget>[
+                  Expanded(
+                    child: Text(date, style: theme.textTheme.labelMedium),
+                  ),
+                  // The label is not decoration: it distinguishes the
+                  // persisted transaction amount from a listing's asking
+                  // price, which this screen never shows.
+                  Text('Agreed price', style: theme.textTheme.labelSmall),
+                  const SizedBox(width: AppSpacing.xs),
+                  Flexible(
+                    child: Text(
                       AppFormatters.formatMoney(transaction.totalAmount) ??
                           transaction.totalAmount,
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w700,
+                        fontFeatures: const <FontFeature>[
+                          FontFeature.tabularFigures(),
+                        ],
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    TransactionStatusBadge(status: transaction.status),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xxs),
-              // The card opens the existing detail route, so it says so.
-              const Padding(
-                padding: EdgeInsets.only(top: AppSpacing.xxs),
-                child: Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: AppColors.textSecondary,
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -119,32 +133,31 @@ class TransactionCard extends StatelessWidget {
   }
 }
 
-/// A small square thumbnail, or an honest placeholder.
-///
-/// Draws a network image only when the stored value is already an absolute
-/// `http`/`https` URL. Anything else gets a neutral placeholder — inventing
-/// a base URL would fabricate a storage mechanism that does not exist.
 class _Thumbnail extends StatelessWidget {
-  const _Thumbnail({required this.photoUrl});
+  const _Thumbnail({required this.photoUrl, required this.type});
 
   final String? photoUrl;
 
+  /// The livestock type, drawn as a silhouette when there is no photo.
+  final String type;
+
   @override
   Widget build(BuildContext context) {
-    const double size = 72;
+    const double size = 56;
 
     final Widget placeholder = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: AppColors.background,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        color: AppColors.primarySurface,
+        borderRadius: BorderRadius.circular(AppRadius.sm - 2),
       ),
-      child: const Icon(
-        Icons.image_not_supported_outlined,
-        size: 22,
-        color: AppColors.textSecondary,
+      child: Center(
+        child: LivestockTypeIcon(
+          type: type,
+          size: 26,
+          color: AppColors.primary.withValues(alpha: 0.6),
+        ),
       ),
     );
 
@@ -154,7 +167,7 @@ class _Thumbnail extends StatelessWidget {
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(AppRadius.sm - 2),
       child: Image.network(
         url.trim(),
         width: size,

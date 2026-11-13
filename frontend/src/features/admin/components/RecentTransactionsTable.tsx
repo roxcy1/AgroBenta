@@ -1,11 +1,14 @@
 import type { DashboardRecentTransaction } from '../api/useDashboard';
 import { formatCurrency, formatDate } from './dashboardFormat';
+import { StatusBadge } from './StatusBadge';
+import { livestockTypeLabel, useLivestockTypes } from '../livestock/api/useLivestockTypes';
 
 interface RecentTransactionsTableProps {
   transactions: DashboardRecentTransaction[];
 }
 
 export function RecentTransactionsTable({ transactions }: RecentTransactionsTableProps) {
+  const { data: livestockTypes } = useLivestockTypes();
   if (transactions.length === 0) {
     return (
       <div className="dashboard-empty-state">
@@ -36,14 +39,12 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
               <td className="lv-seller-cell">{transaction.seller?.name ?? '—'}</td>
               <td>
                 {transaction.listing
-                  ? `${transaction.listing.livestock_type} / ${transaction.listing.breed}`
+                  ? `${livestockTypeLabel(transaction.listing.livestock_type, livestockTypes)} / ${transaction.listing.breed}`
                   : '—'}
               </td>
               <td className="lv-price-cell">{formatCurrency(transaction.total_amount)}</td>
               <td>
-                <span className={`lv-badge lv-badge--${transaction.status}`}>
-                  {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-                </span>
+                <StatusBadge status={transaction.status} />
               </td>
               <td className="lv-date-cell">{formatDate(transaction.created_at)}</td>
             </tr>

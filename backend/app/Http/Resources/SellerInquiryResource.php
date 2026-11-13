@@ -29,16 +29,26 @@ class SellerInquiryResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // The accessor is read once: `reset()` takes its argument by
+        // reference, so `reset($model->photos)` fails on the overloaded
+        // property. Same rule in every resource that reads a photo.
+        $listing = $this->listing;
+        $photos = $listing?->photos;
+
         return [
             'id' => $this->id,
             'buyer' => $this->buyer ? [
                 'id' => $this->buyer->id,
                 'name' => $this->buyer->name,
             ] : null,
-            'listing' => $this->listing ? [
-                'id' => $this->listing->id,
-                'livestock_type' => $this->listing->livestock_type,
-                'breed' => $this->listing->breed,
+            'listing' => $listing ? [
+                'id' => $listing->id,
+                'livestock_type' => $listing->livestock_type,
+                'breed' => $listing->breed,
+                'asking_price' => $listing->asking_price,
+                'photo_url' => is_array($photos) && $photos !== []
+                    ? (string) reset($photos)
+                    : null,
             ] : null,
             'subject' => $this->subject,
             'message' => $this->message,
@@ -48,7 +58,36 @@ class SellerInquiryResource extends JsonResource
             'delivery_fee' => $this->delivery_fee,
             'contact_method' => $this->contact_method?->value,
             'preferred_schedule' => $this->preferred_schedule?->toDateString(),
+            'collection_date_option' => $this->collection_date_option,
+            'payment_method' => $this->payment_method?->value,
+            'collection_method' => $this->collection_method?->value,
             'created_at' => $this->created_at?->toISOString(),
+            // The server owns the rule, so the client only renders it: an
+            // offer is allowed while the inquiry is open, nothing is pending
+            // and nothing has been accepted (acceptance is permanent).
+            'can_make_offer' => $this->canMakeOffer(),
         ];
+    }
+
+    /**
+     * Whether this inquiry may still receive an offer from its seller.
+     */
+    private function canMakeOffer(): bool
+    {
+        $status = $this->status?->value;
+
+        if ($status !== 'open') {
+            return false;
+        }
+
+        $offers = $this->relationLoaded('offers') ? $this->offers : collect();
+
+        return ! $offers->contains(
+            fn ($offer): bool => in_array(
+                $offer->status?->value,
+                ['pending', 'accepted'],
+                true,
+            ),
+        );
     }
 }

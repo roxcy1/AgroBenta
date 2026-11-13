@@ -12,8 +12,8 @@ import '../../../widgets/section_card.dart';
 
 /// The "Uploaded Documents" section of the status screen (doc 06).
 ///
-/// Lists the two required documents and whether each is on file, read from the
-/// record's `has_id_document` / `has_selfie` flags — never from a path or URL,
+/// Lists the required documents and whether each is on file, read from the
+/// record's `has_*` flags, plus any farm photos — never from a path or URL,
 /// which the mobile resource does not expose. Each document that is on file
 /// offers a secure `View`, which streams the bytes through the authenticated
 /// endpoint; nothing here is a public URL.
@@ -32,15 +32,34 @@ class SellerVerificationDocumentsSection extends StatelessWidget {
       children: <Widget>[
         _DocumentRow(
           label: 'Government-Issued ID',
-          type: VerificationDocumentType.idDocument,
+          fetch: (SellerVerificationRepository repository) =>
+              repository.fetchDocument(VerificationDocumentType.idDocument),
           present: verification.hasIdDocument,
         ),
         const SizedBox(height: AppSpacing.xs),
         _DocumentRow(
+          label: 'Proof of Address',
+          fetch: (SellerVerificationRepository repository) =>
+              repository.fetchDocument(VerificationDocumentType.proofOfAddress),
+          present: verification.hasProofOfAddress,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        _DocumentRow(
           label: 'Selfie Holding ID',
-          type: VerificationDocumentType.selfie,
+          fetch: (SellerVerificationRepository repository) =>
+              repository.fetchDocument(VerificationDocumentType.selfie),
           present: verification.hasSelfie,
         ),
+        for (final (int index, String photoId)
+            in verification.farmPhotoIds.indexed) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          _DocumentRow(
+            label: 'Farm Photo ${index + 1}',
+            fetch: (SellerVerificationRepository repository) =>
+                repository.fetchFarmPhoto(photoId),
+            present: true,
+          ),
+        ],
       ],
     );
   }
@@ -49,12 +68,12 @@ class SellerVerificationDocumentsSection extends StatelessWidget {
 class _DocumentRow extends StatelessWidget {
   const _DocumentRow({
     required this.label,
-    required this.type,
+    required this.fetch,
     required this.present,
   });
 
   final String label;
-  final VerificationDocumentType type;
+  final Future<Uint8List?> Function(SellerVerificationRepository) fetch;
   final bool present;
 
   @override
@@ -103,7 +122,7 @@ class _DocumentRow extends StatelessWidget {
       barrierDismissible: true,
       builder: (BuildContext context) => _DocumentDialog(
         label: label,
-        future: repository.fetchDocument(type),
+        future: fetch(repository),
       ),
     );
   }
@@ -154,52 +173,54 @@ class _DocumentDialogState extends State<_DocumentDialog> {
             Flexible(
               child: FutureBuilder<Uint8List?>(
                 future: _future,
-                builder: (
-                  BuildContext context,
-                  AsyncSnapshot<Uint8List?> snapshot,
-                ) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Padding(
-                      padding: EdgeInsets.all(AppSpacing.xxl),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
+                builder:
+                    (BuildContext context, AsyncSnapshot<Uint8List?> snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Padding(
+                          padding: EdgeInsets.all(AppSpacing.xxl),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
 
-                  if (snapshot.hasError) {
-                    final Object error = snapshot.error!;
-                    final String message = error is ApiException
-                        ? error.message
-                        : 'Could not load this document.';
-                    return _DialogMessage(
-                      icon: Icons.cloud_off_outlined,
-                      message: message,
-                    );
-                  }
+                      if (snapshot.hasError) {
+                        final Object error = snapshot.error!;
+                        final String message = error is ApiException
+                            ? error.message
+                            : 'Could not load this document.';
+                        return _DialogMessage(
+                          icon: Icons.cloud_off_outlined,
+                          message: message,
+                        );
+                      }
 
-                  final Uint8List? bytes = snapshot.data;
-                  if (bytes == null || bytes.isEmpty) {
-                    // A `null` here is the repository's translation of a 404:
-                    // the record claimed a document but none is stored. Report
-                    // it honestly rather than showing a broken image.
-                    return _DialogMessage(
-                      icon: Icons.image_not_supported_outlined,
-                      message: 'This document is not available.',
-                    );
-                  }
+                      final Uint8List? bytes = snapshot.data;
+                      if (bytes == null || bytes.isEmpty) {
+                        // A `null` here is the repository's translation of a 404:
+                        // the record claimed a document but none is stored. Report
+                        // it honestly rather than showing a broken image.
+                        return _DialogMessage(
+                          icon: Icons.image_not_supported_outlined,
+                          message: 'This document is not available.',
+                        );
+                      }
 
-                  return InteractiveViewer(
-                    child: Image.memory(
-                      bytes,
-                      fit: BoxFit.contain,
-                      errorBuilder:
-                          (BuildContext context, Object error, StackTrace? _) =>
-                              const _DialogMessage(
+                      return InteractiveViewer(
+                        child: Image.memory(
+                          bytes,
+                          fit: BoxFit.contain,
+                          errorBuilder:
+                              (
+                                BuildContext context,
+                                Object error,
+                                StackTrace? _,
+                              ) => const _DialogMessage(
                                 icon: Icons.image_not_supported_outlined,
-                                message: 'This document could not be displayed.',
+                                message:
+                                    'This document could not be displayed.',
                               ),
-                    ),
-                  );
-                },
+                        ),
+                      );
+                    },
               ),
             ),
           ],

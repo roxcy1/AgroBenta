@@ -2,13 +2,22 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
 import { useListing, useListingCounts, useListings } from '../api/useListings';
+import {
+  listingTypeOptions,
+  livestockTypeLabel,
+  requestLivestockTypesRefetch,
+  useLivestockTypes,
+} from '../api/useLivestockTypes';
 import type { Listing } from '../api/useListings';
 import ListingDetailsDialog from './ListingDetailsDialog';
 import { ListingPhotoThumb } from './ListingPhotos';
 import ListingReviewDialog from './ListingReviewDialog';
 import ListingStatsCards from './ListingStatsCards';
 import type { ModerationOption } from './listingModeration';
-import { moderationOptionsFor, statusLabel } from './listingModeration';
+import { moderationOptionsFor } from './listingModeration';
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDate, formatPeso } from '../../../../lib/format';
+import { emptyListMessage } from '../../../../lib/emptyState';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -18,33 +27,6 @@ const STATUS_OPTIONS = [
   { value: 'sold', label: 'Sold' },
   { value: 'inactive', label: 'Inactive' },
 ] as const;
-
-const LIVESTOCK_OPTIONS = [
-  { value: '', label: 'All Types' },
-  { value: 'cattle', label: 'Cattle' },
-  { value: 'carabao', label: 'Carabao' },
-  { value: 'goat', label: 'Goat' },
-  { value: 'pig', label: 'Pig' },
-  { value: 'chicken', label: 'Chicken' },
-  { value: 'duck', label: 'Duck' },
-  { value: 'horse', label: 'Horse' },
-  { value: 'sheep', label: 'Sheep' },
-] as const;
-
-function formatCurrency(value: string): string {
-  const num = parseFloat(value);
-  if (isNaN(num)) return '₱0';
-  return `₱${num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 export function ListingsTab() {
   const [search, setSearch] = useState('');
@@ -70,6 +52,13 @@ export function ListingsTab() {
   });
 
   const { data: counts } = useListingCounts();
+  const {
+    data: livestockTypes,
+    isLoading: areLivestockTypesLoading,
+    isFetching: areLivestockTypesFetching,
+    isError: livestockTypesFailed,
+    refetch: refetchLivestockTypes,
+  } = useLivestockTypes();
   const { data: linkedListing, isError: linkedListingFailed } = useListing(linkedListingId);
 
   // A deep link opens the listing it names even when that row is not on the
@@ -167,6 +156,7 @@ export function ListingsTab() {
                   <input
                     type="text"
                     className="lv-search-input"
+                    aria-label="Search listings"
                     placeholder="Search by type, breed, or location..."
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
@@ -180,18 +170,42 @@ export function ListingsTab() {
                 <div className="lv-filters">
                   <select
                     className="lv-filter-select"
+                    aria-label="Filter by livestock type"
                     value={typeFilter}
                     onChange={(e) => handleTypeChange(e.target.value)}
+                    disabled={areLivestockTypesLoading || areLivestockTypesFetching}
                   >
-                    {LIVESTOCK_OPTIONS.map((opt) => (
+                    {listingTypeOptions(livestockTypes).map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
                   </select>
+                  {areLivestockTypesLoading && <span className="lv-filter-status">Loading types...</span>}
+                  {livestockTypesFailed && (
+                    <>
+                      <span className="lv-filter-status">
+                        {areLivestockTypesFetching ? 'Retrying types...' : 'Types unavailable'}
+                      </span>
+                      <button
+                        type="button"
+                        className="lv-retry-button"
+                        disabled={areLivestockTypesFetching}
+                        onClick={() =>
+                          requestLivestockTypesRefetch(
+                            areLivestockTypesFetching,
+                            refetchLivestockTypes,
+                          )
+                        }
+                      >
+                        {areLivestockTypesFetching ? 'Retrying...' : 'Retry'}
+                      </button>
+                    </>
+                  )}
 
                   <select
                     className="lv-filter-select"
+                    aria-label="Filter by status"
                     value={statusFilter}
                     onChange={(e) => handleStatusChange(e.target.value)}
                   >
@@ -220,12 +234,12 @@ export function ListingsTab() {
 
             {listings.length === 0 ? (
               <div className="lv-empty">
-                <p>No livestock listings found.</p>
+                <p>{emptyListMessage('livestock listings', Boolean(search || statusFilter || typeFilter))}</p>
               </div>
             ) : (
               <>
                 <div className="lv-table-container">
-                  <table className="lv-table">
+                  <table className="lv-table lv-table--listings">
                     <thead>
                       <tr>
                         <th>Photo</th>
@@ -246,23 +260,23 @@ export function ListingsTab() {
                           key={listing.id}
                           className="lv-listings-row"
                           tabIndex={0}
-                          aria-label={`View details for ${listing.livestock_type} listing`}
+                          aria-label={`View details for ${livestockTypeLabel(listing.livestock_type, livestockTypes)} listing`}
                           onClick={() => setDetails(listing)}
                           onKeyDown={(event) => handleRowKeyDown(event, listing)}
                         >
                           <td className="lv-photo-cell">
                             <ListingPhotoThumb url={listing.photos[0]} />
                           </td>
-                          <td className="lv-name-cell">{listing.livestock_type}</td>
-                          <td>{listing.breed}</td>
+                          <td className="lv-name-cell" title={livestockTypeLabel(listing.livestock_type, livestockTypes)}>
+                            {livestockTypeLabel(listing.livestock_type, livestockTypes)}
+                          </td>
+                          <td title={listing.breed}>{listing.breed}</td>
                           <td>{listing.quantity}</td>
-                          <td className="lv-price-cell">{formatCurrency(listing.asking_price)}</td>
-                          <td>{listing.location}</td>
-                          <td className="lv-seller-cell">{listing.seller.name}</td>
+                          <td className="lv-price-cell">{formatPeso(listing.asking_price)}</td>
+                          <td title={listing.location}>{listing.location}</td>
+                          <td className="lv-seller-cell" title={listing.seller.name}>{listing.seller.name}</td>
                           <td>
-                            <span className={`lv-badge lv-badge--${listing.status}`}>
-                              {statusLabel(listing.status)}
-                            </span>
+                            <StatusBadge status={listing.status} />
                           </td>
                           <td>{formatDate(listing.created_at)}</td>
                           <td>
@@ -328,13 +342,18 @@ export function ListingsTab() {
           // error-prone than an effect that clears them after the fact.
           key={`${decision.listing.id}-${decision.option.action}`}
           listing={decision.listing}
+          livestockTypes={livestockTypes ?? []}
           option={decision.option}
           onClose={() => setDecision(null)}
         />
       )}
 
       {activeDetails && (
-        <ListingDetailsDialog listing={activeDetails} onClose={handleCloseDetails} />
+        <ListingDetailsDialog
+          listing={activeDetails}
+          livestockTypes={livestockTypes ?? []}
+          onClose={handleCloseDetails}
+        />
       )}
     </>
   );

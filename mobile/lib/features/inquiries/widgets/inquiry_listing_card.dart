@@ -7,7 +7,7 @@ import '../../../models/listing.dart';
 import '../../marketplace/widgets/listing_photo.dart';
 
 /// The selected listing at the top of the inquiry flow: photo, title, price,
-/// location, and the attributes the API actually supplied.
+/// seller name, location, and the attributes the API actually supplied.
 ///
 /// Shared by the Inquire form and the Inquiry Sent confirmation so both show
 /// the identical summary of the same [Listing] instance — no field is
@@ -56,6 +56,27 @@ class InquiryListingCard extends StatelessWidget {
                       color: AppColors.primary,
                     ),
                   ),
+                  if (listing.seller.name.trim().isNotEmpty) ...<Widget>[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Row(
+                      children: <Widget>[
+                        const Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: AppSpacing.xxs),
+                        Expanded(
+                          child: Text(
+                            listing.seller.name,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   if (attributes.isNotEmpty) ...<Widget>[
                     const SizedBox(height: AppSpacing.xxs),
                     Text(

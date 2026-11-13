@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/features/auth/view/register_screen.dart';
@@ -384,6 +385,48 @@ void main() {
   });
 
   group('sign out', () {
+    testWidgets('logout removes protected routes from the back stack', (
+      WidgetTester tester,
+    ) async {
+      tokenStore.token = 'stored-token';
+      final AuthTestHarness harness = await AuthTestHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (RecordedRequest entry) async =>
+            entry.apiPath == '/auth/logout'
+            ? http.Response(
+                jsonEncode(<String, dynamic>{
+                  'success': true,
+                  'message': 'Logged out.',
+                }),
+                200,
+              )
+            : http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      );
+
+      final BuildContext home = tester.element(find.byType(BuyerHomeScreen));
+      unawaited(
+        Navigator.of(home).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Protected detail')),
+          ),
+        ),
+      );
+      await settleAuth(tester);
+      expect(find.text('Protected detail'), findsOneWidget);
+
+      await harness.controller.signOut();
+      await settleAuth(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SignInScreen), findsOneWidget);
+      expect(find.text('Protected detail'), findsNothing);
+      expect(
+        tester.state<NavigatorState>(find.byType(Navigator).first).canPop(),
+        isFalse,
+      );
+    });
+
     testWidgets('revokes the session and returns to the form', (
       WidgetTester tester,
     ) async {

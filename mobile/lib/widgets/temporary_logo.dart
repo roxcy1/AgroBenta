@@ -12,7 +12,7 @@ class TemporaryLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'AgroBenta logo',
+      label: 'AgroBenta',
       image: true,
       child: ExcludeSemantics(
         child: Image.asset(

@@ -118,15 +118,8 @@ export function verificationActionsFor(status: string): readonly VerificationAct
 }
 
 
-export function statusLabel(status: string): string {
-  const known = VERIFICATION_TABS.find((tab) => tab.value === status);
-
-  if (known) {
-    return known.label;
-  }
-
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
+/** The name shown for a status. One source for every page: `src/lib/status.ts`. */
+export { statusLabel } from '../../../../lib/status';
 
 /**
  * How often the verification views re-read themselves while nothing is being

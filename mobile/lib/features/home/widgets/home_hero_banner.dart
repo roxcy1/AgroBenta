@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../widgets/rolling_hills_painter.dart';
 
 /// The Home screen's hero banner.
 ///
@@ -30,11 +29,14 @@ class HomeHeroBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenGutter),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 160),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.xl),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.primarySurface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.border),
+          ),
           child: Stack(
             children: <Widget>[
-              const Positioned.fill(child: CustomPaint(painter: RollingHillsPainter())),
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
@@ -53,16 +55,25 @@ class HomeHeroBanner extends StatelessWidget {
                       constraints: const BoxConstraints(maxWidth: 320),
                       child: Text(
                         'Connect with trusted sellers and grow your '
-                            'opportunities.',
+                        'opportunities.',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.primaryDark,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ),
                     if (onExplore != null) ...<Widget>[
                       const SizedBox(height: AppSpacing.sm),
+                      // Compact, as in the approved design: the banner is
+                      // an invitation, not the screen's main action.
                       FilledButton(
                         onPressed: onExplore,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 36),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                          ),
+                          tapTargetSize: MaterialTapTargetSize.padded,
+                        ),
                         child: const Text('Explore Now'),
                       ),
                     ],

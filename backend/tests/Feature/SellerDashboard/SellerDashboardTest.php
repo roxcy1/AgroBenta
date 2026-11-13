@@ -162,11 +162,22 @@ class SellerDashboardTest extends TestCase
         $foreignListing = $this->createListing($this->otherSeller, ['status' => ListingStatus::Active]);
         $this->createListing($this->otherSeller, ['status' => ListingStatus::Sold]);
 
+        // One inquiry per buyer per listing is a database rule, so several
+        // inquiries against one listing come from different buyers.
         $this->createInquiry($this->seller, ['listing' => $ownActive]);
-        $this->createInquiry($this->seller, ['listing' => $ownActive]);
-        $this->createInquiry($this->seller, ['listing' => $ownActive]);
+        $this->createInquiry($this->seller, [
+            'listing' => $ownActive,
+            'buyer_id' => User::factory()->create()->id,
+        ]);
+        $this->createInquiry($this->seller, [
+            'listing' => $ownActive,
+            'buyer_id' => User::factory()->create()->id,
+        ]);
         $this->createInquiry($this->otherSeller, ['listing' => $foreignListing]);
-        $this->createInquiry($this->otherSeller, ['listing' => $foreignListing]);
+        $this->createInquiry($this->otherSeller, [
+            'listing' => $foreignListing,
+            'buyer_id' => User::factory()->create()->id,
+        ]);
 
         $this->createTransaction($ownActive, $this->buyer);
         $this->createTransaction($ownActive, $this->buyer);
@@ -197,10 +208,13 @@ class SellerDashboardTest extends TestCase
                 'inactive' => 1,
             ])
             ->assertJsonPath('data.inquiries', ['total' => 3])
-            ->assertJsonPath('data.transactions', ['total' => 4, 'pending' => 2]);
+            ->assertJsonPath('data.transactions', [
+                'total' => 4,
+                'pending' => 2,
+                'completed' => 1,
+            ]);
 
-        $response->assertJsonMissingPath('data.transactions.completed')
-            ->assertJsonMissingPath('data.transactions.cancelled');
+        $response->assertJsonMissingPath('data.transactions.cancelled');
     }
 
     #[Test]
@@ -218,7 +232,11 @@ class SellerDashboardTest extends TestCase
                 'inactive' => 0,
             ])
             ->assertJsonPath('data.inquiries', ['total' => 0])
-            ->assertJsonPath('data.transactions', ['total' => 0, 'pending' => 0]);
+            ->assertJsonPath('data.transactions', [
+                'total' => 0,
+                'pending' => 0,
+                'completed' => 0,
+            ]);
     }
 
     #[Test]

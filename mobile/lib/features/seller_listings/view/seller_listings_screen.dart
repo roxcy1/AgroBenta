@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_input_border.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
@@ -142,13 +143,36 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
           'change or resubmit it yourself.',
         ),
         actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Submit for review'),
+          Row(
+            children: <Widget>[
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: AppSizes.controlHeight + AppSpacing.xs,
+                  child: FilledButton(
+                    key: const ValueKey<String>('submit-for-review-confirm'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text(
+                      'Submit for review',
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: AppSizes.controlHeight + AppSpacing.xs,
+                  child: OutlinedButton(
+                    key: const ValueKey<String>('cancel-submit-for-review'),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -177,9 +201,7 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.sold,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.sold),
             child: const Text('Mark as sold'),
           ),
         ],
@@ -214,10 +236,7 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
               decoration: InputDecoration(
                 hintText: 'Search your listings',
                 prefixIcon: const Icon(Icons.search, size: 20),
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
+                contentPadding: AppInputs.plainPadding,
                 suffixIcon: ListenableBuilder(
                   listenable: _controller,
                   builder: (BuildContext context, Widget? child) =>
@@ -225,6 +244,7 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                       ? const SizedBox.shrink()
                       : IconButton(
                           icon: const Icon(Icons.close, size: 18),
+                          visualDensity: VisualDensity.compact,
                           tooltip: 'Clear search',
                           onPressed: () {
                             _searchField.clear();
@@ -270,50 +290,56 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                 ),
               ],
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _controller.refresh,
-                  child: switch (state.status) {
-                    SellerListingStatus.initial ||
-                    SellerListingStatus.loading =>
-                      const SellerListingsSkeleton(),
-                    // A scroll view even on a full-screen error, so
-                    // pull-to-refresh works there as well as on the list.
-                    SellerListingStatus.failed => ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: <Widget>[
-                        SizedBox(
-                          height: MediaQuery.sizeOf(context).height * 0.5,
-                          child: SellerListingsErrorState(
-                            message:
-                                state.errorMessage ?? 'Something went wrong.',
-                            onRetry: _controller.retry,
-                          ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    child: RefreshIndicator(
+                      onRefresh: _controller.refresh,
+                      child: switch (state.status) {
+                        SellerListingStatus.initial ||
+                        SellerListingStatus.loading =>
+                          const SellerListingsSkeleton(),
+                        // A scroll view even on a full-screen error, so
+                        // pull-to-refresh works there as well as on the list.
+                        SellerListingStatus.failed => ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: <Widget>[
+                            SizedBox(
+                              height: MediaQuery.sizeOf(context).height * 0.5,
+                              child: SellerListingsErrorState(
+                                message:
+                                    state.errorMessage ??
+                                    'Something went wrong.',
+                                onRetry: _controller.retry,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    _ when state.listings.isEmpty => ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: <Widget>[
-                        SizedBox(
-                          height: MediaQuery.sizeOf(context).height * 0.5,
-                          child: SellerListingsEmptyState(
-                            isFiltered: state.hasActiveQuery,
-                            onCreate: _openCreate,
-                            onClear: _controller.clearQuery,
-                          ),
+                        _ when state.listings.isEmpty => ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: <Widget>[
+                            SizedBox(
+                              height: MediaQuery.sizeOf(context).height * 0.5,
+                              child: SellerListingsEmptyState(
+                                isFiltered: state.hasActiveQuery,
+                                onCreate: _openCreate,
+                                onClear: _controller.clearQuery,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                        _ => _ListingList(
+                          state: state,
+                          controller: _controller,
+                          scrollController: _scrollController,
+                          onOpen: _openDetail,
+                          onSubmit: _confirmSubmit,
+                          onMarkSold: _confirmMarkSold,
+                          onDelete: _confirmDelete,
+                        ),
+                      },
                     ),
-                    _ => _ListingList(
-                      state: state,
-                      controller: _controller,
-                      scrollController: _scrollController,
-                      onOpen: _openDetail,
-                      onSubmit: _confirmSubmit,
-                      onMarkSold: _confirmMarkSold,
-                      onDelete: _confirmDelete,
-                    ),
-                  },
+                  ),
                 ),
               ),
             ],
@@ -458,11 +484,13 @@ class _StatusFilterBar extends StatelessWidget {
   final ListingStatus? selected;
   final ValueChanged<ListingStatus?> onSelected;
 
-  static const List<ListingStatus> _filters = <ListingStatus>[
-    ListingStatus.active,
-    ListingStatus.pending,
-    ListingStatus.sold,
+  static const List<ListingStatus?> _filters = <ListingStatus?>[
+    null,
     ListingStatus.draft,
+    ListingStatus.pending,
+    ListingStatus.active,
+    ListingStatus.sold,
+    ListingStatus.inactive,
   ];
 
   @override
@@ -478,9 +506,11 @@ class _StatusFilterBar extends StatelessWidget {
         separatorBuilder: (BuildContext context, int index) =>
             const SizedBox(width: AppSpacing.xs),
         itemBuilder: (BuildContext context, int index) {
-          final ListingStatus status = _filters[index];
+          final ListingStatus? status = _filters[index];
           final bool isSelected = status == selected;
-          final String label = status == ListingStatus.draft
+          final String label = status == null
+              ? 'All'
+              : status == ListingStatus.draft
               ? 'Drafts'
               : listingStatusLabel(status);
 

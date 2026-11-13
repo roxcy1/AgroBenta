@@ -39,7 +39,10 @@ void main() {
       expect(transaction.status, TransactionStatus.completed);
       expect(transaction.listing.id, 9);
       expect(transaction.listing.title, 'Boer');
-      expect(transaction.listing.loadablePhotoUrl, 'https://cdn.example.test/goats.jpg');
+      expect(
+        transaction.listing.loadablePhotoUrl,
+        'https://cdn.example.test/goats.jpg',
+      );
       expect(transaction.counterparty.id, 7);
       expect(transaction.counterparty.name, 'Ana Reyes');
       expect(transaction.counterparty.email, 'ana@example.test');
@@ -86,6 +89,97 @@ void main() {
         () => Transaction.fromJson(transactionJson(role: 'admin')),
         throwsFormatException,
       );
+    });
+
+    test('parses fulfillment status, permitted actions and terms', () {
+      final Transaction transaction = Transaction.fromJson(
+        transactionJson(
+          status: 'pending',
+          fulfillmentStatus: 'ready_for_pickup',
+          permittedActions: <String>['picked_up', 'cancel'],
+          collectionMethod: 'seller_arranged_delivery',
+          pickupDate: '2026-11-20',
+          paymentMethod: 'gcash',
+        ),
+      );
+
+      expect(
+        transaction.fulfillmentStatus,
+        TransactionFulfillmentStatus.readyForPickup,
+      );
+      expect(transaction.permittedActions, <String>['picked_up', 'cancel']);
+      expect(transaction.terms.collectionMethod, 'seller_arranged_delivery');
+      expect(
+        transaction.terms.collectionMethodLabel,
+        'Seller-Arranged Delivery',
+      );
+      expect(transaction.terms.isDelivery, isTrue);
+      expect(transaction.terms.paymentMethod, 'gcash');
+      expect(transaction.terms.pickupDate, isNotNull);
+      expect(transaction.canCancel, isTrue);
+      expect(transaction.canConfirmReceived, isFalse);
+    });
+
+    test('accepts a legacy null fulfillment stage without crashing', () {
+      final Transaction transaction = Transaction.fromJson(
+        transactionJson(
+          status: 'pending',
+          fulfillmentStatus: null,
+          permittedActions: const <String>['cancel'],
+        ),
+      );
+
+      expect(transaction.fulfillmentStatus, isNull);
+      expect(transaction.hasLegacyFulfillment, isTrue);
+      expect(
+        transaction.effectiveFulfillmentStatus,
+        TransactionFulfillmentStatus.confirmed,
+      );
+    });
+
+    test(
+      'keeps an unknown non-null fulfillment stage distinct from legacy',
+      () {
+        final Transaction transaction = Transaction.fromJson(
+          transactionJson(
+            status: 'pending',
+            fulfillmentStatus: 'future_stage',
+            permittedActions: const <String>['preparing'],
+          ),
+        );
+
+        expect(transaction.fulfillmentStatus, isNull);
+        expect(transaction.fulfillmentStatusValue, 'future_stage');
+        expect(transaction.hasUnknownFulfillmentStatus, isTrue);
+        expect(transaction.hasLegacyFulfillment, isFalse);
+        expect(transaction.effectiveFulfillmentStatus, isNull);
+      },
+    );
+
+    test('derives the one next seller action from the server allow-list', () {
+      final Transaction transaction = Transaction.fromJson(
+        transactionJson(
+          role: 'seller',
+          permittedActions: <String>['delivered', 'cancel'],
+        ),
+      );
+
+      expect(
+        transaction.nextSellerAction,
+        TransactionFulfillmentAction.delivered,
+      );
+    });
+
+    test('does not treat an unknown permitted action as a button', () {
+      final Transaction transaction = Transaction.fromJson(
+        transactionJson(
+          permittedActions: const <String>['teleport', 'confirm_received'],
+        ),
+      );
+
+      expect(transaction.permittedActions, contains('teleport'));
+      expect(transaction.nextSellerAction, isNull);
+      expect(transaction.canConfirmReceived, isTrue);
     });
   });
 
@@ -146,10 +240,7 @@ void main() {
         ),
       );
       final TransactionPage empty = TransactionPage.fromJson(
-        transactionPageJson(
-          transactions: <Map<String, dynamic>>[],
-          total: 0,
-        ),
+        transactionPageJson(transactions: <Map<String, dynamic>>[], total: 0),
       );
 
       expect(last.hasMore, isFalse);

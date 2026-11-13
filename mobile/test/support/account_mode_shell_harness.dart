@@ -9,6 +9,8 @@ import 'package:agrobenta_mobile/features/account_mode/view/account_mode_shell.d
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
@@ -17,6 +19,7 @@ import 'package:agrobenta_mobile/features/notifications/state/notifications_cont
 import 'package:agrobenta_mobile/features/notifications/state/notifications_scope.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_controller.dart';
 import 'package:agrobenta_mobile/features/profile/state/profile_scope.dart';
+import 'package:agrobenta_mobile/features/seller_dashboard/state/seller_activity_scope.dart';
 import 'package:agrobenta_mobile/features/seller_dashboard/state/seller_dashboard_scope.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_controller.dart';
 import 'package:agrobenta_mobile/features/seller_listings/state/seller_listing_scope.dart';
@@ -32,6 +35,7 @@ import 'package:http/testing.dart';
 
 import 'auth_fakes.dart';
 import 'inquiry_fakes.dart';
+import 'livestock_type_fakes.dart';
 import 'marketplace_fakes.dart';
 import 'messaging_fakes.dart';
 import 'notification_fakes.dart';
@@ -112,6 +116,8 @@ class AccountModeShellHarness {
           return sellerInquiryListResponse();
         case '/seller/dashboard':
           return sellerDashboardResponse();
+        case '/seller/activities':
+          return sellerActivityResponse();
         case '/listings':
           return marketplaceListResponse(
             listings: <Map<String, dynamic>>[],
@@ -145,6 +151,13 @@ class AccountModeShellHarness {
       marketplaceRepository,
     );
     addTearDown(marketplaceController.dispose);
+
+    final catalogRepository = buildLivestockTypeRepository(tokenStore);
+    final LivestockTypesController catalogController = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalogController.dispose);
+    await catalogController.ensureLoaded();
 
     final ProfileRepository profileRepository = ProfileRepository(
       ProfileService(
@@ -197,6 +210,12 @@ class AccountModeShellHarness {
       recorded: recorded,
     );
 
+    final sellerActivityRepository = buildSellerActivityRepository(
+      tokenStore,
+      transport,
+      recorded: recorded,
+    );
+
     final InquiryRepository inquiryRepository = InquiryRepository(
       InquiryService(
         ApiClient(
@@ -216,28 +235,35 @@ class AccountModeShellHarness {
           child: MarketplaceScope(
             repository: marketplaceRepository,
             controller: marketplaceController,
-            child: SellerListingScope(
-              repository: sellerListingRepository,
-              controller: sellerListingController,
-              child: ProfileScope(
-                repository: profileRepository,
-                controller: profileController,
-                child: TransactionScope(
-                  repository: transactionRepository,
-                  child: MessagingScope(
-                    repository: messagingRepository,
-                    conversationsController: conversationsController,
-                    child: NotificationsScope(
-                      repository: notificationRepository,
-                      controller: notificationsController,
-                      child: InquiryScope(
-                        repository: inquiryRepository,
-                        child: SellerDashboardScope(
-                          repository: sellerDashboardRepository,
-                          child: NeverSubmittedVerificationScope(
-                            child: MaterialApp(
-                              theme: AppTheme.light(),
-                              home: const AccountModeShell(),
+            child: LivestockTypesScope(
+              repository: catalogRepository,
+              controller: catalogController,
+              child: SellerListingScope(
+                repository: sellerListingRepository,
+                controller: sellerListingController,
+                child: ProfileScope(
+                  repository: profileRepository,
+                  controller: profileController,
+                  child: TransactionScope(
+                    repository: transactionRepository,
+                    child: MessagingScope(
+                      repository: messagingRepository,
+                      conversationsController: conversationsController,
+                      child: NotificationsScope(
+                        repository: notificationRepository,
+                        controller: notificationsController,
+                        child: InquiryScope(
+                          repository: inquiryRepository,
+                          child: SellerDashboardScope(
+                            repository: sellerDashboardRepository,
+                            child: SellerActivityScope(
+                              repository: sellerActivityRepository,
+                              child: NeverSubmittedVerificationScope(
+                                child: MaterialApp(
+                                  theme: AppTheme.light(),
+                                  home: const AccountModeShell(),
+                                ),
+                              ),
                             ),
                           ),
                         ),

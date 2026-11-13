@@ -35,4 +35,52 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Private price-prediction service
+    |--------------------------------------------------------------------------
+    |
+    | Laravel depends only on the versioned HTTP contract. It never reads a
+    | model filename or CatBoost internals.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Google Sign-In (mobile)
+    |--------------------------------------------------------------------------
+    |
+    | The OAuth "Web application" client ID the mobile app passes as its
+    | `serverClientId`. ID tokens must carry it as their audience. No client
+    | secret is needed to verify an ID token, so none is configured here.
+    |
+    */
+
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Firebase Cloud Messaging (mobile push notifications)
+    |--------------------------------------------------------------------------
+    |
+    | The path to the Firebase service account JSON key, absolute or relative
+    | to the backend folder. The key is a secret: keep it out of git (the
+    | storage/app folder is ignored). When it is empty, push is off and
+    | notifications are still stored and shown in the app.
+    |
+    */
+
+    'fcm' => [
+        'credentials' => env('FCM_CREDENTIALS'),
+    ],
+
+    'price_prediction' => [
+        'url' => env('PRICE_PREDICTION_URL', 'http://ml-service:8002'),
+        'connect_timeout' => (int) env('PRICE_PREDICTION_CONNECT_TIMEOUT', 2),
+        'timeout' => (int) env('PRICE_PREDICTION_TIMEOUT', 5),
+        'contract_version' => env('PRICE_PREDICTION_CONTRACT_VERSION', '1.0'),
+    ],
+
 ];

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { CheckCircle2, Clock3, FileText, XCircle } from 'lucide-react';
 import { parsePositiveInt } from '../../../../lib/queryParams';
 import type { SellerVerification } from '../api/useSellerVerifications';
 import {
@@ -10,22 +11,13 @@ import type { VerificationActionConfig, VerificationStatus } from './verificatio
 import {
   VERIFICATION_TABS,
   resolveStatusTab,
-  statusLabel,
   verificationActionsFor,
 } from './verificationModeration';
 import VerificationDetailsDialog from './VerificationDetailsDialog';
 import VerificationReviewDialog from './VerificationReviewDialog';
-
-function formatDate(dateString: string | null): string {
-  if (!dateString) return '\u2014';
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return '\u2014';
-  return date.toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
+import { StatusBadge } from '../../components/StatusBadge';
+import { formatDate } from '../../../../lib/format';
+import { emptyListMessage } from '../../../../lib/emptyState';
 
 export function SellerVerificationTab() {
   const [searchParams] = useSearchParams();
@@ -103,6 +95,12 @@ export function SellerVerificationTab() {
         {VERIFICATION_TABS.map((tab) => {
           const isActive = tab.value === activeStatus;
           const count = counts?.[tab.value];
+          const StatusIcon = {
+            submitted: FileText,
+            pending_review: Clock3,
+            approved: CheckCircle2,
+            rejected: XCircle,
+          }[tab.value];
 
           return (
             <button
@@ -110,11 +108,19 @@ export function SellerVerificationTab() {
               type="button"
               role="tab"
               aria-selected={isActive}
-              className={`lv-tab${isActive ? ' lv-tab--active' : ''}`}
+              aria-label={`${tab.label}: ${count ?? 'count loading'}`}
+              className={`lv-tab verification-status-card verification-status-card--${tab.value}${isActive ? ' lv-tab--active' : ''}`}
               onClick={() => handleTabSelect(tab.value)}
             >
-              {tab.label}
-              {count !== undefined && <span className="lv-tab-count">{count}</span>}
+              <span className="verification-status-card__icon" aria-hidden="true">
+                <StatusIcon />
+              </span>
+              <span className="verification-status-card__copy">
+                <span className="verification-status-card__count" aria-hidden="true">
+                  {count ?? '—'}
+                </span>
+                <span className="verification-status-card__label">{tab.label}</span>
+              </span>
             </button>
           );
         })}
@@ -126,6 +132,7 @@ export function SellerVerificationTab() {
             <input
               type="text"
               className="lv-search-input"
+              aria-label="Search verification requests"
               placeholder="Search by applicant name, email, or business..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -152,12 +159,12 @@ export function SellerVerificationTab() {
         </div>
       ) : verifications.length === 0 ? (
         <div className="lv-empty">
-          <p>No seller verification requests found.</p>
+          <p>{emptyListMessage('seller verification requests', Boolean(search))}</p>
         </div>
       ) : (
         <>
           <div className="lv-table-container">
-            <table className="lv-table">
+            <table className="lv-table lv-table--verification">
               <thead>
                 <tr>
                   <th>Applicant</th>
@@ -179,13 +186,15 @@ export function SellerVerificationTab() {
                     onClick={() => setDetailsId(verification.id)}
                     onKeyDown={(event) => handleRowKeyDown(event, verification)}
                   >
-                    <td className="lv-name-cell">{verification.seller?.name ?? '\u2014'}</td>
-                    <td>{verification.business_name}</td>
-                    <td>{verification.business_location ?? '\u2014'}</td>
+                    <td className="lv-name-cell" title={verification.seller?.name ?? '\u2014'}>
+                      {verification.seller?.name ?? '\u2014'}
+                    </td>
+                    <td title={verification.business_name ?? '—'}>{verification.business_name ?? '—'}</td>
+                    <td title={verification.business_location ?? '\u2014'}>
+                      {verification.business_location ?? '\u2014'}
+                    </td>
                     <td>
-                      <span className={`lv-badge lv-badge--${verification.status}`}>
-                        {statusLabel(verification.status)}
-                      </span>
+                      <StatusBadge status={verification.status} />
                     </td>
                     <td className="lv-date-cell">{formatDate(verification.submitted_at)}</td>
                     <td className="lv-date-cell">{formatDate(verification.reviewed_at)}</td>

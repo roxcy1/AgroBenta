@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
 import '../widgets/auth_scenic_header.dart';
+import '../widgets/google_sign_in_button.dart';
 import 'auth_validators.dart';
 
 /// `POST /auth/register`.
@@ -27,9 +28,10 @@ import 'auth_validators.dart';
 ///    Terms/Privacy acknowledgement is enforced **client-side only**. It is
 ///    required because the approved design specifies it, but the server neither
 ///    receives nor validates it.
-///  * **Social sign-up** — the backend implements no Google/Facebook OAuth and
-///    no credential exists, so the buttons are rendered disabled rather than
-///    implying a capability that is not there.
+///  * **Social sign-up** — Google only, on Android; Facebook was removed
+///    (project decision, MS-11, 2026-11-10). Google sign-up requires the same
+///    Terms/Privacy consent as the form. The button and its divider are hidden
+///    where Google sign-in is unavailable.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({required this.onSignIn, super.key});
 
@@ -117,6 +119,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  /// Google sign-up needs the same consent as the form, but not its fields.
+  Future<void> _signUpWithGoogle() async {
+    if (!_agreedToTerms) {
+      setState(
+        () => _consentError =
+            'Please agree to the Terms and Privacy Policy to continue.',
+      );
+      return;
+    }
+
+    await AuthScope.of(context).signInWithGoogle();
+  }
+
   void _setConsent(bool value) {
     if (_agreedToTerms == value && _consentError == null) {
       return;
@@ -141,12 +156,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       context,
     ).scale(1).clamp(1.0, 1.8).toDouble();
     final double heroHeight =
-        (MediaQuery.sizeOf(context).height * 0.30 * textScale)
-            .clamp(200.0, 300.0)
+        // Just tall enough for the logo and tagline, so the brand sits close
+        // to the form instead of floating above an empty band.
+        (MediaQuery.sizeOf(context).height * 0.22 * textScale)
+            .clamp(160.0, 240.0)
             .toDouble();
 
     // How far the white panel rides up over the hero's bottom edge.
-    const double overlap = 28;
+    // The form panel sits directly under the white brand band.
+    const double overlap = 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -183,19 +201,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: AppColors.surface),
       child: Center(
         child: ConstrainedBox(
           // A phone is narrower than this, so the constraint only matters on a
@@ -216,6 +222,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   'Create Your Account',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Join AgroBenta as a buyer. You can apply to sell later '
+                  'from your profile.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 if (state.errorMessage != null) ...<Widget>[
@@ -247,16 +262,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         )
                       : const Text('Create Account'),
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                _buildDivider(theme),
-                const SizedBox(height: AppSpacing.lg),
-                _buildSocialRow(),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Social sign-up is not available yet.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
+                if (AuthScope.of(context).isGoogleSignInAvailable) ...<Widget>[
+                  const SizedBox(height: AppSpacing.xl),
+                  _buildDivider(theme),
+                  const SizedBox(height: AppSpacing.lg),
+                  GoogleSignInButton(
+                    onPressed: busy ? null : _signUpWithGoogle,
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 _buildFooter(theme, state),
               ],
@@ -280,8 +293,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             textInputAction: TextInputAction.next,
             autofillHints: const <String>[AutofillHints.name],
             decoration: const InputDecoration(
-              labelText: 'Full Name',
-              prefixIcon: Icon(Icons.person_outline),
+              label: FieldLabel('Full Name', hasPrefixIcon: true),
+              prefixIcon: FieldIcon(Icon(Icons.person_outline)),
             ),
             validator: (String? value) {
               final String local = value?.trim() ?? '';
@@ -301,8 +314,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             autofillHints: const <String>[AutofillHints.email],
             autocorrect: false,
             decoration: const InputDecoration(
-              labelText: 'Email Address',
-              prefixIcon: Icon(Icons.mail_outline),
+              label: FieldLabel('Email Address', hasPrefixIcon: true),
+              prefixIcon: FieldIcon(Icon(Icons.mail_outline)),
             ),
             validator: (String? value) =>
                 validateRequiredEmail(value) ?? state.errorFor('email'),
@@ -314,8 +327,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             textInputAction: TextInputAction.next,
             autofillHints: const <String>[AutofillHints.newPassword],
             decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
+              label: FieldLabel('Password', hasPrefixIcon: true),
+              prefixIcon: const FieldIcon(Icon(Icons.lock_outline)),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscurePassword,
                 onPressed: () =>
@@ -333,12 +346,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             autofillHints: const <String>[AutofillHints.newPassword],
             onFieldSubmitted: (_) => _submit(),
             decoration: InputDecoration(
-              labelText: 'Confirm Password',
-              prefixIcon: const Icon(Icons.lock_outline),
+              label: FieldLabel('Confirm Password', hasPrefixIcon: true),
+              prefixIcon: const FieldIcon(Icon(Icons.lock_outline)),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscureConfirmation,
-                onPressed: () =>
-                    setState(() => _obscureConfirmation = !_obscureConfirmation),
+                onPressed: () => setState(
+                  () => _obscureConfirmation = !_obscureConfirmation,
+                ),
               ),
             ),
             validator: _validateConfirmation,
@@ -360,9 +374,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       children: <Widget>[
         Checkbox(
           value: _agreedToTerms,
-          onChanged: busy
-              ? null
-              : (bool? value) => _setConsent(value ?? false),
+          onChanged: busy ? null : (bool? value) => _setConsent(value ?? false),
         ),
         Expanded(
           child: GestureDetector(
@@ -400,55 +412,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Text('or sign up with', style: theme.textTheme.bodySmall),
         ),
         const Expanded(child: Divider()),
-      ],
-    );
-  }
-
-  Widget _buildSocialRow() {
-    // Disabled, not absent: the buttons are part of the approved layout, but the
-    // backend implements no OAuth. A disabled control states the feature is not
-    // available; a working-looking one would imply it is.
-    //
-    // Each carries its provider's brand mark from Font Awesome. The colours are
-    // the providers' brand identities, not part of the AgroBenta palette, so
-    // they stay local to these two icons rather than entering `AppColors`.
-    return const Row(
-      children: <Widget>[
-        Expanded(
-          child: OutlinedButton(
-            onPressed: null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                FaIcon(
-                  FontAwesomeIcons.google,
-                  size: 18,
-                  color: Color(0xFF4285F4),
-                ),
-                SizedBox(width: AppSpacing.xs),
-                Text('Google'),
-              ],
-            ),
-          ),
-        ),
-        SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: OutlinedButton(
-            onPressed: null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                FaIcon(
-                  FontAwesomeIcons.facebook,
-                  size: 18,
-                  color: Color(0xFF1877F2),
-                ),
-                SizedBox(width: AppSpacing.xs),
-                Text('Facebook'),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -501,12 +464,15 @@ class _PasswordVisibilityToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(
-        visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+    return FieldIcon(
+      IconButton(
+        onPressed: onPressed,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(
+          visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        ),
+        tooltip: visible ? 'Hide password' : 'Show password',
       ),
-      tooltip: visible ? 'Hide password' : 'Show password',
     );
   }
 }
