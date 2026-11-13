@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'personal_information_screen.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -25,7 +26,7 @@ import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
 import 'change_password_screen.dart';
-import 'edit_profile_screen.dart';
+
 
 /// The caller's own profile.
 ///
@@ -60,11 +61,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _openEdit() async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (BuildContext context) => const EditProfileScreen(),
-        fullscreenDialog: true,
+    Future<void> _openEdit() async {
+    // "Personal Information" is a review, not a form. It opens a read-only
+    // screen with an "Edit" action, which is where EditProfileScreen is
+    // reached. EditProfileScreen remains the only place an edit can be saved;
+    // this handler only navigates to the review.
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => const PersonalInformationScreen(),
       ),
     );
   }
