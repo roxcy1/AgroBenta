@@ -1,0 +1,69 @@
+# Production overrides for a single server (see docs/DEPLOYMENT.md).
+#
+# Used together with compose.yaml, never on its own:
+#
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d
+#
+# deploy.sh runs that for you. Compared with development:
+#   - Caddy is the only public entry point (ports 80/443, automatic HTTPS). It
+#     serves the built Admin Web and proxies /api, /broadcasting and /storage
+#     to nginx, and /app (WebSockets) to Reverb.
+#   - nginx, MySQL and Reverb publish no host ports; they are reachable only
+#     on the internal Docker network.
+#   - phpMyAdmin and the Vite dev server are not started.
+#   - The queue worker and Reverb run as www-data, the same user PHP-FPM serves
+#     requests as, so every process can write the shared storage/ folder.
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # The public domain, from the root .env. Caddy requests its certificate.
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN in the root .env}
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The Admin Web build output (deploy.sh runs `npm run build`).
+      - ./frontend/dist:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      nginx:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+    networks:
+      - app_network
+
+  php:
+    restart: unless-stopped
+
+  nginx:
+    restart: unless-stopped
+    ports: !reset []
+
+  mysql:
+    ports: !reset []
+
+  reverb:
+    user: www-data
+    ports: !reset []
+
+  queue:
+    user: www-data
+
+  # Development-only services, kept out of a normal `up`.
+  phpmyadmin:
+    profiles: ["dev-tools"]
+
+  node:
+    profiles: ["dev-tools"]
+    ports: !reset []
+
+volumes:
+  caddy_data:
+  caddy_config:
