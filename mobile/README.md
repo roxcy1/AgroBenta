@@ -123,6 +123,53 @@ Cleartext HTTP is denied by default on Android. Debug builds allow it broadly
 LAN can reach the plain-HTTP Docker stack; `src/main` stays strict and permits
 it only for `10.0.2.2`, `localhost` and `127.0.0.1`. Production must be HTTPS.
 
+## Release builds and app updates
+
+Phones get the app as an APK from the public home page, and later updates from
+**Profile → App Update**, which compares the installed build with
+`GET /api/app-release` and opens the newer APK's download in the browser.
+Android installs it over the old app and keeps the user signed in.
+
+### Signing key
+
+Release builds are signed with the release keystore named in
+`android/key.properties` (gitignored, like the keystore itself):
+
+```properties
+storePassword=...
+keyPassword=...
+keyAlias=agrobenta
+storeFile=C:/path/to/agrobenta-release.jks
+```
+
+**Every published APK must be signed with this same key**, or Android refuses
+to install it as an update and users have to uninstall first. Back up the
+keystore and the passwords somewhere safe outside the repository; losing them
+means no more updates for installed copies. Without `key.properties` the
+release build falls back to the debug key with a Gradle warning; never publish
+such an APK. Google sign-in in a release build also needs this key's SHA-1 on
+the Android OAuth client (see "Google sign-in" above).
+
+### Building and publishing an update
+
+1. Raise `version:` in `pubspec.yaml`. The build number after `+` must go up
+   every release (`1.0.0+1` → `1.0.1+2`); it is what the update check compares.
+2. Build against the live server. `REVERB_APP_KEY` is the server's
+   `backend/.env` value (public, not the secret):
+
+   ```sh
+   flutter build apk --release \
+     --dart-define=API_BASE_URL=https://agrobenta.com/api \
+     --dart-define=REVERB_WS_URL=wss://agrobenta.com \
+     --dart-define=REVERB_APP_KEY=<server REVERB_APP_KEY> \
+     --dart-define=GOOGLE_SERVER_CLIENT_ID=<GOOGLE_CLIENT_ID>
+   ```
+
+3. Publish `build/app/outputs/flutter-apk/app-release.apk` on the server with
+   `php artisan app:publish-release` (`docs/DEPLOYMENT.md`, "Publishing the
+   mobile app"). The home page's Download button and the in-app update check
+   pick it up straight away.
+
 ## Validation
 
 Run all four before reporting work as complete:
