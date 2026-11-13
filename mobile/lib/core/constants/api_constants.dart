@@ -507,6 +507,14 @@ abstract final class DeviceEndpoints {
   static const String register = '/devices';
 }
 
+/// The latest published Android build of this app.
+abstract final class AppReleaseEndpoints {
+  /// `GET` — public. `data` is the release
+  /// (`version_name`, `version_code`, `download_url`, `size_bytes`, `sha256`,
+  /// `notes`, `published_at`) or `null` before one is published.
+  static const String latest = '/app-release';
+}
+
 /// Profile endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` for the

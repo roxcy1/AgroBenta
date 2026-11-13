@@ -12,6 +12,7 @@ import '../../../widgets/trinidad_location_selector.dart';
 import '../../account_mode/state/account_mode.dart';
 import '../../account_mode/state/account_mode_controller.dart';
 import '../../account_mode/state/account_mode_scope.dart';
+import '../../app_update/view/app_update_tile.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../help_center/view/help_center_screen.dart';
 import '../../seller_verification/state/seller_verification_controller.dart';
@@ -906,6 +907,10 @@ class _OtherSection extends StatelessWidget {
                 title: 'Terms and Policies',
                 subtitle: 'View our terms, privacy policy, and guidelines',
                 onTap: onTermsAndPolicies,
+              ),
+              const Divider(height: 1),
+              const AppUpdateTile(
+                leading: _IconTile(icon: Icons.system_update_outlined),
               ),
             ],
           ),

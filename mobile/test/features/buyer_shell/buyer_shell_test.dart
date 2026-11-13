@@ -43,6 +43,7 @@ import '../../support/messaging_fakes.dart';
 import '../../support/notification_fakes.dart';
 import '../../support/seller_verification_app_harness.dart';
 import '../../support/transaction_fakes.dart';
+import '../../support/app_update_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -202,14 +203,16 @@ void main() {
                   // Answered with "never submitted" — this test is about navigation, and
                   // the card must not need a transport to render.
                   child: NeverSubmittedVerificationScope(
-                    child: ProfileScope(
-                      repository: profileRepository,
-                      controller: profileController,
-                      child: TransactionScope(
-                        repository: transactionRepository,
-                        child: MaterialApp(
-                          theme: AppTheme.light(),
-                          home: const BuyerShell(),
+                    child: NoReleaseAppUpdateScope(
+                      child: ProfileScope(
+                        repository: profileRepository,
+                        controller: profileController,
+                        child: TransactionScope(
+                          repository: transactionRepository,
+                          child: MaterialApp(
+                            theme: AppTheme.light(),
+                            home: const BuyerShell(),
+                          ),
                         ),
                       ),
                     ),

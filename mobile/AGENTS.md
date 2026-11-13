@@ -379,6 +379,8 @@ disagree. Signing out, changing accounts or losing capability clears the mode.
 | `google_sign_in` | Android Google sign-in: obtains the ID token sent to `POST /api/auth/google`, behind `GoogleSignInService`. | A WebView OAuth flow, or a client secret in the app. |
 | `firebase_core`, `firebase_messaging` | Android push notifications (MS-15): the FCM registration token sent to `POST /api/devices`, and opening the Notifications screen from a tapped push, behind `PushMessaging` (`lib/core/push/`). Firebase is configured by the committed `android/app/google-services.json` through the Google Services Gradle plugin; no options file is generated. Held on `firebase_messaging` 16.x: 17.0 deprecates the registration-token API the backend's FCM HTTP v1 send targets. This is push only — **not** Firebase Authentication (§C). | `flutter_local_notifications` (a push received in the foreground is not shown; Reverb already updates the open app), or a second messaging SDK. |
 | `google_sign_in_ios` | Not used directly; a version pin only. `google_sign_in`'s iOS implementation is held at `<6.4.0` because 6.4.0 needs Flutter 3.47, above the documented Flutter 3.44.4. Remove the pin when the documented toolchain moves to 3.47+. | — |
+| `package_info_plus` | The installed version and build number for Profile → App Update, behind `InstalledApp` (`lib/core/platform/installed_app.dart`). Flutter has no SDK API for the app's own version. | Hard-coding the version, or a `--dart-define` that can drift from `pubspec.yaml`. |
+| `url_launcher` | Opens the update APK's HTTPS download in the phone's browser, behind `ExternalLinkOpener`; Android's installer takes over from there. Chosen over in-app download + install, which would need `REQUEST_INSTALL_PACKAGES`. | An in-app APK downloader/installer package. |
 | `cupertino_icons` | Scaffold default. Currently unused by app code; remove it if it stays unused when real iOS-styled widgets land. | — |
 
 **Deliberately not added** in M0, and the phase that should justify each:
@@ -544,6 +546,22 @@ refreshed token, deletes the FCM token on sign-out, and opens
 `NotificationsScreen` when a push is tapped — after sign-in if the tap
 launched the app. Only `main()` builds `FirebasePushMessaging`; tests and
 non-Android platforms use `NoopPushMessaging`.
+
+**Resolved for app updates (Android).** One public route, outside the
+`ability:*` groups because the public home page and a signed-out phone read it:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/app-release` | The latest published APK: `version_name`, `version_code`, `download_url` (absolute HTTPS), `size_bytes`, `sha256`, `notes`, `published_at`; `data: null` before one is published. 60 requests a minute. |
+
+Releases are published on the server with `php artisan app:publish-release`
+(`docs/DEPLOYMENT.md`); there is no upload endpoint. Profile → **App Update**
+(`lib/features/app_update/`) shows the installed version, checks when the
+Profile screen opens and on tap, and offers an update only when the server's
+`version_code` is **higher** than the installed build number, the same rule
+Android applies. The update opens the HTTPS download in the browser; a
+non-HTTPS link is never opened. Every release APK must be signed with the same
+release key (`mobile/README.md`, "Release builds and app updates").
 
 **Resolved for password recovery (MS-10).** Two public routes, for a signed-out
 user:

@@ -26,6 +26,7 @@ import '../../support/auth_app_harness.dart';
 import '../../support/auth_fakes.dart';
 import '../../support/seller_verification_app_harness.dart';
 import '../../support/trinidad_location_fakes.dart';
+import '../../support/app_update_fakes.dart';
 
 /// The profile screen, which is where sign-out lives since it left the Home
 /// screen. The auth controller is exercised through the real repository and a
@@ -107,10 +108,12 @@ void main() {
           child: NeverSubmittedVerificationScope(
             child: TrinidadLocationTestScope(
               tokenStore: tokenStore,
-              child: ProfileScope(
-                repository: profileRepository,
-                controller: profileController,
-                child: const MaterialApp(home: ProfileScreen()),
+              child: NoReleaseAppUpdateScope(
+                child: ProfileScope(
+                  repository: profileRepository,
+                  controller: profileController,
+                  child: const MaterialApp(home: ProfileScreen()),
+                ),
               ),
             ),
           ),

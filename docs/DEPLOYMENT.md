@@ -61,6 +61,31 @@ migrates, caches Laravel, builds the Admin Web for `https://SITE_DOMAIN`, and
 restarts the queue worker and Reverb. After changing `backend/.env`, run it
 again (or `artisan optimize`), because the cached config ignores `.env`.
 
+## Publishing the mobile app
+
+The home page's Download button and the app's Profile → App Update read the
+latest release from `GET /api/app-release`. To publish a build (see
+`mobile/README.md`, "Release builds and app updates", for building it):
+
+```sh
+# On your PC: copy the APK to the server.
+scp -i <key.pem> mobile/build/app/outputs/flutter-apk/app-release.apk ubuntu@<server>:/tmp/
+
+# On the server: hand it to Laravel and publish it.
+cd ~/AgroBenta
+C="docker compose -f compose.yaml -f compose.prod.yaml"
+$C cp /tmp/app-release.apk php:/tmp/app-release.apk
+$C exec -u www-data php php artisan app:publish-release /tmp/app-release.apk \
+    --version-name=1.0.1 --version-code=2 --notes="What changed, in one line."
+$C exec php rm /tmp/app-release.apk && rm /tmp/app-release.apk
+```
+
+The name and code must match `version:` in `mobile/pubspec.yaml` (`1.0.1+2`).
+The command refuses a file that is not an APK and a code that is not higher
+than the current release. The APK is stored in
+`backend/storage/app/public/releases/` and served at
+`https://<domain>/storage/releases/...`; older files are kept for rollback.
+
 ## Cloudflare
 
 Start with the DNS records as **DNS only** (grey cloud) so Caddy can get its

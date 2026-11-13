@@ -55,6 +55,8 @@ dependencies:
   # backend's FCM HTTP v1 send targets, in favour of Firebase Installation IDs.
   firebase_core: ^4.15.2
   firebase_messaging: ^16.7.1
+  package_info_plus: ^10.2.2
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

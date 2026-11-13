@@ -1,3 +1,17 @@
+import java.io.FileInputStream
+import java.util.Properties
+
+// Release signing (mobile/README.md, "Release builds"). `android/key.properties`
+// points at the release keystore and holds its passwords; both are kept out of
+// git. Every published APK must be signed with this same key, or Android
+// refuses to install it as an update over the existing app.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+
 plugins {
     id("com.android.application")
     // Firebase config from google-services.json (push notifications).
@@ -27,11 +41,29 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Without key.properties (a teammate's machine) the release build
+            // falls back to the debug key so `flutter run --release` still
+            // works. Such an APK must never be published: it cannot update an
+            // installed copy.
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("key.properties not found: signing the release build with the DEBUG key. Do not publish this APK.")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
