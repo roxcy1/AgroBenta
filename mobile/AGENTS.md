@@ -473,6 +473,8 @@ client, and not evidence that a browser flow has been verified.
   the response.
 * `AppConfig` resolves web to `http://localhost:8001/api` from `kIsWeb`; it
   deliberately does not trust the browser's user agent.
+* `web/flutter_bootstrap.js` enables Flutter's multi-view embedding mode, and
+  `lib/main.dart` creates and removes an app tree for each embedded view.
 * Photo picking uses `image_picker`, which has web support, and local previews
   read `XFile` bytes through `LocalImagePreview` instead of `Image.file`, so the
   composer does not depend on `dart:io`.
