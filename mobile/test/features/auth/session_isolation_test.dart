@@ -41,11 +41,13 @@ void main() {
         id: 7,
         name: 'Ana Reyes',
         email: 'ana@example.test',
+        location: 'Purok 1, Barangay Banlasan, Trinidad, Bohol',
       );
       final Map<String, dynamic> userB = userJson(
         id: 8,
         name: 'Ben Cruz',
         email: 'ben@example.test',
+        location: 'Purok 2, Barangay San Isidro, Trinidad, Bohol',
       );
 
       http.Response jsonResponse(Object body, {int status = 200}) =>
@@ -139,6 +141,10 @@ void main() {
 
       await _openProfile(tester);
       expect(find.text('Ana Reyes'), findsOneWidget);
+      expect(
+        find.text('Purok 1, Barangay Banlasan, Trinidad, Bohol'),
+        findsOneWidget,
+      );
       await _logout(tester);
       expect(find.byType(SignInScreen), findsOneWidget);
       expect(tokenStore.token, isNull);
@@ -149,6 +155,14 @@ void main() {
       await _openProfile(tester);
       expect(find.text('Ben Cruz'), findsOneWidget);
       expect(find.text('Ana Reyes'), findsNothing);
+      expect(
+        find.text('Purok 2, Barangay San Isidro, Trinidad, Bohol'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Purok 1, Barangay Banlasan, Trinidad, Bohol'),
+        findsNothing,
+      );
 
       // A's old request completes only after B has logged in and loaded their
       // inbox. Its controller was disposed at the session boundary.

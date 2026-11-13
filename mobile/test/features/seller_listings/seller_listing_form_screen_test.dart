@@ -11,6 +11,7 @@ import 'package:agrobenta_mobile/features/seller_listings/view/seller_listing_fo
 import 'package:agrobenta_mobile/models/listing.dart';
 import 'package:agrobenta_mobile/repositories/seller_listing_repository.dart';
 import 'package:agrobenta_mobile/widgets/local_image_preview.dart';
+import 'package:agrobenta_mobile/widgets/trinidad_location_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -139,10 +140,7 @@ void main() {
     matching: find.byType(DropdownButtonFormField<String>),
   );
 
-  Finder locationBarangayDropdown() => find.ancestor(
-    of: find.text('Barangay'),
-    matching: find.byType(DropdownButtonFormField<String>),
-  );
+  Finder locationBarangayDropdown() => find.byKey(trinidadBarangayFieldKey);
 
   Finder genderDropdown() => find.ancestor(
     of: find.text('Gender'),

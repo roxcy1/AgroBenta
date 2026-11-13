@@ -60,6 +60,22 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Firebase Cloud Messaging (mobile push notifications)
+    |--------------------------------------------------------------------------
+    |
+    | The path to the Firebase service account JSON key, absolute or relative
+    | to the backend folder. The key is a secret: keep it out of git (the
+    | storage/app folder is ignored). When it is empty, push is off and
+    | notifications are still stored and shown in the app.
+    |
+    */
+
+    'fcm' => [
+        'credentials' => env('FCM_CREDENTIALS'),
+    ],
+
     'price_prediction' => [
         'url' => env('PRICE_PREDICTION_URL', 'http://ml-service:8002'),
         'connect_timeout' => (int) env('PRICE_PREDICTION_CONNECT_TIMEOUT', 2),

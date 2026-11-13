@@ -104,6 +104,16 @@ After changing `.env`, also update `backend/.env` with matching values for Larav
 
 Password reset codes are sent by email. Locally, `MAIL_MAILER=log` writes each email to `backend/storage/logs/laravel.log`, so you can read the code there. For a real deployment, set the `CHANGE_THIS_*` mail values listed in `backend/.env.example` in `backend/.env`.
 
+### Push notifications (FCM)
+
+Phone push is off until the backend has a Firebase service account key. Download it from Firebase Console → **Project settings → Service accounts → Generate new private key**, save it under `backend/storage/app/firebase/` (ignored by git — never commit it), and point `FCM_CREDENTIALS` in `backend/.env` at it, relative to `backend/`:
+
+```env
+FCM_CREDENTIALS=storage/app/firebase/CHANGE_THIS_service-account.json
+```
+
+Pushes are sent by the `queue` worker, so it must be running. Without the key, notifications are still stored and shown in the app. The Android app's `google-services.json` is committed in `mobile/android/app/`; see `mobile/README.md`.
+
 **Optional but recommended:** change the folder name when you copy this template — it becomes your Docker project name automatically.
 
 ---
@@ -113,7 +123,9 @@ Password reset codes are sent by email. Locally, `MAIL_MAILER=log` writes each e
 | Service | URL |
 |---------|-----|
 | Laravel (via Nginx) | http://localhost:8001 |
-| React + Vite dev server | http://localhost:5174 |
+| React + Vite dev server — public home page | http://localhost:5174 |
+| Admin login | http://localhost:5174/login |
+| Admin dashboard (after login) | http://localhost:5174/dashboard |
 | phpMyAdmin | http://localhost:8082 |
 | MySQL (external client) | localhost:33070 |
 | Redis (external client) | localhost:6379 |

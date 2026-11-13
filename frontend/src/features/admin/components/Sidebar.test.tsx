@@ -39,7 +39,7 @@ describe('Sidebar navigation', () => {
     );
 
     const expectedRoutes = [
-      ['Dashboard', '/'],
+      ['Dashboard', '/dashboard'],
       ['Livestock', '/livestock'],
       ['Users', '/users'],
       ['Seller Verification', '/seller-verification'],

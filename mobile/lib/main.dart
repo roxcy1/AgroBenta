@@ -1,12 +1,14 @@
 import 'dart:async';
+import 'dart:ui' show FlutterView;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
-import 'dart:ui' as ui;
 
 import 'core/network/api_client.dart';
+import 'core/push/firebase_push_messaging.dart';
+import 'core/push/push_messaging.dart';
 import 'core/realtime/realtime_client.dart';
 import 'core/realtime/realtime_controller.dart';
 import 'core/realtime/realtime_event.dart';
@@ -68,7 +70,11 @@ import 'services/transaction_service.dart';
 import 'services/trinidad_location_service.dart';
 import 'features/notifications/state/notifications_controller.dart';
 import 'features/notifications/state/notifications_scope.dart';
+import 'features/notifications/state/push_registration_controller.dart';
+import 'features/notifications/view/notifications_screen.dart';
+import 'repositories/device_repository.dart';
 import 'repositories/notification_repository.dart';
+import 'services/device_service.dart';
 import 'services/notification_service.dart';
 
 /// AgroBenta mobile client — application entry point.
@@ -81,6 +87,8 @@ import 'services/notification_service.dart';
 /// visual rules, and the API gap register for what the backend does not expose
 /// yet.
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   // `intl` ships date symbols for `en_US` only; every other locale must be
   // initialised explicitly or `DateFormat(..., 'en_PH')` throws a
   // `LocaleDataException` the first time a date is rendered. On a device that
@@ -88,60 +96,41 @@ Future<void> main() async {
   // frame — there is no safe lazy point.
   await initializeDateFormatting('en_PH');
 
-  // Rendering the root widget must match how the engine attached to this
-  // browser context. Cutting-edge Chromium-based hosts (Electron 44 /
-  // Chromium 152-era embedded panes) boot the web engine in multi-view mode,
-  // where no implicit view exists and a plain `runApp` aborts the boot with
-  // "the platform has multi-view mode enabled". `runWidget` plus a view
-  // observer is the engine's documented remedy there; everywhere else the
-  // classic `runApp` is kept unchanged.
+  // Firebase push on Android only; every other platform gets the no-op.
+  final PushMessaging pushMessaging =
+      FirebasePushMessaging.forCurrentPlatform();
+
   if (kIsWeb) {
-    runWidget(const MultiViewApp(child: AgroBentaApp()));
+    runWidget(_WebMultiViewRoot(pushMessaging: pushMessaging));
   } else {
-    runApp(const AgroBentaApp());
+    runApp(AgroBentaApp(pushMessaging: pushMessaging));
   }
 }
 
-/// Renders [child] into every Flutter view attached to the app.
+/// Creates one app tree for each Flutter view supplied by the web embedder.
 ///
-/// This is the pattern from the Flutter web embedding documentation
-/// (flutter.dev/go/web-multiview): the root is a [ViewCollection] rebuilt
-/// from `platformDispatcher.views` whenever the metric change that follows
-/// a view attach/detach fires. On single-view platforms it is unused.
-class MultiViewApp extends StatefulWidget {
-  const MultiViewApp({super.key, required this.child});
+/// The embedder can add or remove views after startup. Its view list is
+/// refreshed when the platform dispatcher reports metric changes.
+class _WebMultiViewRoot extends StatefulWidget {
+  const _WebMultiViewRoot({required this.pushMessaging});
 
-  final Widget child;
+  final PushMessaging pushMessaging;
 
   @override
-  State<MultiViewApp> createState() => _MultiViewAppState();
+  State<_WebMultiViewRoot> createState() => _WebMultiViewRootState();
 }
 
-class _MultiViewAppState extends State<MultiViewApp>
+class _WebMultiViewRootState extends State<_WebMultiViewRoot>
     with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _updateViews();
   }
 
   @override
   void didChangeMetrics() {
-    _updateViews();
-  }
-
-  Map<Object, Widget> _views = <Object, Widget>{};
-
-  void _updateViews() {
-    final Map<Object, Widget> newViews = <Object, Widget>{};
-    for (final ui.FlutterView view
-        in WidgetsBinding.instance.platformDispatcher.views) {
-      newViews[view.viewId] = View(view: view, child: widget.child);
-    }
-    setState(() {
-      _views = newViews;
-    });
+    setState(() {});
   }
 
   @override
@@ -151,9 +140,17 @@ class _MultiViewAppState extends State<MultiViewApp>
   }
 
   @override
-  Widget build(BuildContext context) {
-    return ViewCollection(views: _views.values.toList(growable: false));
-  }
+  Widget build(BuildContext context) => ViewCollection(
+    views: WidgetsBinding.instance.platformDispatcher.views
+        .map(
+          (FlutterView view) => View(
+            key: ValueKey<int>(view.viewId),
+            view: view,
+            child: AgroBentaApp(pushMessaging: widget.pushMessaging),
+          ),
+        )
+        .toList(growable: false),
+  );
 }
 
 class AgroBentaApp extends StatefulWidget {
@@ -161,8 +158,15 @@ class AgroBentaApp extends StatefulWidget {
     this.tokenStore,
     this.accountModePreferenceStore,
     this.httpClient,
+    this.pushMessaging,
     super.key,
   });
+
+  /// The phone's push notification source.
+  ///
+  /// Null means no push. Only `main()` passes the Firebase implementation, so
+  /// tests, which have no Firebase platform channel, never start it.
+  final PushMessaging? pushMessaging;
 
   /// Overrides the secure token store.
   ///
@@ -227,6 +231,14 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final PusherReverbClient _realtimeClient;
   late final RealtimeController _realtimeController;
   StreamSubscription<bool>? _realtimeConnectionSubscription;
+  late final PushMessaging _pushMessaging;
+  late final PushRegistrationController _pushRegistrationController;
+  StreamSubscription<Map<String, String>>? _pushOpenedSubscription;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  /// A push was tapped before a session was restored; open the Notifications
+  /// screen once the user is signed in.
+  bool _pendingPushOpen = false;
   int? _sessionUserId;
   bool _sessionControllersCreated = false;
 
@@ -354,7 +366,44 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _realtimeConnectionSubscription =
         _realtimeController.connected.listen(_handleRealtimeConnection);
 
+    // Push: registered with the backend for each session (see
+    // _handleAuthSessionChanged). A tapped push opens the Notifications screen.
+    _pushMessaging = widget.pushMessaging ?? const NoopPushMessaging();
+    _pushRegistrationController = PushRegistrationController(
+      _pushMessaging,
+      DeviceRepository(DeviceService(_apiClient)),
+    );
+    _pushOpenedSubscription = _pushMessaging.openedNotifications.listen(
+      (_) => _handlePushOpened(),
+      onError: (Object error) =>
+          debugPrint('Opening a push failed: ${error.runtimeType}'),
+    );
+
     _authController.addListener(_handleAuthSessionChanged);
+  }
+
+  void _handlePushOpened() {
+    if (_sessionUserId == null) {
+      _pendingPushOpen = true;
+      return;
+    }
+    _openNotifications();
+  }
+
+  void _openNotifications() {
+    _pendingPushOpen = false;
+    // After the next frame, so the signed-in shell is already in place when
+    // the push arrived with the session restore. A frame is requested because
+    // a tap on a push changes nothing else on screen that would schedule one.
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (BuildContext context) => const NotificationsScreen(),
+          ),
+        );
+      })
+      ..scheduleFrame();
   }
 
   void _handleAuthSessionChanged() {
@@ -365,8 +414,22 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
       return;
     }
 
+    // Push follows the session too: the old phone registration ends with the
+    // old session, and the new one registers this phone for its user. The
+    // controller runs these in order.
+    if (_sessionUserId != null) {
+      _pushRegistrationController.stop();
+    }
+    if (userId != null) {
+      _pushRegistrationController.start();
+    }
+
     _sessionUserId = userId;
     _createSessionControllers(replaceExisting: true);
+
+    if (userId != null && _pendingPushOpen) {
+      _openNotifications();
+    }
 
     // Real-time follows the session: connect the user's private channel, or
     // disconnect when signed out.
@@ -452,6 +515,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _trinidadLocationController.dispose();
     _realtimeConnectionSubscription?.cancel();
     _realtimeController.dispose();
+    _pushOpenedSubscription?.cancel();
+    _pushRegistrationController.dispose();
     _apiClient.close();
     super.dispose();
   }
@@ -547,6 +612,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                                   child: RealtimeScope(
                                     controller: _realtimeController,
                                     child: MaterialApp(
+                                      navigatorKey: _navigatorKey,
                                       title: 'AgroBenta',
                                       debugShowCheckedModeBanner: false,
                                       theme: AppTheme.light(),

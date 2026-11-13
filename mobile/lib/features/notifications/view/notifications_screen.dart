@@ -30,8 +30,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     super.initState();
     _controller = NotificationsScope.readOf(context);
     // Ensure the first page is loaded even if the badge-only call has been
-    // the only network activity so far.
-    _controller.load();
+    // the only network activity so far. Deferred to after the first frame:
+    // `load()` notifies synchronously, and the Home bell listening to the same
+    // controller must not be marked dirty while this route is being built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _controller.load();
+      }
+    });
     _scrollController.addListener(_onScroll);
   }
 
