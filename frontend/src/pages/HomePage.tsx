@@ -9,6 +9,8 @@ import {
   Store,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { formatReleaseSize, useAppRelease } from '../features/appRelease/useAppRelease';
+import type { AppRelease } from '../features/appRelease/useAppRelease';
 import './HomePage.css';
 
 interface Feature {
@@ -78,11 +80,36 @@ const SELLER_STEPS = [
 const LIVESTOCK_TYPES = ['Cattle', 'Carabao', 'Goat', 'Swine', 'Chicken'];
 
 /**
- * The mobile app is not released yet, so this is deliberately not a link and
- * performs no action. It is a real disabled button, so assistive technology
- * announces it as unavailable, and the label says why.
+ * Downloads the latest published APK. Until a release is published (or while
+ * it is loading, or if the request fails) it is a real disabled button, so
+ * assistive technology announces it as unavailable, and the label says why.
  */
-function DownloadButton({ variant }: { variant: 'on-dark' | 'on-light' }) {
+function DownloadButton({
+  variant,
+  release,
+}: {
+  variant: 'on-dark' | 'on-light';
+  release: AppRelease | null;
+}) {
+  if (release) {
+    return (
+      <a
+        className={`home-download home-download--${variant} home-download--available`}
+        href={release.download_url}
+        download
+        aria-describedby="home-download-note"
+      >
+        <Download className="home-download-icon" aria-hidden="true" />
+        <span className="home-download-text">
+          <span className="home-download-label">Download for Android</span>
+          <span className="home-download-status">
+            Version {release.version_name} · {formatReleaseSize(release.size_bytes)}
+          </span>
+        </span>
+      </a>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -102,6 +129,8 @@ function DownloadButton({ variant }: { variant: 'on-dark' | 'on-light' }) {
 // The page carries no link to the admin console on purpose: it is the public
 // face of the product. Administrators open /login directly.
 export default function HomePage() {
+  const release = useAppRelease().data ?? null;
+
   return (
     <div className="home">
       <a className="home-skip-link" href="#main">
@@ -140,14 +169,15 @@ export default function HomePage() {
                 verified first.
               </p>
               <div className="home-hero-actions">
-                <DownloadButton variant="on-dark" />
+                <DownloadButton variant="on-dark" release={release} />
                 <a className="home-button home-button--ghost" href="#how-it-works">
                   See how it works
                 </a>
               </div>
               <p className="home-hero-note" id="home-download-note">
-                The mobile app is still in development. The download will open
-                here when it is released.
+                {release
+                  ? 'For Android phones. After downloading, open the file and allow your browser to install apps if your phone asks.'
+                  : 'The mobile app is still in development. The download will open here when it is released.'}
               </p>
             </div>
             <div className="home-hero-art">
@@ -254,11 +284,12 @@ export default function HomePage() {
                 Get the AgroBenta mobile app
               </h2>
               <p className="home-cta-text">
-                For Android phones. The app is being finished and tested, and
-                is not available to download yet.
+                {release
+                  ? 'For Android phones. Updates are offered inside the app, under Profile.'
+                  : 'For Android phones. The app is being finished and tested, and is not available to download yet.'}
               </p>
             </div>
-            <DownloadButton variant="on-light" />
+            <DownloadButton variant="on-light" release={release} />
           </div>
         </section>
       </main>

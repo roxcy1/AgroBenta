@@ -7,6 +7,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/network/api_client.dart';
+import 'core/platform/installed_app.dart';
 import 'core/push/firebase_push_messaging.dart';
 import 'core/push/push_messaging.dart';
 import 'core/realtime/realtime_client.dart';
@@ -20,6 +21,7 @@ import 'core/theme/app_theme.dart';
 import 'features/account_mode/state/account_mode_controller.dart';
 import 'features/account_mode/state/account_mode_scope.dart';
 import 'features/account_mode/view/account_mode_shell.dart';
+import 'features/app_update/state/app_update_scope.dart';
 import 'features/auth/state/auth_controller.dart';
 import 'features/auth/state/auth_scope.dart';
 import 'features/auth/view/auth_gate.dart';
@@ -42,6 +44,7 @@ import 'features/seller_verification/state/seller_verification_scope.dart';
 import 'features/transactions/state/transaction_scope.dart';
 import 'features/trinidad_location/state/trinidad_location_controller.dart';
 import 'features/trinidad_location/state/trinidad_location_scope.dart';
+import 'repositories/app_release_repository.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/inquiry_repository.dart';
 import 'repositories/livestock_type_repository.dart';
@@ -55,6 +58,7 @@ import 'repositories/seller_listing_repository.dart';
 import 'repositories/seller_verification_repository.dart';
 import 'repositories/transaction_repository.dart';
 import 'repositories/trinidad_location_repository.dart';
+import 'services/app_release_service.dart';
 import 'services/auth_service.dart';
 import 'services/inquiry_service.dart';
 import 'services/livestock_type_service.dart';
@@ -159,8 +163,16 @@ class AgroBentaApp extends StatefulWidget {
     this.accountModePreferenceStore,
     this.httpClient,
     this.pushMessaging,
+    this.installedApp,
+    this.linkOpener,
     super.key,
   });
+
+  /// Overrides how the installed version is read and how the update download
+  /// is opened, for tests (both use platform channels). Production leaves
+  /// them null.
+  final InstalledApp? installedApp;
+  final ExternalLinkOpener? linkOpener;
 
   /// The phone's push notification source.
   ///
@@ -207,6 +219,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final SellerDashboardRepository _sellerDashboardRepository;
   late final SellerActivityService _sellerActivityService;
   late final SellerActivityRepository _sellerActivityRepository;
+  late final AppReleaseRepository _appReleaseRepository;
   late final ProfileService _profileService;
   late final ProfileRepository _profileRepository;
   late ProfileController _profileController;
@@ -293,6 +306,14 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
       _sellerActivityService,
     );
 
+    // App updates: the Profile screen's App Update tile compares this build
+    // with the latest published one and opens the download in the browser.
+    _appReleaseRepository = AppReleaseRepository(
+      AppReleaseService(_apiClient),
+      widget.installedApp ?? const PackageInfoInstalledApp(),
+      widget.linkOpener ?? const UrlLauncherLinkOpener(),
+    );
+
     // Profile. Session-scoped like the others so the profile loaded once is not
     // re-fetched every time the user taps the Profile tab. Installed above
     // `MaterialApp` so the pushed Edit Profile and Change Password screens can
@@ -363,8 +384,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // controllers are disposed with the authenticated shell itself.
     _createSessionControllers();
 
-    _realtimeConnectionSubscription =
-        _realtimeController.connected.listen(_handleRealtimeConnection);
+    _realtimeConnectionSubscription = _realtimeController.connected.listen(
+      _handleRealtimeConnection,
+    );
 
     // Push: registered with the backend for each session (see
     // _handleAuthSessionChanged). A tapped push opens the Notifications screen.
@@ -605,19 +627,23 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                                 repository: _sellerDashboardRepository,
                                 child: SellerActivityScope(
                                   repository: _sellerActivityRepository,
-                                  // Real-time sits closest to `MaterialApp` so
-                                  // every pushed route can subscribe to the
-                                  // session's events without constructor
-                                  // threading.
-                                  child: RealtimeScope(
-                                    controller: _realtimeController,
-                                    child: MaterialApp(
-                                      navigatorKey: _navigatorKey,
-                                      title: 'AgroBenta',
-                                      debugShowCheckedModeBanner: false,
-                                      theme: AppTheme.light(),
-                                      home: AuthGate(
-                                        authenticatedView: _buildAccountModeShell,
+                                  child: AppUpdateScope(
+                                    repository: _appReleaseRepository,
+                                    // Real-time sits closest to `MaterialApp` so
+                                    // every pushed route can subscribe to the
+                                    // session's events without constructor
+                                    // threading.
+                                    child: RealtimeScope(
+                                      controller: _realtimeController,
+                                      child: MaterialApp(
+                                        navigatorKey: _navigatorKey,
+                                        title: 'AgroBenta',
+                                        debugShowCheckedModeBanner: false,
+                                        theme: AppTheme.light(),
+                                        home: AuthGate(
+                                          authenticatedView:
+                                              _buildAccountModeShell,
+                                        ),
                                       ),
                                     ),
                                   ),

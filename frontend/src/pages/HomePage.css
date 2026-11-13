@@ -279,6 +279,40 @@
   color: #b75400;
 }
 
+/* A published release: a real link, so a solid border and a pointer. */
+.home-download--available {
+  border-style: solid;
+  cursor: pointer;
+}
+
+.home-download--on-dark.home-download--available {
+  border-color: #fff;
+  background: #fff;
+  color: var(--color-primary);
+}
+
+.home-download--on-dark.home-download--available .home-download-status {
+  color: #b75400;
+}
+
+.home-download--on-dark.home-download--available:hover {
+  background: #f1f8f1;
+}
+
+.home-download--on-light.home-download--available {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.home-download--on-light.home-download--available .home-download-status {
+  color: #ffcc80;
+}
+
+.home-download--on-light.home-download--available:hover {
+  background: var(--color-primary-dark);
+}
+
 /* ── Sections ───────────────────────────────────────────────────────────── */
 
 .home-section {
