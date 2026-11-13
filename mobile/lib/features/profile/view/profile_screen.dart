@@ -20,6 +20,14 @@ import 'address_screen.dart';
 import 'change_password_screen.dart';
 import 'edit_profile_screen.dart';
 
+/// Identifies the tappable Address row in Account Settings.
+///
+/// A test invokes the row's `onTap` directly to reproduce a second tap that
+/// lands while the first is still opening the editor.
+const ValueKey<String> profileAddressTileKey = ValueKey<String>(
+  'profile-address-tile',
+);
+
 /// The caller's own profile.
 ///
 /// Reached from the signed-in shell's bottom navigation in both Buyer Mode and
@@ -41,6 +49,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final ProfileController _controller;
 
+<<<<<<< HEAD
   /// True while this screen has a pushed destination on top of it.
   ///
   /// The navigator is the wrong place to discover a double tap: by the time the
@@ -48,6 +57,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// transition, so two routes can stack. The flag is set *before* awaiting the
   /// push and cleared when the route pops, which makes the second call a no-op.
   bool _opening = false;
+=======
+  /// The destinations currently opening or open, keyed per destination.
+  ///
+  /// Flutter does not debounce a tap: `Navigator.push` returns immediately and
+  /// the route transition does not block input, so two fast taps on the same
+  /// row would otherwise stack two screens. The key is the destination rather
+  /// than one shared flag, so a tap on a different row is still allowed.
+  final Set<String> _opening = <String>{};
+>>>>>>> 69f8cd1 (feat(mobile): improve profile screen UI and tests)
 
   @override
   void initState() {
@@ -58,6 +76,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+<<<<<<< HEAD
   /// Pushes [builder] at most once, however fast the control is tapped.
   Future<void> _pushOnce(WidgetBuilder builder) async {
     if (_opening) {
@@ -85,6 +104,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openChangePassword() {
     return _pushOnce((BuildContext context) => const ChangePasswordScreen());
+=======
+  /// Opens [push] once; a second call for the same [key] is ignored until the
+  /// first destination has been popped.
+  Future<T?> _openOnce<T>(String key, Future<T?> Function() push) async {
+    if (!_opening.add(key)) {
+      return null;
+    }
+    try {
+      return await push();
+    } finally {
+      _opening.remove(key);
+    }
+  }
+
+  Future<void> _openEdit() async {
+    await _openOnce<bool>(
+      'edit',
+      () => Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (BuildContext context) => const EditProfileScreen(),
+          fullscreenDialog: true,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openChangePassword() async {
+    await _openOnce<void>(
+      'password',
+      () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const ChangePasswordScreen(),
+          fullscreenDialog: true,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openHelpCenter() async {
+    await _openOnce<void>(
+      'help',
+      () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const HelpCenterScreen(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openTermsAndPolicies() async {
+    await _openOnce<void>(
+      'terms',
+      () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const TermsAndPoliciesScreen(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAddressEditor(User user) async {
+    await _openOnce<void>(
+      'address',
+      () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (BuildContext context) =>
+            _EditAddressSheet(user: user, controller: _controller),
+      ),
+    );
+>>>>>>> 69f8cd1 (feat(mobile): improve profile screen UI and tests)
   }
 
   @override
@@ -382,9 +477,18 @@ class _BecomeSellerCard extends StatefulWidget {
 class _BecomeSellerCardState extends State<_BecomeSellerCard> {
   late final SellerVerificationController _controller;
 
+<<<<<<< HEAD
   /// Guards the push while the route is opening, so a fast double tap cannot
   /// stack two verification screens.
   bool _opening = false;
+=======
+  /// Whether the verification screen is opening or open.
+  ///
+  /// The card owns its own pushes, so it cannot use the profile screen's
+  /// guard. Without this, a fast second tap on the action stacks a second
+  /// verification screen.
+  bool _openingVerification = false;
+>>>>>>> 69f8cd1 (feat(mobile): improve profile screen UI and tests)
 
   @override
   void initState() {
@@ -396,21 +500,34 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
   }
 
   Future<void> _openVerification() async {
+<<<<<<< HEAD
     if (_opening) {
       return;
     }
     setState(() => _opening = true);
     try {
       await Navigator.of(context).push<void>(
+=======
+    if (_openingVerification) {
+      return;
+    }
+    _openingVerification = true;
+    try {
+      await Navigator.of(context).push(
+>>>>>>> 69f8cd1 (feat(mobile): improve profile screen UI and tests)
         MaterialPageRoute<void>(
           builder: (BuildContext context) =>
               SellerVerificationScreen(accountName: widget.user.name),
         ),
       );
     } finally {
+<<<<<<< HEAD
       if (mounted) {
         setState(() => _opening = false);
       }
+=======
+      _openingVerification = false;
+>>>>>>> 69f8cd1 (feat(mobile): improve profile screen UI and tests)
     }
   }
 
@@ -611,6 +728,74 @@ class _OtherSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
+<<<<<<< HEAD
+=======
+    return InkWell(
+      key: profileAddressTileKey,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const _IconTile(icon: Icons.home_outlined),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Address', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    hasAddress ? savedAddress : 'Not provided',
+                    softWrap: true,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  if (!hasAddress) ...<Widget>[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      'Tap to add your delivery address',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OtherSection extends StatelessWidget {
+  const _OtherSection({
+    required this.onHelpAndSupport,
+    required this.onTermsAndPolicies,
+  });
+
+  final VoidCallback onHelpAndSupport;
+  final VoidCallback onTermsAndPolicies;
+
+  @override
+  Widget build(BuildContext context) {
+>>>>>>> 69f8cd1 (feat(mobile): improve profile screen UI and tests)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[

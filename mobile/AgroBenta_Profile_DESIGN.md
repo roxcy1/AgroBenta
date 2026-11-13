@@ -56,6 +56,28 @@ deferred. Do not expose email editing or add profile-image upload
 without approval. If avatar capture/upload is unsupported, do not show a
 working camera action.
 
+<<<<<<< HEAD
+=======
+### B.1 Address in Account Settings
+
+- Show one tappable Address row in Account Settings, with the authenticated
+  user's saved `location` string as its subtitle and normal wrapping for long
+  values.
+- Show a clear "Not provided" state when the optional address is empty.
+- Do not duplicate the address in the profile summary or Personal Information
+  form.
+- Edit through the existing Trinidad barangay catalog and
+  `TrinidadLocationSelector`, saving only the existing `location` field via
+  the current profile update API.
+- Preserve an unmatched legacy value until the user explicitly chooses a new
+  catalog address. Address is optional; do not invent additional address fields
+  or change its stored string format.
+- A repeated tap on the row opens exactly one editor. The same guard applies to
+  every other Profile destination (Personal Information, Change Password, the
+  seller-verification card, Help and Support, Terms and Policies), and releases
+  when that destination is closed.
+
+>>>>>>> 69f8cd1 (feat(mobile): improve profile screen UI and tests)
 ### C. Account Mode Card
 
 -   Pale-green rounded card with a cart icon.

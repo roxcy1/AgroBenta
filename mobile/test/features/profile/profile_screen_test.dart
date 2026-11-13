@@ -163,6 +163,402 @@ void main() {
     expect(isDisabled(tester, 'Log Out'), isFalse);
   });
 
+<<<<<<< HEAD
+=======
+  testWidgets('a verified seller no longer sees the Become a Seller card', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      sellerCapability: 'seller',
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: userJson(sellerCapability: 'seller'))),
+        200,
+      ),
+    );
+
+    expect(find.text('Become a Seller'), findsNothing);
+    expect(find.text('Start Seller Verification'), findsNothing);
+    expect(find.text('View verification'), findsNothing);
+    // The rest of the screen is still there.
+    expect(find.text('Account Mode'), findsOneWidget);
+    expect(find.text('Account Settings'), findsOneWidget);
+  });
+
+  testWidgets('Help and Support opens Help Center and returns to Profile', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    expect(find.text('Help and Support'), findsOneWidget);
+    await tapAction(tester, 'Help and Support');
+
+    expect(find.byType(HelpCenterScreen), findsOneWidget);
+    expect(find.text('Help & Support'), findsOneWidget);
+    await tester.pageBack();
+    await settleAuth(tester, frames: 12);
+
+    expect(find.byType(HelpCenterScreen), findsNothing);
+    expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(find.text('Help and Support'), findsOneWidget);
+  });
+
+  testWidgets('rapid Help and Support taps push only one Help Center', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final Finder helpRow = find.widgetWithText(ListTile, 'Help and Support');
+    final VoidCallback? onTap = tester.widget<ListTile>(helpRow).onTap;
+    expect(onTap, isNotNull);
+    onTap!();
+    onTap();
+    await settleAuth(tester, frames: 12);
+
+    expect(find.byType(HelpCenterScreen), findsOneWidget);
+  });
+
+  testWidgets(
+    'Terms and Policies opens unavailable-content screen and returns to Profile',
+    (WidgetTester tester) async {
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      );
+
+      expect(find.text('Terms and Policies'), findsOneWidget);
+      await tapAction(tester, 'Terms and Policies');
+
+      expect(find.byType(TermsAndPoliciesScreen), findsOneWidget);
+      expect(find.text('Terms & Policies'), findsOneWidget);
+      expect(find.text('Terms and Conditions'), findsOneWidget);
+      expect(find.text('Privacy Policy'), findsOneWidget);
+      expect(
+        find.textContaining('Approved legal content is not available yet.'),
+        findsOneWidget,
+      );
+
+      await tester.pageBack();
+      await settleAuth(tester, frames: 12);
+
+      expect(find.byType(TermsAndPoliciesScreen), findsNothing);
+      expect(find.byType(ProfileScreen), findsOneWidget);
+      expect(find.text('Terms and Policies'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'rapid Terms and Policies taps push only one availability screen',
+    (WidgetTester tester) async {
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      );
+
+      final Finder termsRow = find.widgetWithText(
+        ListTile,
+        'Terms and Policies',
+      );
+      final VoidCallback? onTap = tester.widget<ListTile>(termsRow).onTap;
+      expect(onTap, isNotNull);
+      onTap!();
+      onTap();
+      await settleAuth(tester, frames: 12);
+
+      expect(find.byType(TermsAndPoliciesScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('rapid Address taps open only one address editor', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final Finder addressRow = find.byKey(profileAddressTileKey);
+    expect(addressRow, findsOneWidget);
+    final VoidCallback? onTap = tester.widget<InkWell>(addressRow).onTap;
+    expect(onTap, isNotNull);
+
+    onTap!();
+    onTap();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit address'), findsOneWidget);
+    expect(find.byType(TrinidadLocationSelector), findsOneWidget);
+  });
+
+  testWidgets('the Address guard releases after the editor closes', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    Future<void> openAddress() async {
+      final VoidCallback? onTap = tester
+          .widget<InkWell>(find.byKey(profileAddressTileKey))
+          .onTap;
+      expect(onTap, isNotNull);
+      onTap!();
+      await tester.pumpAndSettle();
+    }
+
+    await openAddress();
+    expect(find.text('Edit address'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit address'), findsNothing);
+
+    // A guard that never releases would make the row dead after one visit.
+    await openAddress();
+    expect(find.text('Edit address'), findsOneWidget);
+  });
+
+  testWidgets('rapid Personal Information taps push only one edit form', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final VoidCallback? onTap = tester
+        .widget<ListTile>(find.widgetWithText(ListTile, 'Personal Information'))
+        .onTap;
+    expect(onTap, isNotNull);
+    onTap!();
+    onTap();
+    await settleAuth(tester, frames: 12);
+
+    expect(find.byType(EditProfileScreen), findsOneWidget);
+  });
+
+  testWidgets('rapid Change Password taps push only one password form', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final VoidCallback? onTap = tester
+        .widget<ListTile>(find.widgetWithText(ListTile, 'Change Password'))
+        .onTap;
+    expect(onTap, isNotNull);
+    onTap!();
+    onTap();
+    await settleAuth(tester, frames: 12);
+
+    expect(find.byType(ChangePasswordScreen), findsOneWidget);
+  });
+
+  testWidgets('rapid Start Seller Verification taps push only one flow', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final Finder button = find.widgetWithText(
+      FilledButton,
+      'Start Seller Verification',
+    );
+    expect(button, findsOneWidget);
+    final VoidCallback? onPressed = tester
+        .widget<FilledButton>(button)
+        .onPressed;
+    expect(onPressed, isNotNull);
+    onPressed!();
+    onPressed();
+    await settleAuth(tester, frames: 12);
+
+    expect(find.byType(SellerVerificationScreen), findsOneWidget);
+  });
+
+  testWidgets('address editor saves through the existing profile update', (
+    WidgetTester tester,
+  ) async {
+    const String initialAddress = 'Purok 3, Barangay Banlasan, Trinidad, Bohol';
+    const String updatedAddress =
+        'Purok 5, Riverside, Barangay San Isidro, Trinidad, Bohol';
+    final List<RecordedRequest> profileRequests = <RecordedRequest>[];
+
+    await pumpProfile(
+      tester,
+      location: initialAddress,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      profileHandler: (RecordedRequest request) async {
+        profileRequests.add(request);
+        if (request.method == 'PUT' && request.apiPath.endsWith('/profile')) {
+          return http.Response(
+            jsonEncode(
+              successEnvelope(
+                data: userJson(location: request.body['location']),
+              ),
+            ),
+            200,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        }
+        return http.Response(
+          jsonEncode(successEnvelope(data: userJson(location: initialAddress))),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      },
+    );
+
+    await tapAddress(tester);
+    expect(find.byType(TrinidadLocationSelector), findsOneWidget);
+
+    await tester.tap(find.byKey(trinidadBarangayFieldKey));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(trinidadBarangaySearchFieldKey), 'san');
+    await tester.pumpAndSettle();
+    expect(find.text('4 barangays found'), findsOneWidget);
+    expect(find.text('San Isidro'), findsOneWidget);
+    expect(find.text('San Vicente'), findsOneWidget);
+    expect(find.text('Santo Tomas'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(trinidadBarangayResultsKey),
+        matching: find.text('Banlasan'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('San Isidro').last);
+    await tester.pumpAndSettle();
+
+    final Finder streetField = find.widgetWithText(
+      TextFormField,
+      'Street / Purok (optional)',
+    );
+    await tester.ensureVisible(streetField);
+    await tester.enterText(streetField, 'Purok 5, Riverside');
+    final Finder saveAddressFinder = find.widgetWithText(
+      FilledButton,
+      'Save address',
+    );
+    await tester.ensureVisible(saveAddressFinder);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(saveAddressFinder).onPressed, isNotNull);
+    await tester.tap(saveAddressFinder);
+    await tester.pumpAndSettle();
+
+    final RecordedRequest update = profileRequests.singleWhere(
+      (RecordedRequest request) => request.method == 'PUT',
+    );
+    expect(update.apiPath, '/profile');
+    expect(update.body, <String, dynamic>{'location': updatedAddress});
+    expect(find.text(updatedAddress), findsOneWidget);
+    expect(find.text('Address'), findsOneWidget);
+    expect(find.byType(TrinidadLocationSelector), findsNothing);
+  });
+
+  testWidgets('canceling address edits does not persist changes', (
+    WidgetTester tester,
+  ) async {
+    const String savedAddress = 'Purok 3, Barangay Banlasan, Trinidad, Bohol';
+    final List<RecordedRequest> profileRequests = <RecordedRequest>[];
+
+    await pumpProfile(
+      tester,
+      location: savedAddress,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      profileHandler: (RecordedRequest request) async {
+        profileRequests.add(request);
+        return http.Response(
+          jsonEncode(successEnvelope(data: userJson(location: savedAddress))),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      },
+    );
+
+    await tapAddress(tester);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Street / Purok (optional)'),
+      'Unsaved Purok',
+    );
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Cancel'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(
+      profileRequests.where((request) => request.method == 'PUT'),
+      isEmpty,
+    );
+    expect(find.text(savedAddress), findsOneWidget);
+    expect(find.text('Unsaved Purok'), findsNothing);
+  });
+
+  testWidgets('an empty address has a clear state', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+    expect(find.text('Not provided'), findsOneWidget);
+    expect(find.text('Tap to add your delivery address'), findsOneWidget);
+    await tapAddress(tester);
+    expect(find.byType(TrinidadLocationSelector), findsOneWidget);
+  });
+
+  testWidgets('long addresses wrap on a narrow phone surface', (
+    WidgetTester tester,
+  ) async {
+    final Size originalSize = tester.view.physicalSize;
+    final double originalDpr = tester.view.devicePixelRatio;
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.physicalSize = originalSize;
+      tester.view.devicePixelRatio = originalDpr;
+    });
+
+    final String street = List<String>.filled(8, 'Riverside').join(' ');
+    final String longAddress =
+        'Purok $street, Barangay Banlasan, Trinidad, Bohol';
+    await pumpProfile(
+      tester,
+      location: longAddress,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+    await tester.ensureVisible(find.text(longAddress));
+    await tester.pumpAndSettle();
+
+    expect(find.text(longAddress), findsOneWidget);
+    expect(tester.widget<Text>(find.text(longAddress)).softWrap, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+>>>>>>> 69f8cd1 (feat(mobile): improve profile screen UI and tests)
   testWidgets('a verified seller can switch between Buyer and Seller Mode', (
     WidgetTester tester,
   ) async {
