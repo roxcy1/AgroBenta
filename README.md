@@ -118,6 +118,12 @@ Pushes are sent by the `queue` worker, so it must be running. Without the key, n
 
 ---
 
+## Deploying to a server
+
+Production runs on one Linux server with `compose.prod.yaml`, Caddy (HTTPS) and `deploy.sh`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+---
+
 ## URLs
 
 | Service | URL |

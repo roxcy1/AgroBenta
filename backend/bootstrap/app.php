@@ -32,6 +32,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // middleware is guaranteed to run first.
         $middleware->prepend(ForceJsonResponse::class);
 
+        // In production every request reaches Laravel through Caddy (HTTPS)
+        // and nginx on the private Docker network. Trusting the forwarded
+        // headers from private addresses only lets Laravel see the real
+        // scheme (https) and the visitor's IP (for rate limiting), while a
+        // client calling from the internet cannot fake them. nginx publishes
+        // no port in production, so only Caddy can reach it.
+        $middleware->trustProxies(at: [
+            '10.0.0.0/8',
+            '172.16.0.0/12',
+            '192.168.0.0/16',
+        ]);
+
         $middleware->alias([
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
