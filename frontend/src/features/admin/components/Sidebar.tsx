@@ -16,7 +16,7 @@ import './Sidebar.css';
 const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: LucideIcon }[] }[] = [
   {
     label: 'Overview',
-    items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
   },
   {
     label: 'Marketplace',
@@ -67,7 +67,7 @@ export function Sidebar() {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  end={item.to === '/'}
+                  end={item.to === '/dashboard'}
                   className={({ isActive }) =>
                     `sidebar-nav-item ${isActive ? 'sidebar-nav-item--active' : ''}`
                   }
