@@ -190,6 +190,26 @@ void main() {
     expect(isDisabled(tester, 'Log Out'), isFalse);
   });
 
+  testWidgets('a verified seller no longer sees the Become a Seller card', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      sellerCapability: 'seller',
+      handler: (_) async => http.Response(
+        jsonEncode(successEnvelope(data: userJson(sellerCapability: 'seller'))),
+        200,
+      ),
+    );
+
+    expect(find.text('Become a Seller'), findsNothing);
+    expect(find.text('Start Seller Verification'), findsNothing);
+    expect(find.text('View verification'), findsNothing);
+    // The rest of the screen is still there.
+    expect(find.text('Account Mode'), findsOneWidget);
+    expect(find.text('Account Settings'), findsOneWidget);
+  });
+
   testWidgets('Help and Support opens Help Center and returns to Profile', (
     WidgetTester tester,
   ) async {

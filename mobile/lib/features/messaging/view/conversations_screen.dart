@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_input_border.dart';
 import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -165,6 +166,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         builder: (BuildContext context) => ChatScreen(
           counterpart: conversation.counterpart,
           currentUserId: currentUserId,
+          listingTitle: conversation.listingTitle,
+          listingPrice: conversation.listingPrice,
           // The seller-side action only exists in Seller Mode; the server has
           // already decided which inquiry is eligible, so the chat never
           // guesses one.
@@ -562,13 +565,15 @@ class _SearchField extends StatelessWidget {
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: 'Search conversations...',
-          prefixIcon: const Icon(Icons.search),
+          prefixIcon: const Icon(Icons.search, size: 20),
+          contentPadding: AppInputs.plainPadding,
           // Present only while there is something to clear; a suffix icon
           // with an empty handler would still be a tappable dead control.
           suffixIcon: query.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(Icons.clear),
+                  icon: const Icon(Icons.clear, size: 18),
+                  visualDensity: VisualDensity.compact,
                   tooltip: 'Clear search',
                   onPressed: onClear,
                 ),
@@ -592,36 +597,43 @@ class _FilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    // Underlined tabs on a hairline, as in the approved design.
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenGutter),
-      child: Row(
-        children: <Widget>[
-          _FilterChip(
-            label: 'All',
-            selected: filter == InboxFilter.all,
-            onTap: () => onSelected(InboxFilter.all),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          _FilterChip(
-            label: 'Inquiries',
-            selected: filter == InboxFilter.inquiries,
-            onTap: () => onSelected(InboxFilter.inquiries),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          _FilterChip(
-            label: 'Transactions',
-            selected: filter == InboxFilter.transactions,
-            onTap: () => onSelected(InboxFilter.transactions),
-          ),
-        ],
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: <Widget>[
+            _FilterChip(
+              label: 'All',
+              selected: filter == InboxFilter.all,
+              onTap: () => onSelected(InboxFilter.all),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            _FilterChip(
+              label: 'Inquiries',
+              selected: filter == InboxFilter.inquiries,
+              onTap: () => onSelected(InboxFilter.inquiries),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            _FilterChip(
+              label: 'Transactions',
+              selected: filter == InboxFilter.transactions,
+              onTap: () => onSelected(InboxFilter.transactions),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// One filter chip. Selected = solid primary green with white text; unselected
-/// = surface with a border; disabled = the same, dimmed and inert.
+/// One tab. Selected = brand-green label with a green underline; unselected =
+/// secondary text; disabled = the same, dimmed and inert.
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
     required this.label,
@@ -632,39 +644,34 @@ class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
 
-  /// `null` disables the chip.
+  /// `null` disables the tab.
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final BorderRadius radius = BorderRadius.circular(AppRadius.xl);
 
     return Opacity(
       opacity: onTap == null ? 0.55 : 1,
-      child: Material(
-        color: selected ? AppColors.primary : AppColors.surface,
-        borderRadius: radius,
-        child: InkWell(
-          borderRadius: radius,
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: radius,
-              border: Border.all(
-                color: selected ? AppColors.primary : AppColors.border,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? AppColors.primary : Colors.transparent,
+                width: 2.5,
               ),
             ),
-            child: Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: selected ? Colors.white : AppColors.textSecondary,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-              ),
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             ),
           ),
         ),
@@ -864,7 +871,7 @@ class _StatusBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: emphasised ? AppColors.primary : AppColors.surface,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(
           color: emphasised ? AppColors.primary : AppColors.border,
         ),

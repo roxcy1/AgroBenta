@@ -50,7 +50,7 @@ class TransactionStatusBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(1000),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: foreground.withValues(alpha: 0.4)),
       ),
       child: Text(

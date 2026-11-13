@@ -268,7 +268,7 @@ class ConversationClassificationTest extends TestCase
         $sellerView = $this->conversations($this->seller)[0];
         $this->assertSame($inquiry->id, $sellerView['eligible_inquiry']['id']);
         $this->assertSame($listing->id, $sellerView['eligible_inquiry']['listing_id']);
-        $this->assertSame('cattle Angus', $sellerView['eligible_inquiry']['listing_title']);
+        $this->assertSame('Angus', $sellerView['eligible_inquiry']['listing_title']);
 
         $this->assertNull($this->conversations($this->buyer)[0]['eligible_inquiry']);
     }
@@ -293,7 +293,7 @@ class ConversationClassificationTest extends TestCase
         $this->assertSame('pending', $sellerView['latest_offer']['status']);
         $this->assertSame('47500.00', $sellerView['latest_offer']['proposed_amount']);
         $this->assertSame($listing->id, $sellerView['latest_offer']['listing_id']);
-        $this->assertSame('cattle Angus', $sellerView['latest_offer']['listing_title']);
+        $this->assertSame('Angus', $sellerView['latest_offer']['listing_title']);
         $this->assertSame(['seller'], $sellerView['roles']);
         $this->assertNull(
             $sellerView['eligible_inquiry'],
@@ -350,7 +350,7 @@ class ConversationClassificationTest extends TestCase
         $conversation = $this->conversations($this->buyer)[0];
 
         $this->assertSame($offerListing->id, $conversation['listing_id']);
-        $this->assertSame('goat Boer', $conversation['listing_title']);
+        $this->assertSame('Boer', $conversation['listing_title']);
         $this->assertSame('42000.00', (string) $conversation['listing_price']);
         $this->assertSame(2, $conversation['listing_count']);
         $this->assertSame('pending', $conversation['latest_offer']['status']);

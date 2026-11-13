@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'field_label.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../features/trinidad_location/state/trinidad_location_controller.dart';
@@ -194,10 +195,7 @@ class _TrinidadLocationSelectorState extends State<TrinidadLocationSelector> {
           }
 
           return const InputDecorator(
-            decoration: InputDecoration(
-              labelText: 'Barangay',
-              border: OutlineInputBorder(),
-            ),
+            decoration: InputDecoration(label: FieldLabel('Barangay')),
             child: Row(
               children: <Widget>[
                 SizedBox(
@@ -338,9 +336,8 @@ class _TrinidadLocationSelectorState extends State<TrinidadLocationSelector> {
               textInputAction: TextInputAction.next,
               maxLength: widget.maxFormattedLength,
               decoration: const InputDecoration(
-                labelText: 'Street / Purok (optional)',
+                label: FieldLabel('Street / Purok (optional)'),
                 hintText: 'Purok 3, Sitio Riverside',
-                border: OutlineInputBorder(),
                 helperText: 'Optional.',
               ),
               onChanged: _emitStreet,

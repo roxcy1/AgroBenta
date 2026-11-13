@@ -5,6 +5,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
 import '../../../models/transaction.dart';
+import '../../../widgets/livestock_type_icon.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
@@ -323,22 +324,66 @@ class _RequestHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          transaction.displayId,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: AppColors.textSecondary,
-          ),
+    final String? photo = transaction.listing.loadablePhotoUrl;
+
+    // The livestock, its reference and the status in one bordered row.
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          children: <Widget>[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.sm - 2),
+              child: SizedBox.square(
+                dimension: 52,
+                child: photo != null
+                    ? Image.network(
+                        photo,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _thumbPlaceholder(),
+                        excludeFromSemantics: true,
+                      )
+                    : _thumbPlaceholder(),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    transaction.listing.title,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    transaction.displayId,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            TransactionStatusBadge(status: transaction.status),
+          ],
         ),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(transaction.listing.title, style: theme.textTheme.headlineSmall),
-        const SizedBox(height: AppSpacing.xs),
-        TransactionStatusBadge(status: transaction.status),
-      ],
+      ),
     );
   }
+
+  Widget _thumbPlaceholder() => ColoredBox(
+    color: AppColors.primarySurface,
+    child: Center(
+      child: LivestockTypeIcon(
+        type: transaction.listing.livestockType,
+        size: 26,
+        color: AppColors.primary.withValues(alpha: 0.6),
+      ),
+    ),
+  );
 }
 
 /// The persisted money on the record.

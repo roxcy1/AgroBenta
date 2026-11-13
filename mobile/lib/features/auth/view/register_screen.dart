@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
@@ -151,17 +152,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // The hero scales with the text scale so an enlarged brand block can never
     // overflow a fixed-height decoration, and is capped so it cannot swallow
     // the screen on a short device.
-    final double textScale = MediaQuery.textScalerOf(context)
-        .scale(1)
-        .clamp(1.0, 1.8)
-        .toDouble();
+    final double textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, 1.8).toDouble();
     final double heroHeight =
-        (MediaQuery.sizeOf(context).height * 0.30 * textScale)
-            .clamp(200.0, 300.0)
+        // Just tall enough for the logo and tagline, so the brand sits close
+        // to the form instead of floating above an empty band.
+        (MediaQuery.sizeOf(context).height * 0.22 * textScale)
+            .clamp(160.0, 240.0)
             .toDouble();
 
     // How far the white panel rides up over the hero's bottom edge.
-    const double overlap = 28;
+    // The form panel sits directly under the white brand band.
+    const double overlap = 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -198,17 +201,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: AppColors.surface),
       child: Center(
         child: ConstrainedBox(
           // A phone is narrower than this, so the constraint only matters on a
@@ -229,6 +222,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   'Create Your Account',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Join AgroBenta as a buyer. You can apply to sell later '
+                  'from your profile.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 if (state.errorMessage != null) ...<Widget>[
@@ -291,8 +293,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             textInputAction: TextInputAction.next,
             autofillHints: const <String>[AutofillHints.name],
             decoration: const InputDecoration(
-              labelText: 'Full Name',
-              prefixIcon: Icon(Icons.person_outline),
+              label: FieldLabel('Full Name', hasPrefixIcon: true),
+              prefixIcon: FieldIcon(Icon(Icons.person_outline)),
             ),
             validator: (String? value) {
               final String local = value?.trim() ?? '';
@@ -312,8 +314,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             autofillHints: const <String>[AutofillHints.email],
             autocorrect: false,
             decoration: const InputDecoration(
-              labelText: 'Email Address',
-              prefixIcon: Icon(Icons.mail_outline),
+              label: FieldLabel('Email Address', hasPrefixIcon: true),
+              prefixIcon: FieldIcon(Icon(Icons.mail_outline)),
             ),
             validator: (String? value) =>
                 validateRequiredEmail(value) ?? state.errorFor('email'),
@@ -325,8 +327,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             textInputAction: TextInputAction.next,
             autofillHints: const <String>[AutofillHints.newPassword],
             decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
+              label: FieldLabel('Password', hasPrefixIcon: true),
+              prefixIcon: const FieldIcon(Icon(Icons.lock_outline)),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscurePassword,
                 onPressed: () =>
@@ -344,8 +346,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             autofillHints: const <String>[AutofillHints.newPassword],
             onFieldSubmitted: (_) => _submit(),
             decoration: InputDecoration(
-              labelText: 'Confirm Password',
-              prefixIcon: const Icon(Icons.lock_outline),
+              label: FieldLabel('Confirm Password', hasPrefixIcon: true),
+              prefixIcon: const FieldIcon(Icon(Icons.lock_outline)),
               suffixIcon: _PasswordVisibilityToggle(
                 visible: !_obscureConfirmation,
                 onPressed: () => setState(
@@ -462,12 +464,15 @@ class _PasswordVisibilityToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(
-        visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+    return FieldIcon(
+      IconButton(
+        onPressed: onPressed,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(
+          visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        ),
+        tooltip: visible ? 'Hide password' : 'Show password',
       ),
-      tooltip: visible ? 'Hide password' : 'Show password',
     );
   }
 }

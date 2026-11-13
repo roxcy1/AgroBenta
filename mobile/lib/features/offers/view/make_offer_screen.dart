@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_input_border.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/inquiry.dart';
 import '../../../models/offer.dart';
 import '../../../models/received_inquiry.dart';
+import '../../../widgets/field_label.dart';
 import '../state/make_offer_controller.dart';
 import '../state/offer_scope.dart';
 import '../state/offer_state.dart';
@@ -299,6 +301,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                   decoration: InputDecoration(
                     prefixText: '₱ ',
                     hintText: '0.00',
+                    contentPadding: AppInputs.plainPadding,
                     errorText: state.amountErrorMessage,
                     helperText:
                         'The final price you are proposing for this inquiry. '
@@ -317,9 +320,10 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<InquiryPaymentMethod>(
+                  icon: const FieldDropdownIcon(),
                   initialValue: _paymentMethod,
                   decoration: const InputDecoration(
-                    labelText: 'Payment method',
+                    label: FieldLabel('Payment method'),
                   ),
                   items: InquiryPaymentMethod.values
                       .map(
@@ -337,9 +341,10 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<InquiryCollectionMethod>(
+                  icon: const FieldDropdownIcon(),
                   initialValue: _collectionMethod,
                   decoration: const InputDecoration(
-                    labelText: 'Collection method',
+                    label: FieldLabel('Collection method'),
                   ),
                   items: InquiryCollectionMethod.values
                       .map(
@@ -362,7 +367,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                   maxLength: 500,
                   maxLines: 3,
                   decoration: const InputDecoration(
-                    labelText: 'Note (optional)',
+                    label: FieldLabel('Note (optional)'),
                     hintText:
                         'Anything the buyer should know about this offer.',
                   ),

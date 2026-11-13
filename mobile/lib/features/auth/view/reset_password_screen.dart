@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/field_label.dart';
 import '../state/auth_controller.dart';
 import '../state/auth_scope.dart';
 import '../widgets/auth_error_banner.dart';
@@ -94,12 +95,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     required bool obscured,
     required VoidCallback onPressed,
   }) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(
-        obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+    return FieldIcon(
+      IconButton(
+        onPressed: onPressed,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(
+          obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+        ),
+        tooltip: obscured ? 'Show password' : 'Hide password',
       ),
-      tooltip: obscured ? 'Show password' : 'Hide password',
     );
   }
 
@@ -138,7 +142,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(resetCodeLength),
                 ],
-                decoration: const InputDecoration(labelText: 'Reset code'),
+                decoration: const InputDecoration(
+                  label: FieldLabel('Reset code'),
+                ),
                 validator: validateResetCode,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -148,7 +154,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 textInputAction: TextInputAction.next,
                 autofillHints: const <String>[AutofillHints.newPassword],
                 decoration: InputDecoration(
-                  labelText: 'New password',
+                  label: FieldLabel('New password'),
                   suffixIcon: _visibilityToggle(
                     obscured: _obscurePassword,
                     onPressed: () =>
@@ -164,7 +170,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 textInputAction: TextInputAction.done,
                 autofillHints: const <String>[AutofillHints.newPassword],
                 decoration: InputDecoration(
-                  labelText: 'Confirm new password',
+                  label: FieldLabel('Confirm new password'),
                   suffixIcon: _visibilityToggle(
                     obscured: _obscureConfirmation,
                     onPressed: () => setState(

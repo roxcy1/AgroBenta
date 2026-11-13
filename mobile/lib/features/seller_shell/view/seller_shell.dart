@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../widgets/nav_line_icon.dart';
+
 import '../../../models/transaction.dart';
 import '../../home/view/seller_home_screen.dart';
 import '../../messaging/state/conversations_controller.dart';
@@ -59,46 +62,44 @@ class _SellerShellState extends State<SellerShell> {
           const ProfileScreen(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (int index) => setState(() => _index = index),
-        destinations: <NavigationDestination>[
-          const NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.storefront_outlined),
-            selectedIcon: Icon(Icons.storefront),
-            label: 'My Listings',
-          ),
-          NavigationDestination(
-            icon: unread > 0
-                ? Badge(
-                    label: Text(unread > 99 ? '99+' : '$unread'),
-                    child: const Icon(Icons.chat_bubble_outline),
-                  )
-                : const Icon(Icons.chat_bubble_outline),
-            selectedIcon: unread > 0
-                ? Badge(
-                    label: Text(unread > 99 ? '99+' : '$unread'),
-                    child: const Icon(Icons.chat_bubble),
-                  )
-                : const Icon(Icons.chat_bubble),
-            label: 'Messages',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.swap_horiz_outlined),
-            selectedIcon: Icon(Icons.swap_horiz),
-            label: 'Transactions',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+      // A hairline separates the bar from the content, as on the app bar.
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (int index) => setState(() => _index = index),
+          // The proposal's line icons: a selected tab keeps the same outline
+          // and only turns brand green (the theme colours it).
+          destinations: <NavigationDestination>[
+            const NavigationDestination(
+              icon: NavLineIcon(NavGlyph.home),
+              label: 'Home',
+            ),
+            const NavigationDestination(
+              icon: NavLineIcon(NavGlyph.listings),
+              label: 'My Listings',
+            ),
+            NavigationDestination(
+              icon: unread > 0
+                  ? Badge(
+                      label: Text(unread > 99 ? '99+' : '$unread'),
+                      child: const NavLineIcon(NavGlyph.messages),
+                    )
+                  : const NavLineIcon(NavGlyph.messages),
+              label: 'Messages',
+            ),
+            const NavigationDestination(
+              icon: NavLineIcon(NavGlyph.transactions),
+              label: 'Transactions',
+            ),
+            const NavigationDestination(
+              icon: NavLineIcon(NavGlyph.profile),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }

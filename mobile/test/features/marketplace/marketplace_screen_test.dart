@@ -64,10 +64,10 @@ void main() {
       expect(find.text('Angus'), findsOneWidget);
       expect(find.text('₱42,500'), findsOneWidget);
       expect(find.text('₱78,000'), findsOneWidget);
-      expect(find.text('Mabalacat, Pampanga'), findsNWidgets(2));
+      expect(find.text('Cattle · Mabalacat, Pampanga'), findsNWidgets(2));
     });
 
-    testWidgets('a card shows completed sales and the placeholder rating', (
+    testWidgets('a card shows no placeholder rating or sales line', (
       WidgetTester tester,
     ) async {
       await MarketplaceHarness.pump(
@@ -80,23 +80,9 @@ void main() {
         ),
       );
 
-      expect(find.text('2 completed sales'), findsOneWidget);
-      expect(find.text('4.8 · 24 reviews'), findsOneWidget);
-      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
-    });
-
-    testWidgets('a listing with no completed sales says zero', (
-      WidgetTester tester,
-    ) async {
-      await MarketplaceHarness.pump(
-        tester,
-        tokenStore: tokenStore,
-        handler: (_) async => marketplaceListResponse(
-          listings: <Map<String, dynamic>>[listingJson(completedSales: 0)],
-        ),
-      );
-
-      expect(find.text('0 completed sales'), findsOneWidget);
+      expect(find.text('2 completed sales'), findsNothing);
+      expect(find.text('4.8 · 24 reviews'), findsNothing);
+      expect(find.byIcon(Icons.star_rounded), findsNothing);
     });
 
     testWidgets('lays listings out in a two-column grid', (

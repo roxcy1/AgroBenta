@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
 import '../../../models/message.dart';
-import '../../messaging/view/chat_screen.dart';
-import '../widgets/listing_social_proof.dart';
 import '../../../repositories/marketplace_repository.dart';
 import '../../../widgets/detail_row.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../inquiries/view/inquire_screen.dart';
+import '../../messaging/view/chat_screen.dart';
 import '../state/listing_detail_controller.dart';
 import '../state/listing_detail_state.dart';
 import '../state/marketplace_scope.dart';
@@ -31,14 +31,19 @@ class ListingDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No app bar: the photo runs to the top of the screen and a round back
+    // button floats over it, as in the approved design. The bottom inset is
+    // reserved so the pinned action bar clears the system navigation area.
     return Scaffold(
-      appBar: AppBar(title: const Text('Listing Details')),
-      // The gallery deliberately runs under the app bar's lower edge, so the
-      // top inset is not reserved here; the bottom inset is, so the pinned
-      // action bar clears the system navigation area.
-      body: SafeArea(
-        top: false,
-        child: _ListingDetailBody(listingId: listingId),
+      body: Stack(
+        children: <Widget>[
+          SafeArea(top: false, child: _ListingDetailBody(listingId: listingId)),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + AppSpacing.xs,
+            left: AppSpacing.sm,
+            child: const _FloatingBackButton(),
+          ),
+        ],
       ),
     );
   }
@@ -136,7 +141,7 @@ class _DetailContent extends StatelessWidget {
   static const double _galleryHeight = 260;
 
   /// How far the details panel rides up over the gallery's lower edge.
-  static const double _panelOverlap = 16;
+  static const double _panelOverlap = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -180,49 +185,53 @@ class _DetailsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final String? additionalNotes = listing.additionalNotes;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-        border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _SummarySection(listing: listing),
-          const _PanelDivider(),
-          _AttributesSection(listing: listing),
-          if (listing.healthStatus != null ||
-              listing.vaccination != null) ...<Widget>[
-            const _PanelDivider(),
-            _FactsSection(listing: listing),
+    return ColoredBox(
+      color: AppColors.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.screenGutter,
+          AppSpacing.md,
+          AppSpacing.screenGutter,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _SummarySection(listing: listing),
+            const SizedBox(height: AppSpacing.md),
+            _FactsGrid(listing: listing),
+            if (listing.hasEstimatedMeasurement) ...<Widget>[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Estimated age or weight is provided by the seller and is not '
+                'independently verified.',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+            if (listing.shortDescription.trim().isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.lg),
+              _TextSection(
+                title: 'Description',
+                body: listing.shortDescription,
+              ),
+            ],
+            if (additionalNotes != null &&
+                additionalNotes.trim().isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.lg),
+              _TextSection(title: 'Seller’s notes', body: additionalNotes),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            _SellerSection(listing: listing),
           ],
-          if (listing.shortDescription.trim().isNotEmpty) ...<Widget>[
-            const _PanelDivider(),
-            _TextSection(title: 'Description', body: listing.shortDescription),
-          ],
-          if (additionalNotes != null &&
-              additionalNotes.trim().isNotEmpty) ...<Widget>[
-            const _PanelDivider(),
-            _TextSection(title: 'Seller’s notes', body: additionalNotes),
-          ],
-          const _PanelDivider(),
-          _SellerSection(listing: listing),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _PanelDivider extends StatelessWidget {
-  const _PanelDivider();
-
-  @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: AppColors.border);
-}
-
-/// Type, title, price, availability and location — the top of the panel.
+/// Name, where and when, then the price — the figure the buyer decides on.
 class _SummarySection extends StatelessWidget {
   const _SummarySection({required this.listing});
 
@@ -231,139 +240,129 @@ class _SummarySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final String type = listing.livestockType.trim();
+    final String species = type.isEmpty
+        ? ''
+        : '${type[0].toUpperCase()}${type.substring(1)}';
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenGutter,
-        AppSpacing.lg,
-        AppSpacing.screenGutter,
-        AppSpacing.md,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            listing.livestockType.toUpperCase(),
-            style: theme.textTheme.labelMedium,
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (species.isNotEmpty)
+          Text(species, style: theme.textTheme.labelMedium),
+        Text(listing.title, style: theme.textTheme.headlineSmall),
+        if (listing.location.trim().isNotEmpty) ...<Widget>[
           const SizedBox(height: AppSpacing.xxs),
-          Text(listing.title, style: theme.textTheme.headlineSmall),
-          const SizedBox(height: AppSpacing.sm),
-          // The exact amount, to the cent. A card rounds for space; here there
-          // is room, and this is the figure the buyer is deciding on.
-          Text(
-            AppFormatters.formatMoney(listing.askingPrice) ??
-                listing.askingPrice,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              color: AppColors.primary,
-            ),
+          Row(
+            children: <Widget>[
+              const Icon(
+                Icons.location_on_outlined,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              Flexible(
+                child: Text(listing.location, style: theme.textTheme.bodySmall),
+              ),
+              Text(
+                ' · Posted ${AppFormatters.formatRelative(listing.createdAt)}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
           ),
-          Text(
-            'per head',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          if (listing.quantity > 0) ...<Widget>[
-            const SizedBox(height: AppSpacing.xxs),
-            Text(
-              '${listing.quantity} '
-              '${listing.quantity == 1 ? 'head' : 'heads'} available',
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-          if (listing.location.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: <Widget>[
-                const Icon(
-                  Icons.location_on_outlined,
-                  size: 16,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: AppSpacing.xxs),
-                Expanded(
-                  child: Text(
-                    listing.location,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: AppSpacing.sm),
-          ListingSocialProof(completedSales: listing.completedSales),
         ],
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        // The exact amount, to the cent. A card rounds for space; here there
+        // is room, and this is the figure the buyer is deciding on.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: <Widget>[
+            Flexible(
+              child: Text(
+                AppFormatters.formatMoney(listing.askingPrice) ??
+                    listing.askingPrice,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: AppColors.primary,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const <FontFeature>[
+                    FontFeature.tabularFigures(),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xxs),
+            Text('per head', style: theme.textTheme.labelMedium),
+          ],
+        ),
+      ],
     );
   }
 }
 
-/// Age, Weight and Gender across three columns with hairline separators.
-///
-/// Every column is shown; a value the API did not supply renders as an em dash
-/// rather than being invented.
-class _AttributesSection extends StatelessWidget {
-  const _AttributesSection({required this.listing});
+/// Six facts in a bordered three-column grid: Age, Weight, Gender, Health,
+/// Vaccination and Quantity. A missing fact shows a dash rather than hiding,
+/// so the grid keeps its shape.
+class _FactsGrid extends StatelessWidget {
+  const _FactsGrid({required this.listing});
 
   final Listing listing;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenGutter,
-        vertical: AppSpacing.md,
+    final List<(String, String?)> facts = <(String, String?)>[
+      // "Estimated Age" / "Measured Weight" when the seller said which.
+      (listing.ageInformationLabel ?? 'Age', listing.ageLabel),
+      (listing.weightInformationLabel ?? 'Weight', listing.weightLabel),
+      ('Gender', listing.genderLabel),
+      ('Health', listing.healthStatus),
+      ('Vaccination', listing.vaccination),
+      (
+        'Quantity',
+        listing.quantity > 0
+            ? '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}'
+            : null,
       ),
-      child: Column(
+    ];
+
+    Widget row(int from) => IntrinsicHeight(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Expanded(
-                  child: _Attribute(
-                    label: listing.ageInformationLabel ?? 'Age',
-                    value: listing.ageLabel,
-                  ),
-                ),
-                const _AttributeSeparator(),
-                Expanded(
-                  child: _Attribute(
-                    label: listing.weightInformationLabel ?? 'Weight',
-                    value: listing.weightLabel,
-                  ),
-                ),
-                const _AttributeSeparator(),
-                Expanded(
-                  child: _Attribute(
-                    label: 'Gender',
-                    value: listing.genderLabel,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (listing.hasEstimatedMeasurement) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Estimated age or weight is provided by the seller and is not '
-              'independently verified.',
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
+          for (int i = from; i < from + 3; i++) ...<Widget>[
+            if (i > from)
+              const VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: AppColors.border,
+              ),
+            Expanded(
+              child: _Fact(label: facts[i].$1, value: facts[i].$2),
             ),
           ],
+        ],
+      ),
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        children: <Widget>[
+          row(0),
+          const Divider(height: 1, thickness: 1, color: AppColors.border),
+          row(3),
         ],
       ),
     );
   }
 }
 
-class _Attribute extends StatelessWidget {
-  const _Attribute({required this.label, required this.value});
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.value});
 
   final String label;
   final String? value;
@@ -373,70 +372,28 @@ class _Attribute extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final String? value = this.value;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        Text(label, style: theme.textTheme.labelMedium),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          value ?? '—',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: value == null ? AppColors.textSecondary : AppColors.text,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AttributeSeparator extends StatelessWidget {
-  const _AttributeSeparator();
-
-  @override
-  Widget build(BuildContext context) => const VerticalDivider(
-    width: AppSpacing.md,
-    thickness: 1,
-    color: AppColors.border,
-  );
-}
-
-/// Health and vaccination, when the listing records them.
-///
-/// Not part of the three-column attribute row, but kept so the screen does not
-/// silently lose data the API supplies.
-class _FactsSection extends StatelessWidget {
-  const _FactsSection({required this.listing});
-
-  final Listing listing;
-
-  @override
-  Widget build(BuildContext context) {
-    final String? healthStatus = listing.healthStatus;
-    final String? vaccination = listing.vaccination;
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenGutter,
-        AppSpacing.md,
-        AppSpacing.screenGutter,
-        AppSpacing.xs,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          if (healthStatus != null)
-            DetailRow(label: 'Health', value: healthStatus),
-          if (vaccination != null)
-            DetailRow(label: 'Vaccination', value: vaccination),
+          Text(label, style: theme.textTheme.labelMedium),
+          const SizedBox(height: AppSpacing.xxxs),
+          Text(
+            value ?? '—',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: value == null ? AppColors.textSecondary : AppColors.text,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// A titled block of prose — the description or the seller's notes.
 class _TextSection extends StatelessWidget {
   const _TextSection({required this.title, required this.body});
 
@@ -447,25 +404,18 @@ class _TextSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.screenGutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(title, style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.xs),
-          DetailRow.body(body),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(title, style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.xs),
+        DetailRow.body(body),
+      ],
     );
   }
 }
 
-/// Who is selling, reduced to what the marketplace API discloses.
-///
-/// The seller projection is `{ id, name }` — no avatar, no verification flag,
-/// no email — so this shows an initials avatar and the name, and does not
-/// imply a "Verified Seller" badge the API never sends.
+/// The seller, as one bordered row.
 class _SellerSection extends StatelessWidget {
   const _SellerSection({required this.listing});
 
@@ -475,52 +425,29 @@ class _SellerSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.screenGutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
         children: <Widget>[
-          Text('Seller', style: theme.textTheme.labelMedium),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            children: <Widget>[
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppColors.primarySurface,
-                child: Text(
-                  _initial(listing.seller.name),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
+          InitialsAvatar(name: listing.seller.name, radius: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Seller', style: theme.textTheme.labelSmall),
+                Text(
                   listing.seller.name,
-                  style: theme.textTheme.titleMedium,
+                  style: theme.textTheme.titleSmall,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: <Widget>[
-              const Icon(
-                Icons.schedule_outlined,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: AppSpacing.xxs),
-              Expanded(
-                child: Text(
-                  'Posted ${AppFormatters.formatRelative(listing.createdAt)}',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -677,8 +604,21 @@ class _UnavailableNotice extends StatelessWidget {
   }
 }
 
-/// The fallback avatar letter for a seller with no image.
-String _initial(String name) {
-  final String trimmed = name.trim();
-  return trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
+/// The round white back button that sits on top of the photo.
+class _FloatingBackButton extends StatelessWidget {
+  const _FloatingBackButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface.withValues(alpha: 0.94),
+      shape: const CircleBorder(side: BorderSide(color: AppColors.border)),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        tooltip: 'Back',
+        icon: const Icon(Icons.arrow_back, color: AppColors.text),
+        onPressed: () => Navigator.of(context).maybePop(),
+      ),
+    );
+  }
 }

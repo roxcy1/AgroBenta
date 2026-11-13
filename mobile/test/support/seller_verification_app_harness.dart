@@ -230,6 +230,14 @@ Future<void> scrollSellerVerificationIntoView(
   final Finder scrollable = find
       .ancestor(of: target, matching: find.byType(Scrollable))
       .first;
+  // The loop below only scrolls downwards. A target that is already built
+  // but sits above the viewport is brought back first.
+  if (target.hitTestable().evaluate().isEmpty && target.evaluate().isNotEmpty) {
+    await tester.ensureVisible(target.first);
+    for (int frame = 0; frame < 4; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
   for (int attempt = 0; attempt < 12; attempt++) {
     if (target.hitTestable().evaluate().isNotEmpty) {
       // Let the scroll settle enough for the button center to stay in the

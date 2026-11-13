@@ -5,6 +5,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/inquiry.dart';
 import '../../../models/received_inquiry.dart';
+import '../../../widgets/livestock_type_icon.dart';
 
 /// One inquiry in the seller's received-inquiry list.
 ///
@@ -79,26 +80,8 @@ class ReceivedInquiryCard extends StatelessWidget {
                 ],
               ],
             ),
-            const SizedBox(height: AppSpacing.xxs),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const Icon(
-                  Icons.pets_outlined,
-                  size: 16,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: AppSpacing.xxs),
-                Expanded(
-                  child: Text(
-                    _listingLabel(),
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            const SizedBox(height: AppSpacing.sm),
+            _ListingStrip(listing: inquiry.listing, label: _listingLabel()),
             if (subject != null && subject.isNotEmpty) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
               Text(subject, style: theme.textTheme.titleSmall),
@@ -198,4 +181,86 @@ class ReceivedInquiryCard extends StatelessWidget {
     ];
     return values.isEmpty ? null : values.join(' / ');
   }
+}
+
+/// The livestock the buyer asked about: its picture, name and asking price.
+///
+/// Showing the animal itself lets a seller with several listings tell
+/// inquiries apart at a glance. A listing without photos shows its type's
+/// silhouette instead; a deleted listing shows only [label].
+class _ListingStrip extends StatelessWidget {
+  const _ListingStrip({required this.listing, required this.label});
+
+  final InquiryListing? listing;
+  final String label;
+
+  static const double _thumb = 52;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final InquiryListing? listing = this.listing;
+    final String? price = listing == null
+        ? null
+        : AppFormatters.formatMoney(listing.askingPrice);
+    final String? photo = listing?.photoUrl;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Row(
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.sm - 2),
+            child: SizedBox.square(
+              dimension: _thumb,
+              child: photo != null && photo.isNotEmpty
+                  ? Image.network(
+                      photo,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _placeholder(),
+                    )
+                  : _placeholder(),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  label,
+                  style: theme.textTheme.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (price != null)
+                  Text(
+                    price,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _placeholder() => ColoredBox(
+    color: AppColors.primarySurface,
+    child: Center(
+      child: LivestockTypeIcon(
+        type: listing?.livestockType ?? '',
+        size: 28,
+        color: AppColors.primary,
+      ),
+    ),
+  );
 }

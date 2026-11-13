@@ -240,7 +240,7 @@ void main() {
       },
     );
 
-    expect(find.widgetWithText(OutlinedButton, 'Mark as sold'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Delete listing'), findsNothing);
   });
 
@@ -273,15 +273,22 @@ void main() {
         },
       );
 
+      // The bar's own button is filled too, so the dialog's confirm button is
+      // looked up inside the dialog.
+      final Finder dialogConfirm = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Mark as sold'),
+      );
+
       // Tap Mark as sold — confirmation dialog must appear before any API call.
       expect(find.text('Mark this listing as sold?'), findsNothing);
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Mark as sold'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Mark as sold'));
       await tester.pumpAndSettle();
 
       // Dialog is shown with Cancel and Confirm.
       expect(find.text('Mark this listing as sold?'), findsOneWidget);
       expect(find.widgetWithText(TextButton, 'Cancel'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsOneWidget);
+      expect(dialogConfirm, findsOneWidget);
 
       // Cancel closes the dialog without changing listing state.
       await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
@@ -291,9 +298,9 @@ void main() {
       expect(find.text('Sold'), findsNothing);
 
       // Confirm closes the dialog.
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Mark as sold'));
-      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Mark as sold'));
+      await tester.pumpAndSettle();
+      await tester.tap(dialogConfirm);
       await tester.pumpAndSettle();
       expect(find.text('Mark this listing as sold?'), findsNothing);
     },
@@ -331,7 +338,7 @@ void main() {
       find.widgetWithText(FilledButton, 'Submit for review'),
       findsNothing,
     );
-    expect(find.widgetWithText(OutlinedButton, 'Mark as sold'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsNothing);
   });
 
   for (final String status in <String>['pending', 'sold']) {
@@ -367,7 +374,7 @@ void main() {
         find.widgetWithText(FilledButton, 'Submit for review'),
         findsNothing,
       );
-      expect(find.widgetWithText(OutlinedButton, 'Mark as sold'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Mark as sold'), findsNothing);
     });
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../models/received_inquiry.dart';
 import '../../../models/seller_activity.dart';
 import '../../../models/seller_dashboard.dart';
@@ -128,11 +129,13 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListenableBuilder(
-        listenable: Listenable.merge(<Listenable?>[
-          _controller,
-          _attention,
-          _activity,
-        ].whereType<Listenable>().toList(growable: false)),
+        listenable: Listenable.merge(
+          <Listenable?>[
+            _controller,
+            _attention,
+            _activity,
+          ].whereType<Listenable>().toList(growable: false),
+        ),
         builder: (BuildContext context, Widget? child) {
           return _buildBody(context, _controller.state);
         },
@@ -192,6 +195,13 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
             ),
             const SizedBox(height: AppSpacing.md),
           ],
+          _SummaryGrid(
+            dashboard: dashboard,
+            onOpenListings: widget.onOpenListings,
+            onOpenInquiries: widget.onOpenInquiries,
+            onOpenTransactions: widget.onOpenTransactions,
+          ),
+          const SizedBox(height: AppSpacing.md),
           SizedBox(
             height: AppSizes.controlHeight,
             child: FilledButton.icon(
@@ -199,13 +209,6 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add listing'),
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _SummaryGrid(
-            dashboard: dashboard,
-            onOpenListings: widget.onOpenListings,
-            onOpenInquiries: widget.onOpenInquiries,
-            onOpenTransactions: widget.onOpenTransactions,
           ),
           if (!dashboard.hasActivity) ...<Widget>[
             const SizedBox(height: AppSpacing.sm),
@@ -262,6 +265,8 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
 ///
 /// Two columns at every width, per the approved layout: the cards stay equal
 /// sized and readable on a phone and on a tablet.
+/// The four counts in one bordered two-by-two grid. Each cell opens the
+/// screen behind its number.
 class _SummaryGrid extends StatelessWidget {
   const _SummaryGrid({
     required this.dashboard,
@@ -277,112 +282,121 @@ class _SummaryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        const double spacing = AppSpacing.sm;
-        final double width = (constraints.maxWidth - spacing) / 2;
+    const VerticalDivider vertical = VerticalDivider(
+      width: 1,
+      thickness: 1,
+      color: AppColors.border,
+    );
 
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: <Widget>[
-            _SummaryTile(
-              width: width,
-              label: 'Active Listings',
-              value: dashboard.listings.active,
-              icon: Icons.storefront_outlined,
-              onTap: onOpenListings,
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        children: <Widget>[
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _SummaryTile(
+                    label: 'Active Listings',
+                    value: dashboard.listings.active,
+                    onTap: onOpenListings,
+                  ),
+                ),
+                vertical,
+                Expanded(
+                  child: _SummaryTile(
+                    label: 'Inquiries',
+                    value: dashboard.inquiries.total,
+                    onTap: onOpenInquiries,
+                  ),
+                ),
+              ],
             ),
-            _SummaryTile(
-              width: width,
-              label: 'Inquiries',
-              value: dashboard.inquiries.total,
-              icon: Icons.mark_email_unread_outlined,
-              onTap: onOpenInquiries,
+          ),
+          const Divider(height: 1, thickness: 1, color: AppColors.border),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _SummaryTile(
+                    label: 'Ongoing Transactions',
+                    value: dashboard.transactions.pending,
+                    onTap: onOpenTransactions,
+                  ),
+                ),
+                vertical,
+                Expanded(
+                  child: _SummaryTile(
+                    label: 'Completed Sales',
+                    value: dashboard.transactions.completed,
+                    onTap: onOpenTransactions,
+                  ),
+                ),
+              ],
             ),
-            _SummaryTile(
-              width: width,
-              label: 'Ongoing Transactions',
-              value: dashboard.transactions.pending,
-              icon: Icons.swap_horiz_outlined,
-              onTap: onOpenTransactions,
-            ),
-            _SummaryTile(
-              width: width,
-              label: 'Completed Sales',
-              value: dashboard.transactions.completed,
-              icon: Icons.task_alt_outlined,
-              onTap: onOpenTransactions,
-            ),
-          ],
-        );
-      },
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _SummaryTile extends StatelessWidget {
   const _SummaryTile({
-    required this.width,
     required this.label,
     required this.value,
-    required this.icon,
     required this.onTap,
   });
 
-  final double width;
   final String label;
   final int value;
-  final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return SizedBox(
-      width: width,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(icon, size: 20, color: AppColors.primary),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '$value',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.sm,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              '$value',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+              ),
             ),
-          ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Up to three genuinely actionable inquiries (`can_make_offer` is true, which
-/// the server defines as an open inquiry with no pending or accepted offer).
-///
-/// When nothing is actionable but inquiries exist, the same rows are shown
-/// under a "Recent inquiries" label with no claim that action is required.
 class _AttentionSection extends StatelessWidget {
   const _AttentionSection({
     required this.controller,
@@ -396,11 +410,36 @@ class _AttentionSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ReceivedInquiriesState state = controller.state;
+    final bool loaded =
+        state.status != ReceivedInquiriesStatus.failed &&
+        state.status != ReceivedInquiriesStatus.initial &&
+        state.status != ReceivedInquiriesStatus.loading;
+    final bool hasActionable = state.inquiries.any(
+      (ReceivedInquiry inquiry) => inquiry.canMakeOffer,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text('Needs Your Attention', style: theme.textTheme.titleMedium),
+        // The heading with its link on the same line, as in the approved
+        // design. The link appears only once there are inquiries to open.
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Needs Your Attention',
+                style: theme.textTheme.titleMedium,
+              ),
+            ),
+            if (loaded && state.inquiries.isNotEmpty)
+              TextButton(
+                onPressed: onOpenInquiries,
+                child: Text(
+                  hasActionable ? 'View inquiries' : 'View recent inquiries',
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.xs),
         if (state.status == ReceivedInquiriesStatus.failed)
           Row(
@@ -453,66 +492,102 @@ class _AttentionSection extends StatelessWidget {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        for (final ReceivedInquiry inquiry in shown)
-          _AttentionTile(inquiry: inquiry, onTap: onOpenInquiries),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: onOpenInquiries,
-            child: Text(
-              isActionable ? 'View inquiries' : 'View recent inquiries',
+    // One bordered list with hairlines between the rows.
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          for (int i = 0; i < shown.length; i++) ...<Widget>[
+            if (i > 0) const Divider(height: 1),
+            _AttentionTile(
+              inquiry: shown[i],
+              isNew: isActionable,
+              onTap: onOpenInquiries,
             ),
-          ),
-        ),
-      ],
+          ],
+        ],
+      ),
     );
   }
 }
 
 class _AttentionTile extends StatelessWidget {
-  const _AttentionTile({required this.inquiry, required this.onTap});
+  const _AttentionTile({
+    required this.inquiry,
+    required this.isNew,
+    required this.onTap,
+  });
 
   final ReceivedInquiry inquiry;
+
+  /// Whether the inquiry still waits for the seller's offer.
+  final bool isNew;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final String buyer = inquiry.buyer?.name ?? 'Unknown buyer';
-    final String listing = inquiry.listing?.title ?? 'Listing no longer available';
+    final String listing =
+        inquiry.listing?.title ?? 'Listing no longer available';
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(buyer, style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 2),
-                    Text(
-                      listing,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+    final String message = inquiry.message.trim();
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          children: <Widget>[
+            // The buyer's initials, as in the approved design.
+            InitialsAvatar(name: buyer, radius: 18),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(buyer, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 2),
+                  // The listing, then what the buyer asked.
+                  Text(
+                    message.isEmpty ? listing : '$listing · $message',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
                     ),
-                  ],
-                ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
-              const Icon(Icons.chevron_right, size: 20),
-            ],
-          ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            if (isNew)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xxxs,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'New',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+            else
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+          ],
         ),
       ),
     );
@@ -555,7 +630,10 @@ class _RecentActivitySection extends StatelessWidget {
         Row(
           children: <Widget>[
             Expanded(
-              child: Text('Recent Activity', style: theme.textTheme.titleMedium),
+              child: Text(
+                'Recent Activity',
+                style: theme.textTheme.titleMedium,
+              ),
             ),
             if (onSeeAll != null)
               TextButton(onPressed: onSeeAll, child: const Text('See All')),
@@ -605,15 +683,22 @@ class _RecentActivitySection extends StatelessWidget {
         final List<SellerActivity> shown = state.activities
             .take(5)
             .toList(growable: false);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            for (final SellerActivity activity in shown)
-              SellerActivityTile(
-                activity: activity,
-                onTap: _actionFor(activity),
-              ),
-          ],
+        // One bordered list with hairlines between the rows.
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              for (int i = 0; i < shown.length; i++) ...<Widget>[
+                if (i > 0) const Divider(height: 1),
+                SellerActivityTile(
+                  activity: shown[i],
+                  onTap: _actionFor(shown[i]),
+                  boxed: true,
+                ),
+              ],
+            ],
+          ),
         );
     }
   }

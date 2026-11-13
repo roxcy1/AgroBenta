@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/conversation.dart';
 import '../../../models/message.dart';
@@ -77,8 +78,11 @@ class ConversationTile extends StatelessWidget {
                         Expanded(
                           child: Text(
                             _listingLabel(conversation),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppColors.textSecondary,
+                            // The livestock the thread is about, in brand
+                            // green so it reads apart from the message.
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -200,24 +204,13 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? url = user.avatarUrl;
-    final Widget fallback = CircleAvatar(
-      radius: 24,
-      child: Text(
-        user.initial,
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
-    );
-
     return SizedBox(
       width: 48,
       height: 48,
       child: Stack(
         clipBehavior: Clip.none,
         children: <Widget>[
-          url == null || url.isEmpty
-              ? fallback
-              : CircleAvatar(radius: 24, backgroundImage: NetworkImage(url)),
+          InitialsAvatar(name: user.name, imageUrl: user.avatarUrl, radius: 24),
           if (hasUnread)
             Positioned(
               top: 0,
@@ -265,7 +258,7 @@ class _StatusChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: emphasised ? AppColors.primary : AppColors.border,
         ),

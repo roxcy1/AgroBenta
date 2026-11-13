@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_input_border.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/listing.dart';
@@ -235,10 +236,7 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
               decoration: InputDecoration(
                 hintText: 'Search your listings',
                 prefixIcon: const Icon(Icons.search, size: 20),
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
+                contentPadding: AppInputs.plainPadding,
                 suffixIcon: ListenableBuilder(
                   listenable: _controller,
                   builder: (BuildContext context, Widget? child) =>
@@ -246,6 +244,7 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                       ? const SizedBox.shrink()
                       : IconButton(
                           icon: const Icon(Icons.close, size: 18),
+                          visualDensity: VisualDensity.compact,
                           tooltip: 'Clear search',
                           onPressed: () {
                             _searchField.clear();
@@ -297,47 +296,48 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                     child: RefreshIndicator(
                       onRefresh: _controller.refresh,
                       child: switch (state.status) {
-                    SellerListingStatus.initial ||
-                    SellerListingStatus.loading =>
-                      const SellerListingsSkeleton(),
-                    // A scroll view even on a full-screen error, so
-                    // pull-to-refresh works there as well as on the list.
-                    SellerListingStatus.failed => ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: <Widget>[
-                        SizedBox(
-                          height: MediaQuery.sizeOf(context).height * 0.5,
-                          child: SellerListingsErrorState(
-                            message:
-                                state.errorMessage ?? 'Something went wrong.',
-                            onRetry: _controller.retry,
-                          ),
+                        SellerListingStatus.initial ||
+                        SellerListingStatus.loading =>
+                          const SellerListingsSkeleton(),
+                        // A scroll view even on a full-screen error, so
+                        // pull-to-refresh works there as well as on the list.
+                        SellerListingStatus.failed => ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: <Widget>[
+                            SizedBox(
+                              height: MediaQuery.sizeOf(context).height * 0.5,
+                              child: SellerListingsErrorState(
+                                message:
+                                    state.errorMessage ??
+                                    'Something went wrong.',
+                                onRetry: _controller.retry,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    _ when state.listings.isEmpty => ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: <Widget>[
-                        SizedBox(
-                          height: MediaQuery.sizeOf(context).height * 0.5,
-                          child: SellerListingsEmptyState(
-                            isFiltered: state.hasActiveQuery,
-                            onCreate: _openCreate,
-                            onClear: _controller.clearQuery,
-                          ),
+                        _ when state.listings.isEmpty => ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: <Widget>[
+                            SizedBox(
+                              height: MediaQuery.sizeOf(context).height * 0.5,
+                              child: SellerListingsEmptyState(
+                                isFiltered: state.hasActiveQuery,
+                                onCreate: _openCreate,
+                                onClear: _controller.clearQuery,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    _ => _ListingList(
-                      state: state,
-                      controller: _controller,
-                      scrollController: _scrollController,
-                      onOpen: _openDetail,
-                      onSubmit: _confirmSubmit,
-                      onMarkSold: _confirmMarkSold,
-                      onDelete: _confirmDelete,
-                    ),
-                  },
+                        _ => _ListingList(
+                          state: state,
+                          controller: _controller,
+                          scrollController: _scrollController,
+                          onOpen: _openDetail,
+                          onSubmit: _confirmSubmit,
+                          onMarkSold: _confirmMarkSold,
+                          onDelete: _confirmDelete,
+                        ),
+                      },
                     ),
                   ),
                 ),

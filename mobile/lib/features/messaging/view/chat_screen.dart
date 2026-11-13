@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/conversation.dart';
 import '../../../models/message.dart';
@@ -35,6 +36,8 @@ class ChatScreen extends StatefulWidget {
     required this.counterpart,
     required this.currentUserId,
     this.listingId,
+    this.listingTitle,
+    this.listingPrice,
     this.messageListingId,
     this.offerInquiry,
     this.counterpartRole,
@@ -51,6 +54,11 @@ class ChatScreen extends StatefulWidget {
   /// The listing this thread is filtered to, if any.
   final int? listingId;
 
+  /// The thread's listing name and asking price, as the conversation list
+  /// already knows them. When given, a strip under the app bar names the
+  /// livestock the conversation is about.
+  final String? listingTitle;
+  final String? listingPrice;
   /// The listing to tag new messages with when opened from a listing's detail
   /// screen. The thread itself still shows the whole buyer–seller history.
   final int? messageListingId;
@@ -416,6 +424,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
             return Column(
               children: <Widget>[
+                if (widget.listingTitle != null)
+                  _ListingStrip(
+                    title: widget.listingTitle!,
+                    price: widget.listingPrice,
+                  ),
                 Expanded(
                   child: switch (state.status) {
                     ChatStatus.initial || ChatStatus.loading => const Center(
@@ -491,17 +504,11 @@ class _SmallAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? url = user.avatarUrl;
-    if (url == null || url.isEmpty) {
-      return CircleAvatar(
-        radius: 16,
-        child: Text(
-          user.initial,
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-      );
-    }
-    return CircleAvatar(radius: 16, backgroundImage: NetworkImage(url));
+    return InitialsAvatar(
+      name: user.name,
+      imageUrl: user.avatarUrl,
+      radius: 16,
+    );
   }
 }
 
@@ -572,17 +579,11 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? url = user.avatarUrl;
-    if (url == null || url.isEmpty) {
-      return CircleAvatar(
-        radius: 32,
-        child: Text(
-          user.initial,
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-      );
-    }
-    return CircleAvatar(radius: 32, backgroundImage: NetworkImage(url));
+    return InitialsAvatar(
+      name: user.name,
+      imageUrl: user.avatarUrl,
+      radius: 32,
+    );
   }
 }
 
@@ -628,6 +629,73 @@ class _MakeOfferBar extends StatelessWidget {
             onPressed: onPressed,
             icon: const Icon(Icons.local_offer_outlined, size: 18),
             label: const Text('Make an Offer'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The livestock this conversation is about: name and asking price, on a
+/// light strip under the app bar.
+class _ListingStrip extends StatelessWidget {
+  const _ListingStrip({required this.title, this.price});
+
+  final String title;
+  final String? price;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String? formatted = price == null
+        ? null
+        : AppFormatters.formatMoney(price);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.screenGutter,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.primarySurface,
+              borderRadius: BorderRadius.circular(AppRadius.sm - 2),
+            ),
+            child: const Icon(
+              Icons.pets_outlined,
+              size: 20,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (formatted != null)
+                  Text(
+                    formatted,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),

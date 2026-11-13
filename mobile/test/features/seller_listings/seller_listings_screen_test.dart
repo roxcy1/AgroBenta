@@ -57,7 +57,16 @@ void main() {
       matching: find.text(text),
     );
 
-    expect(inCards('Cattle'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byWidgetPredicate(
+          (Widget widget) =>
+              widget.runtimeType.toString() == 'SellerListingCard',
+        ),
+        matching: find.textContaining('Cattle'),
+      ),
+      findsOneWidget,
+    );
     expect(inCards('Draft'), findsOneWidget);
     expect(inCards('Pending review'), findsOneWidget);
 
@@ -172,7 +181,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Cattle'));
+    await tester.tap(find.textContaining('Cattle').first);
     await sellerListingsSettle(tester);
 
     expect(find.byType(SellerListingDetailScreen), findsOneWidget);
@@ -358,7 +367,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Cattle'));
+    await tester.tap(find.textContaining('Cattle').first);
     await sellerListingsSettle(tester);
 
     expect(find.text(listingPhotoRequirementMessage), findsOneWidget);

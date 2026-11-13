@@ -7,6 +7,7 @@ import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_state.dart';
 import 'package:agrobenta_mobile/features/auth/view/sign_in_screen.dart';
+import 'package:agrobenta_mobile/widgets/temporary_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -110,10 +111,10 @@ void main() {
   ) async {
     await pumpSignIn(tester, handler: (_) async => fail('no request expected'));
 
-    expect(find.text('AgroBenta'), findsOneWidget);
+    expect(find.byType(TemporaryLogo), findsOneWidget);
     expect(find.text('Buy. Sell. Grow. Together.'), findsOneWidget);
-    expect(find.text('Welcome Back!'), findsOneWidget);
-    expect(find.text('Sign in to continue'), findsOneWidget);
+    expect(find.text('Welcome Back!'), findsNothing);
+    expect(find.text('Sign in to continue'), findsNothing);
     expect(find.text("Don't have an account?"), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Sign Up'), findsOneWidget);
   });

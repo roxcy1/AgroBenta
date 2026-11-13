@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../widgets/initials_avatar.dart';
+import '../../../widgets/temporary_logo.dart';
 import '../../../models/seller_verification.dart';
 import '../../../models/trinidad_location.dart';
 import '../../../models/user.dart';
@@ -11,7 +13,6 @@ import '../../account_mode/state/account_mode.dart';
 import '../../account_mode/state/account_mode_controller.dart';
 import '../../account_mode/state/account_mode_scope.dart';
 import '../../auth/state/auth_scope.dart';
-import '../../auth/widgets/auth_scenic_header.dart';
 import '../../help_center/view/help_center_screen.dart';
 import '../../seller_verification/state/seller_verification_controller.dart';
 import '../../seller_verification/state/seller_verification_scope.dart';
@@ -122,7 +123,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      // A white page: the approved design sets the account header and the
+      // mode switch straight on the surface, with only the lists boxed.
+      backgroundColor: AppColors.surface,
       body: ListenableBuilder(
         listenable: _controller,
         builder: (BuildContext context, Widget? child) {
@@ -183,70 +186,69 @@ class _ProfileBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The header carries the same painted landscape, temporary logo and tagline
-    // as the auth screens, so the brand treatment stays in one place. It grows
-    // with the text scale and is capped, like the auth screens. A narrow phone
-    // needs additional height because the wordmark can wrap onto another line.
-    final double textScale = MediaQuery.textScalerOf(
-      context,
-    ).scale(1).clamp(1.0, 1.8).toDouble();
-    final double minimumHeroHeight = MediaQuery.sizeOf(context).width <= 360
-        ? 250.0
-        : 180.0;
-    final double heroHeight =
-        (MediaQuery.sizeOf(context).height * 0.26 * textScale)
-            .clamp(minimumHeroHeight, 260.0)
-            .toDouble();
-
-    // How far the summary card rides up over the header's lower edge.
-    const double overlap = 24;
-
     return SafeArea(
       bottom: false,
-      child: SingleChildScrollView(
-        child: Column(
-          children: <Widget>[
-            Stack(
-              clipBehavior: Clip.none,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          // A compact white header: the logo (which carries the wordmark) and
+          // the screen title, like every other tab.
+          Container(
+            height: AppSizes.appBarHeight,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenGutter,
+            ),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
+            child: Row(
               children: <Widget>[
-                AuthScenicHeader(height: heroHeight),
-                Padding(
-                  padding: EdgeInsets.only(top: heroHeight - overlap),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenGutter,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        _ProfileSummaryCard(user: user, onEdit: onEdit),
-                        const SizedBox(height: AppSpacing.md),
-                        const _AccountModeCard(),
-                        const SizedBox(height: AppSpacing.md),
-                        _BecomeSellerCard(user: user),
-                        const SizedBox(height: AppSpacing.lg),
-                        _AccountSettingsSection(
-                          location: user.location,
-                          onEdit: onEdit,
-                          onEditAddress: onEditAddress,
-                          onChangePassword: onChangePassword,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        _OtherSection(
-                          onHelpAndSupport: onHelpAndSupport,
-                          onTermsAndPolicies: onTermsAndPolicies,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                const TemporaryLogo(size: 30),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Profile', style: Theme.of(context).textTheme.titleLarge),
               ],
             ),
-            SizedBox(
-              height: MediaQuery.paddingOf(context).bottom + AppSpacing.xl,
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.screenGutter,
+                AppSpacing.md,
+                AppSpacing.screenGutter,
+                MediaQuery.paddingOf(context).bottom + AppSpacing.xl,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _ProfileSummaryCard(user: user, onEdit: onEdit),
+                  const SizedBox(height: AppSpacing.md),
+                  const _AccountModeCard(),
+                  const SizedBox(height: AppSpacing.md),
+                  // Only for accounts that are not sellers yet. Once the
+                  // account is verified there is nothing left to apply for,
+                  // so the whole card goes, not just its button.
+                  if (!user.isSeller) ...<Widget>[
+                    _BecomeSellerCard(user: user),
+                    const SizedBox(height: AppSpacing.lg),
+                  ] else
+                    const SizedBox(height: AppSpacing.xs),
+                  _AccountSettingsSection(
+                    location: user.location,
+                    onEdit: onEdit,
+                    onEditAddress: onEditAddress,
+                    onChangePassword: onChangePassword,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _OtherSection(
+                    onHelpAndSupport: onHelpAndSupport,
+                    onTermsAndPolicies: onTermsAndPolicies,
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -262,40 +264,35 @@ class _ProfileSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Row(
-          children: <Widget>[
-            _Avatar(name: user.name, url: user.avatarUrl),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    user.name,
-                    style: theme.textTheme.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    user.email,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+    // No card: the avatar, name and email sit straight on the page.
+    return Row(
+      children: <Widget>[
+        InitialsAvatar(name: user.name, imageUrl: user.avatarUrl, radius: 36),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                user.name,
+                style: theme.textTheme.titleLarge,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            TextButton(onPressed: onEdit, child: const Text('Edit')),
-          ],
+              const SizedBox(height: AppSpacing.xxxs),
+              Text(
+                user.email,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
-      ),
+        TextButton(onPressed: onEdit, child: const Text('Edit')),
+      ],
     );
   }
 }
@@ -505,72 +502,91 @@ class _AccountModeCard extends StatelessWidget {
         AuthScope.of(context).state.user?.isSeller ?? false;
     final AccountMode mode = controller.mode;
 
-    return Card(
-      color: AppColors.primary.withValues(alpha: 0.08),
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(
-                  mode == AccountMode.seller
-                      ? Icons.storefront_outlined
-                      : Icons.shopping_cart_outlined,
-                  color: AppColors.primary,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const _GroupLabel('Account Mode'),
+        const SizedBox(height: AppSpacing.xs),
+        // A grey track with the selected half raised in white, as in the
+        // approved design, rather than Material's outlined pill.
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.xxs),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: SegmentedButton<AccountMode>(
+            style: ButtonStyle(
+              visualDensity: VisualDensity.standard,
+              backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+                (Set<WidgetState> states) =>
+                    states.contains(WidgetState.selected)
+                    ? AppColors.surface
+                    : Colors.transparent,
+              ),
+              foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+                (Set<WidgetState> states) =>
+                    states.contains(WidgetState.disabled)
+                    ? AppColors.textSecondary.withValues(alpha: 0.5)
+                    : states.contains(WidgetState.selected)
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+              ),
+              side: const WidgetStatePropertyAll<BorderSide>(
+                BorderSide(color: Colors.transparent),
+              ),
+              shape: WidgetStatePropertyAll<OutlinedBorder>(
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              textStyle: WidgetStatePropertyAll<TextStyle?>(
+                theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Text('Account Mode', style: theme.textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              mode == AccountMode.seller
-                  ? 'You can list and manage your livestock.'
-                  : 'Browse and purchase livestock.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            SegmentedButton<AccountMode>(
-              segments: <ButtonSegment<AccountMode>>[
-                const ButtonSegment<AccountMode>(
-                  value: AccountMode.buyer,
-                  label: Text('Buyer Mode'),
-                ),
-                ButtonSegment<AccountMode>(
-                  value: AccountMode.seller,
-                  label: const Text('Seller Mode'),
-                  enabled: canUseSellerMode,
-                ),
-              ],
-              selected: <AccountMode>{mode},
-              onSelectionChanged: (Set<AccountMode> selection) {
-                final AccountMode next = selection.first;
-                if (next == AccountMode.seller) {
-                  controller.requestSellerMode();
-                } else {
-                  controller.select(next);
-                }
-              },
-              showSelectedIcon: false,
-              expandedInsets: EdgeInsets.zero,
-            ),
-            if (!canUseSellerMode) ...<Widget>[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Seller Mode becomes available after seller verification.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+            segments: <ButtonSegment<AccountMode>>[
+              const ButtonSegment<AccountMode>(
+                value: AccountMode.buyer,
+                label: Text('Buyer Mode'),
+              ),
+              ButtonSegment<AccountMode>(
+                value: AccountMode.seller,
+                label: const Text('Seller Mode'),
+                enabled: canUseSellerMode,
               ),
             ],
-          ],
+            selected: <AccountMode>{mode},
+            onSelectionChanged: (Set<AccountMode> selection) {
+              final AccountMode next = selection.first;
+              if (next == AccountMode.seller) {
+                controller.requestSellerMode();
+              } else {
+                controller.select(next);
+              }
+            },
+            showSelectedIcon: false,
+            expandedInsets: EdgeInsets.zero,
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          mode == AccountMode.seller
+              ? 'You can list and manage your livestock.'
+              : 'Browse and purchase livestock.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        if (!canUseSellerMode) ...<Widget>[
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            'Seller Mode becomes available after seller verification.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -619,7 +635,7 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
           // A pale amber tint derived from the existing warning token, the same
           // way the account-mode card derives its pale green — no new colour is
           // introduced for this one card.
-          color: AppColors.warning.withValues(alpha: 0.10),
+          color: AppColors.primarySurface,
           margin: EdgeInsets.zero,
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -628,9 +644,17 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    const Icon(Icons.person_add_alt_outlined),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text('Become a Seller', style: theme.textTheme.titleSmall),
+                    Expanded(
+                      child: Text(
+                        'Become a Seller',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.storefront_outlined,
+                      size: 20,
+                      color: AppColors.primary,
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -745,12 +769,10 @@ class _AccountSettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('Account Settings', style: theme.textTheme.titleSmall),
+        const _GroupLabel('Account Settings'),
         const SizedBox(height: AppSpacing.xs),
         Card(
           margin: EdgeInsets.zero,
@@ -809,10 +831,7 @@ class _AddressSettingsTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Icon(Icons.home_outlined, color: AppColors.primary),
-            ),
+            const _IconTile(icon: Icons.home_outlined),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -840,11 +859,12 @@ class _AddressSettingsTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
               child: Icon(
                 Icons.chevron_right,
-                color: theme.colorScheme.onSurfaceVariant,
+                size: 20,
+                color: AppColors.textSecondary,
               ),
             ),
           ],
@@ -865,12 +885,10 @@ class _OtherSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('Other', style: theme.textTheme.titleSmall),
+        const _GroupLabel('Other'),
         const SizedBox(height: AppSpacing.xs),
         Card(
           margin: EdgeInsets.zero,
@@ -889,11 +907,12 @@ class _OtherSection extends StatelessWidget {
                 subtitle: 'View our terms, privacy policy, and guidelines',
                 onTap: onTermsAndPolicies,
               ),
-              const Divider(height: 1),
-              const _SignOutTile(),
             ],
           ),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        // Log Out stands alone, in red, so it is never tapped by habit.
+        const Card(margin: EdgeInsets.zero, child: _SignOutTile()),
       ],
     );
   }
@@ -919,15 +938,21 @@ class _SettingsTile extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
 
     return ListTile(
-      leading: Icon(icon),
+      leading: _IconTile(icon: icon),
       title: Text(title, style: theme.textTheme.titleSmall),
       subtitle: Text(
         subtitle,
         style: theme.textTheme.bodySmall?.copyWith(
           color: AppColors.textSecondary,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: const Icon(
+        Icons.chevron_right,
+        size: 20,
+        color: AppColors.textSecondary,
+      ),
       enabled: enabled,
       onTap: enabled ? onTap : null,
     );
@@ -941,41 +966,74 @@ class _SignOutTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isBusy = AuthScope.of(context).state.isSigningOut;
 
+    final ThemeData theme = Theme.of(context);
+
     return ListTile(
-      leading: const Icon(Icons.logout),
-      title: const Text('Log Out'),
-      subtitle: const Text('Sign out from your account'),
+      leading: const _IconTile(icon: Icons.logout, danger: true),
+      title: Text(
+        'Log Out',
+        style: theme.textTheme.titleSmall?.copyWith(color: AppColors.error),
+      ),
+      subtitle: Text(
+        'Sign out from your account',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      ),
       trailing: isBusy
           ? const SizedBox.square(
               dimension: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Icon(Icons.chevron_right),
+          : null,
       enabled: !isBusy,
       onTap: isBusy ? null : () => AuthScope.of(context).signOut(),
     );
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, required this.url});
+/// The small grey heading above a group of rows.
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.text);
 
-  final String name;
-  final String? url;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final String? src = url;
-    if (src == null || src.isEmpty) {
-      return CircleAvatar(
-        radius: 32,
-        child: Text(
-          name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-      );
-    }
-    return CircleAvatar(radius: 32, backgroundImage: NetworkImage(src));
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        color: AppColors.textSecondary,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+/// The tinted square that carries a row's icon.
+class _IconTile extends StatelessWidget {
+  const _IconTile({required this.icon, this.danger = false});
+
+  final IconData icon;
+
+  /// Red on a pale red tile, for the one destructive row.
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = danger ? AppColors.error : AppColors.primary;
+
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: danger
+            ? AppColors.error.withValues(alpha: 0.10)
+            : AppColors.primarySurface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Icon(icon, size: 19, color: accent),
+    );
   }
 }
 

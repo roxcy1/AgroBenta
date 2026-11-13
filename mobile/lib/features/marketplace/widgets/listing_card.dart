@@ -5,7 +5,6 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
 import 'listing_photo.dart';
-import 'listing_social_proof.dart';
 
 /// One listing in the marketplace list.
 ///
@@ -45,32 +44,27 @@ class ListingCard extends StatelessWidget {
             // every card has the same-shaped image band and the list stays
             // scannable when sellers write very different amounts of text.
             AspectRatio(
-              aspectRatio: 16 / 9,
+              aspectRatio: 4 / 3,
               child: ListingPhoto(listing: listing),
             ),
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.sm),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                AppSpacing.xs,
+                AppSpacing.sm,
+                AppSpacing.sm,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  // Species first and in a label style: it is the broadest
-                  // thing a buyer scanning for "cattle" is looking for, and
-                  // the title below narrows it.
-                  Text(
-                    listing.livestockType,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppSpacing.xxs),
                   Text(
                     listing.title,
                     style: theme.textTheme.titleSmall,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: AppSpacing.xxxs),
+                  _MetaRow(icon: Icons.place_outlined, text: _place()),
                   const SizedBox(height: AppSpacing.xs),
                   // Price, left-aligned and outside a pill, per the type
                   // rules. Never the only thing carrying the value: the peso
@@ -81,22 +75,14 @@ class ListingCard extends StatelessWidget {
                         listing.askingPrice,
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const <FontFeature>[
+                        FontFeature.tabularFigures(),
+                      ],
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  ListingSocialProof(completedSales: listing.completedSales),
-                  const SizedBox(height: AppSpacing.xs),
-                  _MetaRow(icon: Icons.place_outlined, text: listing.location),
-                  if (listing.weightLabel != null ||
-                      listing.quantity > 0) ...<Widget>[
-                    const SizedBox(height: AppSpacing.xxs),
-                    _MetaRow(
-                      icon: Icons.scale_outlined,
-                      text: _physicalSummary(),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -110,16 +96,17 @@ class ListingCard extends StatelessWidget {
   ///
   /// Only the parts a seller actually filled in are shown. A card that renders
   /// "Age: —" for a listing with no age recorded is noise.
-  String _physicalSummary() {
-    final List<String> parts = <String>[
-      if (listing.quantity > 0)
-        '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
-      if (listing.weightLabel != null)
-        '${listing.weightIsEstimated ? 'Est. ' : ''}${listing.weightLabel!}',
-      if (listing.ageLabel != null)
-        '${listing.ageIsEstimated ? 'Est. ' : ''}${listing.ageLabel!}',
-    ];
-    return parts.isEmpty ? 'Details on request' : parts.join(' · ');
+  /// The species next to the place, e.g. "Cattle · Lipa, Batangas", so a
+  /// buyer still sees what the animal is when the photo does not show it.
+  String _place() {
+    final String type = listing.livestockType.trim();
+    final String species = type.isEmpty
+        ? ''
+        : '${type[0].toUpperCase()}${type.substring(1)}';
+    return <String>[
+      if (species.isNotEmpty) species,
+      if (listing.location.trim().isNotEmpty) listing.location.trim(),
+    ].join(' · ');
   }
 }
 

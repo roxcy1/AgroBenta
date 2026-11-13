@@ -1080,7 +1080,7 @@ void main() {
     await settleSellerListings(tester, frames: 20);
     expect(find.text('AI Suggested Price per Head'), findsOneWidget);
 
-    await tapFormControl(tester, find.widgetWithText(TextButton, 'Back'));
+    await tapFormControl(tester, find.widgetWithText(OutlinedButton, 'Back'));
     await tester.enterText(field('Weight'), '600');
     await tester.pump();
     await tapContinue(tester);
@@ -1128,6 +1128,9 @@ void main() {
     );
     expect(find.text('Outside the typical age-band range.'), findsNothing);
 
+    // The pinned action bar shortens the scroll area, so bring the row in.
+    await tester.ensureVisible(find.text('Technical details'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Technical details'));
     await tester.pumpAndSettle();
     expect(find.text('Outside the typical age-band range.'), findsOneWidget);
@@ -1183,6 +1186,9 @@ void main() {
       findsNothing,
     );
 
+    // The pinned action bar shortens the scroll area, so bring the row in.
+    await tester.ensureVisible(find.text('Technical details'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Technical details'));
     await tester.pumpAndSettle();
     expect(find.text('Outside the supported model envelope.'), findsOneWidget);

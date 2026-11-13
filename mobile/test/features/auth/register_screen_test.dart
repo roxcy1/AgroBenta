@@ -4,6 +4,7 @@ import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/auth/view/register_screen.dart';
+import 'package:agrobenta_mobile/widgets/temporary_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -102,7 +103,7 @@ void main() {
     );
 
     expect(find.text('Create Your Account'), findsOneWidget);
-    expect(find.text('AgroBenta'), findsOneWidget);
+    expect(find.byType(TemporaryLogo), findsOneWidget);
     expect(find.text('Buy. Sell. Grow. Together.'), findsOneWidget);
     expect(find.text('Already have an account?'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Log In'), findsOneWidget);

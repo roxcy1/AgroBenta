@@ -37,6 +37,17 @@ AgroBenta uses a:
 
 The interface should feel like a **real livestock marketplace application**, not a generic AI or banking application.
 
+### Professional theme (approved 2026-11-05)
+
+The approved "now vs proposed" mockup sets the current look. In short:
+
+- **One typeface:** Public Sans for everything (§4).
+- **White chrome:** app bars, headers and the bottom bar are white with a hairline border. Solid green bands are no longer used.
+- **Green only where it means something:** primary buttons, the selected tab, links, prices and success states.
+- **8dp corners** on buttons, fields, cards and chips (§6).
+- **No painted scenery:** the sky, sun and rolling-hills illustration is retired from the auth, profile and Home screens.
+- **Brand artwork:** the AgroBenta logo carries the wordmark, and the four livestock types use their own silhouettes (§34.1).
+
 ### Design Principles
 
 1. **Clarity first**
@@ -64,33 +75,33 @@ The interface should feel like a **real livestock marketplace application**, not
 
 # 3. Color System
 
-The prototype uses a dark agricultural green as the dominant brand color with white content surfaces and lighter green accents.
-
-The following values are the implementation target and may be adjusted slightly if the existing AgroBenta branding requires exact matching.
+The brand is a dark agricultural green on white surfaces, with a pale green tint for selected and informational surfaces. These values match the approved proposal and the Admin Web brand green.
 
 | Purpose | Color | Hex |
 |---|---|---|
-| Primary brand | Dark agricultural green | `#006B4F` |
-| Primary action | Marketplace green | `#008A5A` |
-| Dark header | Deep green | `#005A43` |
-| Light green surface | Very light green | `#EAF7F0` |
-| Success | Green | `#168A4A` |
-| Warning | Amber | `#D98B00` |
-| Error | Red | `#C93636` |
-| Text primary | Near black | `#202124` |
-| Text secondary | Gray | `#6B7280` |
-| Border | Light gray | `#D9DEE3` |
-| Page background | Very light gray | `#F7F8F7` |
+| Primary brand | Dark agricultural green | `#1B5E20` |
+| Primary hover / pressed | Green | `#2E7D32` |
+| Deep green | Darkest brand green | `#134417` |
+| Light green surface | Pale green tint | `#EAF2E8` |
+| Success | Green | `#1B5E20` |
+| Sold / info | Blue | `#1D5385` |
+| Warning | Amber | `#8A5A00` on `#FBF0D9` |
+| Error | Red | `#A3302A` on `#F9E4E1` |
+| Text primary | Near black green | `#16241A` |
+| Text secondary | Gray green | `#5B665E` |
+| Border | Light gray green | `#E2E6E0` |
+| Field / page background | Very light gray | `#F5F6F4` |
 | Card background | White | `#FFFFFF` |
 
 ### Color Usage
 
 - Primary green is reserved for:
-  - App bars
   - Primary buttons
-  - Selected navigation
-  - Important actions
+  - The selected tab and other selected controls
+  - Links and important actions
+  - Prices
   - Verification/success indicators where appropriate
+- App bars and headers are **white**, not green.
 
 - White is used for:
   - Main content surfaces
@@ -112,13 +123,13 @@ Do not use gradients, neon colors, excessive shadows, or decorative color effect
 
 # 4. Typography
 
-Use the platform/system font unless the project already contains an approved AgroBenta font.
+The approved font is **Public Sans** (SIL Open Font License), bundled with the app in `assets/fonts/`. It is a plain, professional UI typeface, so it replaces the platform font everywhere. Use one family only; do not add a second display font.
 
 Recommended hierarchy:
 
 | Element | Weight | Approx. Size |
 |---|---:|---:|
-| Screen title | Bold | 18–20sp |
+| Screen title | Bold | 18–22sp |
 | Section heading | Semi-bold | 15–17sp |
 | Card title | Semi-bold | 14–16sp |
 | Body text | Regular | 13–15sp |
@@ -132,7 +143,7 @@ Recommended hierarchy:
 - Use sentence case for normal UI text.
 - Avoid excessive ALL CAPS.
 - Keep labels short.
-- Prices should be visually prominent.
+- Prices should be visually prominent: bold, brand green, with evenly spaced (tabular) figures.
 - Supporting information should be lighter than the primary content.
 - Do not use oversized headings that consume most of the screen.
 
@@ -174,39 +185,32 @@ Avoid tightly packed controls.
 
 # 6. Shape and Radius
 
-The prototype uses rounded controls and cards without excessive pill styling.
-
-Recommended:
+The professional theme uses one moderate radius for almost everything.
 
 ```text
-Text fields:      8–10dp
-Cards:            10–12dp
-Primary buttons:  8–10dp
+Text fields:      8dp
+Cards:            8dp
+Buttons:          8dp
+Chips:            8dp
+Status badges:    6dp
+Image containers: 6–8dp
 Dialogs:          12–16dp
-Chips:             8–16dp
-Image containers: 10–12dp
 ```
 
-Avoid making every component fully pill-shaped.
-
-Pill shapes should primarily be used for:
-
-- Filter chips
-- Status chips
-- Compact category selectors
+Do not use fully pill-shaped components. Status badges are small rounded rectangles, not pills.
 
 ---
 
 # 7. Elevation and Borders
 
-Use subtle elevation.
+Separate surfaces with 1dp borders, not shadows.
 
 Recommended:
 
 ```text
-Cards: 1–2dp elevation
+Cards: no elevation, 1dp border
 Dialogs: 4–8dp elevation
-Bottom navigation: subtle elevation
+App bar and bottom navigation: no elevation, 1dp hairline border
 ```
 
 Borders may be used for:
@@ -293,7 +297,7 @@ The navigation must remain simple and should not introduce a separate seller acc
 
 # 10. App Bar
 
-App bars use the AgroBenta green brand color.
+App bars are white with a 1dp hairline border underneath and near-black titles. Action text and icons that need emphasis use brand green.
 
 Typical structure:
 
@@ -1167,6 +1171,13 @@ Recommended icon usage:
 Icons should support text rather than replace important labels.
 
 Avoid mixing multiple unrelated icon styles.
+
+## 34.1 Brand artwork
+
+- **Logo:** `assets/images/AgroBentaLogo.png` (transparent background). It includes the "AgroBenta" wordmark, so never repeat the name as text beside it. Show it on white or very light backgrounds only.
+- **Livestock types:** cattle, carabao, goat, swine and chicken use the silhouettes in `assets/icons/livestock/`, through `LivestockTypeIcon`. They are tinted brand green. Any other type falls back to a neutral paw. Do not use Font Awesome stand-ins (hippo, bacon, paw) for these types.
+- **Bottom navigation icons:** Home, Browse, My Listings, Messages, Transactions and Profile use the approved proposal's thin line icons, drawn by `NavLineIcon` (`lib/widgets/nav_line_icon.dart`). A selected tab keeps the same outline and turns brand green; there is no filled variant.
+- **People without a photo:** a solid brand-green circle with up to two white initials, through `InitialsAvatar` (`lib/widgets/initials_avatar.dart`).
 
 ---
 

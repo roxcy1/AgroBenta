@@ -465,7 +465,8 @@ class MessageRepository
     }
 
     /**
-     * The listing label the mobile app already shows ("Cattle Angus").
+     * The listing's own name, as the marketplace cards show it ("Angus",
+     * "Duroc sow"); the livestock type only when the listing has no name.
      */
     private function listingTitle(?Listing $listing): ?string
     {
@@ -473,7 +474,7 @@ class MessageRepository
             return null;
         }
 
-        $title = trim(($listing->livestock_type ?? '').' '.($listing->breed ?? ''));
+        $title = trim($listing->displayLabel());
 
         return $title === '' ? null : $title;
     }

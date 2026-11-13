@@ -14,11 +14,16 @@ class SellerActivityTile extends StatelessWidget {
   const SellerActivityTile({
     required this.activity,
     required this.onTap,
+    this.boxed = false,
     super.key,
   });
 
   final SellerActivity activity;
   final VoidCallback? onTap;
+
+  /// Whether the row sits inside a bordered list, which needs side padding
+  /// and puts the time at the right edge instead of under the text.
+  final bool boxed;
 
   static IconData iconFor(String action) {
     if (action.startsWith('inquiry')) {
@@ -46,11 +51,29 @@ class SellerActivityTile extends StatelessWidget {
     final String? description = activity.description;
 
     final Widget content = Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      padding: EdgeInsets.symmetric(
+        vertical: boxed ? AppSpacing.sm : AppSpacing.xs,
+        horizontal: boxed ? AppSpacing.sm : 0,
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: boxed
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(iconFor(activity.action), size: 18, color: AppColors.primary),
+          // The event's icon on a pale tile, as in the approved design.
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primarySurface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(
+              iconFor(activity.action),
+              size: 19,
+              color: AppColors.primary,
+            ),
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -65,7 +88,8 @@ class SellerActivityTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (description != null && description.trim().isNotEmpty) ...<Widget>[
+                if (description != null &&
+                    description.trim().isNotEmpty) ...<Widget>[
                   const SizedBox(height: 2),
                   Text(
                     description,
@@ -76,7 +100,7 @@ class SellerActivityTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
-                if (timestamp.isNotEmpty) ...<Widget>[
+                if (!boxed && timestamp.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 2),
                   Text(
                     timestamp,
@@ -88,7 +112,17 @@ class SellerActivityTile extends StatelessWidget {
               ],
             ),
           ),
-          if (onTap != null)
+          if (boxed && timestamp.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: AppSpacing.xs),
+              child: Text(
+                timestamp,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            )
+          else if (onTap != null)
             const Padding(
               padding: EdgeInsets.only(left: AppSpacing.xs),
               child: Icon(Icons.chevron_right, size: 20),
@@ -103,7 +137,7 @@ class SellerActivityTile extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderRadius: boxed ? null : BorderRadius.circular(AppRadius.sm),
       child: content,
     );
   }

@@ -7,6 +7,7 @@ import '../../../core/utils/app_formatters.dart';
 import '../../../models/inquiry.dart';
 import '../../../models/listing.dart';
 import '../../../models/message.dart';
+import '../../../widgets/field_label.dart';
 import '../../../widgets/notice_banner.dart';
 import '../../../widgets/section_card.dart';
 import '../../auth/state/auth_scope.dart';
@@ -379,13 +380,15 @@ class _InquireScreenState extends State<InquireScreen> {
                         ],
                         InquiryListingCard(listing: widget.listing),
                         const SizedBox(height: AppSpacing.md),
-                        ..._paymentMethodSection(isSubmitting),
+                        // Message first, then collection, date and payment, as in
+                        // the approved proposal.
+                        ..._messageSection(isSubmitting),
                         const SizedBox(height: AppSpacing.md),
                         ..._collectionMethodSection(isSubmitting),
                         const SizedBox(height: AppSpacing.md),
                         ..._collectionDateSection(isSubmitting),
                         const SizedBox(height: AppSpacing.md),
-                        ..._messageSection(isSubmitting),
+                        ..._paymentMethodSection(isSubmitting),
                         const SizedBox(height: AppSpacing.lg),
                         Row(
                           children: <Widget>[
@@ -467,7 +470,7 @@ class _InquireScreenState extends State<InquireScreen> {
             textInputAction: TextInputAction.newline,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              labelText: 'Message (optional)',
+              label: FieldLabel('Message (optional)'),
               alignLabelWithHint: true,
               hintText: 'Type your message here...',
               helperText:
@@ -501,10 +504,18 @@ class _InquireScreenState extends State<InquireScreen> {
             runSpacing: AppSpacing.xs,
             children: <Widget>[
               for (final _MessageTemplate template in _messageTemplates)
+                // Compact chips rather than full-width buttons.
                 OutlinedButton(
                   onPressed: isSubmitting
                       ? null
                       : () => _applyTemplate(template),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
+                    textStyle: theme.textTheme.labelLarge,
+                  ),
                   child: Text(template.label),
                 ),
             ],
@@ -961,28 +972,48 @@ class _PreferenceCard extends StatelessWidget {
                 width: selected ? 2 : 1,
               ),
             ),
-            child: Column(
+            // A radio mark beside the title and hint, as in the approved
+            // design, rather than a large centred icon.
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                Container(
+                  width: 18,
+                  height: 18,
+                  margin: const EdgeInsets.only(top: 1),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? AppColors.primary : AppColors.border,
+                      width: selected ? 5 : 2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: AppColors.text,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xxxs),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 Icon(
                   icon,
-                  size: 24,
+                  size: 18,
                   color: selected ? AppColors.primary : AppColors.textSecondary,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: selected ? AppColors.primary : AppColors.text,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
                 ),
               ],
             ),
