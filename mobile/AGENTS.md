@@ -377,6 +377,7 @@ disagree. Signing out, changing accounts or losing capability clears the mode.
 | `intl` | Peso, date and relative-date formatting in `AppFormatters`, added in M2 as the first screen that displays money. `main()` calls `initializeDateFormatting('en_PH')` before the first frame; **any locale other than `en_US` must be initialised or `DateFormat` throws**, and `test/flutter_test_config.dart` does the equivalent for the suite. | Hand-rolled month names or a second date library. |
 | `font_awesome_flutter` | The Google brand mark on the registration and login screens' "Continue with Google" button (Facebook was removed, MS-11). Material has no Google glyph and the project ships no brand assets, so `FaIcon(FontAwesomeIcons.google/facebook)` is the only accurate source. Pin `^11.0.0`: earlier 10.x versions extend `IconData`, which this SDK declares `final`, and fail to compile. | A hand-drawn `CustomPainter`, an SVG asset, or a second icon-font package. |
 | `google_sign_in` | Android Google sign-in: obtains the ID token sent to `POST /api/auth/google`, behind `GoogleSignInService`. | A WebView OAuth flow, or a client secret in the app. |
+| `firebase_core`, `firebase_messaging` | Android push notifications (MS-15): the FCM registration token sent to `POST /api/devices`, and opening the Notifications screen from a tapped push, behind `PushMessaging` (`lib/core/push/`). Firebase is configured by the committed `android/app/google-services.json` through the Google Services Gradle plugin; no options file is generated. Held on `firebase_messaging` 16.x: 17.0 deprecates the registration-token API the backend's FCM HTTP v1 send targets. This is push only — **not** Firebase Authentication (§C). | `flutter_local_notifications` (a push received in the foreground is not shown; Reverb already updates the open app), or a second messaging SDK. |
 | `google_sign_in_ios` | Not used directly; a version pin only. `google_sign_in`'s iOS implementation is held at `<6.4.0` because 6.4.0 needs Flutter 3.47, above the documented Flutter 3.44.4. Remove the pin when the documented toolchain moves to 3.47+. | — |
 | `cupertino_icons` | Scaffold default. Currently unused by app code; remove it if it stays unused when real iOS-styled widgets land. | — |
 
@@ -522,6 +523,25 @@ One contract detail to keep in mind: **`POST /api/auth/logout` returns
 `{ success, message }` with no `data` key.** `ApiClient` normalises a valid
 success envelope that omits `data` to `data: null`; `ApiEnvelope` itself stays
 strict and still rejects a missing `success`.
+
+**Resolved for push notifications (MS-15, Android).** One route behind
+`auth:sanctum` + `ability:mobile`:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/devices` | Registers the phone's FCM token (`token`, max 512) for the calling session. `{ success, message }` with no `data`; `user_id` is `422`. |
+
+The registration belongs to the session's Sanctum token and is deleted with it,
+so logout (and a password reset, which revokes every token) stops pushes with
+no unregister call. A token re-registered by another account moves to it. The
+backend pushes every stored notification from its `NotificationSent` hook on
+the queue: the title, the fixed body "Open AgroBenta to see the details." and
+string `data` (`notification_id`, `type`, `action`, `action_id`). The app
+registers after sign-in through `PushRegistrationController`, re-registers a
+refreshed token, deletes the FCM token on sign-out, and opens
+`NotificationsScreen` when a push is tapped — after sign-in if the tap
+launched the app. Only `main()` builds `FirebasePushMessaging`; tests and
+non-Android platforms use `NoopPushMessaging`.
 
 **Resolved for password recovery (MS-10).** Two public routes, for a signed-out
 user:
@@ -938,7 +958,7 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-15 | Token lifetime policy | Mobile tokens are issued non-expiring, the same as admin tokens. No expiry, no refresh, no revocation-all. Still needs an explicit decision before shipping, so a mobile session currently lasts until it is logged out or revoked. | Security |
 | GAP-16 | Sanctum token ability scoping for mobile | **CLOSED.** Mobile tokens carry `['mobile']`; mobile routes require `ability:mobile`. The `admin` group now also requires `ability:admin`, so a mobile token is refused by admin routes and an admin token is refused by mobile routes. Both directions are covered by `backend/tests/Feature/Auth/MobileAuthTest.php`. | — |
 | GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry, and `GET /api/inquiries/listing/{listing}` pre-checks the buyer's existing inquiry for a listing. `GET /api/seller/inquiries` lists the approved seller's inquiries through `SellerInquiryResource`, which omits buyer email and inquiry status. Administrator inquiry endpoints have been removed; inquiries are handled between buyers and sellers only. The app directs buyers to Messages after submitting an inquiry or when an inquiry already exists. Buyer inquiry list/detail and dedicated seller inquiry detail/status actions remain unavailable. | Buyer inquiry list/detail, dedicated seller inquiry detail/status actions, any remaining server-driven status display |
-| GAP-20 | Real-time messaging / notifications | **CLOSED.** Laravel Reverb is installed (`laravel/reverb`), `BROADCAST_CONNECTION=reverb`, `QUEUE_CONNECTION=redis`, with `config/broadcasting.php`, `config/reverb.php` and `routes/channels.php`. The `reverb` service (internal `0.0.0.0:8080`, published `8083`) and a Redis `queue` worker run in `compose.yaml`; `/broadcasting/auth` uses `auth:sanctum`. Broadcast events (`MessageSent`, `InquiryCreated`, `OfferCreated`, `OfferUpdated`, `TransactionCreated`, `TransactionUpdated`, `NotificationCreated`, `ActivityRecorded`) are queued + after-commit and target `private-user.{id}` or the shared `private-admin`. The mobile app subscribes with `pusher_reverb_flutter` (`lib/core/realtime/`) and refreshes REST data on events and on reconnect; the Admin Web subscribes with `laravel-echo`/`pusher-js` and invalidates react-query caches. No push/background delivery (out of scope). | — |
+| GAP-20 | Real-time messaging / notifications | **CLOSED.** Laravel Reverb is installed (`laravel/reverb`), `BROADCAST_CONNECTION=reverb`, `QUEUE_CONNECTION=redis`, with `config/broadcasting.php`, `config/reverb.php` and `routes/channels.php`. The `reverb` service (internal `0.0.0.0:8080`, published `8083`) and a Redis `queue` worker run in `compose.yaml`; `/broadcasting/auth` uses `auth:sanctum`. Broadcast events (`MessageSent`, `InquiryCreated`, `OfferCreated`, `OfferUpdated`, `TransactionCreated`, `TransactionUpdated`, `NotificationCreated`, `ActivityRecorded`) are queued + after-commit and target `private-user.{id}` or the shared `private-admin`. The mobile app subscribes with `pusher_reverb_flutter` (`lib/core/realtime/`) and refreshes REST data on events and on reconnect; the Admin Web subscribes with `laravel-echo`/`pusher-js` and invalidates react-query caches. Reverb itself has no push/background delivery; phone push for stored notifications is FCM, separately (see "Resolved for push notifications" above). | — |
 
 ### Gaps that are design questions, not missing code
 

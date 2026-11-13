@@ -6,6 +6,10 @@ Add real-time updates to AgroBenta over Laravel Reverb, delivered to Flutter
 (mobile) and React (admin) **only while a client is open and connected**. No
 FCM/push notifications, typing indicators, or online presence.
 
+> Phone push (FCM) was later approved and built separately, outside this
+> plan (functional documentation §7, MS-15, 2026-11-11). It reuses the
+> `NotificationSent` hook but adds no broadcast event or channel.
+
 In scope: buyer–seller messaging, inquiries, offers, transactions/fulfillment,
 and the notification unread badge (mobile), plus admin moderation/activity
 dashboards (React).

@@ -5,8 +5,10 @@ namespace App\Providers;
 use App\Auth\PasswordResetCodeBrokerManager;
 use App\Contracts\PriceSuggestionProvider;
 use App\Events\NotificationCreated;
+use App\Jobs\SendPushNotification;
 use App\Models\User;
 use App\Services\PriceSuggestion\FastApiPriceSuggestionProvider;
+use App\Services\Push\PushNotificationService;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -55,6 +57,23 @@ class AppServiceProvider extends ServiceProvider
 
             if ($event->notifiable instanceof User) {
                 NotificationCreated::dispatch($event->notifiable, $event->notification);
+
+                // Phone push (FCM) for the same notification, queued after
+                // commit. Off when no Firebase key is configured.
+                if (app(PushNotificationService::class)->isEnabled()) {
+                    $payload = $event->notification->toArray($event->notifiable);
+
+                    SendPushNotification::dispatch(
+                        (int) $event->notifiable->getKey(),
+                        (string) ($payload['title'] ?? 'AgroBenta'),
+                        array_map('strval', array_filter([
+                            'notification_id' => $event->notification->id,
+                            'type' => $payload['type'] ?? null,
+                            'action' => $payload['action'] ?? null,
+                            'action_id' => $payload['action_id'] ?? null,
+                        ], fn ($value) => $value !== null)),
+                    );
+                }
             }
         });
     }

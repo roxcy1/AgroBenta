@@ -94,6 +94,30 @@ Google Cloud Console also needs an **Android** OAuth client for package
 its own SHA-1, so each one must be added; a release build needs the release
 key's SHA-1. No client secret is used by the app or the backend.
 
+### Push notifications (Android only)
+
+Firebase Cloud Messaging is configured by `android/app/google-services.json`
+(Firebase project `agrobenta-proj`, package `com.agrobenta.agrobenta_mobile`).
+It is committed: it identifies the Firebase project but holds no secret. To
+point the app at another Firebase project, replace that file with the one from
+Firebase Console → **Project settings → Your apps**.
+
+After sign-in the app asks for notification permission (Android 13+) and sends
+the phone's FCM token to `POST /api/devices`. Pushes arrive only when the
+backend has `FCM_CREDENTIALS` set and its queue worker is running (root
+`README.md`). A push received while the app is open is not shown, because the
+open app already updates live; tapping a push opens the Notifications screen.
+iOS push needs an APNs key and is not set up.
+
+The Android app icon is `assets/images/AgroBentaLogo.png`
+(`res/mipmap-*/ic_launcher.png`, plus an adaptive icon on a white background in
+`res/mipmap-anydpi-v26/`). The push status-bar icon,
+`res/drawable-*/ic_stat_agrobenta.png`, is a white silhouette of the logo's
+ring, leaves and cart: Android draws that icon in one colour, so the full-colour
+logo would show as a white square. It is tinted brand green (`#006B4F`) through
+the Firebase `default_notification_*` entries in `AndroidManifest.xml`. If the
+logo changes, regenerate all of these.
+
 Cleartext HTTP is denied by default on Android. Debug builds allow it broadly
 (`android/app/src/debug/res/xml/network_security_config.xml`) so a phone on the
 LAN can reach the plain-HTTP Docker stack; `src/main` stays strict and permits
