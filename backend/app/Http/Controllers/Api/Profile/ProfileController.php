@@ -8,6 +8,8 @@ use App\Http\Requests\Profile\UpdateProfileRequest;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
+use App\Http\Requests\Profile\UploadAvatarRequest;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * The authenticated user's own profile.
@@ -77,6 +79,33 @@ class ProfileController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Password changed.',
+        ], 200);
+    }
+
+        /**
+     * `POST /api/profile/avatar` — uploads a new avatar.
+     */
+    public function uploadAvatar(UploadAvatarRequest $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Delete old avatar if it exists (para dili mo-puno ang storage)
+        if ($user->avatar_url) {
+            $oldPath = str_replace(Storage::disk('public')->url(''), '', $user->avatar_url);
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        // Save new file sa storage/app/public/avatars
+        $path = $request->file('avatar')->store('avatars', 'public');
+
+        // I-save ang bag-ong URL sa database
+        $user->avatar_url = Storage::disk('public')->url($path);
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile picture updated.',
+            'data' => new \App\Http\Resources\UserResource($user->fresh()),
         ], 200);
     }
 }

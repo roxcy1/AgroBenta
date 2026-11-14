@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -18,14 +21,13 @@ import '../state/profile_state.dart';
 /// `name` and `email` are the two the server treats as required; the rest are
 /// optional and may be cleared.
 ///
-/// ## Why the "only send what changed" comparison
+/// ## Avatar upload
 ///
-/// The name is compared against the loaded value and, when it matches, `null`
-/// is sent. That is not a micro-optimisation: `UpdateProfileRequest` validates
-/// `email` with a `unique` rule `ignore`-ing the caller's own id, so a client
-/// that resent the unchanged email would be fine — but a client that resends a
-/// changed email while an unrelated field is being saved is a request the user
-/// did not make. Sending only the diff keeps the request honest.
+/// The avatar is chosen from the gallery or the camera and uploaded immediately
+/// via `POST /profile/avatar`, rather than being typed in as a URL. This is
+/// the "select from gallery" flow the task calls for; a URL field would
+/// require users to host the image elsewhere first, which is not a viable
+/// mobile flow.
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -38,35 +40,56 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _name;
   late final TextEditingController _email;
   late final TextEditingController _phone;
-  late final TextEditingController _avatarUrl;
   late final TextEditingController _bio;
 
   late final ProfileController _controller;
   late final User _initial;
+
+  /// The image the user has just picked. Shown as a preview while the upload
+  /// is in flight; cleared to null once the server confirms.
+  File? _selectedImage;
+
+  /// Whether the avatar upload is in flight. Disables the save button so a
+  /// half-finished avatar cannot be committed.
+  bool _uploadingAvatar = false;
+
+  /// The current avatar as it appears on the form. Sourced from the profile,
+  /// then overridden by a fresh upload.
+  String? _currentAvatarUrl;
+
+  final ImagePicker _imagePicker = ImagePicker();
 
   /// The field errors currently on screen, so a repeat of the same server error
   /// does not re-validate for nothing.
   Map<String, List<String>> _displayedErrors = const <String, List<String>>{};
 
   @override
+  void initState() {
+    super.initState();
+    // `readOf`, not `of`: a dependency cannot be registered from `initState`.
+    _controller = ProfileScope.readOf(context);
+    _initial =
+        _controller.state.user ??
+        (throw StateError(
+          'EditProfileScreen opened without a loaded profile.',
+        ));
+
+    _name = TextEditingController(text: _initial.name);
+    _email = TextEditingController(text: _initial.email);
+    _phone = TextEditingController(text: _initial.phone ?? '');
+    _bio = TextEditingController(text: _initial.bio ?? '');
+    _currentAvatarUrl = _initial.avatarUrl;
+  }
+
+  @override
   void dispose() {
     _name.dispose();
     _email.dispose();
     _phone.dispose();
-    _avatarUrl.dispose();
     _bio.dispose();
     super.dispose();
   }
 
-  /// A `TextFormField` runs its validator when its value changes and when
-  /// `validate()` is called — not when the widget rebuilds. A `422` therefore
-  /// arrives after the last validation and would never appear on the field
-  /// without this.
-  ///
-  /// Called from the [ListenableBuilder] rather than from
-  /// `didChangeDependencies` because a `422` arrives as a controller
-  /// notification, and this screen deliberately does **not** depend on the
-  /// scope: it listens to the controller instead.
   void _revealServerFieldErrors(Map<String, List<String>> errors) {
     if (mapEquals(errors, _displayedErrors)) {
       return;
@@ -79,6 +102,85 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
   }
 
+  /// Opens the image-source picker: gallery or camera.
+  Future<void> _pickAvatarSource() async {
+    if (_uploadingAvatar) {
+      return;
+    }
+
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined),
+                title: const Text('Take a photo'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) {
+      return;
+    }
+
+    final XFile? picked = await _imagePicker.pickImage(
+      source: source,
+      maxWidth: 800,
+      imageQuality: 70,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedImage = File(picked.path);
+      _uploadingAvatar = true;
+    });
+
+    try {
+      final User updated = await ProfileScope.readOf(
+        context,
+      ).uploadAvatar(File(picked.path));
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _currentAvatarUrl = updated.avatarUrl;
+        _selectedImage = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile picture updated.')),
+      );
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedImage = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not upload the picture. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingAvatar = false);
+      }
+    }
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
@@ -87,7 +189,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String name = _name.text.trim();
     final String email = _email.text.trim();
     final String phone = _phone.text.trim();
-    final String avatarUrl = _avatarUrl.text.trim();
     final String bio = _bio.text.trim();
 
     final bool emailChanged = email != _initial.email;
@@ -97,7 +198,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         name: name == _initial.name ? null : name,
         email: emailChanged ? email : null,
         phone: phone == (_initial.phone ?? '') ? null : phone,
-        avatarUrl: avatarUrl == (_initial.avatarUrl ?? '') ? null : avatarUrl,
+        // The avatar is uploaded separately. Never send it as a text field.
+        avatarUrl: null,
         bio: bio == (_initial.bio ?? '') ? null : bio,
         currentPassword: currentPassword,
       );
@@ -152,24 +254,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    // `readOf`, not `of`: a dependency cannot be registered from `initState`.
-    _controller = ProfileScope.readOf(context);
-    _initial =
-        _controller.state.user ??
-        (throw StateError(
-          'EditProfileScreen opened without a loaded profile.',
-        ));
-
-    _name = TextEditingController(text: _initial.name);
-    _email = TextEditingController(text: _initial.email);
-    _phone = TextEditingController(text: _initial.phone ?? '');
-    _avatarUrl = TextEditingController(text: _initial.avatarUrl ?? '');
-    _bio = TextEditingController(text: _initial.bio ?? '');
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Edit profile')),
@@ -179,6 +263,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           builder: (BuildContext context, Widget? child) {
             final ProfileState state = _controller.state;
             final bool isSaving = state.status == ProfileUiStatus.saving;
+            final bool isBusy = isSaving || _uploadingAvatar;
 
             _revealServerFieldErrors(state.fieldErrors);
 
@@ -201,12 +286,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: <Widget>[
+                              // Avatar picker, at the top of the form.
+                              _AvatarPicker(
+                                selectedImage: _selectedImage,
+                                currentAvatarUrl: _currentAvatarUrl,
+                                isUploading: _uploadingAvatar,
+                                onTap: isBusy ? null : _pickAvatarSource,
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+
                               TextFormField(
                                 controller: _name,
                                 textCapitalization: TextCapitalization.words,
                                 textInputAction: TextInputAction.next,
                                 maxLength: 120,
-                                enabled: !isSaving,
+                                enabled: !isBusy,
                                 decoration: const InputDecoration(
                                   label: FieldLabel('Full name'),
                                   helperText: 'Required.',
@@ -225,7 +319,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 keyboardType: TextInputType.emailAddress,
                                 textInputAction: TextInputAction.next,
                                 maxLength: 191,
-                                enabled: !isSaving,
+                                enabled: !isBusy,
                                 decoration: const InputDecoration(
                                   label: FieldLabel('Email address'),
                                   helperText: 'Required.',
@@ -238,36 +332,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   return state.errorFor('email');
                                 },
                               ),
-
                               const SizedBox(height: AppSpacing.md),
                               TextFormField(
                                 controller: _phone,
                                 keyboardType: TextInputType.phone,
                                 textInputAction: TextInputAction.next,
                                 maxLength: 32,
-                                enabled: !isSaving,
+                                enabled: !isBusy,
                                 decoration: const InputDecoration(
                                   label: FieldLabel('Phone number'),
                                   helperText: 'Optional.',
                                 ),
                                 validator: (String? value) =>
                                     state.errorFor('phone'),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              TextFormField(
-                                controller: _avatarUrl,
-                                keyboardType: TextInputType.url,
-                                textInputAction: TextInputAction.next,
-                                maxLength: 2048,
-                                enabled: !isSaving,
-                                decoration: const InputDecoration(
-                                  label: FieldLabel('Avatar URL'),
-                                  helperText:
-                                      'Optional. A link to an image of you or '
-                                      'your farm.',
-                                ),
-                                validator: (String? value) =>
-                                    state.errorFor('avatar_url'),
                               ),
                               const SizedBox(height: AppSpacing.md),
                               TextFormField(
@@ -278,7 +355,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 minLines: 3,
                                 maxLines: 6,
                                 maxLength: 1000,
-                                enabled: !isSaving,
+                                enabled: !isBusy,
                                 decoration: const InputDecoration(
                                   label: FieldLabel('Bio'),
                                   alignLabelWithHint: true,
@@ -294,7 +371,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         FilledButton(
-                          onPressed: isSaving ? null : _save,
+                          onPressed: isBusy ? null : _save,
                           child: isSaving
                               ? const SizedBox.square(
                                   dimension: 18,
@@ -313,6 +390,79 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// The avatar picker: circle preview, camera button, and optional spinner.
+class _AvatarPicker extends StatelessWidget {
+  const _AvatarPicker({
+    required this.selectedImage,
+    required this.currentAvatarUrl,
+    required this.isUploading,
+    required this.onTap,
+  });
+
+  final File? selectedImage;
+  final String? currentAvatarUrl;
+  final bool isUploading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ImageProvider? imageProvider = selectedImage != null
+        ? FileImage(selectedImage!)
+        : (currentAvatarUrl != null && currentAvatarUrl!.isNotEmpty
+              ? NetworkImage(currentAvatarUrl!)
+              : null);
+
+    return Center(
+      child: Stack(
+        children: <Widget>[
+          GestureDetector(
+            onTap: onTap,
+            child: CircleAvatar(
+              radius: 56,
+              backgroundColor: AppColors.background,
+              backgroundImage: imageProvider,
+              child: imageProvider == null
+                  ? const Icon(
+                      Icons.person,
+                      size: 56,
+                      color: AppColors.textSecondary,
+                    )
+                  : null,
+            ),
+          ),
+          if (isUploading)
+            const Positioned.fill(
+              child: CircleAvatar(
+                backgroundColor: Colors.black45,
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: Material(
+              color: AppColors.primary,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onTap,
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.camera_alt,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -385,7 +535,7 @@ class _CurrentPasswordDialogState extends State<_CurrentPasswordDialog> {
             obscureText: true,
             autofocus: true,
             decoration: InputDecoration(
-              label: FieldLabel('Current password'),
+              label: const FieldLabel('Current password'),
               errorText: widget.error,
             ),
           ),

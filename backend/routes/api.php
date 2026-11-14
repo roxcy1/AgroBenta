@@ -266,6 +266,8 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('profile')->group(fu
     Route::get('/', [ProfileController::class, 'show']);
     Route::put('/', [ProfileController::class, 'update']);
     Route::put('/password', [ProfileController::class, 'changePassword']);
+        // Multipart upload para sa profile picture
+    Route::post('/avatar', [ProfileController::class, 'uploadAvatar']);
 });
 
 // Messaging — the caller's own conversations and messages.

@@ -529,6 +529,9 @@ abstract final class ProfileEndpoints {
   /// `GET` — the caller's own profile. 200, plain envelope.
   static const String show = '/profile';
 
+  /// `POST` — uploads a new profile picture (multipart). 200, plain envelope.
+  static const String uploadAvatar = '/profile/avatar';
+
   /// `PUT` — update the caller's own profile. 200, plain envelope.
   ///
   /// The Form Request guards every field with `sometimes`, so a partial body

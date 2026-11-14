@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
@@ -8,27 +10,6 @@ import 'profile_state.dart';
 /// Presentation logic for the caller's own profile.
 ///
 /// The only thing that mutates [state]. Screens call these methods and listen.
-///
-/// ## One read, one save
-///
-/// [load] is idempotent while a read is in flight; [save] refuses a second
-/// call while one is running, the same guard `SellerVerificationController`
-/// uses. The disabled button stops a tap; the guard stops the request already
-/// on its way from being followed by another.
-///
-/// ## Errors are not all the same
-///
-/// A `422` from a save is a *field* problem and its errors land in
-/// [ProfileState.fieldErrors] so the form can show them beside the inputs. A
-/// `422` from a password change also lands in [ProfileState.fieldErrors], but
-/// the password screen maps `current_password` and `password` keys to the
-/// fields it already has on screen.
-///
-/// ## Success is a one-shot
-///
-/// A successful save publishes [ProfileState.successMessage] and the screen
-/// shows a snackbar and then calls [consumeSuccess] to clear it. Without that
-/// clear, the snackbar would be shown again on the next rebuild.
 class ProfileController extends ChangeNotifier {
   ProfileController(this._repository);
 
@@ -42,11 +23,6 @@ class ProfileController extends ChangeNotifier {
   int _generation = 0;
 
   /// Reads the caller's own profile.
-  ///
-  /// A failure leaves the last successful [ProfileState.user] in place, so a
-  /// screen that has already rendered a profile shows a stale one rather than
-  /// blanking. That is the same rule `SellerVerificationController` applies to
-  /// its record.
   Future<void> load() async {
     if (_loading) {
       return;
@@ -100,16 +76,9 @@ class ProfileController extends ChangeNotifier {
   }
 
   /// Re-fetches the profile while keeping what is on screen.
-  ///
-  /// On failure the previous profile stays in place — a refresh that loses
-  /// data because the network blinked is worse than a stale screen.
   Future<void> refresh() => load();
 
   /// Saves the given fields. Returns `true` when the server accepted the update.
-  ///
-  /// Only the fields the caller passes are sent; a `null` argument means
-  /// "leave this field alone", and an empty string is a real value the user
-  /// cleared. That is what makes a partial update a partial update.
   Future<bool> save({
     String? name,
     String? email,
@@ -162,9 +131,6 @@ class ProfileController extends ChangeNotifier {
       _set(
         _state.copyWith(
           status: ProfileUiStatus.ready,
-          // A 422 carries per-field messages; a form-level banner would be
-          // redundant noise above them, so the top-level message is left empty
-          // for that kind alone.
           errorMessage: error.kind == ApiErrorKind.validation
               ? null
               : error.message,
@@ -186,11 +152,14 @@ class ProfileController extends ChangeNotifier {
     }
   }
 
+  /// Uploads a new avatar and merges the server's response into [state].
+  Future<User> uploadAvatar(File imageFile) async {
+    final User updated = await _repository.uploadAvatar(imageFile);
+    _set(_state.copyWith(user: updated));
+    return updated;
+  }
+
   /// Changes the caller's password. Returns `true` on success.
-  ///
-  /// A `422` here means the current password was wrong, or the new one failed
-  /// the policy. The server's message is the clearest wording available, so it
-  /// is shown as a form-level error rather than being rewritten.
   Future<bool> changePassword({
     required String currentPassword,
     required String newPassword,
