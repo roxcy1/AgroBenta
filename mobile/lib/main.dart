@@ -495,7 +495,10 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     // only the surface it owns (see `_onRealtimeEvent` in each controller).
     final Stream<RealtimeEvent> realtimeEvents = _realtimeController.events;
 
-    _marketplaceController = MarketplaceController(_marketplaceRepository);
+    _marketplaceController = MarketplaceController(
+      _marketplaceRepository,
+      realtimeEvents: realtimeEvents,
+    );
     _sellerVerificationController = SellerVerificationController(
       _sellerVerificationRepository,
       realtimeEvents: realtimeEvents,

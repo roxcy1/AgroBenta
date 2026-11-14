@@ -65,6 +65,11 @@ class ListingCard extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.xxxs),
                   _MetaRow(icon: Icons.place_outlined, text: _place()),
+                  const SizedBox(height: AppSpacing.xxs),
+                  _MetaRow(
+                    icon: Icons.inventory_2_outlined,
+                    text: _availableLabel,
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   // Price, left-aligned and outside a pill, per the type
                   // rules. Never the only thing carrying the value: the peso
@@ -107,6 +112,11 @@ class ListingCard extends StatelessWidget {
       if (species.isNotEmpty) species,
       if (listing.location.trim().isNotEmpty) listing.location.trim(),
     ].join(' · ');
+  }
+
+  String get _availableLabel {
+    final int available = listing.availableQuantity ?? listing.quantity;
+    return available == 1 ? 'Only 1 left' : '$available available';
   }
 }
 

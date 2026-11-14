@@ -77,7 +77,11 @@ trait SellerListingRules
             'weight_unit' => ['in:kg,lb'],
             'weight_information' => ['nullable', Rule::enum(WeightInformation::class)],
 
-            'quantity' => ['integer', 'min:1'],
+            // `quantity` is the legacy write field and means available stock.
+            // New clients send `total_quantity`; the service maintains the
+            // available compatibility field from the committed inventory.
+            'quantity' => ['integer', 'min:1', 'max:4294967295'],
+            'total_quantity' => ['integer', 'min:1', 'max:4294967295'],
 
             // `decimal:0,2` rejects a third decimal instead of letting storage
             // round it [DEC-02]; the ceiling stays configurable, and the column
@@ -146,7 +150,7 @@ trait SellerListingRules
             'livestock_type' => [Rule::enum(LivestockType::class)],
             'location' => ['string', 'max:255'],
             'asking_price' => ['numeric', 'min:0', 'max:'.$this->maxAskingPrice()],
-            'quantity' => ['integer', 'min:1'],
+            'total_quantity' => ['integer', 'min:1'],
         ];
     }
 

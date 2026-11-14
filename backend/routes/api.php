@@ -360,6 +360,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::post('/listings/{listing}/approve', [ListingController::class, 'approve']);
     Route::post('/listings/{listing}/reject', [ListingController::class, 'reject']);
     Route::post('/listings/{listing}/deactivate', [ListingController::class, 'deactivate']);
+    Route::post('/listings/{listing}/inventory/reconcile', [ListingController::class, 'reconcileInventory']);
     Route::get('/listings/{listing}', [ListingController::class, 'show']);
     Route::get('/seller-verifications', [SellerVerificationController::class, 'index']);
     Route::get('/seller-verifications/{sellerVerification}', [SellerVerificationController::class, 'show']);

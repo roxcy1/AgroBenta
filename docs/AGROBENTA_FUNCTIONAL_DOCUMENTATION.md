@@ -435,6 +435,12 @@ Rules:
 7. A seller never sends `status` directly. The server sets it from the action.
 8. A listing must have at least one stored photo before it can be submitted for
    review, and therefore before it can become `active` (§4.5). **[DEC-03]**
+9. For listings with verified inventory, `quantity` is the available stock and
+   may decrease as accepted transactions reserve animals. Fully reserved or
+   sold-out listings are not offered in the buyer marketplace; the seller marks
+   the listing sold when all remaining available animals are sold externally.
+   Multi-quantity inventory and its legacy reconciliation rules are recorded in
+   DEC-10 (§6.4, §13.8).
 
 > **[OPEN] MS-01 — direct publish vs admin approval.** The Add New Listing
 > prototype (Figure 22) has a seller-chosen "Status: Active" and a "Publish
@@ -582,6 +588,11 @@ an agreed livestock sale between a buyer and a seller and its status.
 trusted or stored. Whether an agreed price different from the asking price is
 supported is **[OPEN]**, §13, MS-13.
 
+For new multi-quantity listings, `asking_price` is the seller's price per head.
+An offer's `proposed_amount` is the total amount for its `proposed_quantity`;
+the accepted transaction preserves that total without recalculating it from the
+listing price (DEC-10).
+
 ### 6.2 Self-transaction
 
 A user cannot be both buyer and seller on the same transaction.
@@ -617,8 +628,9 @@ Rules (DEC-09, 2026-11-09):
 1. **The buyer initiates a transaction** by accepting the seller's formal
    offer. A seller does not create transactions.
 2. A new transaction starts as `pending` and reserves the agreed quantity of
-   the listing's stock atomically. The one-head-per-offer rule remains in
-   force; multi-head offers are not introduced by this decision.
+   the listing's stock atomically. The quantity is the buyer's requested
+   quantity or the lower quantity agreed in the seller's offer; it cannot
+   exceed the buyer's request or verified available stock (DEC-10).
 3. **The seller accepts** is represented by the seller's offer; the buyer's
    acceptance creates the transaction.
 4. **The seller reports preparation, dispatch and handover.** These fulfillment
@@ -995,7 +1007,7 @@ for the manuscript's author.
 | **OQ-10** | Identity verification strength beyond administrator review. |
 | **OQ-11** | Session / token lifetime. Tokens currently never expire. |
 | **OQ-12** | Whether an administrator account may sign in to the mobile app. |
-| **OQ-17** | What happens to an `active` listing when its quantity is used up by transactions. |
+| ~~OQ-17~~ | What happens to an `active` listing when its quantity is used up by transactions. **Resolved by DEC-10:** unavailable inventory is hidden from Marketplace; exhausted listings become sold when no stock remains. |
 | **A-01** | Whether a rejected listing can be edited and resubmitted, or must be replaced. |
 
 ### 13.4 Closed by project-owner decision (2026-10-27)
@@ -1037,7 +1049,21 @@ MS-08 (listing title) remains open in §13.2. No title field or column is added.
 | **DEC-09** | Completion | The buyer confirms receipt after the seller reports pickup or delivery. The backend and mobile transaction detail/status screens implement the fulfillment progression and completion. |
 | **DEC-09** | Payments | Existing payment-method recording is retained. No gateway and no payment-status system are introduced. |
 | **DEC-09** | Disputes | Out of scope. |
-| **DEC-09** | Offers | One head per offer remains. Multi-head offer support is not introduced. |
+| **DEC-09** | Offers | One head per offer remains. **Superseded by DEC-10** (approved 2026-11-14). |
+
+### 13.8 Closed by project-owner decision (2026-11-14)
+
+The project manager approved multi-quantity livestock listings and partial
+offers on 2026-11-14, superseding DEC-09's one-head-per-offer constraint. These
+are project-owner decisions; update the capstone manuscript to match. Legacy
+inventory is never inferred from ambiguous unreserved transaction rows.
+
+| ID | Decision | Resolution |
+|---|---|---|
+| **DEC-10** | Listing quantities | `listings.quantity` remains the backward-compatible available quantity. A separate total quantity and explicit reserved, platform-sold and externally-sold counts maintain the inventory ledger. Fully reserved or unavailable inventory is hidden from new Marketplace activity. |
+| **DEC-10** | Partial quantities | Buyer inquiries specify requested quantity. A seller's offer covers that quantity or less, never more. Acceptance reserves the agreed quantity atomically. `proposed_amount` is the total offer amount for the offer's quantity; `asking_price` is per head. |
+| **DEC-10** | Stock exhaustion and external sales | A listing with no available stock is no longer purchasable and becomes sold when its inventory is exhausted. Seller Mark Sold accounts for remaining available stock as externally sold and is refused while any quantity is reserved. |
+| **DEC-10** | Legacy reconciliation | Unreserved legacy transactions do not create inferred reservations, platform sales or cancellation restoration. Listings with ambiguous transaction allocations are quarantined from new Marketplace activity until an administrator records verified physical stock, external sales, transaction allocations, reason and supporting evidence. Historical rows and the original listing quantity are preserved. |
 
 ---
 
@@ -1077,4 +1103,5 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-09 | **[DEC-09]** Approved the two-action Listing Details UX (Ask Seller / I'm Interested), the shortened optional-message interest form, the four current collection choices, atomic stock reservation with cancellation release, the pre-handover cancellation cutoff, buyer receipt confirmation as the later completion actor, unchanged payment-method recording, disputes out of scope, and one-head-per-offer (§6.3–§6.5, §8.2, §13.7). |
 | 2026-11-09 | Fulfillment implemented for DEC-09: separate fulfillment stages, seller-controlled preparation/pickup/delivery actions, buyer receipt confirmation, cancellation cutoffs, the legacy-stock completion policy, and the mobile collection-specific tracker and action buttons (§6.4, §6.5). |
 | 2026-11-10 | Resolved the merge's duplicate decision identifier by retaining DEC-08 for the 2026-11-07 Admin Web account-action decision and renumbering the 2026-11-09 transaction decisions to DEC-09. No decision text or business rule changed. |
+| 2026-11-14 | **[DEC-10]** Project manager approved multi-quantity listings, partial offers no greater than buyer-requested quantity, atomic quantity reservation, per-head listing price, total offer amount, sold-out Marketplace exclusion and seller external Mark Sold accounting. DEC-09's one-head offer limit and OQ-17 are superseded/resolved. Added conservative, auditable legacy inventory reconciliation (§4.4, §6.1, §6.4, §13.7–§13.8); update the capstone manuscript to match. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

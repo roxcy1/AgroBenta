@@ -7,6 +7,7 @@ class InquiryOfferSummary {
     required this.id,
     required this.status,
     required this.proposedAmount,
+    this.proposedQuantity = 1,
   });
 
   factory InquiryOfferSummary.fromJson(Map<String, dynamic> json) {
@@ -14,6 +15,7 @@ class InquiryOfferSummary {
       id: readInt(json, 'id'),
       status: readString(json, 'status'),
       proposedAmount: readDecimalString(json, 'proposed_amount'),
+      proposedQuantity: readNullableInt(json, 'proposed_quantity') ?? 1,
     );
   }
 
@@ -23,6 +25,7 @@ class InquiryOfferSummary {
   final String status;
 
   final String proposedAmount;
+  final int proposedQuantity;
 
   bool get isPending => status == 'pending';
 }
@@ -34,6 +37,8 @@ class InquiryListItemListing {
     required this.title,
     required this.askingPrice,
     required this.photoUrl,
+    this.availableQuantity,
+    this.inventoryReconciliationRequired = false,
   });
 
   factory InquiryListItemListing.fromJson(Map<String, dynamic> json) {
@@ -42,6 +47,9 @@ class InquiryListItemListing {
       title: readString(json, 'title'),
       askingPrice: readNullableDecimalString(json, 'asking_price'),
       photoUrl: readNullableString(json, 'photo_url'),
+      availableQuantity: readNullableInt(json, 'quantity'),
+      inventoryReconciliationRequired:
+          readNullableBool(json, 'inventory_reconciliation_required') ?? false,
     );
   }
 
@@ -49,6 +57,8 @@ class InquiryListItemListing {
   final String title;
   final String? askingPrice;
   final String? photoUrl;
+  final int? availableQuantity;
+  final bool inventoryReconciliationRequired;
 }
 
 /// One active inquiry, as `GET /api/inquiries` returns it.
@@ -68,6 +78,7 @@ class InquiryListItem {
     required this.preferredSchedule,
     required this.message,
     required this.latestOffer,
+    this.requestedQuantity = 1,
     this.canMakeOffer = false,
   });
 
@@ -84,6 +95,7 @@ class InquiryListItem {
 
     return InquiryListItem(
       id: readInt(json, 'id'),
+      requestedQuantity: readNullableInt(json, 'requested_quantity') ?? 1,
       role: readString(json, 'role'),
       listing: listing == null
           ? null
@@ -112,6 +124,8 @@ class InquiryListItem {
   }
 
   final int id;
+
+  final int requestedQuantity;
 
   /// The caller's side: `buyer` or `seller`.
   final String role;

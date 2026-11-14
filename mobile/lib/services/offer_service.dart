@@ -65,6 +65,7 @@ class OfferService {
     required int inquiryId,
     required int listingId,
     required String proposedAmount,
+    int proposedQuantity = 1,
     DateTime? proposedPickupDate,
     InquiryPaymentMethod? paymentMethod,
     InquiryCollectionMethod? collectionMethod,
@@ -74,6 +75,7 @@ class OfferService {
       'inquiry_id': inquiryId,
       'listing_id': listingId,
       'proposed_amount': proposedAmount,
+      'proposed_quantity': proposedQuantity,
     };
     if (proposedPickupDate != null) {
       body['proposed_pickup_date'] = _isoDate(proposedPickupDate);

@@ -42,6 +42,9 @@ class StoreInquiryRequest extends FormRequest
     {
         return [
             'listing_id' => ['required', 'integer', 'exists:listings,id'],
+            // Older mobile builds omit this field and continue to request one
+            // head. The service applies that compatibility default.
+            'requested_quantity' => ['sometimes', 'integer', 'min:1', 'max:4294967295'],
             'message' => ['nullable', 'string', 'max:500', 'not_regex:/^\s*$/'],
             'collection_date_option' => [
                 'nullable',
@@ -98,6 +101,7 @@ class StoreInquiryRequest extends FormRequest
             'buyer_id' => ['prohibited'],
             'seller_id' => ['prohibited'],
             'status' => ['prohibited'],
+            'quantity' => ['prohibited'],
         ];
     }
 }

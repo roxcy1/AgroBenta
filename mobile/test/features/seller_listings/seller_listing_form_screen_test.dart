@@ -282,7 +282,7 @@ void main() {
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Number of Animals Available'), quantity);
+    await tester.enterText(field('Total Animals in This Listing'), quantity);
     if (askingPrice != null) {
       await tester.enterText(field('Asking Price (₱) — Per Head'), askingPrice);
     }
@@ -310,7 +310,7 @@ void main() {
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Total Animals in This Listing'), '2');
     await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(
       tester,
@@ -404,7 +404,7 @@ void main() {
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Number of Animals Available'), '1');
+    await tester.enterText(field('Total Animals in This Listing'), '1');
     await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await selectGender(tester, 'Male');
@@ -562,7 +562,7 @@ void main() {
     await selectOption(tester, weightUnitDropdown(), 'Kilograms');
     await tapContinue(tester);
 
-    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Total Animals in This Listing'), '2');
     await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(
       tester,
@@ -599,7 +599,7 @@ void main() {
     await tapFormControl(tester, reviewBack);
 
     expect(currentStep(tester), 1);
-    expect(fieldText(tester, 'Number of Animals Available'), '2');
+    expect(fieldText(tester, 'Total Animals in This Listing'), '2');
     expect(fieldText(tester, 'Asking Price (₱) — Per Head'), '42500');
     expect(
       tester
@@ -660,7 +660,7 @@ void main() {
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Total Animals in This Listing'), '2');
     await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
@@ -680,7 +680,7 @@ void main() {
     expect(posts.single.body['weight_value'], '500');
     expect(posts.single.body['weight_unit'], 'kg');
     expect(posts.single.body['weight_information'], 'measured');
-    expect(posts.single.body['quantity'], 2);
+    expect(posts.single.body['total_quantity'], 2);
     expect(posts.single.body['asking_price'], '42500');
     expect(posts.single.body['location'], 'Barangay Banlasan, Trinidad, Bohol');
     // The client never sends a status; the server decides it.
@@ -799,7 +799,7 @@ void main() {
     await selectWeightUnit(tester, 'Kilograms');
     await tester.pump();
     await tapContinue(tester);
-    await tester.enterText(field('Number of Animals Available'), '1');
+    await tester.enterText(field('Total Animals in This Listing'), '1');
     await tester.enterText(field('Asking Price (₱) — Per Head'), '500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
@@ -958,7 +958,7 @@ void main() {
       );
 
       await fillSuggestionInputs(tester, quantity: '2');
-      expect(find.text('Number of Animals Available'), findsWidgets);
+      expect(find.text('Total Animals in This Listing'), findsWidgets);
       expect(find.text('Asking Price (₱) — Per Head'), findsWidgets);
       expect(
         find.textContaining('Total listing value: ₱85,000.00'),
@@ -978,8 +978,8 @@ void main() {
 
       // Quantity is not a model input: changing it keeps the per-head estimate
       // and only recalculates the informational totals.
-      await tester.ensureVisible(field('Number of Animals Available'));
-      await tester.enterText(field('Number of Animals Available'), '3');
+      await tester.ensureVisible(field('Total Animals in This Listing'));
+      await tester.enterText(field('Total Animals in This Listing'), '3');
       await tester.pump();
       expect(find.text('AI Suggested Price per Head'), findsOneWidget);
       expect(
@@ -1370,7 +1370,7 @@ void main() {
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Total Animals in This Listing'), '2');
     await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();
@@ -1426,7 +1426,7 @@ void main() {
     await tester.pump();
     await tapContinue(tester);
 
-    await tester.enterText(field('Number of Animals Available'), '2');
+    await tester.enterText(field('Total Animals in This Listing'), '2');
     await tester.enterText(field('Asking Price (₱) — Per Head'), '42500');
     await selectListingLocation(tester, barangay: 'Banlasan');
     await tester.pump();

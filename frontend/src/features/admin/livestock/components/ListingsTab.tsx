@@ -13,6 +13,7 @@ import ListingDetailsDialog from './ListingDetailsDialog';
 import { ListingPhotoThumb } from './ListingPhotos';
 import ListingReviewDialog from './ListingReviewDialog';
 import ListingStatsCards from './ListingStatsCards';
+import ReconcileInventoryDialog from './ReconcileInventoryDialog';
 import type { ModerationOption } from './listingModeration';
 import { moderationOptionsFor } from './listingModeration';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -35,6 +36,7 @@ export function ListingsTab() {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [details, setDetails] = useState<Listing | null>(null);
+  const [reconciliationListing, setReconciliationListing] = useState<Listing | null>(null);
   const [decision, setDecision] = useState<{
     listing: Listing;
     option: ModerationOption;
@@ -75,6 +77,13 @@ export function ListingsTab() {
   const activeDetails = details ?? linkedState.record;
 
   const handleCloseDetails = () => {
+    setDetails(null);
+    if (linkedListingId !== null) setDismissedLinkId(linkedListingId);
+  };
+
+  const handleOpenReconciliation = () => {
+    if (activeDetails === null) return;
+    setReconciliationListing(activeDetails);
     setDetails(null);
     if (linkedListingId !== null) setDismissedLinkId(linkedListingId);
   };
@@ -245,7 +254,10 @@ export function ListingsTab() {
                         <th>Photo</th>
                         <th>Type</th>
                         <th>Breed</th>
-                        <th>Qty</th>
+                        <th>Total</th>
+                        <th>Reserved</th>
+                        <th>Sold</th>
+                        <th>Available</th>
                         <th>Price</th>
                         <th>Location</th>
                         <th>Seller</th>
@@ -271,12 +283,20 @@ export function ListingsTab() {
                             {livestockTypeLabel(listing.livestock_type, livestockTypes)}
                           </td>
                           <td title={listing.breed}>{listing.breed}</td>
-                          <td>{listing.quantity}</td>
+                          <td>{listing.inventory_reconciliation_required ? 'Review required' : listing.total_quantity ?? '—'}</td>
+                          <td>{listing.reserved_quantity ?? '—'}</td>
+                          <td>{listing.sold_quantity ?? '—'}</td>
+                          <td>{listing.available_quantity ?? '—'}</td>
                           <td className="lv-price-cell">{formatPeso(listing.asking_price)}</td>
                           <td title={listing.location}>{listing.location}</td>
                           <td className="lv-seller-cell" title={listing.seller.name}>{listing.seller.name}</td>
                           <td>
-                            <StatusBadge status={listing.status} />
+                            <>
+                              <StatusBadge status={listing.status} />
+                              {listing.inventory_reconciliation_required && (
+                                <span className="lv-inventory-warning">Inventory review</span>
+                              )}
+                            </>
                           </td>
                           <td>{formatDate(listing.created_at)}</td>
                           <td>
@@ -353,6 +373,18 @@ export function ListingsTab() {
           listing={activeDetails}
           livestockTypes={livestockTypes ?? []}
           onClose={handleCloseDetails}
+          onReconcile={handleOpenReconciliation}
+        />
+      )}
+
+      {reconciliationListing && (
+        <ReconcileInventoryDialog
+          listing={reconciliationListing}
+          onClose={() => setReconciliationListing(null)}
+          onReconciled={() => {
+            setReconciliationListing(null);
+            void refetch();
+          }}
         />
       )}
     </>

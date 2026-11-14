@@ -7,7 +7,9 @@ import '../../../core/utils/app_formatters.dart';
 import '../../../models/inquiry.dart';
 import '../../../models/offer.dart';
 import '../../../models/received_inquiry.dart';
+import '../../marketplace/state/marketplace_scope.dart';
 import '../../../widgets/field_label.dart';
+import '../../../widgets/notice_banner.dart';
 import '../state/make_offer_controller.dart';
 import '../state/offer_scope.dart';
 import '../state/offer_state.dart';
@@ -46,6 +48,10 @@ class MakeOfferScreen extends StatefulWidget {
       initialPaymentMethod: inquiry.paymentMethod,
       initialCollectionMethod: inquiry.collectionMethod,
       initialPickupDate: inquiry.preferredSchedule,
+      requestedQuantity: inquiry.requestedQuantity,
+      listingAvailableQuantity: inquiry.listing?.availableQuantity,
+      inventoryReconciliationRequired:
+          inquiry.listing?.inventoryReconciliationRequired ?? false,
       key: key,
     );
   }
@@ -61,6 +67,9 @@ class MakeOfferScreen extends StatefulWidget {
     InquiryPaymentMethod? paymentMethod,
     InquiryCollectionMethod? collectionMethod,
     DateTime? preferredSchedule,
+    int requestedQuantity = 1,
+    int? listingAvailableQuantity,
+    bool inventoryReconciliationRequired = false,
     Key? key,
   }) {
     return MakeOfferScreen._(
@@ -73,6 +82,9 @@ class MakeOfferScreen extends StatefulWidget {
       initialPaymentMethod: paymentMethod,
       initialCollectionMethod: collectionMethod,
       initialPickupDate: preferredSchedule,
+      requestedQuantity: requestedQuantity,
+      listingAvailableQuantity: listingAvailableQuantity,
+      inventoryReconciliationRequired: inventoryReconciliationRequired,
       key: key,
     );
   }
@@ -87,6 +99,9 @@ class MakeOfferScreen extends StatefulWidget {
     this.initialPaymentMethod,
     this.initialCollectionMethod,
     this.initialPickupDate,
+    this.requestedQuantity = 1,
+    this.listingAvailableQuantity,
+    this.inventoryReconciliationRequired = false,
     super.key,
   });
 
@@ -101,6 +116,9 @@ class MakeOfferScreen extends StatefulWidget {
   final InquiryPaymentMethod? initialPaymentMethod;
   final InquiryCollectionMethod? initialCollectionMethod;
   final DateTime? initialPickupDate;
+  final int requestedQuantity;
+  final int? listingAvailableQuantity;
+  final bool inventoryReconciliationRequired;
 
   @override
   State<MakeOfferScreen> createState() => _MakeOfferScreenState();
@@ -114,6 +132,23 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
   late InquiryPaymentMethod? _paymentMethod = widget.initialPaymentMethod;
   late InquiryCollectionMethod? _collectionMethod =
       widget.initialCollectionMethod;
+  late int _proposedQuantity = widget.requestedQuantity;
+
+  int get _maximumProposedQuantity {
+    if (widget.inventoryReconciliationRequired ||
+        _controller.state.inventoryReconciliationRequired ||
+        _controller.state.listingUnavailable) {
+      return 0;
+    }
+    final int? available =
+        _controller.state.refreshedAvailableQuantity ??
+        widget.listingAvailableQuantity;
+    if (available == null) return widget.requestedQuantity;
+    if (available < 0) return 0;
+    return available < widget.requestedQuantity
+        ? available
+        : widget.requestedQuantity;
+  }
 
   /// Earliest date the seller may propose: tomorrow. The backend also refuses
   /// past dates, so the picker and the server agree.
@@ -142,9 +177,18 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = MakeOfferController(OfferScope.readOf(context));
-    // Prefill the price with the listing's asking price; the seller may edit it.
-    _amount.text = widget.askingPrice ?? '';
+    _controller = MakeOfferController(
+      OfferScope.readOf(context),
+      marketplace: MarketplaceScope.readOf(context).repository,
+    );
+    // The listing price is per head while the offer amount is the total for
+    // this offer's quantity. Prefill the product; the seller may edit it.
+    final double? askingPrice = widget.askingPrice == null
+        ? null
+        : AppFormatters.parseDecimal(widget.askingPrice!);
+    _amount.text = askingPrice == null
+        ? ''
+        : (askingPrice * widget.requestedQuantity).toStringAsFixed(2);
   }
 
   @override
@@ -192,6 +236,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
       inquiryId: widget.inquiryId,
       listingId: listingId,
       amount: _amount.text,
+      proposedQuantity: _proposedQuantity,
       pickupDate: _pickupDate,
       paymentMethod: _paymentMethod,
       collectionMethod: _collectionMethod,
@@ -210,7 +255,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
         title: const Text('Offer sent'),
         content: Text(
           '$amount is now visible to $buyerLabel in your conversation. '
-          'It stays pending until the buyer accepts or declines it.',
+          'It covers ${created.proposedQuantity} ${created.proposedQuantity == 1 ? 'animal' : 'animals'} and stays pending until the buyer accepts or declines it.',
         ),
         actions: <Widget>[
           FilledButton(
@@ -243,11 +288,42 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
           builder: (BuildContext context, Widget? child) {
             final MakeOfferState state = _controller.state;
             final bool canSubmit =
-                widget.listingId != null && !state.isSubmitting;
+                widget.listingId != null &&
+                !state.isSubmitting &&
+                !widget.inventoryReconciliationRequired &&
+                !state.inventoryReconciliationRequired &&
+                !state.listingUnavailable &&
+                _maximumProposedQuantity > 0 &&
+                _proposedQuantity <= _maximumProposedQuantity;
 
             return ListView(
               padding: const EdgeInsets.all(AppSpacing.screenGutter),
               children: <Widget>[
+                if (widget.inventoryReconciliationRequired ||
+                    state.inventoryReconciliationRequired) ...<Widget>[
+                  const NoticeBanner(
+                    accent: AppColors.warning,
+                    icon: Icons.inventory_2_outlined,
+                    message: 'Inventory reconciliation is required. You cannot make an offer yet.',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ] else if (state.listingUnavailable ||
+                    (state.refreshedAvailableQuantity == 0)) ...<Widget>[
+                  const NoticeBanner(
+                    accent: AppColors.warning,
+                    icon: Icons.inventory_2_outlined,
+                    message: 'This listing is no longer available for offers.',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ] else if (state.refreshedAvailableQuantity != null &&
+                    _proposedQuantity > _maximumProposedQuantity) ...<Widget>[
+                  NoticeBanner(
+                    accent: AppColors.warning,
+                    icon: Icons.info_outline,
+                    message: 'Only ${state.refreshedAvailableQuantity} animals remain. Reduce the offer quantity to continue.',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(AppSpacing.md),
@@ -288,7 +364,49 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                Text('Offer amount', style: theme.textTheme.titleSmall),
+                Text('Agreed quantity', style: theme.textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.xs),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            '$_proposedQuantity ${_proposedQuantity == 1 ? 'animal' : 'animals'}',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Reduce quantity',
+                          onPressed: state.isSubmitting || _proposedQuantity <= 1
+                              ? null
+                              : () => setState(() => _proposedQuantity--),
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                        IconButton(
+                          tooltip: 'Increase quantity',
+                          onPressed: state.isSubmitting ||
+                                  _proposedQuantity >= _maximumProposedQuantity
+                              ? null
+                              : () => setState(() => _proposedQuantity++),
+                          icon: const Icon(Icons.add_circle_outline),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Text(
+                  'Buyer requested ${widget.requestedQuantity}. You can offer no more than requested or currently available stock.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text('Total offer amount', style: theme.textTheme.titleSmall),
                 const SizedBox(height: AppSpacing.xs),
                 TextField(
                   controller: _amount,
@@ -304,8 +422,7 @@ class _MakeOfferScreenState extends State<MakeOfferScreen> {
                     contentPadding: AppInputs.plainPadding,
                     errorText: state.amountErrorMessage,
                     helperText:
-                        'The final price you are proposing for this inquiry. '
-                        'The listing\'s asking price is unchanged.',
+                        'Total for $_proposedQuantity ${_proposedQuantity == 1 ? 'animal' : 'animals'}. The listing\'s asking price is per head and remains unchanged.',
                     helperMaxLines: 2,
                   ),
                 ),

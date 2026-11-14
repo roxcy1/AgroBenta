@@ -166,7 +166,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Asking Price (₱) — Per Head'), findsOneWidget);
-    expect(find.text('Number of Animals Available'), findsOneWidget);
+    expect(find.text('Total animals listed'), findsOneWidget);
     expect(find.text('Total listing value'), findsOneWidget);
     expect(find.text('₱170,000.00 (informational only)'), findsOneWidget);
   });

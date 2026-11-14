@@ -21,6 +21,7 @@ import 'auth_fakes.dart';
 /// field the API never sends (mobile/AGENTS.md §A).
 Map<String, dynamic> inquiryJson({
   Object? id = 5,
+  int requestedQuantity = 1,
   Map<String, dynamic>? listing,
   String? subject = 'General Inquiry',
   String message = 'Is this one still available?',
@@ -37,6 +38,7 @@ Map<String, dynamic> inquiryJson({
 }) {
   return <String, dynamic>{
     'id': id,
+    'requested_quantity': requestedQuantity,
     'listing': listing ?? inquiryListingJson(),
     'subject': subject,
     'message': message,
@@ -60,6 +62,7 @@ Map<String, dynamic> inquiryJson({
 /// that added one would let the model grow a field the API never sends.
 Map<String, dynamic> sellerInquiryJson({
   Object? id = 5,
+  int requestedQuantity = 1,
   Map<String, dynamic>? buyer,
   Map<String, dynamic>? listing,
   String? subject = 'General Inquiry',
@@ -78,6 +81,7 @@ Map<String, dynamic> sellerInquiryJson({
 }) {
   return <String, dynamic>{
     'id': id,
+    'requested_quantity': requestedQuantity,
     'buyer': buyer ?? inquiryBuyerJson(),
     'listing': listing ?? inquiryListingJson(),
     'subject': subject,
@@ -110,11 +114,17 @@ Map<String, dynamic> inquiryListingJson({
   Object? id = 12,
   String livestockType = 'cattle',
   String breed = 'Holstein',
+  Object? quantity,
+  Object? totalQuantity,
+  bool inventoryReconciliationRequired = false,
 }) {
   return <String, dynamic>{
     'id': id,
     'livestock_type': livestockType,
     'breed': breed,
+    'quantity': ?quantity,
+    'total_quantity': ?totalQuantity,
+    'inventory_reconciliation_required': inventoryReconciliationRequired,
   };
 }
 
@@ -130,6 +140,9 @@ Map<String, dynamic> inquiryListItemJson({
   String role = 'buyer',
   String listingTitle = 'cattle Angus',
   Object? askingPrice = '50000.00',
+  int requestedQuantity = 1,
+  int quantity = 4,
+  bool inventoryReconciliationRequired = false,
   String? photoUrl,
   String counterpartName = 'Juan Dela Cruz',
   String? paymentMethod = 'gcash',
@@ -142,11 +155,14 @@ Map<String, dynamic> inquiryListItemJson({
   return <String, dynamic>{
     'id': id,
     'role': role,
+    'requested_quantity': requestedQuantity,
     'status': 'open',
     'listing': <String, dynamic>{
       'id': 12,
       'title': listingTitle,
       'asking_price': askingPrice,
+      'quantity': quantity,
+      'inventory_reconciliation_required': inventoryReconciliationRequired,
       'photo_url': photoUrl,
     },
     'counterpart': <String, dynamic>{'id': 3, 'name': counterpartName},
@@ -165,11 +181,13 @@ Map<String, dynamic> inquiryListOfferJson({
   Object? id = 41,
   String status = 'pending',
   Object? proposedAmount = '47500.00',
+  int proposedQuantity = 1,
 }) {
   return <String, dynamic>{
     'id': id,
     'status': status,
     'proposed_amount': proposedAmount,
+    'proposed_quantity': proposedQuantity,
   };
 }
 

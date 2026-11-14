@@ -16,6 +16,8 @@ abstract class TestCase extends BaseTestCase
      * This runs after the application has booted but before Laravel's
      * setUpTraits() invokes any destructive test trait. It therefore also
      * catches a cached config that points at the development MySQL database.
+     * The only MySQL exception is an explicitly opted-in, separately named
+     * inventory concurrency database.
      */
     protected function setUpTraits()
     {
@@ -32,15 +34,20 @@ abstract class TestCase extends BaseTestCase
         $driver = $connection['driver'] ?? null;
         $database = $connection['database'] ?? null;
 
-        $safeConfiguration = $environment === 'testing'
+        $safeSqlite = $environment === 'testing'
             && $driver === 'sqlite'
             && $database === ':memory:';
+        $safeMySqlInventoryTest = $environment === 'testing'
+            && getenv('AGROBENTA_MYSQL_INVENTORY_TESTS') === '1'
+            && $driver === 'mysql'
+            && $database === 'agrobenta_multi_quantity_test';
 
-        if (! $safeConfiguration) {
+        if (! $safeSqlite && ! $safeMySqlInventoryTest) {
             throw new RuntimeException(sprintf(
                 'REFUSING TO RUN TESTS: unsafe database configuration. '.
                 'Effective environment=%s, connection=%s, driver=%s, database=%s. '.
-                'Tests require environment=testing, connection=sqlite, database=:memory:. '.
+                'Tests require testing/sqlite/:memory:, or the explicitly enabled isolated '.
+                'MySQL inventory test database agrobenta_multi_quantity_test. '.
                 'Clear cached configuration with `php artisan optimize:clear` and use '.
                 '`composer test` or run `php artisan test` only after clearing the cache.',
                 var_export($environment, true),
@@ -54,10 +61,14 @@ abstract class TestCase extends BaseTestCase
         $actualDriver = DB::connection()->getDriverName();
         $actualDatabase = DB::connection()->getDatabaseName();
 
-        if ($actualDriver !== 'sqlite' || $actualDatabase !== ':memory:') {
+        $actualSafeSqlite = $actualDriver === 'sqlite' && $actualDatabase === ':memory:';
+        $actualSafeMySqlInventoryTest = $safeMySqlInventoryTest
+            && $actualDriver === 'mysql'
+            && $actualDatabase === 'agrobenta_multi_quantity_test';
+
+        if (! $actualSafeSqlite && ! $actualSafeMySqlInventoryTest) {
             throw new RuntimeException(sprintf(
-                'REFUSING TO RUN TESTS: effective database is driver=%s, database=%s. '.
-                'Expected sqlite/:memory:.',
+                'REFUSING TO RUN TESTS: effective database is driver=%s, database=%s.',
                 var_export($actualDriver, true),
                 var_export($actualDatabase, true),
             ));

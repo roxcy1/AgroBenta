@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Enums\ListingStatus;
+use App\Enums\TransactionStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,7 +14,9 @@ use Illuminate\Support\Facades\Storage;
 #[Fillable([
     'seller_id', 'livestock_type', 'breed', 'age_value', 'age_unit',
     'age_information', 'gender', 'weight_value', 'weight_unit',
-    'weight_information', 'quantity', 'asking_price', 'location',
+    'weight_information', 'quantity', 'total_quantity',
+    'externally_sold_quantity', 'inventory_reconciliation_required',
+    'legacy_quantity_snapshot', 'asking_price', 'location',
     'health_status', 'vaccination', 'short_description', 'additional_notes',
     'photos', 'status', 'admin_note',
 ])]
@@ -36,6 +40,18 @@ class Listing extends Model
      */
     public const PHOTO_LIMIT = 10;
 
+    protected static function booted(): void
+    {
+        static::creating(function (Listing $listing): void {
+            // Existing internal callers that create with `quantity` remain
+            // quantity-one compatible. Reconciliation rows are deliberately
+            // excluded so a missing historical total is never guessed.
+            if ($listing->total_quantity === null && ! $listing->inventory_reconciliation_required) {
+                $listing->total_quantity = (int) $listing->quantity;
+            }
+        });
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -47,6 +63,10 @@ class Listing extends Model
             'status' => ListingStatus::class,
             'photos' => 'array',
             'quantity' => 'integer',
+            'total_quantity' => 'integer',
+            'externally_sold_quantity' => 'integer',
+            'inventory_reconciliation_required' => 'boolean',
+            'legacy_quantity_snapshot' => 'integer',
             'age_value' => 'decimal:1',
             'weight_value' => 'decimal:2',
             'asking_price' => 'decimal:2',
@@ -266,5 +286,52 @@ class Listing extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function inventoryReconciliations(): HasMany
+    {
+        return $this->hasMany(ListingInventoryReconciliation::class)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+    }
+
+    /**
+     * Transactions an administrator must verify before this listing can leave
+     * reconciliation quarantine.
+     */
+    public function unaccountedInventoryTransactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class)
+            ->where('inventory_accounted', false)
+            ->whereIn('status', [TransactionStatus::Pending, TransactionStatus::Completed])
+            ->orderBy('id');
+    }
+
+    /**
+     * Add inventory sums in SQL so list resources can display reserved and
+     * platform-completed quantities without per-listing queries.
+     *
+     * @param  Builder<Listing>  $query
+     * @return Builder<Listing>
+     */
+    public function scopeWithInventoryTotals(Builder $query): Builder
+    {
+        return $query
+            ->withSum([
+                'transactions as reserved_quantity' => static fn (Builder $transactions): Builder =>
+                    $transactions
+                        ->where('status', TransactionStatus::Pending)
+                        ->where(fn (Builder $query): Builder => $query
+                            ->where('inventory_accounted', true)
+                            ->orWhere('inventory_reserved', true)),
+            ], 'quantity')
+            ->withSum([
+                'transactions as accounted_completed_quantity' => static fn (Builder $transactions): Builder =>
+                    $transactions
+                        ->where('status', TransactionStatus::Completed)
+                        ->where(fn (Builder $query): Builder => $query
+                            ->where('inventory_accounted', true)
+                            ->orWhere('inventory_reserved', true)),
+            ], 'quantity');
     }
 }

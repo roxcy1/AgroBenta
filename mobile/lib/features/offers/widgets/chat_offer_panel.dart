@@ -142,7 +142,7 @@ class ChatOfferPanel extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xxs),
         Text(
-          _caption(offer, isBuyer: isBuyer),
+          'Total offer for ${offer.proposedQuantity} ${offer.proposedQuantity == 1 ? 'animal' : 'animals'} · ${_caption(offer, isBuyer: isBuyer)}',
           style: theme.textTheme.bodySmall?.copyWith(
             color: AppColors.textSecondary,
           ),

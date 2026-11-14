@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../models/inquiry.dart';
+import '../../../models/listing.dart';
 import '../../../models/offer.dart';
+import '../../../repositories/marketplace_repository.dart';
 import '../../../repositories/offer_repository.dart';
 import 'offer_state.dart';
 
@@ -14,9 +16,10 @@ import 'offer_state.dart';
 /// repository is shared through `OfferScope`; nothing about this form is
 /// session state.
 class MakeOfferController extends ChangeNotifier {
-  MakeOfferController(this._repository);
+  MakeOfferController(this._repository, {this.marketplace});
 
   final OfferRepository _repository;
+  final MarketplaceRepository? marketplace;
 
   MakeOfferState _state = const MakeOfferState();
   MakeOfferState get state => _state;
@@ -35,6 +38,7 @@ class MakeOfferController extends ChangeNotifier {
     required int inquiryId,
     required int listingId,
     required String amount,
+    int proposedQuantity = 1,
     DateTime? pickupDate,
     InquiryPaymentMethod? paymentMethod,
     InquiryCollectionMethod? collectionMethod,
@@ -57,7 +61,11 @@ class MakeOfferController extends ChangeNotifier {
     }
 
     _set(
-      _state.copyWith(status: MakeOfferStatus.submitting, clearErrors: true),
+      _state.copyWith(
+        status: MakeOfferStatus.submitting,
+        clearErrors: true,
+        clearAvailability: true,
+      ),
     );
 
     try {
@@ -65,6 +73,7 @@ class MakeOfferController extends ChangeNotifier {
         inquiryId: inquiryId,
         listingId: listingId,
         proposedAmount: trimmed,
+        proposedQuantity: proposedQuantity,
         proposedPickupDate: pickupDate,
         paymentMethod: paymentMethod,
         collectionMethod: collectionMethod,
@@ -88,6 +97,15 @@ class MakeOfferController extends ChangeNotifier {
           errorMessage: error.message,
         ),
       );
+      final String message = error.message.toLowerCase();
+      if (error.kind == ApiErrorKind.conflict &&
+          marketplace != null &&
+          (message.contains('stock') ||
+              message.contains('available') ||
+              message.contains('reconciliation') ||
+              message.contains('inventory'))) {
+        await _refreshListingAvailability(listingId);
+      }
       return null;
     } on Object {
       if (_disposed) {
@@ -100,6 +118,33 @@ class MakeOfferController extends ChangeNotifier {
         ),
       );
       return null;
+    }
+  }
+
+  Future<void> _refreshListingAvailability(int listingId) async {
+    try {
+      final Listing listing = await marketplace!.detail(listingId);
+      if (_disposed) return;
+      _set(
+        _state.copyWith(
+          refreshedAvailableQuantity:
+              listing.availableQuantity ?? listing.quantity,
+          inventoryReconciliationRequired:
+              listing.inventoryReconciliationRequired,
+          listingUnavailable: false,
+        ),
+      );
+    } on ApiException catch (error) {
+      if (_disposed || error.kind != ApiErrorKind.notFound) return;
+      _set(
+        _state.copyWith(
+          refreshedAvailableQuantity: 0,
+          listingUnavailable: true,
+        ),
+      );
+    } on Object {
+      // The original stock conflict is already visible; a failed best-effort
+      // refresh must not replace it with a less useful network error.
     }
   }
 

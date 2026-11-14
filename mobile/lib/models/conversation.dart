@@ -13,6 +13,7 @@ class ConversationOffer {
     required this.id,
     required this.status,
     required this.proposedAmount,
+    this.proposedQuantity = 1,
     required this.listingId,
     required this.listingTitle,
   });
@@ -41,6 +42,7 @@ class ConversationOffer {
       id: readInt(json, 'id'),
       status: parsed,
       proposedAmount: readString(json, 'proposed_amount'),
+      proposedQuantity: readNullableInt(json, 'proposed_quantity') ?? 1,
       listingId: readNullableInt(json, 'listing_id'),
       listingTitle: readNullableString(json, 'listing_title'),
     );
@@ -51,6 +53,7 @@ class ConversationOffer {
 
   /// The proposed final price, as the API sent it, e.g. `"47500.00"`.
   final String proposedAmount;
+  final int proposedQuantity;
 
   final int? listingId;
   final String? listingTitle;
@@ -68,6 +71,9 @@ class ConversationEligibleInquiry {
     required this.id,
     required this.listingId,
     required this.listingTitle,
+    this.requestedQuantity = 1,
+    this.listingAvailableQuantity,
+    this.inventoryReconciliationRequired = false,
     this.askingPrice,
     this.photoUrl,
     this.paymentMethod,
@@ -80,6 +86,10 @@ class ConversationEligibleInquiry {
       id: readInt(json, 'id'),
       listingId: readNullableInt(json, 'listing_id'),
       listingTitle: readNullableString(json, 'listing_title'),
+      requestedQuantity: readNullableInt(json, 'requested_quantity') ?? 1,
+      listingAvailableQuantity: readNullableInt(json, 'listing_available_quantity'),
+      inventoryReconciliationRequired:
+          readNullableBool(json, 'listing_inventory_reconciliation_required') ?? false,
       askingPrice: readNullableDecimalString(json, 'asking_price'),
       photoUrl: readNullableString(json, 'listing_photo_url'),
       paymentMethod: readNullableEnum(
@@ -99,6 +109,12 @@ class ConversationEligibleInquiry {
   final int id;
   final int? listingId;
   final String? listingTitle;
+
+  final int requestedQuantity;
+
+  final int? listingAvailableQuantity;
+
+  final bool inventoryReconciliationRequired;
 
   /// The listing's asking price when the offer form opens, as the API sent it.
   final String? askingPrice;

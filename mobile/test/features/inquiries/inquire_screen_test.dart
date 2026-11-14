@@ -9,6 +9,7 @@ import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/view/inquire_screen.dart';
 import 'package:agrobenta_mobile/features/inquiries/view/inquiry_already_sent_view.dart';
 import 'package:agrobenta_mobile/features/inquiries/view/inquiry_validators.dart';
+import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
 import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
@@ -87,6 +88,8 @@ void main() {
     required Future<http.Response> Function(RecordedRequest request) handler,
     Future<http.Response> Function(RecordedRequest request)? checkHandler,
     Future<http.Response> Function(RecordedRequest request)? messagingHandler,
+    Future<http.Response> Function(RecordedRequest request)? marketplaceHandler,
+    Listing? listing,
   }) async {
     Future<http.Response> routed(RecordedRequest request) {
       if (request.method == 'GET' &&
@@ -101,6 +104,15 @@ void main() {
       routed,
       recorded: recorded,
     );
+    final marketplaceRepository = buildMarketplaceRepository(
+      tokenStore,
+      marketplaceHandler ?? (_) async => listingDetailResponse(),
+    );
+    final marketplaceController = buildMarketplaceController(
+      tokenStore,
+      marketplaceHandler ?? (_) async => listingDetailResponse(),
+    );
+    addTearDown(marketplaceController.dispose);
 
     final MessagingRepository messagingRepository = buildMessagingRepository(
       tokenStore,
@@ -137,17 +149,21 @@ void main() {
     await tester.pumpWidget(
       InquiryScope(
         repository: repository,
-        child: MessagingScope(
-          repository: messagingRepository,
-          conversationsController: conversationsController,
-          child: OfferScope(
-            repository: offerRepository,
-            child: AuthScope(
-              controller: authController,
-              child: MaterialApp(
-                theme: AppTheme.light(),
-                home: Scaffold(
-                  appBar: AppBar(title: const Text('Listing detail stand-in')),
+        child: MarketplaceScope(
+          repository: marketplaceRepository,
+          controller: marketplaceController,
+          child: MessagingScope(
+            repository: messagingRepository,
+            conversationsController: conversationsController,
+            child: OfferScope(
+              repository: offerRepository,
+              child: AuthScope(
+                controller: authController,
+                child: MaterialApp(
+                  theme: AppTheme.light(),
+                  home: Scaffold(
+                    appBar: AppBar(title: const Text('Listing detail stand-in')),
+                  ),
                 ),
               ),
             ),
@@ -160,9 +176,10 @@ void main() {
       find.byType(Navigator),
     );
     navigator.push(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            InquireScreen(listing: testListing()),
+        MaterialPageRoute<void>(
+        builder: (BuildContext context) => InquireScreen(
+          listing: listing ?? testListing(),
+        ),
       ),
     );
     await settle(tester);
@@ -749,6 +766,7 @@ void main() {
       expect(post.apiPath, InquiryEndpoints.create);
       expect(post.body, <String, dynamic>{
         'listing_id': 12,
+        'requested_quantity': 1,
         'message': 'Is this one still available?',
         'collection_date_option': 'next_few_days',
         'payment_method': 'cash',
@@ -801,6 +819,7 @@ void main() {
       final RecordedRequest post = posts().single;
       expect(post.body, <String, dynamic>{
         'listing_id': 12,
+        'requested_quantity': 1,
         'message': 'Can we discuss arrangements?',
         'collection_date_option': 'next_few_days',
         'payment_method': 'gcash',
@@ -813,6 +832,125 @@ void main() {
         isEmpty,
         reason: 'not one key outside the allow-list went out',
       );
+      expect(find.text(successHeading), findsOneWidget);
+    });
+
+    testWidgets('the buyer can request a bounded partial quantity', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(
+          inquiry: inquiryJson(
+            message: 'Can I buy three?',
+            paymentMethod: 'cash',
+            collectionMethod: 'farm_pickup',
+          ),
+        ),
+      );
+
+      await tester.tap(find.byTooltip('Increase requested quantity'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Increase requested quantity'));
+      await tester.pump();
+      expect(find.text('3 animals'), findsOneWidget);
+
+      await typeMessage(tester, 'Can I buy three?');
+      await chooseOption(tester, 'Cash');
+      await chooseOption(tester, 'Personal Pickup');
+      await submit(tester);
+
+      expect(posts().single.body['requested_quantity'], 3);
+    });
+
+    testWidgets('one available animal keeps the single-animal inquiry form', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(),
+        listing: Listing.fromJson(
+          listingJson(quantity: 1, totalQuantity: 1, availableQuantity: 1),
+        ),
+      );
+
+      expect(find.text('1 animal available'), findsOneWidget);
+      expect(find.text('Number of animals'), findsNothing);
+    });
+
+    testWidgets('zero available animals disables a new inquiry', (
+      WidgetTester tester,
+    ) async {
+      await pushInquire(
+        tester,
+        handler: (_) async => inquiryCreatedResponse(),
+        listing: Listing.fromJson(
+          listingJson(quantity: 0, totalQuantity: 1, availableQuantity: 0),
+        ),
+      );
+
+      expect(
+        find.text('No animals are currently available for a new inquiry.'),
+        findsOneWidget,
+      );
+      final FilledButton sendButton = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Send Interest'),
+      );
+      expect(sendButton.onPressed, isNull);
+    });
+
+    testWidgets('refreshes availability after a stale quantity conflict', (
+      WidgetTester tester,
+    ) async {
+      int attempts = 0;
+      await pushInquire(
+        tester,
+        handler: (_) async {
+          attempts++;
+          if (attempts == 1) {
+            return inquiryConflictResponse(
+              message: 'There is not enough stock for the requested quantity.',
+            );
+          }
+          return inquiryCreatedResponse(
+            inquiry: inquiryJson(
+              message: 'Can I buy two?',
+              paymentMethod: 'cash',
+              collectionMethod: 'farm_pickup',
+              requestedQuantity: 2,
+            ),
+          );
+        },
+        marketplaceHandler: (_) async => listingDetailResponse(
+          listing: listingJson(quantity: 2, totalQuantity: 5, availableQuantity: 2),
+        ),
+      );
+
+      await tester.tap(find.byTooltip('Increase requested quantity'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Increase requested quantity'));
+      await tester.pump();
+      await typeMessage(tester, 'Can I buy two?');
+      await chooseOption(tester, 'Cash');
+      await chooseOption(tester, 'Personal Pickup');
+      await submit(tester);
+
+      expect(
+        find.text('2 available. You may request up to this amount.'),
+        findsOneWidget,
+      );
+      final FilledButton sendButton = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Send Interest'),
+      );
+      expect(sendButton.onPressed, isNull);
+
+      await tester.ensureVisible(find.byTooltip('Reduce requested quantity'));
+      await tester.tap(find.byTooltip('Reduce requested quantity'));
+      await tester.pump();
+      await submit(tester);
+
+      expect(attempts, 2);
+      expect(posts().last.body['requested_quantity'], 2);
       expect(find.text(successHeading), findsOneWidget);
     });
 

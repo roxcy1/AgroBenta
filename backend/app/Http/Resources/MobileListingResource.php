@@ -27,6 +27,10 @@ class MobileListingResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $reconciliationRequired = (bool) $this->inventory_reconciliation_required;
+        $reserved = $this->resource->getAttribute('reserved_quantity');
+        $completed = $this->resource->getAttribute('accounted_completed_quantity');
+
         return [
             'id' => $this->id,
             'seller' => new MobileSellerResource($this->seller),
@@ -39,7 +43,19 @@ class MobileListingResource extends JsonResource
             'weight_value' => $this->weight_value,
             'weight_unit' => $this->weight_unit,
             'weight_information' => $this->weight_information,
+            // `quantity` remains the available-stock compatibility field.
             'quantity' => $this->quantity,
+            'total_quantity' => $reconciliationRequired ? null : $this->total_quantity,
+            'reserved_quantity' => $reconciliationRequired ? null : (int) ($reserved ?? 0),
+            'platform_sold_quantity' => $reconciliationRequired ? null : (int) ($completed ?? 0),
+            'sold_quantity' => $reconciliationRequired
+                ? null
+                : (int) ($completed ?? 0) + (int) $this->externally_sold_quantity,
+            'externally_sold_quantity' => $reconciliationRequired
+                ? null
+                : $this->externally_sold_quantity,
+            'available_quantity' => $reconciliationRequired ? null : $this->quantity,
+            'inventory_reconciliation_required' => $reconciliationRequired,
             'asking_price' => $this->asking_price,
             'location' => $this->location,
             'health_status' => $this->health_status,

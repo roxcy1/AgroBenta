@@ -115,6 +115,13 @@ class Listing {
     required this.weightUnit,
     required this.weightInformation,
     required this.quantity,
+    this.totalQuantity,
+    this.reservedQuantity,
+    this.platformSoldQuantity,
+    this.soldQuantity,
+    this.availableQuantity,
+    this.externallySoldQuantity,
+    this.inventoryReconciliationRequired = false,
     required this.askingPrice,
     required this.location,
     required this.healthStatus,
@@ -142,6 +149,16 @@ class Listing {
       weightUnit: readString(json, 'weight_unit'),
       weightInformation: readNullableString(json, 'weight_information'),
       quantity: readInt(json, 'quantity'),
+      totalQuantity: json.containsKey('total_quantity')
+          ? readNullableInt(json, 'total_quantity')
+          : readInt(json, 'quantity'),
+      reservedQuantity: readNullableInt(json, 'reserved_quantity'),
+      platformSoldQuantity: readNullableInt(json, 'platform_sold_quantity'),
+      soldQuantity: readNullableInt(json, 'sold_quantity'),
+      availableQuantity: readNullableInt(json, 'available_quantity'),
+      externallySoldQuantity: readNullableInt(json, 'externally_sold_quantity'),
+      inventoryReconciliationRequired:
+          readNullableBool(json, 'inventory_reconciliation_required') ?? false,
       askingPrice: readDecimalString(json, 'asking_price'),
       location: readString(json, 'location'),
       healthStatus: readNullableString(json, 'health_status'),
@@ -201,8 +218,29 @@ class Listing {
   /// selector. The value is the seller's declaration, not a verification.
   final String? weightInformation;
 
-  /// Whole units available. Never negative.
+  /// Legacy API field, retained as the available-stock quantity.
   final int quantity;
+
+  /// The full quantity the seller listed, or null for an unverified legacy row.
+  final int? totalQuantity;
+
+  /// Quantity committed to active transactions, or null while reconciliation is required.
+  final int? reservedQuantity;
+
+  /// Animals in transactions completed through AgroBenta.
+  final int? platformSoldQuantity;
+
+  /// Platform-completed plus externally reported sales, or null while reconciliation is required.
+  final int? soldQuantity;
+
+  /// Current uncommitted quantity, or null while reconciliation is required.
+  final int? availableQuantity;
+
+  /// Animals the seller reported as sold outside AgroBenta.
+  final int? externallySoldQuantity;
+
+  /// Legacy inventory is quarantined until an administrator verifies it.
+  final bool inventoryReconciliationRequired;
 
   /// The seller's asking price as the API sent it, e.g. `"42500.00"`.
   ///

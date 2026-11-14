@@ -174,9 +174,22 @@ class TransactionService
     public function cancel(Transaction $transaction, User $actor): Transaction
     {
         return DB::transaction(function () use ($transaction, $actor): Transaction {
-            // Re-read under a row lock: the model handed in by the controller
-            // may be stale, and a concurrent cancel must not release stock
-            // twice.
+            // Use a consistent listing → transaction lock order with inventory
+            // reconciliation and reservations. The scoped pre-read supplies
+            // only the immutable listing id; all decisions use the locked rows.
+            $visible = $this->transactions->findForUser(
+                (int) $transaction->getKey(),
+                $actor,
+            );
+
+            if ($visible === null) {
+                abort(404, 'Transaction not found.');
+            }
+
+            $this->reservations->lockForInventoryMutation((int) $visible->listing_id);
+
+            // Re-read under a transaction row lock so a concurrent cancel or
+            // completion cannot release inventory twice.
             $locked = $this->transactions->lockForUser(
                 (int) $transaction->getKey(),
                 $actor,

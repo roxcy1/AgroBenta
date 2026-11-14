@@ -33,12 +33,15 @@ class InquiryListItemResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'requested_quantity' => $this->requested_quantity,
             'role' => $isBuyer ? 'buyer' : 'seller',
             'status' => $this->status?->value,
             'listing' => $listing === null ? null : [
                 'id' => $listing->id,
                 'title' => trim(($listing->livestock_type ?? '').' '.($listing->breed ?? '')),
                 'asking_price' => $listing->asking_price,
+                'quantity' => $listing->quantity,
+                'inventory_reconciliation_required' => (bool) $listing->inventory_reconciliation_required,
                 'photo_url' => is_array($photos) && $photos !== []
                     ? (string) reset($photos)
                     : null,
@@ -55,10 +58,15 @@ class InquiryListItemResource extends JsonResource
                 'id' => $latestOffer->id,
                 'status' => $latestOffer->status?->value,
                 'proposed_amount' => $latestOffer->proposed_amount,
+                'proposed_quantity' => $latestOffer->proposed_quantity,
             ],
             // The seller may revise after a decline/withdrawal, but never
             // while pending and never after acceptance (server-owned rule).
-            'can_make_offer' => $isBuyer
+            'can_make_offer' => $isBuyer ||
+                $listing === null ||
+                $listing->status?->value !== 'active' ||
+                $listing->inventory_reconciliation_required ||
+                (int) $listing->quantity < 1
                 ? false
                 : $this->offers->every(
                     fn ($offer): bool => ! in_array(

@@ -43,6 +43,7 @@ const Map<String, int> _fieldStep = <String, int>{
   'weight_value': 0,
   'weight_unit': 0,
   'quantity': 1,
+  'total_quantity': 1,
   'asking_price': 1,
   'location': 1,
   'gender': 1,
@@ -760,6 +761,34 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     final ThemeData theme = Theme.of(context);
     final Listing? listing = widget.listing;
 
+    if (listing?.inventoryReconciliationRequired ?? false) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit listing')),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.screenGutter),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const NoticeBanner(
+                    accent: AppColors.warning,
+                    icon: Icons.inventory_2_outlined,
+                    message: 'Inventory reconciliation is required before this listing can be edited.',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('Back to My Listings'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     // The server refuses an edit for a listing that is not a `draft` or an
     // `active` one, so the form is not even offered for the other states rather
     // than being shown and then failing on save.
@@ -1212,15 +1241,17 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
           children: <Widget>[
             _TextField(
               controller: _quantity,
-              label: 'Number of Animals Available',
+              label: 'Total Animals in This Listing',
               hint: 'e.g. 12',
               helper:
-                  'Required. Animals grouped in one listing must have similar '
+                  'Required. This is the full listing quantity, including '
+                  'animals already reserved or sold. Animals grouped in one listing must have similar '
                   'characteristics and share one price per head. List '
                   'significantly different animals separately.',
               helperMaxLines: 4,
               validator: validateQuantity,
-              serverErrors: state.validationErrors['quantity'],
+              serverErrors: state.validationErrors['total_quantity'] ??
+                  state.validationErrors['quantity'],
               keyboardType: TextInputType.number,
               inputFormatters: const <TextInputFormatter>[
                 DigitsOnlyInputFormatter(),

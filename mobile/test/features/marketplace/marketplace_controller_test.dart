@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:agrobenta_mobile/features/marketplace/state/listing_filters.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_state.dart';
+import 'package:agrobenta_mobile/core/realtime/realtime_event.dart';
 import 'package:agrobenta_mobile/models/listing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -21,12 +22,14 @@ void main() {
 
   /// A controller over a handler, plus a record of every notification.
   ({MarketplaceController controller, List<MarketplaceState> states}) build(
-    Future<http.Response> Function(RecordedRequest request) handler,
-  ) {
+    Future<http.Response> Function(RecordedRequest request) handler, {
+    Stream<RealtimeEvent>? realtimeEvents,
+  }) {
     final MarketplaceController controller = buildMarketplaceController(
       tokenStore,
       handler,
       recorded: recorded,
+      realtimeEvents: realtimeEvents,
     );
     addTearDown(controller.dispose);
 
@@ -251,6 +254,81 @@ void main() {
       await controller.submitSearch();
 
       expect(recorded, hasLength(1));
+    });
+
+    test(
+      'inventory updates remain subscribed after submitting a search',
+      () async {
+        final _CountingRealtimeEventStream events =
+            _CountingRealtimeEventStream();
+        addTearDown(events.close);
+        final harness = build(
+          (_) async => marketplaceListResponse(),
+          realtimeEvents: events,
+        );
+
+        await harness.controller.loadInitial();
+        harness.controller.updateSearch('goat');
+        await harness.controller.submitSearch();
+        expect(recorded, hasLength(2));
+
+        events.add(_inventoryUpdatedEvent);
+        await pumpEventQueue();
+
+        expect(recorded, hasLength(3));
+        expect(harness.controller.state.status, MarketplaceStatus.ready);
+      },
+    );
+
+    test(
+      'inventory updates remain subscribed after clearing a search',
+      () async {
+        final _CountingRealtimeEventStream events =
+            _CountingRealtimeEventStream();
+        addTearDown(events.close);
+        final harness = build(
+          (_) async => marketplaceListResponse(),
+          realtimeEvents: events,
+        );
+
+        await harness.controller.loadInitial();
+        harness.controller.updateSearch('goat');
+        await harness.controller.submitSearch();
+        harness.controller.updateSearch('');
+        await harness.controller.submitSearch();
+        expect(recorded, hasLength(3));
+
+        events.add(_inventoryUpdatedEvent);
+        await pumpEventQueue();
+
+        expect(recorded, hasLength(4));
+        expect(recorded.last.query.containsKey('search'), isFalse);
+      },
+    );
+
+    test('repeated searches keep exactly one inventory subscription', () async {
+      final _CountingRealtimeEventStream events =
+          _CountingRealtimeEventStream();
+      addTearDown(events.close);
+      final harness = build(
+        (_) async => marketplaceListResponse(),
+        realtimeEvents: events,
+      );
+
+      await harness.controller.loadInitial();
+      for (final String term in <String>['goat', 'cattle', '', 'swine']) {
+        harness.controller.updateSearch(term);
+        await harness.controller.submitSearch();
+      }
+
+      expect(events.listenCount, 1);
+      expect(recorded, hasLength(5));
+
+      events.add(_inventoryUpdatedEvent);
+      await pumpEventQueue();
+
+      expect(events.listenCount, 1);
+      expect(recorded, hasLength(6));
     });
 
     test('a search that resolves late cannot overwrite a newer one', () async {
@@ -589,6 +667,69 @@ void main() {
     });
   });
 
+  test('refreshes availability when a realtime inventory event arrives', () async {
+    final StreamController<RealtimeEvent> events =
+        StreamController<RealtimeEvent>.broadcast();
+    addTearDown(events.close);
+
+    final MarketplaceController controller = buildMarketplaceController(
+      tokenStore,
+      (_) async => marketplaceListResponse(),
+      recorded: recorded,
+      realtimeEvents: events.stream,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.loadInitial();
+    expect(recorded, hasLength(1));
+
+    events.add(
+      const RealtimeEvent(
+        name: 'listing.inventory.updated',
+        data: <String, dynamic>{'listing_id': 12},
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(recorded, hasLength(2));
+    expect(controller.state.status, MarketplaceStatus.ready);
+  });
+
+  test(
+    'dispose cancels inventory updates and ignores subsequent events',
+    () async {
+      final _CountingRealtimeEventStream events =
+          _CountingRealtimeEventStream();
+      addTearDown(events.close);
+      final MarketplaceController controller = buildMarketplaceController(
+        tokenStore,
+        (_) async => marketplaceListResponse(),
+        recorded: recorded,
+        realtimeEvents: events,
+      );
+      bool disposed = false;
+      addTearDown(() {
+        if (!disposed) controller.dispose();
+      });
+
+      await controller.loadInitial();
+      expect(events.listenCount, 1);
+      expect(events.hasListener, isTrue);
+      final MarketplaceState beforeDispose = controller.state;
+
+      controller.dispose();
+      disposed = true;
+      await pumpEventQueue();
+
+      expect(events.hasListener, isFalse);
+      events.add(_inventoryUpdatedEvent);
+      await pumpEventQueue();
+
+      expect(recorded, hasLength(1));
+      expect(controller.state, same(beforeDispose));
+    },
+  );
+
   group('pull to refresh', () {
     test('keeps the loaded listings on screen while re-querying', () async {
       final Completer<http.Response> completer = Completer<http.Response>();
@@ -771,4 +912,41 @@ void main() {
       expect(recorded, isEmpty);
     });
   });
+}
+
+const RealtimeEvent _inventoryUpdatedEvent = RealtimeEvent(
+  name: 'listing.inventory.updated',
+  data: <String, dynamic>{'listing_id': 12},
+);
+
+class _CountingRealtimeEventStream extends Stream<RealtimeEvent> {
+  final StreamController<RealtimeEvent> _controller =
+      StreamController<RealtimeEvent>.broadcast();
+
+  int listenCount = 0;
+
+  bool get hasListener => _controller.hasListener;
+
+  void add(RealtimeEvent event) => _controller.add(event);
+
+  Future<void> close() => _controller.close();
+
+  @override
+  bool get isBroadcast => true;
+
+  @override
+  StreamSubscription<RealtimeEvent> listen(
+    void Function(RealtimeEvent event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    listenCount++;
+    return _controller.stream.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
 }
