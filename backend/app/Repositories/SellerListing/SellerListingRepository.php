@@ -34,6 +34,7 @@ class SellerListingRepository
         int $perPage = 15,
     ): LengthAwarePaginator {
         $query = Listing::query()
+            ->withInventoryTotals()
             ->with('seller:id,name')
             ->where('seller_id', $seller->getKey());
 
@@ -91,6 +92,7 @@ class SellerListingRepository
     public function findOwned(int $listingId, User $seller): ?Listing
     {
         return Listing::query()
+            ->withInventoryTotals()
             ->with('seller:id,name')
             ->where('id', $listingId)
             ->where('seller_id', $seller->getKey())
@@ -126,7 +128,11 @@ class SellerListingRepository
         $listing->fill($attributes);
         $listing->save();
 
-        return $listing;
+        return Listing::query()
+            ->withInventoryTotals()
+            ->with('seller:id,name')
+            ->whereKey($listing->getKey())
+            ->firstOrFail();
     }
 
     /**

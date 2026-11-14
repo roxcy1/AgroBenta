@@ -39,6 +39,8 @@ class StoreOfferRequest extends FormRequest
             'inquiry_id' => ['required', 'integer', 'exists:inquiries,id'],
             'listing_id' => ['required', 'integer', 'exists:listings,id'],
             'proposed_amount' => ['required', 'numeric', 'min:0.01'],
+            // Legacy clients omit quantity and receive the inquiry's request.
+            'proposed_quantity' => ['sometimes', 'integer', 'min:1', 'max:4294967295'],
             'proposed_pickup_date' => ['nullable', 'date', 'after_or_equal:today'],
             'payment_method' => [
                 'nullable',
@@ -56,6 +58,7 @@ class StoreOfferRequest extends FormRequest
             'seller_id' => ['prohibited'],
             'status' => ['prohibited'],
             'responded_at' => ['prohibited'],
+            'quantity' => ['prohibited'],
         ];
     }
 }

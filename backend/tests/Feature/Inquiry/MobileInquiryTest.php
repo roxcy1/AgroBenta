@@ -198,6 +198,83 @@ class MobileInquiryTest extends TestCase
     }
 
     #[Test]
+    public function an_inquiry_can_request_multiple_available_heads_without_reserving_them(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 5]);
+
+        $response = $this->postInquiry($this->validInquiryBody($listing, [
+            'requested_quantity' => 3,
+        ]))->assertCreated();
+
+        $this->assertSame(3, $response->json('data.requested_quantity'));
+        $this->assertSame(3, (int) Inquiry::query()->sole()->requested_quantity);
+        $this->assertSame(5, (int) $listing->refresh()->quantity);
+        $this->assertSame(0, Transaction::query()->count());
+    }
+
+    #[Test]
+    public function a_legacy_inquiry_request_defaults_to_one_head(): void
+    {
+        $listing = $this->createListing($this->seller);
+
+        $response = $this->postInquiry($this->validInquiryBody($listing))
+            ->assertCreated();
+
+        $this->assertSame(1, $response->json('data.requested_quantity'));
+        $this->assertSame(1, (int) Inquiry::query()->sole()->requested_quantity);
+    }
+
+    #[Test]
+    public function an_inquiry_cannot_request_more_than_current_available_stock(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 2]);
+
+        $this->postInquiry($this->validInquiryBody($listing, [
+            'requested_quantity' => 3,
+        ]))->assertStatus(409);
+
+        $this->assertSame(2, (int) $listing->refresh()->quantity);
+        $this->assertSame(0, Inquiry::query()->count());
+        $this->assertSame(0, Transaction::query()->count());
+    }
+
+    #[Test]
+    public function an_inquiry_rejects_zero_decimal_and_legacy_quantity_inputs(): void
+    {
+        $listing = $this->createListing($this->seller);
+
+        $this->postInquiry($this->validInquiryBody($listing, [
+            'requested_quantity' => 0,
+        ]))->assertStatus(422)->assertJsonValidationErrors('requested_quantity');
+
+        $this->postInquiry($this->validInquiryBody($listing, [
+            'requested_quantity' => 1.5,
+        ]))->assertStatus(422)->assertJsonValidationErrors('requested_quantity');
+
+        $this->postInquiry($this->validInquiryBody($listing, [
+            'quantity' => 2,
+        ]))->assertStatus(422)->assertJsonValidationErrors('quantity');
+    }
+
+    #[Test]
+    public function an_unreconciled_listing_rejects_new_inquiries_without_changing_legacy_stock(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'quantity' => 5,
+            'total_quantity' => null,
+            'inventory_reconciliation_required' => true,
+            'legacy_quantity_snapshot' => 5,
+        ]);
+
+        $this->postInquiry($this->validInquiryBody($listing, [
+            'requested_quantity' => 1,
+        ]))->assertStatus(409);
+
+        $this->assertSame(5, (int) $listing->refresh()->quantity);
+        $this->assertSame(0, Inquiry::query()->count());
+    }
+
+    #[Test]
     public function every_supported_preference_is_persisted_and_echoed(): void
     {
         // A controlled clock: the preferred date is relative to "now", so the

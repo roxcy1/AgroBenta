@@ -319,9 +319,9 @@ class _FactsGrid extends StatelessWidget {
       ('Health', listing.healthStatus),
       ('Vaccination', listing.vaccination),
       (
-        'Quantity',
-        listing.quantity > 0
-            ? '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}'
+        'Available',
+        (listing.availableQuantity ?? listing.quantity) > 0
+            ? '${listing.availableQuantity ?? listing.quantity} ${(listing.availableQuantity ?? listing.quantity) == 1 ? 'head' : 'heads'}'
             : null,
       ),
     ];

@@ -152,6 +152,7 @@ class MarketplaceListingRepository
     public function findVisibleListing(int $listingId, int $viewerId): ?Listing
     {
         return Listing::query()
+            ->withInventoryTotals()
             ->with('seller:id,name')
             // Same completed-sale aggregate as the list, so the card and the
             // detail screen can never disagree.
@@ -163,6 +164,8 @@ class MarketplaceListingRepository
             ->where(function (Builder $query) use ($viewerId): void {
                 $query->where(function (Builder $active): void {
                     $active->where('status', ListingStatus::Active)
+                        ->where('inventory_reconciliation_required', false)
+                        ->where('quantity', '>', 0)
                         ->whereHas('seller');
                 })
                     ->orWhere('seller_id', $viewerId);
@@ -177,8 +180,11 @@ class MarketplaceListingRepository
     private function activeQuery(): Builder
     {
         return Listing::query()
+            ->withInventoryTotals()
             ->with('seller:id,name')
             ->where('status', ListingStatus::Active)
+            ->where('inventory_reconciliation_required', false)
+            ->where('quantity', '>', 0)
             // Preserve the listing row and status, but keep its live inventory
             // hidden when the owning account has been deactivated.
             ->whereHas('seller');

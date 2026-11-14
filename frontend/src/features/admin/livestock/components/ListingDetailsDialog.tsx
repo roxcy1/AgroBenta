@@ -10,10 +10,10 @@ import {
   Image as ImageIcon,
   Layers,
   MapPin,
-  Package,
   Scale,
   Store,
   Tag,
+  PackageCheck,
   UsersRound,
   X,
 } from 'lucide-react';
@@ -30,6 +30,7 @@ interface ListingDetailsDialogProps {
   listing: Listing;
   livestockTypes: LivestockTypeOption[];
   onClose: () => void;
+  onReconcile?: () => void;
 }
 
 interface DetailSection {
@@ -44,7 +45,7 @@ function orDash(value: string | number | null | undefined): string {
   return String(value);
 }
 
-export default function ListingDetailsDialog({ listing, livestockTypes, onClose }: ListingDetailsDialogProps) {
+export default function ListingDetailsDialog({ listing, livestockTypes, onClose, onReconcile }: ListingDetailsDialogProps) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose();
@@ -86,7 +87,22 @@ export default function ListingDetailsDialog({ listing, livestockTypes, onClose 
             : '\u2014',
           Scale,
         ],
-        ['Quantity', orDash(listing.quantity), Package],
+      ],
+    },
+    {
+      title: 'Inventory',
+      Icon: PackageCheck,
+      rows: [
+        ['Total quantity', listing.inventory_reconciliation_required ? 'Requires reconciliation' : orDash(listing.total_quantity)],
+        ['Reserved', orDash(listing.reserved_quantity)],
+        ['Sold through AgroBenta', orDash(listing.platform_sold_quantity)],
+        ['Sold externally', orDash(listing.externally_sold_quantity)],
+        ['Total sold', orDash(listing.sold_quantity)],
+        ['Available', listing.inventory_reconciliation_required ? 'Requires reconciliation' : orDash(listing.available_quantity)],
+        ['Inventory status', listing.inventory_reconciliation_required ? 'Reconciliation required' : 'Verified'],
+        ...(listing.inventory_reconciliation_required
+          ? [['Preserved legacy quantity', orDash(listing.legacy_quantity_snapshot)] as [string, ReactNode]]
+          : []),
       ],
     },
     {
@@ -130,6 +146,13 @@ export default function ListingDetailsDialog({ listing, livestockTypes, onClose 
         ['Created', formatDateTime(listing.created_at)],
         ['Updated', formatDateTime(listing.updated_at)],
         ['Admin note', orDash(listing.admin_note)],
+        ...(listing.latest_inventory_reconciliation
+          ? [
+              ['Last reconciled by', orDash(listing.latest_inventory_reconciliation.admin?.name)] as [string, ReactNode],
+              ['Reconciled', formatDateTime(listing.latest_inventory_reconciliation.created_at)] as [string, ReactNode],
+              ['Reconciliation reason', listing.latest_inventory_reconciliation.reason] as [string, ReactNode],
+            ]
+          : []),
       ],
     },
   ];
@@ -223,6 +246,15 @@ export default function ListingDetailsDialog({ listing, livestockTypes, onClose 
         </div>
 
         <footer className="lv-detail-footer">
+          {listing.inventory_reconciliation_required && onReconcile && (
+            <button
+              type="button"
+              className="lv-action-confirm lv-action-confirm--approve"
+              onClick={onReconcile}
+            >
+              Reconcile inventory
+            </button>
+          )}
           <button type="button" className="listing-details-footer-close" onClick={onClose}>
             Close
           </button>

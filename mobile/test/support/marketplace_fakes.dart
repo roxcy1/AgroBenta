@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
+import 'package:agrobenta_mobile/core/realtime/realtime_event.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
 import 'package:agrobenta_mobile/services/marketplace_service.dart';
@@ -64,6 +65,13 @@ Map<String, dynamic> listingJson({
   Object? weightUnit = 'kg',
   Object? weightInformation = 'measured',
   Object? quantity = 4,
+  Object? totalQuantity,
+  Object? reservedQuantity = 0,
+  Object? platformSoldQuantity = 0,
+  Object? soldQuantity = 0,
+  Object? availableQuantity,
+  Object? externallySoldQuantity = 0,
+  bool inventoryReconciliationRequired = false,
   Object? askingPrice = '42500.00',
   String location = 'Mabalacat, Pampanga',
   Object? healthStatus = 'Healthy',
@@ -90,6 +98,13 @@ Map<String, dynamic> listingJson({
     'weight_unit': weightUnit,
     'weight_information': weightInformation,
     'quantity': quantity,
+    'total_quantity': totalQuantity ?? quantity,
+    'reserved_quantity': reservedQuantity,
+    'platform_sold_quantity': platformSoldQuantity,
+    'sold_quantity': soldQuantity,
+    'available_quantity': availableQuantity ?? quantity,
+    'externally_sold_quantity': externallySoldQuantity,
+    'inventory_reconciliation_required': inventoryReconciliationRequired,
     'asking_price': askingPrice,
     'location': location,
     'health_status': healthStatus,
@@ -220,9 +235,11 @@ MarketplaceController buildMarketplaceController(
   FakeTokenStore tokenStore,
   Future<http.Response> Function(RecordedRequest request) handler, {
   List<RecordedRequest>? recorded,
+  Stream<RealtimeEvent>? realtimeEvents,
 }) {
   return MarketplaceController(
     buildMarketplaceRepository(tokenStore, handler, recorded: recorded),
+    realtimeEvents: realtimeEvents,
   );
 }
 

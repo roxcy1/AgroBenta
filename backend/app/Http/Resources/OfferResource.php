@@ -35,6 +35,7 @@ class OfferResource extends JsonResource
             'seller_id' => $this->seller_id,
             'buyer_id' => $this->buyer_id,
             'proposed_amount' => $this->proposed_amount,
+            'proposed_quantity' => $this->proposed_quantity,
             'proposed_pickup_date' => $this->proposed_pickup_date?->toDateString(),
             'payment_method' => $this->payment_method?->value,
             'collection_method' => $this->collection_method?->value,
@@ -47,6 +48,8 @@ class OfferResource extends JsonResource
                 'livestock_type' => $listing->livestock_type,
                 'breed' => $listing->breed,
                 'asking_price' => $listing->asking_price,
+                'quantity' => $listing->quantity,
+                'inventory_reconciliation_required' => (bool) $listing->inventory_reconciliation_required,
                 'photo_url' => is_array($photos) && $photos !== []
                     ? (string) reset($photos)
                     : null,

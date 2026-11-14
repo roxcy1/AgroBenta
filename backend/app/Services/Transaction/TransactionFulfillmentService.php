@@ -4,7 +4,9 @@ namespace App\Services\Transaction;
 
 use App\Enums\ActivityAction;
 use App\Enums\FulfillmentStatus;
+use App\Enums\ListingStatus;
 use App\Enums\TransactionStatus;
+use App\Events\ListingInventoryUpdated;
 use App\Events\TransactionUpdated;
 use App\Models\Transaction;
 use App\Models\User;
@@ -31,8 +33,8 @@ use Illuminate\Support\Facades\DB;
  *    delivered -> completed
  *
  * A seller action not valid for the transaction's flow is a 409, not a silent
- * status write. Cancellation cutoffs and the legacy-stock policy live here and
- * in {@see TransactionService::cancel()}.
+ * status write. Cancellation cutoffs and the legacy inventory policy live here
+ * and in {@see TransactionService::cancel()}.
  */
 class TransactionFulfillmentService
 {
@@ -91,6 +93,17 @@ class TransactionFulfillmentService
     public function confirmReceived(int $transactionId, User $buyer): Transaction
     {
         return DB::transaction(function () use ($transactionId, $buyer): Transaction {
+            // Lock listing inventory before the transaction row. This matches
+            // cancellation, reservation, and administrative reconciliation and
+            // prevents lock-order deadlocks.
+            $visible = $this->transactions->findForUser($transactionId, $buyer);
+
+            if ($visible === null) {
+                abort(404, 'Transaction not found.');
+            }
+
+            $this->reservations->lockForInventoryMutation((int) $visible->listing_id);
+
             $locked = $this->transactions->lockForUser($transactionId, $buyer);
 
             if ($locked === null) {
@@ -112,23 +125,41 @@ class TransactionFulfillmentService
                 abort(409, 'Receipt can only be confirmed after pickup or delivery.');
             }
 
-            // Historical rows predate reservation. Take the stock now so a
-            // legacy sale cannot complete without holding its quantity; if the
-            // listing has no stock left, the completion is refused.
-            if (! $locked->inventory_reserved) {
-                $this->reservations->reserve(
-                    (int) $locked->listing_id,
-                    (int) $locked->quantity,
-                );
-                $locked = $this->transactions->markInventoryReserved($locked);
-            }
-
             // Completion and the receipt snapshot are written in this same
             // database transaction: a completed row can never exist without the
             // values the receipt will show.
             $completedAt = now();
             $snapshot = $this->receipts->snapshot($locked, $completedAt);
             $completed = $this->transactions->complete($locked, $snapshot, $completedAt);
+
+            $listingAutomaticallySold = false;
+            if ($completed->inventory_accounted) {
+                $listingAutomaticallySold = $this->reservations->markSoldIfExhausted(
+                    (int) $completed->listing_id,
+                );
+                if (! $listingAutomaticallySold) {
+                    ListingInventoryUpdated::dispatch((int) $completed->listing_id);
+                }
+            }
+
+            if ($listingAutomaticallySold) {
+                $this->activity->log(
+                    null,
+                    ActivityAction::ListingMarkedSold,
+                    sprintf('Listing #%d automatically marked sold after its final accounted transaction.', $completed->listing_id),
+                    [
+                        'target_type' => 'listing',
+                        'target_id' => $completed->listing_id,
+                        'context' => ['transaction_id' => $completed->getKey()],
+                        'changes' => [
+                            'status' => [
+                            'from' => ListingStatus::Active->value,
+                            'to' => ListingStatus::Sold->value,
+                            ],
+                        ],
+                    ],
+                );
+            }
 
             $this->activity->log(
                 $buyer,

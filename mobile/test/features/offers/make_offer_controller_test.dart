@@ -70,7 +70,7 @@ void main() {
   });
 
   group('submit', () {
-    test('trims the amount and sends only the three request fields', () async {
+    test('trims the amount and sends all four request fields', () async {
       final MakeOfferController controller = build(
         (_) async => offerCreatedResponse(
           offer: offerJson(id: 8, proposedAmount: '48000.00'),
@@ -91,7 +91,9 @@ void main() {
         'inquiry_id',
         'listing_id',
         'proposed_amount',
+        'proposed_quantity',
       });
+      expect(recorded.single.body['proposed_quantity'], 1);
       expect(recorded.single.body['proposed_amount'], '48000.00');
     });
 
@@ -119,11 +121,13 @@ void main() {
           'inquiry_id',
           'listing_id',
           'proposed_amount',
+          'proposed_quantity',
           'proposed_pickup_date',
           'payment_method',
           'collection_method',
           'note',
         });
+        expect(body['proposed_quantity'], 1);
         expect(body['proposed_pickup_date'], '2036-11-12');
         expect(body['payment_method'], 'cash');
         expect(body['collection_method'], 'farm_pickup');

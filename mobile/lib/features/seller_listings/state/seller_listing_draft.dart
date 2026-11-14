@@ -70,7 +70,7 @@ class SellerListingDraft {
       weightValue: listing.weightValue ?? '',
       weightUnit: listing.weightUnit,
       weightInformation: listing.weightInformation ?? 'measured',
-      quantity: listing.quantity.toString(),
+      quantity: listing.totalQuantity?.toString() ?? '',
       askingPrice: listing.askingPrice,
       location: listing.location,
       healthStatus: listing.healthStatus ?? '',
@@ -164,9 +164,9 @@ class SellerListingDraft {
           if (weightValue.trim().isNotEmpty && weightUnit != null) {
             body[key] = weightInformation;
           }
-        case 'quantity':
-          // Same guard as `age_value`: the contract holds this to an integer,
-          // and an unparseable value is left out rather than thrown on.
+        case 'total_quantity':
+          // Total animals in the listing. The backend derives the available
+          // compatibility value after reserved and sold quantities.
           final int? amount = int.tryParse(quantity.trim());
           if (amount != null) {
             body[key] = amount;

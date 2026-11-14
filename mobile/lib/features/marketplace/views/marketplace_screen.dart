@@ -36,7 +36,7 @@ import 'marketplace_filter_screen.dart';
 /// Height of a listing card's text block under its photo: name, place and
 /// price, with their padding. Slightly generous so a larger system font
 /// still fits.
-const double _cardTextHeight = 104;
+const double _cardTextHeight = 120;
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});

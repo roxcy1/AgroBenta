@@ -22,6 +22,9 @@ export function useAdminRealtime(): void {
         // refresh every admin surface once.
         void queryClient.invalidateQueries({ queryKey: ['admin'] });
       },
+      () => {
+        void queryClient.invalidateQueries({ queryKey: ['admin', 'listings'] });
+      },
     );
   }, [queryClient]);
 }

@@ -34,17 +34,26 @@ class StoreSellerListingRequest extends FormRequest
      */
     public function rules(): array
     {
+        // The two quantity spellings are mutually exclusive and one is
+        // required. All other core fields use the shared required-field rules.
         // `required` is added last so it takes precedence over the optional
-        // definition of the same field; applied the other way, `livestock_type`
-        // would silently revert to optional and a listing could be created with no
-        // livestock type at all.
+        // definition of the same field.
+        $required = $this->requiredFieldRules();
+        unset($required['total_quantity']);
+
         return $this->mergeRules(
-            $this->submissionRules(),
+            $this->contentRules(),
+            $this->pairRules(),
+            $this->requiredMeasurementRules(),
             $this->ownershipRules(),
             array_map(
                 static fn (array $rules): array => ['required', ...$rules],
-                $this->requiredFieldRules(),
+                $required,
             ),
+            [
+                'quantity' => ['required_without:total_quantity', 'prohibits:total_quantity'],
+                'total_quantity' => ['required_without:quantity', 'prohibits:quantity'],
+            ],
         );
     }
 

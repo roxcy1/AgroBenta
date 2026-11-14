@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../models/inquiry.dart';
+import '../../../models/listing.dart';
+import '../../../repositories/marketplace_repository.dart';
 import '../../../repositories/inquiry_repository.dart';
 import 'inquiry_state.dart';
 
@@ -40,9 +42,10 @@ import 'inquiry_state.dart';
 ///    cannot help.
 ///  * everything else — a form-level message carrying the server's wording.
 class InquiryController extends ChangeNotifier {
-  InquiryController(this._repository);
+  InquiryController(this._repository, {this.marketplace});
 
   final InquiryRepository _repository;
+  final MarketplaceRepository? marketplace;
 
   InquiryState _state = const InquiryState();
   InquiryState get state => _state;
@@ -120,6 +123,7 @@ class InquiryController extends ChangeNotifier {
   /// both, so the screen has no path that could call this without them.
   Future<bool> send({
     required int listingId,
+    int requestedQuantity = 1,
     required String message,
     InquiryCollectionDateOption? collectionDateOption,
     DateTime? preferredSchedule,
@@ -152,6 +156,7 @@ class InquiryController extends ChangeNotifier {
     try {
       final Inquiry inquiry = await _repository.create(
         listingId: listingId,
+        requestedQuantity: requestedQuantity,
         message: message,
         collectionDateOption: collectionDateOption,
         preferredSchedule: preferredSchedule,
@@ -195,6 +200,19 @@ class InquiryController extends ChangeNotifier {
               : const <String, List<String>>{},
         ),
       );
+      if (error.kind == ApiErrorKind.notFound) {
+        _set(_state.copyWith(listingUnavailable: true));
+      } else {
+        final String message = error.message.toLowerCase();
+        if (error.kind == ApiErrorKind.conflict &&
+            marketplace != null &&
+            (message.contains('stock') ||
+                message.contains('available') ||
+                message.contains('reconciliation') ||
+                message.contains('inventory'))) {
+          await _refreshListingAvailability(listingId);
+        }
+      }
       return false;
     } on Object {
       if (_disposed) {
@@ -207,6 +225,25 @@ class InquiryController extends ChangeNotifier {
         ),
       );
       return false;
+    }
+  }
+
+  Future<void> _refreshListingAvailability(int listingId) async {
+    try {
+      final Listing listing = await marketplace!.detail(listingId);
+      if (_disposed) return;
+      _set(
+        _state.copyWith(
+          refreshedListing: listing,
+          listingUnavailable: false,
+        ),
+      );
+    } on ApiException catch (error) {
+      if (_disposed || error.kind != ApiErrorKind.notFound) return;
+      _set(_state.copyWith(listingUnavailable: true));
+    } on Object {
+      // The original conflict is already visible. A best-effort refresh must
+      // not replace it with a generic network error.
     }
   }
 

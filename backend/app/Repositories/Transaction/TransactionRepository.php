@@ -137,6 +137,8 @@ class TransactionRepository
             'collection_method' => $collectionMethod,
             'pickup_date' => $pickupDate,
             'inventory_reserved' => true,
+            'inventory_accounted' => true,
+            'inventory_accounted_at' => now(),
             'status' => TransactionStatus::Pending,
             'fulfillment_status' => FulfillmentStatus::Confirmed,
         ]);
@@ -162,6 +164,9 @@ class TransactionRepository
     public function releaseInventory(Transaction $transaction): Transaction
     {
         $transaction->inventory_reserved = false;
+        $transaction->inventory_accounted = false;
+        $transaction->inventory_accounted_at = null;
+        $transaction->inventory_accounted_by = null;
         $transaction->save();
 
         return $transaction->refresh();
@@ -211,6 +216,8 @@ class TransactionRepository
     public function markInventoryReserved(Transaction $transaction): Transaction
     {
         $transaction->inventory_reserved = true;
+        $transaction->inventory_accounted = true;
+        $transaction->inventory_accounted_at = now();
         $transaction->save();
 
         return $transaction->refresh();

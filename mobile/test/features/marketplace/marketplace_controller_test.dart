@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:agrobenta_mobile/features/marketplace/state/listing_filters.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_state.dart';
+import 'package:agrobenta_mobile/core/realtime/realtime_event.dart';
 import 'package:agrobenta_mobile/models/listing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -587,6 +588,34 @@ void main() {
       completer.complete(marketplaceListResponse());
       await pumpEventQueue();
     });
+  });
+
+  test('refreshes availability when a realtime inventory event arrives', () async {
+    final StreamController<RealtimeEvent> events =
+        StreamController<RealtimeEvent>.broadcast();
+    addTearDown(events.close);
+
+    final MarketplaceController controller = buildMarketplaceController(
+      tokenStore,
+      (_) async => marketplaceListResponse(),
+      recorded: recorded,
+      realtimeEvents: events.stream,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.loadInitial();
+    expect(recorded, hasLength(1));
+
+    events.add(
+      const RealtimeEvent(
+        name: 'listing.inventory.updated',
+        data: <String, dynamic>{'listing_id': 12},
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(recorded, hasLength(2));
+    expect(controller.state.status, MarketplaceStatus.ready);
   });
 
   group('pull to refresh', () {

@@ -3,6 +3,7 @@
 namespace App\Repositories\Messaging;
 
 use App\Enums\InquiryStatus;
+use App\Enums\ListingStatus;
 use App\Enums\OfferStatus;
 use App\Models\Inquiry;
 use App\Models\Listing;
@@ -11,6 +12,7 @@ use App\Models\Offer;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -231,7 +233,14 @@ class MessageRepository
             ->where(function ($query) use ($userId): void {
                 $query->where('buyer_id', $userId)->orWhere('seller_id', $userId);
             })
-            ->with('listing:id,livestock_type,breed,asking_price,photos')
+            ->with([
+                'listing' => fn ($query) => $query
+                    ->select([
+                        'id', 'livestock_type', 'breed', 'asking_price', 'photos',
+                        'quantity', 'inventory_reconciliation_required', 'status',
+                    ])
+                    ->withInventoryTotals(),
+            ])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
@@ -255,7 +264,14 @@ class MessageRepository
             ->where(function ($query) use ($userId): void {
                 $query->where('buyer_id', $userId)->orWhere('seller_id', $userId);
             })
-            ->with('listing:id,livestock_type,breed,asking_price,photos')
+            ->with([
+                'listing' => fn ($query) => $query
+                    ->select([
+                        'id', 'livestock_type', 'breed', 'asking_price', 'photos',
+                        'quantity', 'inventory_reconciliation_required', 'status',
+                    ])
+                    ->withInventoryTotals(),
+            ])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
@@ -281,9 +297,13 @@ class MessageRepository
             // Inquiries arrive newest-first, so the first eligible one wins.
             if (
                 ! $isBuyer
-                && $facts[$counterpartId]['eligible_inquiry'] === null
-                && ! isset($pendingOfferInquiryIds[(int) $inquiry->id])
-                && ! isset($acceptedOfferInquiryIds[(int) $inquiry->id])
+             && $facts[$counterpartId]['eligible_inquiry'] === null
+             && ! isset($pendingOfferInquiryIds[(int) $inquiry->id])
+             && ! isset($acceptedOfferInquiryIds[(int) $inquiry->id])
+             && $inquiry->listing !== null
+             && $inquiry->listing->status === ListingStatus::Active
+             && ! $inquiry->listing->inventory_reconciliation_required
+             && (int) $inquiry->listing->quantity > 0
             ) {
                 $facts[$counterpartId]['eligible_inquiry'] = $inquiry;
             }
@@ -485,7 +505,7 @@ class MessageRepository
      * Deliberately not `OfferResource`: the inbox needs the state and the
      * amount, not the parties or the response timestamps.
      *
-     * @return array{id: int, status: string, proposed_amount: string, listing_id: ?int, listing_title: ?string}|null
+     * @return array{id: int, status: string, proposed_amount: string, proposed_quantity: int, listing_id: ?int, listing_title: ?string}|null
      */
     private function offerPreview(?Offer $offer): ?array
     {
@@ -499,6 +519,7 @@ class MessageRepository
                 ? $offer->status->value
                 : (string) $offer->status,
             'proposed_amount' => (string) $offer->proposed_amount,
+            'proposed_quantity' => (int) $offer->proposed_quantity,
             'listing_id' => $offer->listing_id !== null ? (int) $offer->listing_id : null,
             'listing_title' => $this->listingTitle($offer->listing),
         ];
@@ -511,7 +532,7 @@ class MessageRepository
      * them without a second request (there is no buyer inquiry-detail
      * endpoint).
      *
-     * @return array{id: int, listing_id: ?int, listing_title: ?string, asking_price: ?string, payment_method: ?string, collection_method: ?string, preferred_schedule: ?string}|null
+     * @return array{id: int, listing_id: ?int, listing_title: ?string, asking_price: ?string, requested_quantity: int, payment_method: ?string, collection_method: ?string, preferred_schedule: ?string}|null
      */
     private function inquiryPreview(?Inquiry $inquiry): ?array
     {
@@ -529,6 +550,13 @@ class MessageRepository
             'listing_id' => $inquiry->listing_id !== null ? (int) $inquiry->listing_id : null,
             'listing_title' => $this->listingTitle($inquiry->listing),
             'asking_price' => $inquiry->listing?->asking_price,
+            'requested_quantity' => (int) $inquiry->requested_quantity,
+            'listing_available_quantity' => $inquiry->listing?->quantity === null
+                ? null
+                : (int) $inquiry->listing->quantity,
+            'listing_inventory_reconciliation_required' =>
+                (bool) $inquiry->listing?->inventory_reconciliation_required,
+            'requested_quantity' => (int) $inquiry->requested_quantity,
             'listing_photo_url' => is_array($photos) && $photos !== []
                 ? (string) reset($photos)
                 : null,

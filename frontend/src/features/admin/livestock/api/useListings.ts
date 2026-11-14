@@ -19,6 +19,32 @@ export interface Listing {
   weight_value: number | null;
   weight_unit: string | null;
   quantity: number;
+  total_quantity: number | null;
+  reserved_quantity: number | null;
+  platform_sold_quantity: number | null;
+  sold_quantity: number | null;
+  available_quantity: number | null;
+  externally_sold_quantity: number | null;
+  inventory_reconciliation_required: boolean;
+  legacy_quantity_snapshot: number | null;
+  unaccounted_inventory_transactions?: Array<{
+    id: number;
+    status: 'pending' | 'completed';
+    quantity: number;
+  }>;
+  latest_inventory_reconciliation?: {
+    id: number;
+    admin: { id: number; name: string } | null;
+    verified_physical_quantity: number;
+    verified_pending_quantity: number;
+    verified_completed_quantity: number;
+    verified_externally_sold_quantity: number;
+    verified_total_quantity: number;
+    verified_available_quantity: number;
+    reason: string;
+    evidence: string | null;
+    created_at: string | null;
+  } | null;
   asking_price: string;
   location: string;
   health_status: string | null;
@@ -172,6 +198,55 @@ export function useDeactivateListing() {
   return useMutation({
     mutationFn: (id: number) => moderate('deactivate', id),
     onSuccess: invalidateListings,
+  });
+}
+
+export interface ReconcileInventoryInput {
+  verified_physical_quantity: number;
+  verified_externally_sold_quantity: number;
+  accounted_transaction_ids: number[];
+  reason: string;
+  evidence?: string;
+}
+
+interface ReconcileInventoryResponse {
+  success: boolean;
+  message: string;
+  data: {
+    listing: Listing;
+    reconciliation: NonNullable<Listing['latest_inventory_reconciliation']> & {
+      listing_id: number;
+      accounted_transaction_ids: number[];
+    };
+  };
+}
+
+export async function reconcileListingInventory(
+  listingId: number,
+  input: ReconcileInventoryInput,
+): Promise<ReconcileInventoryResponse['data']> {
+  const response = await api.post<ReconcileInventoryResponse>(
+    `/admin/listings/${listingId}/inventory/reconcile`,
+    input,
+  );
+  return response.data.data;
+}
+
+export function useReconcileListingInventory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      listingId,
+      input,
+    }: {
+      listingId: number;
+      input: ReconcileInventoryInput;
+    }) => reconcileListingInventory(listingId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'listings'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
+    },
   });
 }
 

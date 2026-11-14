@@ -5,6 +5,7 @@ namespace Tests\Feature\Marketplace;
 use App\Enums\ListingStatus;
 use App\Enums\UserRole;
 use App\Models\Listing;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -135,6 +136,53 @@ class MarketplaceListingTest extends TestCase
             ->assertJsonPath('data.id', $listing->id)
             ->assertJsonPath('data.livestock_type', 'cattle')
             ->assertJsonPath('data.status', ListingStatus::Active->value);
+    }
+
+    #[Test]
+    public function a_fully_reserved_active_listing_is_hidden_without_becoming_sold(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'quantity' => 0,
+            'total_quantity' => 3,
+            'status' => ListingStatus::Active,
+        ]);
+        Transaction::query()->create([
+            'buyer_id' => User::factory()->create()->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 3,
+            'total_amount' => 150000,
+            'inventory_reserved' => true,
+            'inventory_accounted' => true,
+            'status' => 'pending',
+        ]);
+
+        $this->browse()
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 0);
+        $this->assertSame(ListingStatus::Active, $listing->refresh()->status);
+    }
+
+    #[Test]
+    public function an_unreconciled_listing_is_hidden_from_buyers_but_remains_visible_to_its_seller(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'quantity' => 5,
+            'total_quantity' => null,
+            'inventory_reconciliation_required' => true,
+            'legacy_quantity_snapshot' => 5,
+        ]);
+
+        $this->browse()
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 0);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->getJson('/api/listings/'.$listing->id)
+            ->assertOk()
+            ->assertJsonPath('data.inventory_reconciliation_required', true)
+            ->assertJsonPath('data.available_quantity', null)
+            ->assertJsonPath('data.quantity', 5);
     }
 
     #[Test]

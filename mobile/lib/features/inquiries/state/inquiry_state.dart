@@ -1,4 +1,5 @@
 import '../../../models/inquiry.dart';
+import '../../../models/listing.dart';
 
 /// Where an inquiry submission is in its request lifecycle.
 ///
@@ -46,6 +47,8 @@ class InquiryState {
     this.isCheckingExisting = false,
     this.existingInquiry,
     this.existingCheckError,
+    this.refreshedListing,
+    this.listingUnavailable = false,
   });
 
   final InquiryUiStatus status;
@@ -74,6 +77,11 @@ class InquiryState {
   /// screen unusable.
   final String? existingCheckError;
 
+  /// Refreshed listing returned after a stale-availability conflict.
+  final Listing? refreshedListing;
+
+  final bool listingUnavailable;
+
   /// Whether a request of ours is in flight.
   bool get isBusy => status == InquiryUiStatus.submitting;
 
@@ -97,10 +105,13 @@ class InquiryState {
     bool? isCheckingExisting,
     Inquiry? existingInquiry,
     String? existingCheckError,
+    Listing? refreshedListing,
+    bool? listingUnavailable,
     bool clearInquiry = false,
     bool clearError = false,
     bool clearExistingInquiry = false,
     bool clearExistingCheckError = false,
+    bool clearRefreshedListing = false,
   }) {
     return InquiryState(
       status: status ?? this.status,
@@ -114,6 +125,10 @@ class InquiryState {
       existingCheckError: clearExistingCheckError
           ? null
           : (existingCheckError ?? this.existingCheckError),
+      refreshedListing: clearRefreshedListing
+          ? null
+          : (refreshedListing ?? this.refreshedListing),
+      listingUnavailable: listingUnavailable ?? this.listingUnavailable,
     );
   }
 

@@ -11,6 +11,7 @@ import '../../../widgets/field_label.dart';
 import '../../../widgets/notice_banner.dart';
 import '../../../widgets/section_card.dart';
 import '../../auth/state/auth_scope.dart';
+import '../../marketplace/state/marketplace_scope.dart';
 import '../../messaging/view/chat_screen.dart';
 import '../../messaging/view/conversations_screen.dart';
 import '../state/inquiry_controller.dart';
@@ -107,6 +108,7 @@ class _InquireScreenState extends State<InquireScreen> {
   InquiryCollectionMethod? _collectionMethod;
   InquiryCollectionDateOption? _collectionDateOption;
   DateTime? _preferredSchedule;
+  int _requestedQuantity = 1;
 
   /// Client-side preference errors, shown beside their sections after the
   /// first submit attempt. Cleared the moment the buyer chooses an option;
@@ -126,7 +128,10 @@ class _InquireScreenState extends State<InquireScreen> {
     // and this screen rebuilds on every keystroke otherwise. The controller is
     // this screen's alone — an inquiry is a one-shot form, not session state —
     // so it is created here and disposed here.
-    _controller = InquiryController(InquiryScope.readOf(context));
+    _controller = InquiryController(
+      InquiryScope.readOf(context),
+      marketplace: MarketplaceScope.readOf(context).repository,
+    );
     // The pre-check runs before the form is offered. It is deliberately not
     // awaited: the first frame shows the checking state, and the controller
     // publishes the result when it arrives.
@@ -166,6 +171,13 @@ class _InquireScreenState extends State<InquireScreen> {
       return;
     }
 
+    if (_availableQuantity <= 0 || _requestedQuantity > _availableQuantity) {
+      setState(() {
+        _dateError = null;
+      });
+      return;
+    }
+
     // Validate everything in one pass so the buyer sees every missing answer
     // at once, not one field per attempt.
     final String? paymentError = validateInquiryPaymentMethod(_paymentMethod);
@@ -190,6 +202,7 @@ class _InquireScreenState extends State<InquireScreen> {
 
     final bool sent = await _controller.send(
       listingId: widget.listing.id,
+      requestedQuantity: _requestedQuantity,
       message: _message.text,
       collectionDateOption: _collectionDateOption,
       preferredSchedule: _preferredSchedule,
@@ -209,6 +222,15 @@ class _InquireScreenState extends State<InquireScreen> {
           ? 'Inquiry sent for listing ${widget.listing.id}.'
           : 'Inquiry send failed for listing ${widget.listing.id}.',
     );
+  }
+
+  Listing get _currentListing =>
+      _controller.state.refreshedListing ?? widget.listing;
+
+  int get _availableQuantity {
+    if (_controller.state.listingUnavailable) return 0;
+    final Listing listing = _currentListing;
+    return listing.availableQuantity ?? listing.quantity;
   }
 
   /// Opens the conversation with the seller of [widget.listing]. When a
@@ -262,6 +284,52 @@ class _InquireScreenState extends State<InquireScreen> {
     _formKey.currentState?.validate();
   }
 
+  Widget _requestedQuantitySection(int availableQuantity, bool isSubmitting) {
+    final ThemeData theme = Theme.of(context);
+
+    return SectionCard(
+      title: 'Number of animals',
+      children: <Widget>[
+        Text(
+          '$availableQuantity available. You may request up to this amount.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: <Widget>[
+            IconButton(
+              tooltip: 'Reduce requested quantity',
+              onPressed: isSubmitting || _requestedQuantity <= 1
+                  ? null
+                  : () => setState(() => _requestedQuantity--),
+              icon: const Icon(Icons.remove_circle_outline),
+            ),
+            Expanded(
+              child: Semantics(
+                liveRegion: true,
+                label: '$_requestedQuantity ${_requestedQuantity == 1 ? 'animal' : 'animals'} requested',
+                child: Text(
+                  '$_requestedQuantity ${_requestedQuantity == 1 ? 'animal' : 'animals'}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Increase requested quantity',
+              onPressed: isSubmitting || _requestedQuantity >= availableQuantity
+                  ? null
+                  : () => setState(() => _requestedQuantity++),
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -289,8 +357,12 @@ class _InquireScreenState extends State<InquireScreen> {
           listenable: _controller,
           builder: (BuildContext context, Widget? child) {
             final InquiryState state = _controller.state;
+            final Listing listing = state.refreshedListing ?? widget.listing;
             final bool isSubmitting = state.isBusy;
             final ThemeData theme = Theme.of(context);
+            final int availableQuantity = state.listingUnavailable
+                ? 0
+                : (listing.availableQuantity ?? listing.quantity);
 
             // Must run on every state change, including one that only carries
             // `validationErrors` — see [_revealServerFieldErrors].
@@ -318,7 +390,7 @@ class _InquireScreenState extends State<InquireScreen> {
             // already-sent state replaces the form entirely.
             if (state.existingInquiry != null) {
               return InquiryAlreadySentView(
-                listing: widget.listing,
+                listing: listing,
                 onGoToMessages: () => _openMessages(
                   counterpart: ChatUser(
                     id: widget.listing.seller.id,
@@ -332,7 +404,7 @@ class _InquireScreenState extends State<InquireScreen> {
 
             if (state.status == InquiryUiStatus.succeeded) {
               return InquirySentView(
-                listing: widget.listing,
+                listing: listing,
                 // Succeeded is published only from the create response, so
                 // the record is present; the non-null assertion asserts that
                 // controller invariant, not a hope.
@@ -378,8 +450,31 @@ class _InquireScreenState extends State<InquireScreen> {
                           ),
                           const SizedBox(height: AppSpacing.md),
                         ],
-                        InquiryListingCard(listing: widget.listing),
+                        InquiryListingCard(listing: listing),
                         const SizedBox(height: AppSpacing.md),
+                        if (availableQuantity <= 0) ...<Widget>[
+                          const NoticeBanner(
+                            accent: AppColors.warning,
+                            icon: Icons.inventory_2_outlined,
+                            message: 'No animals are currently available for a new inquiry.',
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                        ] else if (availableQuantity == 1 &&
+                            _requestedQuantity == 1) ...<Widget>[
+                          Text(
+                            '1 animal available',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                        ] else ...<Widget>[
+                          _requestedQuantitySection(
+                            availableQuantity,
+                            isSubmitting,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                        ],
                         // Message first, then collection, date and payment, as in
                         // the approved proposal.
                         ..._messageSection(isSubmitting),
@@ -411,7 +506,11 @@ class _InquireScreenState extends State<InquireScreen> {
                                 // also refuses a second call in flight: the
                                 // button stops the tap, the guard stops the
                                 // request already on its way.
-                                onPressed: isSubmitting ? null : _submit,
+                                 onPressed: isSubmitting ||
+                                         availableQuantity <= 0 ||
+                                         _requestedQuantity > availableQuantity
+                                     ? null
+                                     : _submit,
                                 child: isSubmitting
                                     ? const SizedBox.square(
                                         dimension: 18,

@@ -12,6 +12,7 @@ import 'seller_listing_views.dart';
 import '../../marketplace/widgets/listing_photo_carousel.dart';
 import '../../../widgets/detail_row.dart';
 import '../../../widgets/section_card.dart';
+import '../../../widgets/notice_banner.dart';
 
 /// One of the seller's own listings, in full, with its available actions.
 ///
@@ -199,7 +200,9 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
           final SellerListingState state = _controller.state;
           final bool busy =
               state.isActioning && state.actionListingId == listing.id;
-          final bool canEdit = SellerListingController.canEdit(listing);
+          final bool inventoryKnown = !listing.inventoryReconciliationRequired;
+          final bool canEdit =
+              inventoryKnown && SellerListingController.canEdit(listing);
           // An active listing carries Edit in the bottom bar, beside Mark as
           // sold; every other editable state keeps it over the photo.
           final bool editInBar =
@@ -285,7 +288,7 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                 busy: busy,
                 onEdit: editInBar ? _edit : null,
                 onSubmit: _submit,
-                onMarkSold: _markSold,
+                onMarkSold: inventoryKnown ? _markSold : null,
                 onDelete: _delete,
               ),
             ],
@@ -303,11 +306,39 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
     final String? totalValue = _totalListingValueFor(listing);
 
     final List<Widget> rows = <Widget>[
-      DetailRow(
-        label: 'Number of Animals Available',
-        value:
-            '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
-      ),
+      if (listing.inventoryReconciliationRequired)
+        const NoticeBanner(
+          accent: AppColors.warning,
+          icon: Icons.inventory_2_outlined,
+          message: 'Inventory reconciliation is required. The displayed legacy quantity is not confirmed as available stock.',
+        )
+      else ...<Widget>[
+        DetailRow(
+          label: 'Total animals listed',
+          value: '${listing.totalQuantity ?? listing.quantity}',
+        ),
+        DetailRow(
+          label: 'Available',
+          value:
+              '${listing.availableQuantity ?? listing.quantity} ${(listing.availableQuantity ?? listing.quantity) == 1 ? 'head' : 'heads'}',
+        ),
+        DetailRow(
+          label: 'Reserved',
+          value: '${listing.reservedQuantity ?? 0}',
+        ),
+        DetailRow(
+          label: 'Sold through AgroBenta',
+          value: '${listing.platformSoldQuantity ?? 0}',
+        ),
+        DetailRow(
+          label: 'Sold externally',
+          value: '${listing.externallySoldQuantity ?? 0}',
+        ),
+        DetailRow(
+          label: 'Total sold',
+          value: '${listing.soldQuantity ?? 0}',
+        ),
+      ],
       // The asking price is per head; the total is shown for reference only.
       if (totalValue != null)
         DetailRow(
@@ -446,7 +477,7 @@ class _Summary extends StatelessWidget {
   }
 }
 
-/// Six facts in a bordered three-column grid: Type, Breed, Quantity, Age,
+/// Six facts in a bordered three-column grid: Type, Breed, Available, Age,
 /// Weight and Health. A missing fact shows a dash rather than hiding, so the
 /// grid keeps its shape.
 class _FactsGrid extends StatelessWidget {
@@ -468,8 +499,10 @@ class _FactsGrid extends StatelessWidget {
       ('Type', _capitalised(listing.livestockType)),
       ('Breed', _present(listing.breed)),
       (
-        'Quantity',
-        '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'}',
+        'Available',
+        listing.inventoryReconciliationRequired
+            ? 'Needs reconciliation'
+            : '${listing.availableQuantity ?? listing.quantity} ${((listing.availableQuantity ?? listing.quantity) == 1) ? 'head' : 'heads'}',
       ),
       // "Estimated Age" / "Measured Weight" when the seller said which.
       (listing.ageInformationLabel ?? 'Age', listing.ageLabel),
@@ -573,14 +606,15 @@ class _ActionBar extends StatelessWidget {
   /// Null when Edit is not offered in the bar.
   final VoidCallback? onEdit;
   final VoidCallback onSubmit;
-  final VoidCallback onMarkSold;
+  final VoidCallback? onMarkSold;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final bool canSubmit = SellerListingController.canSubmit(listing);
-    final bool canMarkSold = SellerListingController.canMarkSold(listing);
-    final bool canDelete = SellerListingController.canDelete(listing);
+    final bool inventoryKnown = !listing.inventoryReconciliationRequired;
+    final bool canSubmit = inventoryKnown && SellerListingController.canSubmit(listing);
+    final bool canMarkSold = inventoryKnown && SellerListingController.canMarkSold(listing);
+    final bool canDelete = inventoryKnown && SellerListingController.canDelete(listing);
     final bool hasPhotos = SellerListingController.hasSubmissionPhotos(listing);
 
     return Container(
@@ -681,9 +715,10 @@ class _ActionBar extends StatelessWidget {
 /// missing or invalid. This never replaces the server's transaction calculation.
 String? _totalListingValueFor(Listing listing) {
   final double? unitPrice = AppFormatters.parseDecimal(listing.askingPrice);
-  if (unitPrice == null || unitPrice < 0 || listing.quantity < 1) {
+  final int? totalQuantity = listing.totalQuantity;
+  if (unitPrice == null || unitPrice < 0 || totalQuantity == null || totalQuantity < 1) {
     return null;
   }
-  final String raw = (unitPrice * listing.quantity).toStringAsFixed(2);
+  final String raw = (unitPrice * totalQuantity).toStringAsFixed(2);
   return AppFormatters.formatMoney(raw) ?? raw;
 }

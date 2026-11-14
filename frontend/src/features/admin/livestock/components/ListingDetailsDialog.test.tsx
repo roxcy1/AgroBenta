@@ -15,6 +15,14 @@ const listing: Listing = {
   weight_value: 12,
   weight_unit: 'lb',
   quantity: 2,
+  total_quantity: 2,
+  reserved_quantity: 0,
+  platform_sold_quantity: 0,
+  sold_quantity: 0,
+  available_quantity: 2,
+  externally_sold_quantity: 0,
+  inventory_reconciliation_required: false,
+  legacy_quantity_snapshot: null,
   asking_price: '12500.00',
   location: 'Poblacion, Trinidad',
   health_status: 'healthy',
@@ -47,6 +55,39 @@ describe('ListingDetailsDialog', () => {
     expect(screen.getByText('Healthy listing description')).not.toBeNull();
     expect(screen.getByText('Additional seller notes')).not.toBeNull();
     expect(screen.getByText('Amina Santos')).not.toBeNull();
+    expect(screen.getByText('Total quantity')).not.toBeNull();
+    expect(screen.getByText('Sold through AgroBenta')).not.toBeNull();
+    expect(screen.getByText('Sold externally')).not.toBeNull();
+    expect(screen.getByText('Available')).not.toBeNull();
+  });
+
+  it('marks ambiguous inventory clearly and offers the reconciliation action', () => {
+    const onReconcile = vi.fn();
+    render(
+      <ListingDetailsDialog
+        listing={{
+          ...listing,
+          inventory_reconciliation_required: true,
+          total_quantity: null,
+          reserved_quantity: null,
+          platform_sold_quantity: null,
+          sold_quantity: null,
+          available_quantity: null,
+          legacy_quantity_snapshot: 2,
+          unaccounted_inventory_transactions: [
+            { id: 22, status: 'pending', quantity: 2 },
+          ],
+        }}
+        livestockTypes={[]}
+        onClose={vi.fn()}
+        onReconcile={onReconcile}
+      />,
+    );
+
+    expect(screen.getByText('Reconciliation required')).not.toBeNull();
+    expect(screen.getByText('Preserved legacy quantity')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconcile inventory' }));
+    expect(onReconcile).toHaveBeenCalledOnce();
   });
 
   it('keeps multi-photo navigation and close controls working', () => {

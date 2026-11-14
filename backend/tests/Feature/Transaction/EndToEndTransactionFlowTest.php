@@ -291,4 +291,142 @@ class EndToEndTransactionFlowTest extends TestCase
 
         $this->assertSame(2, $listing->refresh()->quantity);
     }
+
+    #[Test]
+    public function multi_quantity_offer_direct_sale_cancellation_and_sold_out_flow_preserves_inventory(): void
+    {
+        Notification::fake();
+
+        $secondBuyer = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+        $thirdBuyer = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+        $listing = $this->createListing([
+            'livestock_type' => 'goat',
+            'breed' => 'Native',
+            'quantity' => 5,
+            'asking_price' => 2500.00,
+            'short_description' => 'Five similar goats',
+        ]);
+
+        // Inquiries for different quantities are recorded without reserving stock.
+        $firstInquiry = $this->asUser($this->buyer, 'POST', '/api/inquiries', [
+            'listing_id' => $listing->id,
+            'requested_quantity' => 2,
+            'message' => 'I would like two goats.',
+            'payment_method' => 'cash',
+            'collection_method' => 'farm_pickup',
+        ])->assertCreated()->json('data');
+        $secondInquiry = $this->asUser($secondBuyer, 'POST', '/api/inquiries', [
+            'listing_id' => $listing->id,
+            'requested_quantity' => 1,
+            'message' => 'I would like one goat.',
+            'payment_method' => 'cash',
+            'collection_method' => 'farm_pickup',
+        ])->assertCreated()->json('data');
+        $this->assertSame(5, $listing->refresh()->quantity);
+
+        // Accepting a partial offer reserves only its agreed quantity and keeps
+        // the offer's amount as the total agreed price.
+        $firstOffer = $this->asUser($this->seller, 'POST', '/api/offers', [
+            'inquiry_id' => $firstInquiry['id'],
+            'listing_id' => $listing->id,
+            'proposed_amount' => '4400.00',
+            'proposed_quantity' => 2,
+        ])->assertCreated()->json('data');
+        $this->assertSame(2, $firstOffer['proposed_quantity']);
+        $this->assertSame('4400.00', $firstOffer['proposed_amount']);
+
+        $firstAcceptance = $this->asUser(
+            $this->buyer,
+            'POST',
+            '/api/offers/'.$firstOffer['id'].'/accept',
+        )->assertOk()->json('data');
+        $firstTransactionId = (int) $firstAcceptance['transaction']['id'];
+        $this->assertSame(2, (int) $firstAcceptance['transaction']['quantity']);
+        $this->assertSame('4400.00', $firstAcceptance['transaction']['total_amount']);
+        $this->assertSame(3, $listing->refresh()->quantity);
+
+        $this->asUser($this->seller, 'POST', '/api/transactions/'.$firstTransactionId.'/preparing')->assertOk();
+        $this->asUser($this->seller, 'POST', '/api/transactions/'.$firstTransactionId.'/ready-for-pickup')->assertOk();
+        $this->asUser($this->seller, 'POST', '/api/transactions/'.$firstTransactionId.'/picked-up')->assertOk();
+        $this->asUser($this->buyer, 'POST', '/api/transactions/'.$firstTransactionId.'/complete')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+        $this->assertSame(3, $listing->refresh()->quantity);
+        $this->asUser($this->buyer, 'GET', '/api/listings/'.$listing->id)
+            ->assertOk()
+            ->assertJsonPath('data.quantity', 3)
+            ->assertJsonPath('data.platform_sold_quantity', 2)
+            ->assertJsonPath('data.available_quantity', 3);
+
+        // A second accepted offer can be cancelled before handover. Repeating
+        // cancellation never restores the same head a second time.
+        $secondOffer = $this->asUser($this->seller, 'POST', '/api/offers', [
+            'inquiry_id' => $secondInquiry['id'],
+            'listing_id' => $listing->id,
+            'proposed_amount' => '2300.00',
+            'proposed_quantity' => 1,
+        ])->assertCreated()->json('data');
+        $secondTransactionId = $this->asUser(
+            $secondBuyer,
+            'POST',
+            '/api/offers/'.$secondOffer['id'].'/accept',
+        )->assertOk()->json('data.transaction.id');
+        $this->assertSame(2, $listing->refresh()->quantity);
+        $this->asUser($secondBuyer, 'POST', '/api/transactions/'.$secondTransactionId.'/cancel')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled');
+        $this->assertSame(3, $listing->refresh()->quantity);
+        $this->asUser($secondBuyer, 'POST', '/api/transactions/'.$secondTransactionId.'/cancel')
+            ->assertStatus(409);
+        $this->assertSame(3, $listing->refresh()->quantity);
+
+        // The existing direct transaction endpoint shares the same reservation
+        // path. Fully reserved inventory stays active but is absent from buyer
+        // Marketplace and cannot receive another inquiry.
+        $directTransaction = $this->asUser($secondBuyer, 'POST', '/api/transactions', [
+            'listing_id' => $listing->id,
+            'quantity' => 3,
+        ])->assertCreated()
+            ->assertJsonPath('data.quantity', 3)
+            ->json('data');
+        $this->assertSame(0, $listing->refresh()->quantity);
+        $this->assertSame(ListingStatus::Active, $listing->status);
+        $this->asUser($thirdBuyer, 'GET', '/api/listings')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $listing->id]);
+        $this->asUser($thirdBuyer, 'POST', '/api/inquiries', [
+            'listing_id' => $listing->id,
+            'requested_quantity' => 1,
+            'message' => 'Is one still available?',
+            'payment_method' => 'cash',
+            'collection_method' => 'farm_pickup',
+        ])->assertStatus(409);
+
+        // Completing the remaining three heads sells out the listing; all three
+        // transaction records remain preserved (completed, cancelled, completed).
+        $directTransactionId = (int) $directTransaction['id'];
+        $this->asUser($this->seller, 'POST', '/api/transactions/'.$directTransactionId.'/preparing')->assertOk();
+        $this->asUser($this->seller, 'POST', '/api/transactions/'.$directTransactionId.'/ready-for-pickup')->assertOk();
+        $this->asUser($this->seller, 'POST', '/api/transactions/'.$directTransactionId.'/picked-up')->assertOk();
+        $this->asUser($secondBuyer, 'POST', '/api/transactions/'.$directTransactionId.'/complete')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+
+        $this->assertSame(ListingStatus::Sold, $listing->refresh()->status);
+        $this->assertSame(0, $listing->quantity);
+        $this->assertSame(5, $listing->total_quantity);
+        $this->withHeader('Authorization', 'Bearer '.$this->token($this->admin, 'admin'))
+            ->getJson('/api/admin/listings/'.$listing->id)
+            ->assertOk()
+            ->assertJsonPath('data.platform_sold_quantity', 5)
+            ->assertJsonPath('data.available_quantity', 0);
+        $this->assertSame(3, Transaction::query()->where('listing_id', $listing->id)->count());
+        $this->asUser($thirdBuyer, 'GET', '/api/listings/'.$listing->id)->assertNotFound();
+    }
 }

@@ -1,0 +1,43 @@
+.inventory-reconciliation-form {
+  display: grid;
+  gap: 16px;
+}
+
+.inventory-reconciliation-form > .lv-detail-section p {
+  margin: 8px 0;
+}
+
+.inventory-reconciliation-form > .lv-detail-section ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.inventory-reconciliation-form > .lv-detail-section li {
+  padding: 3px 0;
+}
+
+.inventory-reconciliation-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  font: inherit;
+}
+
+.inventory-reconciliation-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--ring-primary);
+}
+
+.inventory-reconciliation-form .lv-action-modal-field small {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}

@@ -16,10 +16,12 @@ class AdminListingRepository
         ?string $status = null,
         int $perPage = 15,
     ): LengthAwarePaginator {
-        $query = Listing::query()->with([
+        $query = Listing::query()->withInventoryTotals()->with([
             'seller' => fn ($seller) => $seller
                 ->withTrashed()
                 ->select(['id', 'name', 'email']),
+            'inventoryReconciliations.admin:id,name',
+            'unaccountedInventoryTransactions:id,listing_id,status,quantity,inventory_accounted',
         ]);
 
         $this->applySearch($query, $search);
@@ -62,10 +64,13 @@ class AdminListingRepository
     ): ?Listing {
         return DB::transaction(function () use ($listing, $from, $to, $adminNote): ?Listing {
             $current = Listing::query()
+                ->withInventoryTotals()
                 ->with([
                     'seller' => fn ($seller) => $seller
                         ->withTrashed()
                         ->select(['id', 'name', 'email']),
+                    'inventoryReconciliations.admin:id,name',
+                    'unaccountedInventoryTransactions:id,listing_id,status,quantity,inventory_accounted',
                 ])
                 ->whereKey($listing->getKey())
                 ->lockForUpdate()

@@ -45,7 +45,13 @@ class InquiryRepository
         return Inquiry::query()
             ->with([
                 'buyer:id,name',
-                'listing:id,livestock_type,breed,asking_price,photos',
+                'listing' => static fn ($query) => $query
+                    ->select([
+                        'id', 'livestock_type', 'breed', 'asking_price', 'photos',
+                        'quantity', 'total_quantity', 'externally_sold_quantity',
+                        'inventory_reconciliation_required', 'status',
+                    ])
+                    ->withInventoryTotals(),
                 'offers:id,inquiry_id,status',
             ])
             ->where('seller_id', $seller->getKey())
@@ -70,7 +76,13 @@ class InquiryRepository
     {
         return Inquiry::query()
             ->with([
-                'listing:id,livestock_type,breed,asking_price,photos',
+                'listing' => static fn ($query) => $query
+                    ->select([
+                        'id', 'livestock_type', 'breed', 'asking_price', 'photos',
+                        'quantity', 'total_quantity', 'externally_sold_quantity',
+                        'inventory_reconciliation_required', 'status',
+                    ])
+                    ->withInventoryTotals(),
                 'buyer:id,name',
                 'seller:id,name',
                 'offers:id,inquiry_id,status,proposed_amount,created_at',
@@ -145,11 +157,13 @@ class InquiryRepository
         int $listingId,
         ?string $message,
         array $preferences,
+        int $requestedQuantity = 1,
     ): Inquiry {
         return Inquiry::query()->create([
             'buyer_id' => $buyer->getKey(),
             'seller_id' => $sellerId,
             'listing_id' => $listingId,
+            'requested_quantity' => $requestedQuantity,
             'subject' => $preferences['subject'] ?? null,
             'message' => $message === null || trim($message) === '' ? null : trim($message),
             'purchase_interest' => $preferences['purchase_interest'] ?? null,
