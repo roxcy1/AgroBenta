@@ -163,8 +163,6 @@ class MarketplaceController extends ChangeNotifier {
   Future<void> submitSearch() async {
     _searchDebounce?.cancel();
     _searchDebounce = null;
-    _realtimeSubscription?.cancel();
-    _realtimeSubscription = null;
     await _loadFirstPage();
   }
 
@@ -397,6 +395,8 @@ class MarketplaceController extends ChangeNotifier {
     _disposed = true;
     _searchDebounce?.cancel();
     _searchDebounce = null;
+    unawaited(_realtimeSubscription?.cancel());
+    _realtimeSubscription = null;
     super.dispose();
   }
 }
