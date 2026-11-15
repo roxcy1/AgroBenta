@@ -28,6 +28,14 @@ import '../state/profile_state.dart';
 import 'change_password_screen.dart';
 import 'edit_profile_screen.dart';
 
+/// Identifies the tappable Address row in Account Settings.
+///
+/// A test invokes the row's `onTap` directly to reproduce a second tap that
+/// lands while the first is still opening the editor.
+const ValueKey<String> profileAddressTileKey = ValueKey<String>(
+  'profile-address-tile',
+);
+
 /// The caller's own profile.
 ///
 /// Reached from the signed-in shell's bottom navigation in both Buyer Mode and
@@ -49,8 +57,14 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late final ProfileController _controller;
-  bool _openingHelpCenter = false;
-  bool _openingTermsAndPolicies = false;
+
+  /// The destinations currently opening or open, keyed per destination.
+  ///
+  /// Flutter does not debounce a tap: `Navigator.push` returns immediately and
+  /// the route transition does not block input, so two fast taps on the same
+  /// row would otherwise stack two screens. The key is the destination rather
+  /// than one shared flag, so a tap on a different row is still allowed.
+  final Set<String> _opening = <String>{};
 
   @override
   void initState() {
@@ -61,63 +75,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Opens [push] once; a second call for the same [key] is ignored until the
+  /// first destination has been popped.
+  Future<T?> _openOnce<T>(String key, Future<T?> Function() push) async {
+    if (!_opening.add(key)) {
+      return null;
+    }
+    try {
+      return await push();
+    } finally {
+      _opening.remove(key);
+    }
+  }
+
   Future<void> _openEdit() async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (BuildContext context) => const EditProfileScreen(),
-        fullscreenDialog: true,
+    await _openOnce<bool>(
+      'edit',
+      () => Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (BuildContext context) => const EditProfileScreen(),
+          fullscreenDialog: true,
+        ),
       ),
     );
   }
 
   Future<void> _openChangePassword() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) => const ChangePasswordScreen(),
-        fullscreenDialog: true,
+    await _openOnce<void>(
+      'password',
+      () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const ChangePasswordScreen(),
+          fullscreenDialog: true,
+        ),
       ),
     );
   }
 
   Future<void> _openHelpCenter() async {
-    if (_openingHelpCenter) return;
-    _openingHelpCenter = true;
-    try {
-      await Navigator.of(context).push<void>(
+    await _openOnce<void>(
+      'help',
+      () => Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => const HelpCenterScreen(),
         ),
-      );
-    } finally {
-      _openingHelpCenter = false;
-    }
+      ),
+    );
   }
 
   Future<void> _openTermsAndPolicies() async {
-    if (_openingTermsAndPolicies) return;
-    _openingTermsAndPolicies = true;
-    try {
-      await Navigator.of(context).push<void>(
+    await _openOnce<void>(
+      'terms',
+      () => Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => const TermsAndPoliciesScreen(),
         ),
-      );
-    } finally {
-      _openingTermsAndPolicies = false;
-    }
+      ),
+    );
   }
 
   Future<void> _openAddressEditor(User user) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    await _openOnce<void>(
+      'address',
+      () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (BuildContext context) =>
+            _EditAddressSheet(user: user, controller: _controller),
       ),
-      builder: (BuildContext context) =>
-          _EditAddressSheet(user: user, controller: _controller),
     );
   }
 
@@ -604,6 +634,13 @@ class _BecomeSellerCard extends StatefulWidget {
 class _BecomeSellerCardState extends State<_BecomeSellerCard> {
   late final SellerVerificationController _controller;
 
+  /// Whether the verification screen is opening or open.
+  ///
+  /// The card owns its own pushes, so it cannot use the profile screen's
+  /// guard. Without this, a fast second tap on the action stacks a second
+  /// verification screen.
+  bool _openingVerification = false;
+
   @override
   void initState() {
     super.initState();
@@ -613,13 +650,21 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
     }
   }
 
-  void _openVerification() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            SellerVerificationScreen(accountName: widget.user.name),
-      ),
-    );
+  Future<void> _openVerification() async {
+    if (_openingVerification) {
+      return;
+    }
+    _openingVerification = true;
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) =>
+              SellerVerificationScreen(accountName: widget.user.name),
+        ),
+      );
+    } finally {
+      _openingVerification = false;
+    }
   }
 
   @override
@@ -823,6 +868,7 @@ class _AddressSettingsTile extends StatelessWidget {
     final bool hasAddress = savedAddress.isNotEmpty;
 
     return InkWell(
+      key: profileAddressTileKey,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(

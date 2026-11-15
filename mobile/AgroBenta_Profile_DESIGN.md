@@ -74,6 +74,10 @@ working camera action.
 - Preserve an unmatched legacy value until the user explicitly chooses a new
   catalog address. Address is optional; do not invent additional address fields
   or change its stored string format.
+- A repeated tap on the row opens exactly one editor. The same guard applies to
+  every other Profile destination (Personal Information, Change Password, the
+  seller-verification card, Help and Support, Terms and Policies), and releases
+  when that destination is closed.
 
 ### C. Account Mode Card
 
