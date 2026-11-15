@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:ui' show FlutterView;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
@@ -104,57 +102,7 @@ Future<void> main() async {
   final PushMessaging pushMessaging =
       FirebasePushMessaging.forCurrentPlatform();
 
-  if (kIsWeb) {
-    runWidget(_WebMultiViewRoot(pushMessaging: pushMessaging));
-  } else {
-    runApp(AgroBentaApp(pushMessaging: pushMessaging));
-  }
-}
-
-/// Creates one app tree for each Flutter view supplied by the web embedder.
-///
-/// The embedder can add or remove views after startup. Its view list is
-/// refreshed when the platform dispatcher reports metric changes.
-class _WebMultiViewRoot extends StatefulWidget {
-  const _WebMultiViewRoot({required this.pushMessaging});
-
-  final PushMessaging pushMessaging;
-
-  @override
-  State<_WebMultiViewRoot> createState() => _WebMultiViewRootState();
-}
-
-class _WebMultiViewRootState extends State<_WebMultiViewRoot>
-    with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeMetrics() {
-    setState(() {});
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => ViewCollection(
-    views: WidgetsBinding.instance.platformDispatcher.views
-        .map(
-          (FlutterView view) => View(
-            key: ValueKey<int>(view.viewId),
-            view: view,
-            child: AgroBentaApp(pushMessaging: widget.pushMessaging),
-          ),
-        )
-        .toList(growable: false),
-  );
+  runApp(AgroBentaApp(pushMessaging: pushMessaging));
 }
 
 class AgroBentaApp extends StatefulWidget {

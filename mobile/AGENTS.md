@@ -475,8 +475,12 @@ client, and not evidence that a browser flow has been verified.
   the response.
 * `AppConfig` resolves web to `http://localhost:8001/api` from `kIsWeb`; it
   deliberately does not trust the browser's user agent.
-* `web/flutter_bootstrap.js` enables Flutter's multi-view embedding mode, and
-  `lib/main.dart` creates and removes an app tree for each embedded view.
+* `web/flutter_bootstrap.js` uses the default single-view loader
+  (`_flutter.loader.load()`), so Flutter renders full-page into `<body>` and
+  `lib/main.dart` calls `runApp` on every platform. Do not enable
+  `multiViewEnabled` without also adding each view from the bootstrap
+  (`app.addView({ hostElement })`): multi-view mode creates no implicit view,
+  and the page stays blank.
 * Photo picking uses `image_picker`, which has web support, and local previews
   read `XFile` bytes through `LocalImagePreview` instead of `Image.file`, so the
   composer does not depend on `dart:io`.
