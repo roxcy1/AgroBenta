@@ -1,19 +1,13 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { SellerVerification } from '../api/useSellerVerifications';
-import {
-  fetchVerificationDocument,
-  fetchVerificationFarmPhoto,
-  useSellerVerification,
-} from '../api/useSellerVerifications';
+import { useSellerVerification } from '../api/useSellerVerifications';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime } from '../../../../lib/format';
-import {
-  applicantDeclaredNoBackImage,
-  governmentIdTypeLabel,
-} from './verificationDetails';
+import { governmentIdTypeLabel } from './verificationDetails';
 import { VerificationModalHeader } from './VerificationModalHeader';
-import { DocumentViewer } from './VerificationDocuments';
+import { VerificationDocumentPreviews } from './VerificationDocuments';
+import { verificationDisplayStatus } from './verificationModeration';
 
 interface VerificationDetailsDialogProps {
   verificationId: number;
@@ -52,7 +46,7 @@ function historyTable(history: SellerVerification[]): ReactNode {
           {history.map((entry) => (
             <tr key={entry.id}>
               <td>
-                <StatusBadge status={entry.status} />
+                <StatusBadge status={verificationDisplayStatus(entry.status)} />
               </td>
               <td className="lv-date-cell">{formatDateTime(entry.submitted_at)}</td>
               <td>{orDash(entry.reviewer?.name)}</td>
@@ -88,7 +82,7 @@ export default function VerificationDetailsDialog({
           title: 'Summary',
           rows: [
             ['Request ID', `#${verification.id}`],
-            ['Status', <StatusBadge key="status" status={verification.status} />],
+            ['Status', <StatusBadge key="status" status={verificationDisplayStatus(verification.status)} />],
             ['Submitted', formatDateTime(verification.submitted_at)],
             ['Reviewed', formatDateTime(verification.reviewed_at)],
           ],
@@ -125,25 +119,7 @@ export default function VerificationDetailsDialog({
           title: 'Government ID images',
           content: (
             <dl className="lv-detail-list">
-              <DocumentViewer
-                preview
-                fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_front')}
-                label="Government ID — Front"
-                present={verification.has_id_document_front || verification.has_id_document}
-              />
-              {applicantDeclaredNoBackImage(verification) ? (
-                <div className="lv-detail-item">
-                  <dt className="lv-detail-label">Government ID — Back</dt>
-                  <dd className="lv-detail-value">Applicant declared no back image</dd>
-                </div>
-              ) : (
-                <DocumentViewer
-                preview
-                  fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_back')}
-                  label="Government ID — Back"
-                  present={verification.has_id_document_back}
-                />
-              )}
+              <VerificationDocumentPreviews verification={verification} group="government_id" />
             </dl>
           ),
         },
@@ -151,12 +127,7 @@ export default function VerificationDetailsDialog({
           title: 'Proof of address',
           content: (
             <dl className="lv-detail-list">
-              <DocumentViewer
-                preview
-                fetchDocument={() => fetchVerificationDocument(verification.id, 'proof_of_address')}
-                label="Proof of address"
-                present={verification.has_proof_of_address}
-              />
+              <VerificationDocumentPreviews verification={verification} group="proof_of_address" />
             </dl>
           ),
         },
@@ -164,12 +135,7 @@ export default function VerificationDetailsDialog({
           title: 'Selfie holding ID',
           content: (
             <dl className="lv-detail-list">
-              <DocumentViewer
-                preview
-                fetchDocument={() => fetchVerificationDocument(verification.id, 'selfie')}
-                label="Selfie holding ID"
-                present={verification.has_selfie}
-              />
+              <VerificationDocumentPreviews verification={verification} group="selfie" />
             </dl>
           ),
         },
@@ -180,15 +146,7 @@ export default function VerificationDetailsDialog({
               <p className="lv-detail-value">{'—'} Not provided</p>
             ) : (
               <dl className="lv-detail-list">
-                {verification.farm_photo_ids.map((photoId, index) => (
-                  <DocumentViewer
-                preview
-                    key={photoId}
-                    fetchDocument={() => fetchVerificationFarmPhoto(verification.id, photoId)}
-                    label={`Farm photo ${index + 1}`}
-                    present
-                  />
-                ))}
+                <VerificationDocumentPreviews verification={verification} group="farm_photos" />
               </dl>
             ),
         },

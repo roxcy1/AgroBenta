@@ -5,7 +5,7 @@ import {
   useRejectVerification,
 } from '../api/useSellerVerifications';
 import type { VerificationActionConfig } from './verificationModeration';
-import { verificationErrorMessage } from './verificationModeration';
+import { verificationDisplayStatus, verificationErrorMessage } from './verificationModeration';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime } from '../../../../lib/format';
 import { VerificationModalHeader } from './VerificationModalHeader';
@@ -107,7 +107,7 @@ export default function VerificationReviewDialog({
                 <tr>
                   <th>Status</th>
                   <td>
-                    <StatusBadge status={verification.status} />
+                    <StatusBadge status={verificationDisplayStatus(verification.status)} />
                   </td>
                 </tr>
                 {rows.map(([label, value]) => (

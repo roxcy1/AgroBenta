@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SellerVerification } from '../api/useSellerVerifications';
 import {
   fetchVerificationDocument,
@@ -15,7 +15,7 @@ import { VerificationModalHeader } from './VerificationModalHeader';
  *
  * - Default: a View button that fetches on demand and opens the lightbox.
  * - `preview`: fetches on mount and shows an inline thumbnail; clicking the
- *   thumbnail opens the same lightbox at full size.
+ *   thumbnail opens the same lightbox at full size. A failed load offers Retry.
  *
  * The lightbox handles Escape itself, in the capture phase, so closing it never
  * also closes the dialog it sits inside.
@@ -35,6 +35,18 @@ export function DocumentViewer({
   const [lightbox, setLightbox] = useState(false);
   const [loading, setLoading] = useState(preview && present);
   const [error, setError] = useState(false);
+  // Bumped by Retry to run the preview fetch again.
+  const [attempt, setAttempt] = useState(0);
+  // False once unmounted, so a fetch that resolves late never creates a blob
+  // URL that nothing would revoke.
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -63,7 +75,7 @@ export function DocumentViewer({
     // `fetchDocument` is an inline closure that changes every render; the
     // document it reads is fixed for the lifetime of the dialog.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview, present]);
+  }, [preview, present, attempt]);
 
   useEffect(() => {
     if (!lightbox) return;
@@ -83,13 +95,20 @@ export function DocumentViewer({
     setError(false);
     try {
       const blob = await fetchDocument();
+      if (!mounted.current) return;
       setObjectUrl(URL.createObjectURL(blob));
       setLightbox(true);
     } catch {
-      setError(true);
+      if (mounted.current) setError(true);
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
+  }
+
+  function retryPreview() {
+    setError(false);
+    setLoading(true);
+    setAttempt((value) => value + 1);
   }
 
   function closeLightbox() {
@@ -124,6 +143,11 @@ export function DocumentViewer({
           </button>
         )}
         {error ? <span className="lv-error-text"> Failed to load document.</span> : null}
+        {error && preview ? (
+          <button type="button" className="lv-action-cancel" onClick={retryPreview}>
+            Retry
+          </button>
+        ) : null}
       </dd>
 
       {lightbox && objectUrl ? (
@@ -160,6 +184,81 @@ export function DocumentViewer({
   );
 }
 
+export type VerificationDocumentGroup = 'government_id' | 'proof_of_address' | 'selfie' | 'farm_photos';
+
+/**
+ * The documents of one group, as inline previews. This is the one place that
+ * knows which documents an application carries and how each is fetched; both
+ * the Details dialog (one section per group) and the Approve / Reject dialog
+ * (every group) render through it.
+ */
+export function VerificationDocumentPreviews({
+  verification,
+  group,
+}: {
+  verification: SellerVerification;
+  group: VerificationDocumentGroup;
+}) {
+  switch (group) {
+    case 'government_id':
+      return (
+        <>
+          <DocumentViewer
+            preview
+            fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_front')}
+            label="Government ID — Front"
+            present={verification.has_id_document_front || verification.has_id_document}
+          />
+          {applicantDeclaredNoBackImage(verification) ? (
+            <div className="lv-detail-item">
+              <dt className="lv-detail-label">Government ID — Back</dt>
+              <dd className="lv-detail-value">Applicant declared no back image</dd>
+            </div>
+          ) : (
+            <DocumentViewer
+              preview
+              fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_back')}
+              label="Government ID — Back"
+              present={verification.has_id_document_back}
+            />
+          )}
+        </>
+      );
+    case 'proof_of_address':
+      return (
+        <DocumentViewer
+          preview
+          fetchDocument={() => fetchVerificationDocument(verification.id, 'proof_of_address')}
+          label="Proof of address"
+          present={verification.has_proof_of_address}
+        />
+      );
+    case 'selfie':
+      return (
+        <DocumentViewer
+          preview
+          fetchDocument={() => fetchVerificationDocument(verification.id, 'selfie')}
+          label="Selfie holding ID"
+          present={verification.has_selfie}
+        />
+      );
+    case 'farm_photos':
+      return (
+        <>
+          {verification.farm_photo_ids.map((photoId, index) => (
+            <DocumentViewer
+              preview
+              key={photoId}
+              fetchDocument={() => fetchVerificationFarmPhoto(verification.id, photoId)}
+              label={`Farm photo ${index + 1}`}
+              present
+            />
+          ))}
+        </>
+      );
+  }
+}
+
 /**
  * Every document an application can carry, as inline previews. Used by the
  * Approve / Reject dialog so the decision is made against the evidence itself.
@@ -167,46 +266,10 @@ export function DocumentViewer({
 export function VerificationDocumentGallery({ verification }: { verification: SellerVerification }) {
   return (
     <dl className="verification-document-grid">
-      <DocumentViewer
-        preview
-        fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_front')}
-        label="Government ID — Front"
-        present={verification.has_id_document_front || verification.has_id_document}
-      />
-      {applicantDeclaredNoBackImage(verification) ? (
-        <div className="lv-detail-item">
-          <dt className="lv-detail-label">Government ID — Back</dt>
-          <dd className="lv-detail-value">Applicant declared no back image</dd>
-        </div>
-      ) : (
-        <DocumentViewer
-          preview
-          fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_back')}
-          label="Government ID — Back"
-          present={verification.has_id_document_back}
-        />
-      )}
-      <DocumentViewer
-        preview
-        fetchDocument={() => fetchVerificationDocument(verification.id, 'proof_of_address')}
-        label="Proof of address"
-        present={verification.has_proof_of_address}
-      />
-      <DocumentViewer
-        preview
-        fetchDocument={() => fetchVerificationDocument(verification.id, 'selfie')}
-        label="Selfie holding ID"
-        present={verification.has_selfie}
-      />
-      {verification.farm_photo_ids.map((photoId, index) => (
-        <DocumentViewer
-          preview
-          key={photoId}
-          fetchDocument={() => fetchVerificationFarmPhoto(verification.id, photoId)}
-          label={`Farm photo ${index + 1}`}
-          present
-        />
-      ))}
+      <VerificationDocumentPreviews verification={verification} group="government_id" />
+      <VerificationDocumentPreviews verification={verification} group="proof_of_address" />
+      <VerificationDocumentPreviews verification={verification} group="selfie" />
+      <VerificationDocumentPreviews verification={verification} group="farm_photos" />
     </dl>
   );
 }

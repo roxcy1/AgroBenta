@@ -590,10 +590,6 @@ export function ReportsPage() {
                 <span className="dashboard-breakdown-value">{formatNumber(seller_verifications.total)}</span>
               </li>
               <li>
-                <span className="dashboard-breakdown-label">Submitted</span>
-                <span className="dashboard-breakdown-value">{formatNumber(seller_verifications.submitted)}</span>
-              </li>
-              <li>
                 <span className="dashboard-breakdown-label">Pending Review</span>
                 <span className="dashboard-breakdown-value">{formatNumber(seller_verifications.pending_review)}</span>
               </li>
