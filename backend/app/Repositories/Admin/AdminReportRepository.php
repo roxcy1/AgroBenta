@@ -282,6 +282,12 @@ class AdminReportRepository
     /**
      * Get seller verification report data.
      *
+     * The counts measure submissions, not applicants, and match the Admin Web
+     * review tabs: `submitted` is every submission in the period (the same
+     * figure as `total`, kept so existing consumers keep working),
+     * `pending_review` is every open submission (`submitted` + `pending_review`),
+     * and `submitted` = `approved` + `rejected` + `pending_review`.
+     *
      * @return array{total: int, submitted: int, pending_review: int, approved: int, rejected: int, submission_trend: array, status_distribution: array}
      */
     public function getSellerVerificationReport(?string $dateFrom = null, ?string $dateTo = null): array

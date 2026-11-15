@@ -187,7 +187,7 @@ export function DocumentViewer({
 export type VerificationDocumentGroup = 'government_id' | 'proof_of_address' | 'selfie' | 'farm_photos';
 
 /**
- * The documents of one group, as inline previews. This is the one place that
+ * The documents of one group. This is the one place that
  * knows which documents an application carries and how each is fetched; both
  * the Details dialog (one section per group) and the Approve / Reject dialog
  * (every group) render through it.
@@ -243,11 +243,12 @@ export function VerificationDocumentPreviews({
         />
       );
     case 'farm_photos':
+      // Farm photos can be many and are supporting evidence, not identity
+      // documents, so each loads only when the administrator asks for it.
       return (
         <>
           {verification.farm_photo_ids.map((photoId, index) => (
             <DocumentViewer
-              preview
               key={photoId}
               fetchDocument={() => fetchVerificationFarmPhoto(verification.id, photoId)}
               label={`Farm photo ${index + 1}`}
@@ -260,8 +261,8 @@ export function VerificationDocumentPreviews({
 }
 
 /**
- * Every document an application can carry, as inline previews. Used by the
- * Approve / Reject dialog so the decision is made against the evidence itself.
+ * Every document an application can carry: identity documents as inline
+ * previews, farm photos on demand. Used by the Approve / Reject dialog so the decision is made against the evidence itself.
  */
 export function VerificationDocumentGallery({ verification }: { verification: SellerVerification }) {
   return (
