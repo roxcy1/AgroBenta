@@ -1,18 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { SellerVerification } from '../api/useSellerVerifications';
-import {
-  fetchVerificationDocument,
-  fetchVerificationFarmPhoto,
-  useSellerVerification,
-} from '../api/useSellerVerifications';
+import { useSellerVerification } from '../api/useSellerVerifications';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime } from '../../../../lib/format';
-import {
-  applicantDeclaredNoBackImage,
-  governmentIdTypeLabel,
-} from './verificationDetails';
+import { governmentIdTypeLabel } from './verificationDetails';
 import { VerificationModalHeader } from './VerificationModalHeader';
+import { VerificationDocumentPreviews } from './VerificationDocuments';
+import { verificationDisplayStatus } from './verificationModeration';
 
 interface VerificationDetailsDialogProps {
   verificationId: number;
@@ -51,7 +46,7 @@ function historyTable(history: SellerVerification[]): ReactNode {
           {history.map((entry) => (
             <tr key={entry.id}>
               <td>
-                <StatusBadge status={entry.status} />
+                <StatusBadge status={verificationDisplayStatus(entry.status)} />
               </td>
               <td className="lv-date-cell">{formatDateTime(entry.submitted_at)}</td>
               <td>{orDash(entry.reviewer?.name)}</td>
@@ -60,96 +55,6 @@ function historyTable(history: SellerVerification[]): ReactNode {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-/**
- * One evidence document: whether it is on file, and a View action that streams
- * the bytes behind the authenticated admin endpoint.
- *
- * The bytes are fetched on demand rather than listed, because the API never
- * returns a URL — the private disk has none. A `URL.createObjectURL` preview is
- * revoked when the lightbox closes so an open document does not leak a blob.
- */
-function DocumentViewer({
-  fetchDocument,
-  label,
-  present,
-}: {
-  fetchDocument: () => Promise<Blob>;
-  label: string;
-  present: boolean;
-}) {
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [objectUrl]);
-
-  async function open() {
-    setLoading(true);
-    setError(false);
-    try {
-      const blob = await fetchDocument();
-      setObjectUrl(URL.createObjectURL(blob));
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function close() {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    setObjectUrl(null);
-  }
-
-  return (
-    <div className="lv-detail-item">
-      <dt className="lv-detail-label">{label}</dt>
-      <dd className="lv-detail-value">
-        {present ? (
-          <button type="button" className="lv-action-cancel" onClick={open} disabled={loading}>
-            {loading ? 'Loading…' : 'View'}
-          </button>
-        ) : (
-          <span>{'\u2014'} Not provided</span>
-        )}
-        {error ? <span className="lv-error-text"> Failed to load document.</span> : null}
-      </dd>
-
-      {objectUrl ? (
-        <div className="lv-action-modal-overlay listing-details-overlay verification-document-overlay" onClick={close}>
-          <div
-            className="lv-action-modal lv-action-modal--detail lv-action-modal--listing-details verification-document-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${label} document`}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <VerificationModalHeader
-              title={label}
-              subtitle="Secure seller verification document."
-              titleId="verification-document-title"
-              closeLabel="Close document preview"
-              onClose={close}
-            />
-            <div className="lv-detail-body verification-document-body">
-              <img className="verification-document-image" src={objectUrl} alt={label} />
-            </div>
-            <footer className="lv-detail-footer listing-details-footer">
-              <button type="button" className="listing-details-footer-close" onClick={close}>
-                Close
-              </button>
-            </footer>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -177,7 +82,7 @@ export default function VerificationDetailsDialog({
           title: 'Summary',
           rows: [
             ['Request ID', `#${verification.id}`],
-            ['Status', <StatusBadge key="status" status={verification.status} />],
+            ['Status', <StatusBadge key="status" status={verificationDisplayStatus(verification.status)} />],
             ['Submitted', formatDateTime(verification.submitted_at)],
             ['Reviewed', formatDateTime(verification.reviewed_at)],
           ],
@@ -214,23 +119,7 @@ export default function VerificationDetailsDialog({
           title: 'Government ID images',
           content: (
             <dl className="lv-detail-list">
-              <DocumentViewer
-                fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_front')}
-                label="Government ID — Front"
-                present={verification.has_id_document_front || verification.has_id_document}
-              />
-              {applicantDeclaredNoBackImage(verification) ? (
-                <div className="lv-detail-item">
-                  <dt className="lv-detail-label">Government ID — Back</dt>
-                  <dd className="lv-detail-value">Applicant declared no back image</dd>
-                </div>
-              ) : (
-                <DocumentViewer
-                  fetchDocument={() => fetchVerificationDocument(verification.id, 'id_document_back')}
-                  label="Government ID — Back"
-                  present={verification.has_id_document_back}
-                />
-              )}
+              <VerificationDocumentPreviews verification={verification} group="government_id" />
             </dl>
           ),
         },
@@ -238,11 +127,7 @@ export default function VerificationDetailsDialog({
           title: 'Proof of address',
           content: (
             <dl className="lv-detail-list">
-              <DocumentViewer
-                fetchDocument={() => fetchVerificationDocument(verification.id, 'proof_of_address')}
-                label="Proof of address"
-                present={verification.has_proof_of_address}
-              />
+              <VerificationDocumentPreviews verification={verification} group="proof_of_address" />
             </dl>
           ),
         },
@@ -250,11 +135,7 @@ export default function VerificationDetailsDialog({
           title: 'Selfie holding ID',
           content: (
             <dl className="lv-detail-list">
-              <DocumentViewer
-                fetchDocument={() => fetchVerificationDocument(verification.id, 'selfie')}
-                label="Selfie holding ID"
-                present={verification.has_selfie}
-              />
+              <VerificationDocumentPreviews verification={verification} group="selfie" />
             </dl>
           ),
         },
@@ -265,14 +146,7 @@ export default function VerificationDetailsDialog({
               <p className="lv-detail-value">{'—'} Not provided</p>
             ) : (
               <dl className="lv-detail-list">
-                {verification.farm_photo_ids.map((photoId, index) => (
-                  <DocumentViewer
-                    key={photoId}
-                    fetchDocument={() => fetchVerificationFarmPhoto(verification.id, photoId)}
-                    label={`Farm photo ${index + 1}`}
-                    present
-                  />
-                ))}
+                <VerificationDocumentPreviews verification={verification} group="farm_photos" />
               </dl>
             ),
         },

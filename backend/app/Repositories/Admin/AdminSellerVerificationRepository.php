@@ -11,14 +11,29 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 
 class AdminSellerVerificationRepository
 {
+    /**
+     * The statuses an application holds while no decision has been made.
+     * `pending_review` is the same applicant as `submitted`, filled
+     * automatically; neither has been approved or rejected.
+     */
+    private const OPEN_STATUSES = [
+        SellerVerificationStatus::Submitted,
+        SellerVerificationStatus::PendingReview,
+    ];
+
     public function list(
         ?string $search = null,
         ?string $status = null,
         int $perPage = 15,
+        bool $allSubmissions = false,
     ): LengthAwarePaginator {
         $query = SellerVerification::with(['seller:id,name,email', 'reviewer:id,name']);
 
-        $this->onlyLatestPerUser($query);
+        // The cumulative submission log keeps every record, so a resubmission
+        // shows beside the earlier one instead of replacing it.
+        if (! $allSubmissions) {
+            $this->onlyLatestPerUser($query);
+        }
         $this->applySearch($query, $search);
         $this->applyFilters($query, $status);
 
@@ -43,6 +58,19 @@ class AdminSellerVerificationRepository
     public function countLatestByStatus(SellerVerificationStatus $status): int
     {
         $query = SellerVerification::query()->where('status', $status);
+
+        $this->onlyLatestPerUser($query);
+
+        return $query->count();
+    }
+
+    /**
+     * Count each applicant's most recent record that is still open (submitted
+     * or pending review): the applications waiting for an administrator.
+     */
+    public function countLatestOpen(): int
+    {
+        $query = SellerVerification::query()->whereIn('status', self::OPEN_STATUSES);
 
         $this->onlyLatestPerUser($query);
 
@@ -114,8 +142,17 @@ class AdminSellerVerificationRepository
 
     private function applyFilters(Builder $query, ?string $status): void
     {
-        if ($status !== null && $status !== '') {
-            $query->where('status', SellerVerificationStatus::from($status));
+        if ($status === null || $status === '') {
+            return;
         }
+
+        // `pending` is not a stored status: it is every open application.
+        if ($status === 'pending') {
+            $query->whereIn('status', self::OPEN_STATUSES);
+
+            return;
+        }
+
+        $query->where('status', SellerVerificationStatus::from($status));
     }
 }

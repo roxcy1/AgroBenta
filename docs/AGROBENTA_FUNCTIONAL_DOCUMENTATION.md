@@ -343,6 +343,31 @@ guarantee livestock ownership, animal health, livestock quality, the accuracy
 of every seller statement, or the completion of a transaction. User-facing
 text must not imply otherwise.
 
+### 3.5 Admin review views **[DEC-11, client request 2026-11-15]**
+
+The Admin Web's seller verification page groups records into four views. They
+count **submissions, not applicants**: under §3.2 each submission is its own
+record, so one person can appear more than once.
+
+| View | Shows |
+|---|---|
+| **Submitted** | Every submission ever made, including resubmissions. It never shrinks; a decided submission stays in it. |
+| **Pending Review** | Every open submission (`submitted` or `pending_review`). It empties as submissions are approved or rejected. |
+| **Approved** | Every `approved` submission. |
+| **Rejected** | Every `rejected` submission. |
+
+* **Submitted = Approved + Rejected + Pending Review.** The dashboard's pending
+  card, the sidebar badge and the Reports seller-verification counts use the
+  same definitions.
+* An applicant who was rejected and later approved is counted once in Rejected
+  and once in Approved.
+* In the table and the review dialogs, an open submission is labelled
+  **Pending** whichever open state it is stored in.
+
+API (`GET /admin/seller-verifications`): `status=pending` returns open
+submissions; `all_submissions=1` returns every submission instead of only each
+applicant's most recent one. Without these parameters the list is unchanged.
+
 ---
 
 ## 4. Livestock listings
@@ -1065,6 +1090,12 @@ inventory is never inferred from ambiguous unreserved transaction rows.
 | **DEC-10** | Stock exhaustion and external sales | A listing with no available stock is no longer purchasable and becomes sold when its inventory is exhausted. Seller Mark Sold accounts for remaining available stock as externally sold and is refused while any quantity is reserved. |
 | **DEC-10** | Legacy reconciliation | Unreserved legacy transactions do not create inferred reservations, platform sales or cancellation restoration. Listings with ambiguous transaction allocations are quarantined from new Marketplace activity until an administrator records verified physical stock, external sales, transaction allocations, reason and supporting evidence. Historical rows and the original listing quantity are preserved. |
 
+### 13.9 Closed by project-owner decision (2026-11-15)
+
+| ID | Decision | Resolution |
+|---|---|---|
+| **DEC-11** | Submitted vs Pending Review | Submitted is the cumulative log of every submission; Pending Review is every open submission and empties as submissions are decided; Approved and Rejected count every submission with that outcome, so Submitted = Approved + Rejected + Pending Review (§3.5). Requested by the client and confirmed by the developer (Trello "Kompanya": "clarify the difference between Submitted and Pending Review"). |
+
 ---
 
 ## 14. Change control
@@ -1104,4 +1135,5 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-09 | Fulfillment implemented for DEC-09: separate fulfillment stages, seller-controlled preparation/pickup/delivery actions, buyer receipt confirmation, cancellation cutoffs, the legacy-stock completion policy, and the mobile collection-specific tracker and action buttons (§6.4, §6.5). |
 | 2026-11-10 | Resolved the merge's duplicate decision identifier by retaining DEC-08 for the 2026-11-07 Admin Web account-action decision and renumbering the 2026-11-09 transaction decisions to DEC-09. No decision text or business rule changed. |
 | 2026-11-14 | **[DEC-10]** Project manager approved multi-quantity listings, partial offers no greater than buyer-requested quantity, atomic quantity reservation, per-head listing price, total offer amount, sold-out Marketplace exclusion and seller external Mark Sold accounting. DEC-09's one-head offer limit and OQ-17 are superseded/resolved. Added conservative, auditable legacy inventory reconciliation (§4.4, §6.1, §6.4, §13.7–§13.8); update the capstone manuscript to match. |
+| 2026-11-15 | **[DEC-11]** Defined the Admin Web seller verification views (§3.5, §13.9): Submitted is every submission, Pending Review is every open submission, Approved and Rejected count submissions with that outcome, and Submitted = Approved + Rejected + Pending Review across the tabs, dashboard, sidebar and Reports. The four stored states (§3.1) and the resubmission rule (§3.2) are unchanged. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

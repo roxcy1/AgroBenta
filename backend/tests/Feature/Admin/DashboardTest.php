@@ -295,6 +295,25 @@ class DashboardTest extends TestCase
         $this->assertEquals(1, $response->json('data.summary.pending_verifications'));
     }
 
+    public function test_dashboard_counts_submitted_and_pending_review_as_pending(): void
+    {
+        foreach ([SellerVerificationStatus::Submitted, SellerVerificationStatus::PendingReview, SellerVerificationStatus::Approved] as $status) {
+            SellerVerification::create([
+                'user_id' => User::factory()->create(['role' => UserRole::User])->id,
+                'business_name' => 'Farm',
+                'status' => $status,
+                'submitted_at' => now(),
+            ]);
+        }
+
+        $token = $this->admin->createToken('admin_token', ['admin'])->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/admin/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.summary.pending_verifications', 2);
+    }
+
     public function test_dashboard_recent_sections_are_limited_and_newest_first(): void
     {
         $buyer = User::factory()->create([

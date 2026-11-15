@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Enums\ListingStatus;
 use App\Enums\SellerCapability;
-use App\Enums\SellerVerificationStatus;
 use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
 use App\Models\Activity;
@@ -62,8 +61,7 @@ class DashboardService
             'total_listings' => Listing::count(),
             'active_listings' => Listing::where('status', ListingStatus::Active)->count(),
             'total_transactions' => Transaction::count(),
-            'pending_verifications' => $this->sellerVerifications
-                ->countLatestByStatus(SellerVerificationStatus::PendingReview),
+            'pending_verifications' => $this->sellerVerifications->countLatestOpen(),
         ];
     }
 

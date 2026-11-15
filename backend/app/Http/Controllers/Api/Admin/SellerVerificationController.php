@@ -32,6 +32,7 @@ class SellerVerificationController extends Controller
             search: $request->validated('search'),
             status: $request->validated('status'),
             perPage: $request->validated('per_page', 15),
+            allSubmissions: $request->boolean('all_submissions'),
         );
 
         return response()->json([

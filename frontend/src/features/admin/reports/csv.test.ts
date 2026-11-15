@@ -82,6 +82,8 @@ describe('buildReportsCsv', () => {
     expect(csv).toContain('Listings,By livestock type: Cattle,2026-01-01 through 2026-01-31,5');
     expect(csv).toContain('Transactions,Recorded arrangement value (completed transactions),2026-01-01 through 2026-01-31,50000');
     expect(csv).toContain('Seller verifications,Total submission records,2026-01-01 through 2026-01-31,4');
+    // `submitted` is the same figure as the total, so it is not exported twice.
+    expect(csv).not.toContain('Seller verifications,Submitted,');
     expect(csv).toContain('Activities,By user: Admin User (ID 7),2026-01-01 through 2026-01-31,2');
     expect(csv).toContain('User totals and listing status counts are all-time.');
   });
