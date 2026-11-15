@@ -353,10 +353,14 @@ disagree. Signing out, changing accounts or losing capability clears the mode.
   ```sh
   flutter pub get
   flutter analyze          # must be clean
-  flutter test             # must pass
+  flutter test --dart-define=ANDROID_RUN_TARGET=emulator   # must pass
   flutter build apk --debug
   ```
 
+* `flutter test` runs as Android, and a native Android build has no default API
+  URL, so the suite needs `ANDROID_RUN_TARGET=emulator` (or an explicit
+  `API_BASE_URL`). Plain `flutter test` fails before the first assertion. See
+  `mobile/README.md` ("Validation").
 * Write tests where they earn their keep. Priority order:
   1. model `fromJson` against the real Resource shape,
   2. service request shape (method, path, body, query),
@@ -1119,7 +1123,7 @@ the earlier round. The register entries changed accordingly:
 ```sh
 flutter pub get
 flutter analyze     # must be clean
-flutter test        # must pass
+flutter test --dart-define=ANDROID_RUN_TARGET=emulator   # must pass
 flutter build apk --debug
 ```
 
