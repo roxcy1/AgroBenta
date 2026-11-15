@@ -28,8 +28,9 @@ class AdminSellerVerificationService
         ?string $search = null,
         ?string $status = null,
         int $perPage = 15,
+        bool $allSubmissions = false,
     ): LengthAwarePaginator {
-        return $this->verifications->list($search, $status, $perPage);
+        return $this->verifications->list($search, $status, $perPage, $allSubmissions);
     }
 
     /**
