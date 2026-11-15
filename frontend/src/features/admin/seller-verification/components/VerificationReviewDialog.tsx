@@ -9,6 +9,7 @@ import { verificationErrorMessage } from './verificationModeration';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime } from '../../../../lib/format';
 import { VerificationModalHeader } from './VerificationModalHeader';
+import { VerificationDocumentGallery } from './VerificationDocuments';
 import './VerificationReviewDialog.css';
 
 interface VerificationReviewDialogProps {
@@ -124,6 +125,9 @@ export default function VerificationReviewDialog({
               </tbody>
             </table>
           </div>
+
+          <h3 className="verification-review-section-title">Submitted documents</h3>
+          <VerificationDocumentGallery verification={verification} />
 
           <div className="lv-action-modal-field">
             <label className="lv-action-modal-label" htmlFor="verification-admin-note">
