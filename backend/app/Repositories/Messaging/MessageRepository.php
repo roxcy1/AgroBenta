@@ -108,13 +108,20 @@ class MessageRepository
      * (`collect(...)`) before handing it to `buildConversation`, which uses
      * Collection methods (`first()`, `where()`, `count()`).
      *
+     * ## Counterparts with no message
+     *
+     * A counterpart the caller has an inquiry, offer or transaction with is
+     * listed even when no message exists between them yet, so the All filter
+     * is never narrower than the Inquiries and Transactions filters. See
+     * `conversationsWithoutMessages()`.
+     *
      * @return Collection<int, array<string, mixed>>
      */
     public function conversationsFor(int $userId): Collection
     {
         $pairFacts = $this->pairFacts($userId);
 
-        return Message::query()
+        $conversations = Message::query()
             ->select([
                 'id',
                 'sender_id',
@@ -142,6 +149,124 @@ class MessageRepository
                 $pairFacts,
             ))
             ->values();
+
+        $withoutMessages = $this->conversationsWithoutMessages(
+            $pairFacts,
+            $conversations->map(fn (array $c): int => (int) $c['counterpart']->id)->all(),
+        );
+
+        if ($withoutMessages->isEmpty()) {
+            return $conversations;
+        }
+
+        // Newest activity first across both kinds of row: a thread whose last
+        // message is older than a new offer or transaction sorts by that
+        // newer activity. `sortByDesc` keeps the original order on ties.
+        return $conversations
+            ->concat($withoutMessages)
+            ->sortByDesc(fn (array $c): int => max(
+                $c['last_message_at']?->getTimestamp() ?? 0,
+                ($pairFacts[(int) $c['counterpart']->id]['activity_at'] ?? null)?->getTimestamp() ?? 0,
+            ))
+            ->values();
+    }
+
+    /**
+     * A row for every counterpart the caller has an inquiry, offer or
+     * transaction with but no message yet.
+     *
+     * The conversation list is derived from messages, but a transaction (and
+     * an offer) never writes one, and an older inquiry may predate the
+     * inquiry-as-message change. Without these rows such a counterpart is
+     * missing from the inbox's All filter even though the Inquiries and
+     * Transactions filters show them. The row is the same shape as a message
+     * conversation: `last_message` is a short placeholder naming the latest
+     * activity from the caller's side ("Inquiry sent" / "Inquiry received",
+     * "Offer sent" / "Offer received", "Transaction started"),
+     * `last_message_at` its time, and nothing is unread. Opening it
+     * loads the (empty) thread and the first message sent starts the real
+     * conversation, so nothing is written here.
+     *
+     * @param  array<int, array<string, mixed>>  $pairFacts
+     * @param  list<int>  $counterpartIdsWithMessages
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function conversationsWithoutMessages(
+        array $pairFacts,
+        array $counterpartIdsWithMessages,
+    ): Collection {
+        $missing = array_diff(array_keys($pairFacts), $counterpartIdsWithMessages);
+
+        if ($missing === []) {
+            return collect();
+        }
+
+        // A deleted account is excluded by the soft-delete scope and simply
+        // gets no row.
+        $counterparts = User::query()
+            ->whereIn('id', $missing)
+            ->get(['id', 'name', 'avatar_url'])
+            ->keyBy('id');
+
+        return collect($missing)
+            ->filter(fn (int $id): bool => $counterparts->has($id))
+            ->map(function (int $id) use ($pairFacts, $counterparts): array {
+                $facts = $pairFacts[$id];
+
+                /** @var Offer|null $latestOffer */
+                $latestOffer = $facts['latest_offer'];
+                /** @var Offer|null $pendingOffer */
+                $pendingOffer = $facts['pending_offer'];
+                /** @var Inquiry|null $openInquiry */
+                $openInquiry = $facts['open_inquiry'];
+
+                $previewListing = $pendingOffer?->listing
+                    ?? $openInquiry?->listing
+                    ?? $facts['activity_listing'];
+
+                $listingIds = array_filter([
+                    $latestOffer?->listing_id,
+                    $pendingOffer?->listing_id,
+                    $openInquiry?->listing_id,
+                    $previewListing?->id,
+                ], fn ($listingId): bool => $listingId !== null);
+
+                return [
+                    'counterpart' => $counterparts->get($id),
+                    'listing_id' => $previewListing?->id,
+                    'listing_title' => $this->listingTitle($previewListing),
+                    'listing_price' => $previewListing?->asking_price,
+                    'last_message' => $facts['activity_label'],
+                    'last_message_at' => $facts['activity_at'],
+                    'unread_count' => 0,
+                    'has_inquiry' => $facts['has_inquiry'],
+                    'has_transaction' => $facts['has_transaction'],
+                    'roles' => $this->normaliseRoles($facts['roles']),
+                    'listing_count' => count(array_unique(array_map('intval', $listingIds))),
+                    'latest_offer' => $this->offerPreview($latestOffer),
+                    'eligible_inquiry' => $this->inquiryPreview($facts['eligible_inquiry']),
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * Records `$at` as the pair's latest activity when it is newer than the
+     * one already seen. Used only for counterparts with no message yet.
+     *
+     * @param  array<string, mixed>  $facts
+     */
+    private function recordActivity(array &$facts, mixed $at, string $label, ?Listing $listing): void
+    {
+        if ($at === null) {
+            return;
+        }
+
+        if ($facts['activity_at'] === null || $at->greaterThan($facts['activity_at'])) {
+            $facts['activity_at'] = $at;
+            $facts['activity_label'] = $label;
+            $facts['activity_listing'] = $listing;
+        }
     }
 
     /**
@@ -285,6 +410,13 @@ class MessageRepository
             $facts[$counterpartId] ??= $this->emptyPairFacts();
             $facts[$counterpartId]['has_inquiry'] = true;
             $facts[$counterpartId]['roles'][] = $isBuyer ? 'buyer' : 'seller';
+            $this->recordActivity(
+                $facts[$counterpartId],
+                $inquiry->created_at,
+                // The buyer sends an inquiry; the seller receives it.
+                $isBuyer ? 'Inquiry sent' : 'Inquiry received',
+                $inquiry->listing,
+            );
 
             // Only an open inquiry is actionable or worth previewing; a
             // responded/closed one still links the pair but is history.
@@ -313,7 +445,8 @@ class MessageRepository
             ->where(function ($query) use ($userId): void {
                 $query->where('buyer_id', $userId)->orWhere('seller_id', $userId);
             })
-            ->get(['buyer_id', 'seller_id']);
+            ->with(['listing:id,livestock_type,breed,asking_price'])
+            ->get(['buyer_id', 'seller_id', 'listing_id', 'created_at']);
 
         foreach ($transactions as $transaction) {
             $isBuyer = (int) $transaction->buyer_id === $userId;
@@ -324,6 +457,12 @@ class MessageRepository
             $facts[$counterpartId] ??= $this->emptyPairFacts();
             $facts[$counterpartId]['has_transaction'] = true;
             $facts[$counterpartId]['roles'][] = $isBuyer ? 'buyer' : 'seller';
+            $this->recordActivity(
+                $facts[$counterpartId],
+                $transaction->created_at,
+                'Transaction started',
+                $transaction->listing,
+            );
         }
 
         foreach ($offers as $offer) {
@@ -334,6 +473,13 @@ class MessageRepository
 
             $facts[$counterpartId] ??= $this->emptyPairFacts();
             $facts[$counterpartId]['roles'][] = $isBuyer ? 'buyer' : 'seller';
+            $this->recordActivity(
+                $facts[$counterpartId],
+                $offer->created_at,
+                // The seller sends an offer; the buyer receives it.
+                $isBuyer ? 'Offer received' : 'Offer sent',
+                $offer->listing,
+            );
 
             // Newest first, so the first one seen is the latest; the first
             // pending one is the most relevant preview when several exist.
@@ -350,7 +496,7 @@ class MessageRepository
     }
 
     /**
-     * @return array{has_inquiry: bool, has_transaction: bool, roles: list<string>, latest_offer: ?Offer, pending_offer: ?Offer, eligible_inquiry: ?Inquiry, open_inquiry: ?Inquiry}
+     * @return array{has_inquiry: bool, has_transaction: bool, roles: list<string>, latest_offer: ?Offer, pending_offer: ?Offer, eligible_inquiry: ?Inquiry, open_inquiry: ?Inquiry, activity_at: mixed, activity_label: ?string, activity_listing: ?Listing}
      */
     private function emptyPairFacts(): array
     {
@@ -362,6 +508,11 @@ class MessageRepository
             'pending_offer' => null,
             'eligible_inquiry' => null,
             'open_inquiry' => null,
+            // The newest inquiry/offer/transaction, for a counterpart that
+            // has no message yet (see conversationsWithoutMessages()).
+            'activity_at' => null,
+            'activity_label' => null,
+            'activity_listing' => null,
         ];
     }
 
