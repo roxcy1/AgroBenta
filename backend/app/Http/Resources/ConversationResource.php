@@ -24,10 +24,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *   'listing_title'  => string|null,          // human-readable listing
  *   'listing_price'  => string|null,          // that listing's asking price
  *   'last_message'   => string,               // the newest message body, or a
- *                                             // placeholder ("Inquiry sent",
- *                                             // "Offer sent", "Transaction
- *                                             // started") for a counterpart
- *                                             // with no message yet
+ *                                             // placeholder for a counterpart
+ *                                             // with no message yet, from the
+ *                                             // caller's side: "Inquiry sent"/
+ *                                             // "Inquiry received", "Offer
+ *                                             // sent"/"Offer received",
+ *                                             // "Transaction started"
  *   'last_message_at'=> Carbon,               // when it was sent (or when that
  *                                             // latest activity happened)
  *   'unread_count'   => int,                  // unread messages for the caller

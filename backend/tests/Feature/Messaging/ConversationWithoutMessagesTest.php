@@ -160,11 +160,14 @@ class ConversationWithoutMessagesTest extends TestCase
 
         $this->assertCount(1, $sellerView);
         $this->assertSame($this->buyer->id, $sellerView[0]['counterpart']['id']);
-        $this->assertSame('Inquiry sent', $sellerView[0]['last_message']);
+        // The seller received the inquiry; only the buyer sent it.
+        $this->assertSame('Inquiry received', $sellerView[0]['last_message']);
         $this->assertTrue($sellerView[0]['has_inquiry']);
         $this->assertFalse($sellerView[0]['has_transaction']);
         // The seller can still start an offer from the chat.
         $this->assertNotNull($sellerView[0]['eligible_inquiry']);
+
+        $this->assertSame('Inquiry sent', $this->conversations($this->buyer)[0]['last_message']);
     }
 
     #[Test]
@@ -183,7 +186,9 @@ class ConversationWithoutMessagesTest extends TestCase
             'status' => OfferStatus::Accepted,
         ]);
 
-        $this->assertSame('Offer sent', $this->conversations($this->buyer)[0]['last_message']);
+        // The seller sent the offer; the buyer received it.
+        $this->assertSame('Offer received', $this->conversations($this->buyer)[0]['last_message']);
+        $this->assertSame('Offer sent', $this->conversations($this->seller)[0]['last_message']);
 
         $this->travel(1)->hours();
         $this->createTransaction($this->buyer, $this->seller, $listing);
@@ -240,6 +245,67 @@ class ConversationWithoutMessagesTest extends TestCase
         );
 
         $this->assertSame([$this->seller->id, $otherSeller->id], $ids);
+    }
+
+    #[Test]
+    public function a_thread_with_newer_activity_than_its_last_message_sorts_by_that_activity(): void
+    {
+        $otherSeller = User::factory()->seller()->create([
+            'role' => UserRole::User,
+            'name' => 'Ramon Cruz',
+        ]);
+        $listing = $this->createListing($this->seller);
+
+        // Old chat with the seller...
+        Message::create([
+            'sender_id' => $this->seller->id,
+            'receiver_id' => $this->buyer->id,
+            'listing_id' => $listing->id,
+            'body' => 'Still available.',
+        ]);
+
+        // ...then an inquiry to another seller (no messages)...
+        $this->travel(1)->hours();
+        $this->createInquiry($this->buyer, $otherSeller, $this->createListing($otherSeller));
+
+        // ...then a brand-new transaction with the first seller.
+        $this->travel(1)->hours();
+        $this->createTransaction($this->buyer, $this->seller, $listing);
+
+        $buyerView = $this->conversations($this->buyer);
+        $ids = array_column(array_column($buyerView, 'counterpart'), 'id');
+
+        $this->assertSame([$this->seller->id, $otherSeller->id], $ids);
+        // The message row still shows its real last message.
+        $this->assertSame('Still available.', $buyerView[0]['last_message']);
+    }
+
+    #[Test]
+    public function a_deleted_counterpart_gets_no_row(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $this->createTransaction($this->buyer, $this->seller, $listing);
+
+        $this->seller->delete();
+
+        $this->assertSame([], $this->conversations($this->buyer));
+    }
+
+    #[Test]
+    public function an_inquiry_whose_listing_was_deleted_is_still_listed(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $this->createInquiry($this->buyer, $this->seller, $listing);
+
+        $listing->delete();
+
+        $buyerView = $this->conversations($this->buyer);
+
+        $this->assertCount(1, $buyerView);
+        $this->assertSame($this->seller->id, $buyerView[0]['counterpart']['id']);
+        $this->assertSame('Inquiry sent', $buyerView[0]['last_message']);
+        $this->assertNull($buyerView[0]['listing_id']);
+        $this->assertNull($buyerView[0]['listing_title']);
     }
 
     #[Test]

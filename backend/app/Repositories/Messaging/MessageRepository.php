@@ -159,11 +159,15 @@ class MessageRepository
             return $conversations;
         }
 
-        // Newest activity first across both kinds of row. `sortByDesc` keeps
-        // the original order for equal timestamps.
+        // Newest activity first across both kinds of row: a thread whose last
+        // message is older than a new offer or transaction sorts by that
+        // newer activity. `sortByDesc` keeps the original order on ties.
         return $conversations
             ->concat($withoutMessages)
-            ->sortByDesc(fn (array $c): int => $c['last_message_at']?->getTimestamp() ?? 0)
+            ->sortByDesc(fn (array $c): int => max(
+                $c['last_message_at']?->getTimestamp() ?? 0,
+                ($pairFacts[(int) $c['counterpart']->id]['activity_at'] ?? null)?->getTimestamp() ?? 0,
+            ))
             ->values();
     }
 
@@ -177,7 +181,9 @@ class MessageRepository
      * missing from the inbox's All filter even though the Inquiries and
      * Transactions filters show them. The row is the same shape as a message
      * conversation: `last_message` is a short placeholder naming the latest
-     * activity, `last_message_at` its time, and nothing is unread. Opening it
+     * activity from the caller's side ("Inquiry sent" / "Inquiry received",
+     * "Offer sent" / "Offer received", "Transaction started"),
+     * `last_message_at` its time, and nothing is unread. Opening it
      * loads the (empty) thread and the first message sent starts the real
      * conversation, so nothing is written here.
      *
@@ -407,7 +413,8 @@ class MessageRepository
             $this->recordActivity(
                 $facts[$counterpartId],
                 $inquiry->created_at,
-                'Inquiry sent',
+                // The buyer sends an inquiry; the seller receives it.
+                $isBuyer ? 'Inquiry sent' : 'Inquiry received',
                 $inquiry->listing,
             );
 
@@ -469,7 +476,8 @@ class MessageRepository
             $this->recordActivity(
                 $facts[$counterpartId],
                 $offer->created_at,
-                'Offer sent',
+                // The seller sends an offer; the buyer receives it.
+                $isBuyer ? 'Offer received' : 'Offer sent',
                 $offer->listing,
             );
 
