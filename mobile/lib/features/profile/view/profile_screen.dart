@@ -27,6 +27,7 @@ import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
 import 'change_password_screen.dart';
 import 'edit_profile_screen.dart';
+import 'personal_information_screen.dart';
 
 /// Identifies the tappable Address row in Account Settings.
 ///
@@ -88,13 +89,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _openEdit() async {
-    await _openOnce<bool>(
-      'edit',
-      () => Navigator.of(context).push<bool>(
-        MaterialPageRoute<bool>(
-          builder: (BuildContext context) => const EditProfileScreen(),
-          fullscreenDialog: true,
+    Future<void> _openEdit() async {
+    // Gi-usab kini aron mo-open sa PersonalInformationScreen (read-only screen)
+    // base sa request ni Rusel (Profile -> Personal Information -> Edit).
+    await _openOnce<void>(
+      'personal-info',
+      () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const PersonalInformationScreen(),
         ),
       ),
     );

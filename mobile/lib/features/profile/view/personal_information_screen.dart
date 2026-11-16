@@ -6,20 +6,9 @@ import '../../../models/user.dart';
 import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
-import 'edit_profile_screen.dart';
+import 'edit_profile_screen.dart'; // ✅ Kini ang import para sa Edit
 
 /// A read-only view of the caller's personal details.
-///
-/// Pushed from the Profile tab's "Personal Information" row. Shows name, email,
-/// phone, and bio without an editable form — a review, not a form. Editing is
-/// one tap away via the "Edit" button in the app bar, which pushes
-/// [EditProfileScreen].
-///
-/// This screen exists so that opening "Personal Information" from the Profile
-/// tab does not immediately present an editable form. A form-first flow reads
-/// as "something is wrong, fix it" — a review-first flow reads as "here is
-/// what we have on file." The distinction is what makes the section a *view*
-/// rather than a save button.
 class PersonalInformationScreen extends StatefulWidget {
   const PersonalInformationScreen({super.key});
 
@@ -35,23 +24,19 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
   void initState() {
     super.initState();
     _controller = ProfileScope.readOf(context);
-    // Ensure the profile is loaded. If the user reached this screen from the
-    // Profile tab, the controller already has the profile cached. If they
-    // reached it some other way, load on demand.
     if (_controller.state.user == null) {
       _controller.load();
     }
   }
 
   Future<void> _openEdit() async {
+    // ✅ Gi-point sa EditProfileScreen (dili sa iyang kaugalingon)
     await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (BuildContext context) => const EditProfileScreen(),
         fullscreenDialog: true,
       ),
     );
-    // On return, refresh so a save performed in the edit form is reflected
-    // here without a manual reload.
     if (mounted) {
       await _controller.refresh();
     }
@@ -62,10 +47,19 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Personal Information'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: _openEdit,
-            child: const Text('Edit'),
+                actions: <Widget>[
+          // Disable the Edit button while the profile is still loading or
+          // has failed to load. EditProfileScreen requires a non-null user,
+          // so tapping Edit during a failed load would throw.
+          ListenableBuilder(
+            listenable: _controller,
+            builder: (BuildContext context, Widget? child) {
+              final bool canEdit = _controller.state.user != null;
+              return TextButton(
+                onPressed: canEdit ? _openEdit : null,
+                child: const Text('Edit'),
+              );
+            },
           ),
         ],
       ),
