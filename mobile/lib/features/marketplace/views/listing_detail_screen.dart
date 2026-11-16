@@ -251,7 +251,7 @@ class _SummarySection extends StatelessWidget {
         if (species.isNotEmpty)
           Text(species, style: theme.textTheme.labelMedium),
         Text(listing.title, style: theme.textTheme.headlineSmall),
-        if (listing.location.trim().isNotEmpty) ...<Widget>[
+        if (listing.hasLocation) ...<Widget>[
           const SizedBox(height: AppSpacing.xxs),
           Row(
             children: <Widget>[
@@ -262,7 +262,7 @@ class _SummarySection extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.xxs),
               Flexible(
-                child: Text(listing.location, style: theme.textTheme.bodySmall),
+                child: Text(listing.location!, style: theme.textTheme.bodySmall),
               ),
               Text(
                 ' · Posted ${AppFormatters.formatRelative(listing.createdAt)}',
@@ -281,7 +281,8 @@ class _SummarySection extends StatelessWidget {
             Flexible(
               child: Text(
                 AppFormatters.formatMoney(listing.askingPrice) ??
-                    listing.askingPrice,
+                    listing.askingPrice ??
+                    'Price not set',
                 style: theme.textTheme.headlineMedium?.copyWith(
                   color: AppColors.primary,
                   fontSize: 26,

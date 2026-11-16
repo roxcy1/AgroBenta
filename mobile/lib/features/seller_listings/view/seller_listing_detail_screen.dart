@@ -77,6 +77,23 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
     return _listing;
   }
 
+  /// The most useful action error the screen can show.
+  ///
+  /// A `422` may name several missing publication fields; showing only the
+  /// first server message hides the rest. The field messages are the ones the
+  /// seller can act on, so they take precedence over the generic envelope
+  /// message.
+  String? _actionError(SellerListingState state) {
+    final List<String> fields = state.validationErrors.values
+        .expand((List<String> messages) => messages)
+        .where((String message) => message.trim().isNotEmpty)
+        .toList(growable: false);
+    if (fields.isNotEmpty) {
+      return fields.join('\n');
+    }
+    return state.actionErrorMessage;
+  }
+
   Future<void> _edit() async {
     final Listing? updated = await Navigator.of(context).push<Listing>(
       MaterialPageRoute<Listing>(
@@ -254,7 +271,7 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                             listing: listing,
                             message: state.actionMessage,
                             conflict: state.conflictMessage,
-                            error: state.actionErrorMessage,
+                            error: _actionError(state),
                           ),
                           const SizedBox(height: AppSpacing.md),
                           _FactsGrid(listing: listing),
@@ -452,7 +469,8 @@ class _Summary extends StatelessWidget {
           children: <Widget>[
             Text(
               AppFormatters.formatMoney(listing.askingPrice) ??
-                  listing.askingPrice,
+                  listing.askingPrice ??
+                  'Price not set',
               style: theme.textTheme.headlineMedium?.copyWith(
                 color: AppColors.primary,
                 fontSize: 26,
@@ -463,7 +481,7 @@ class _Summary extends StatelessWidget {
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
-                listing.location,
+                listing.location ?? 'Location not set',
                 style: theme.textTheme.bodySmall,
                 textAlign: TextAlign.end,
                 maxLines: 2,

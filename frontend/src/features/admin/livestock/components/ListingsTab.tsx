@@ -288,7 +288,7 @@ export function ListingsTab() {
                           <td>{listing.sold_quantity ?? '—'}</td>
                           <td>{listing.available_quantity ?? '—'}</td>
                           <td className="lv-price-cell">{formatPeso(listing.asking_price)}</td>
-                          <td title={listing.location}>{listing.location}</td>
+                          <td title={listing.location ?? '—'}>{listing.location ?? '—'}</td>
                           <td className="lv-seller-cell" title={listing.seller.name}>{listing.seller.name}</td>
                           <td>
                             <>

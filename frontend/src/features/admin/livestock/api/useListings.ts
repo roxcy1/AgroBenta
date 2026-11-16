@@ -45,8 +45,8 @@ export interface Listing {
     evidence: string | null;
     created_at: string | null;
   } | null;
-  asking_price: string;
-  location: string;
+  asking_price: string | null;
+  location: string | null;
   health_status: string | null;
   vaccination: string | null;
   short_description: string;

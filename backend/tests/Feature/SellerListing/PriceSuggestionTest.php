@@ -151,6 +151,30 @@ class PriceSuggestionTest extends TestCase
     }
 
     #[Test]
+    public function success_works_when_the_draft_has_no_asking_price_or_location(): void
+    {
+        $listing = $this->createListing([
+            'asking_price' => null,
+            'location' => null,
+        ]);
+        Http::fake([
+            'http://ml-service:8002/v1/predict' => Http::response($this->successPayload(), 200),
+        ]);
+
+        $response = $this->predict($listing);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.estimated_value', '50000.55');
+
+        $listing->refresh();
+        $this->assertNull($listing->asking_price);
+        $this->assertNull($listing->location);
+        $this->assertSame(ListingStatus::Draft, $listing->status);
+        $this->assertDatabaseCount('ai_price_estimates', 1);
+    }
+
+    #[Test]
     public function quantity_is_not_sent_to_the_provider_and_the_estimate_stays_per_head(): void
     {
         $listing = $this->createListing(['quantity' => 12]);

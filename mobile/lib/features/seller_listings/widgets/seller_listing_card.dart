@@ -119,8 +119,7 @@ class SellerListingCard extends StatelessWidget {
                             if (listing.livestockType.trim().isNotEmpty)
                               '${listing.livestockType.trim()[0].toUpperCase()}'
                                   '${listing.livestockType.trim().substring(1)}',
-                            if (listing.location.trim().isNotEmpty)
-                              listing.location.trim(),
+                            if (listing.hasLocation) listing.location!.trim(),
                           ].join(' · '),
                         ),
                         const SizedBox(height: AppSpacing.xxxs),
@@ -133,7 +132,8 @@ class SellerListingCard extends StatelessWidget {
                           AppFormatters.formatMoneyCompact(
                                 listing.askingPrice,
                               ) ??
-                              listing.askingPrice,
+                              listing.askingPrice ??
+                              'Price not set',
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w700,

@@ -86,8 +86,14 @@ trait SellerListingRules
             // `decimal:0,2` rejects a third decimal instead of letting storage
             // round it [DEC-02]; the ceiling stays configurable, and the column
             // (`decimal(14,2)`) supplies the fallback when the setting is absent.
+            //
+            // Optional for a draft: the seller may ask for an AI reference price
+            // before deciding one. Required at submission (see
+            // [requiredFieldRules()] and [submissionRules()]).
             'asking_price' => ['numeric', 'decimal:0,2', 'min:0', 'max:'.$this->maxAskingPrice()],
 
+            // Optional for a draft, for the same reason as the asking price.
+            // A supplied value must still use the Trinidad barangay catalog.
             'location' => ['string', 'max:255', $this->locationAddressRule()],
             'health_status' => ['nullable', 'string', 'max:255'],
             'vaccination' => ['nullable', 'string', 'max:255'],
@@ -140,17 +146,23 @@ trait SellerListingRules
     }
 
     /**
-     * The four fields a listing cannot be created without.
+     * The four fields a listing cannot be published without.
+     *
+     * `required` lives here rather than in [submissionRules()] so submission
+     * and publication cannot drift. Draft creation deliberately uses only a
+     * subset: `livestock_type` and the quantity are needed to identify the
+     * draft, while the asking price and location are publication requirements
+     * and may stay NULL while the seller is still deciding.
      *
      * @return array<string, list<mixed>>
      */
     protected function requiredFieldRules(): array
     {
         return [
-            'livestock_type' => [Rule::enum(LivestockType::class)],
-            'location' => ['string', 'max:255'],
-            'asking_price' => ['numeric', 'min:0', 'max:'.$this->maxAskingPrice()],
-            'total_quantity' => ['integer', 'min:1'],
+            'livestock_type' => ['required', Rule::enum(LivestockType::class)],
+            'location' => ['required', 'string', 'max:255'],
+            'asking_price' => ['required', 'numeric', 'min:0', 'max:'.$this->maxAskingPrice()],
+            'total_quantity' => ['required', 'integer', 'min:1'],
         ];
     }
 
@@ -197,14 +209,14 @@ trait SellerListingRules
     }
 
     /**
-     * The rules a listing must satisfy to be *storable*, ignoring where the
+     * The rules a listing must satisfy to be *submittable*, ignoring where the
      * values came from.
      *
-     * Used for create, for update, and again for submit — because the contract
-     * requires a listing to satisfy the create rules at the moment it is
-     * submitted (§5.4), and a draft written before those rules tightened, or
-     * created outside this API, has to be checked at that point rather than
-     * trusted.
+     * Used at submission — because the contract requires a listing to satisfy
+     * the create rules at the moment it is submitted (§5.4), and a draft
+     * written before those rules tightened, or created outside this API, has
+     * to be checked at that point rather than trusted. Unlike draft creation,
+     * this set requires the asking price and location.
      *
      * Deliberately excludes [ownershipRules()]: the stored listing of course has
      * a `status` and a `seller_id`, and validating those against the

@@ -24,6 +24,21 @@ void main() {
       expect(listing.createdAt, isNotNull);
     });
 
+    test('accepts null price and location on an incomplete draft', () {
+      final Listing listing = Listing.fromJson(
+        listingJson(
+          askingPrice: null,
+          location: null,
+          status: 'draft',
+        ),
+      );
+
+      expect(listing.askingPrice, isNull);
+      expect(listing.location, isNull);
+      expect(listing.hasAskingPrice, isFalse);
+      expect(listing.hasLocation, isFalse);
+    });
+
     test('parses the seller as an id-and-name projection only', () {
       final Listing listing = Listing.fromJson(listingJson());
 
