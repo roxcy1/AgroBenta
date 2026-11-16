@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'buyer_id', 'seller_id', 'listing_id', 'subject', 'message',
+    'buyer_id', 'seller_id', 'listing_id', 'requested_quantity', 'subject', 'message',
     'purchase_interest', 'transaction_method', 'delivery_method',
     'delivery_fee', 'contact_method', 'preferred_schedule',
     'payment_method', 'collection_method', 'collection_date_option',
@@ -30,6 +30,7 @@ class Inquiry extends Model
     {
         return [
             'purchase_interest' => 'boolean',
+            'requested_quantity' => 'integer',
             'transaction_method' => InquiryTransactionMethod::class,
             'contact_method' => InquiryContactMethod::class,
             'delivery_fee' => 'decimal:2',

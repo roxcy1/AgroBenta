@@ -91,7 +91,7 @@ void main() {
   });
 
   group('create()', () {
-    test('posts exactly the three client-owned fields', () async {
+    test('posts exactly the four client-owned fields', () async {
       service = build((_) async => offerCreatedResponse());
 
       final Offer offer = await service.create(
@@ -107,6 +107,7 @@ void main() {
         'inquiry_id',
         'listing_id',
         'proposed_amount',
+        'proposed_quantity',
       });
       expect(recorded.single.body['inquiry_id'], 5);
       expect(recorded.single.body['listing_id'], 12);

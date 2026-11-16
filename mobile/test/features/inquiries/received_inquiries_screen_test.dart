@@ -5,6 +5,8 @@ import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/view/received_inquiries_screen.dart';
+import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
+import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/state/conversations_controller.dart';
 import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
@@ -18,6 +20,7 @@ import 'package:http/http.dart' as http;
 import '../../support/auth_fakes.dart';
 import '../../support/inquiry_fakes.dart';
 import '../../support/messaging_fakes.dart';
+import '../../support/marketplace_fakes.dart';
 import '../../support/offer_fakes.dart';
 
 void main() {
@@ -50,6 +53,12 @@ void main() {
       (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
       recorded: recorded,
     );
+    final marketplaceRepository = buildMarketplaceRepository(
+      tokenStore,
+      (_) async => listingDetailResponse(listing: listingJson()),
+      recorded: recorded,
+    );
+    final marketplaceController = MarketplaceController(marketplaceRepository);
 
     tester.view.physicalSize = const Size(800, 1800);
     tester.view.devicePixelRatio = 1.0;
@@ -58,11 +67,15 @@ void main() {
     await tester.pumpWidget(
       InquiryScope(
         repository: repository,
-        child: OfferScope(
-          repository: offerRepository,
-          child: MaterialApp(
-            theme: AppTheme.light(),
-            home: const ReceivedInquiriesScreen(),
+        child: MarketplaceScope(
+          repository: marketplaceRepository,
+          controller: marketplaceController,
+          child: OfferScope(
+            repository: offerRepository,
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: const ReceivedInquiriesScreen(),
+            ),
           ),
         ),
       ),

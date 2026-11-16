@@ -12,10 +12,10 @@ import '../../marketplace/widgets/listing_card.dart';
 const double _cardWidth = 150;
 
 /// Row height: the card's 4:3 photo band (~112px at [_cardWidth]) plus its
-/// text block — name, place and price, each on one line — with a little room
-/// for a larger system font. A fixed-height row that overflows is a
-/// yellow-and-black stripe on every buyer's Home screen.
-const double _rowHeight = 218;
+/// text block — name, place, available stock and price — with room for a larger
+/// system font. A fixed-height row that overflows is a yellow-and-black stripe
+/// on every buyer's Home screen.
+const double _rowHeight = 240;
 
 /// The Home screen's listings row, driven by the shared marketplace state.
 ///

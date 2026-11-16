@@ -219,6 +219,93 @@ class OfferTest extends TestCase
     }
 
     #[Test]
+    public function a_seller_may_offer_a_partial_quantity_without_reserving_until_acceptance(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 5]);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing, [
+            'requested_quantity' => 3,
+        ]);
+
+        $data = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => '27000.00',
+            'proposed_quantity' => 2,
+        ])->assertCreated()->json('data');
+
+        $this->assertSame(2, $data['proposed_quantity']);
+        $this->assertSame(5, (int) $listing->refresh()->quantity);
+
+        $this->postOfferAction('accept', (int) $data['id'], $this->buyer)
+            ->assertOk()
+            ->assertJsonPath('data.transaction.quantity', 2)
+            ->assertJsonPath('data.transaction.total_amount', '27000.00');
+
+        $this->assertSame(3, (int) $listing->refresh()->quantity);
+        $this->assertSame(2, (int) Transaction::query()->sole()->quantity);
+    }
+
+    #[Test]
+    public function an_offer_quantity_cannot_exceed_the_buyers_requested_quantity(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 5]);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing, [
+            'requested_quantity' => 2,
+        ]);
+
+        $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => '30000.00',
+            'proposed_quantity' => 3,
+        ])->assertStatus(409);
+
+        $this->assertSame(0, Offer::query()->count());
+        $this->assertSame(5, (int) $listing->refresh()->quantity);
+    }
+
+    #[Test]
+    public function a_legacy_offer_defaults_to_the_buyers_requested_quantity(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing, [
+            'requested_quantity' => 4,
+        ]);
+
+        $data = $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => '72000.00',
+        ])->assertCreated()->json('data');
+
+        $this->assertSame(4, $data['proposed_quantity']);
+        $this->assertSame(5, (int) $listing->refresh()->quantity);
+    }
+
+    #[Test]
+    public function an_unreconciled_listing_cannot_receive_a_new_offer(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'total_quantity' => null,
+            'inventory_reconciliation_required' => true,
+            'legacy_quantity_snapshot' => 5,
+        ]);
+        $inquiry = $this->createInquiry($this->buyer, $this->seller, $listing, [
+            'requested_quantity' => 2,
+        ]);
+
+        $this->postOffer([
+            'inquiry_id' => $inquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => '25000.00',
+            'proposed_quantity' => 2,
+        ])->assertStatus(409);
+
+        $this->assertSame(0, Offer::query()->count());
+        $this->assertSame(5, (int) $listing->refresh()->quantity);
+    }
+
+    #[Test]
     public function an_inquiry_can_have_only_one_pending_offer(): void
     {
         $listing = $this->createListing($this->seller);
@@ -304,6 +391,10 @@ class OfferTest extends TestCase
             'sold' => [['status' => ListingStatus::Sold]],
             'inactive' => [['status' => ListingStatus::Inactive]],
             'out of stock' => [['quantity' => 0]],
+            'inventory reconciliation required' => [[
+                'total_quantity' => null,
+                'inventory_reconciliation_required' => true,
+            ]],
         ];
     }
 
@@ -408,6 +499,38 @@ class OfferTest extends TestCase
 
         $this->assertSame(1, Transaction::query()->count());
         $this->assertSame(0, $listing->refresh()->quantity);
+    }
+
+    #[Test]
+    public function accepting_a_stale_partial_offer_rechecks_inventory_and_prevents_overselling(): void
+    {
+        $listing = $this->createListing($this->seller, ['quantity' => 5]);
+        $firstInquiry = $this->createInquiry($this->buyer, $this->seller, $listing, [
+            'requested_quantity' => 4,
+        ]);
+        $secondInquiry = $this->createInquiry($this->stranger, $this->seller, $listing, [
+            'requested_quantity' => 4,
+        ]);
+
+        $firstOffer = $this->postOffer([
+            'inquiry_id' => $firstInquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => '80000.00',
+            'proposed_quantity' => 4,
+        ])->assertCreated()->json('data.id');
+        $secondOffer = $this->postOffer([
+            'inquiry_id' => $secondInquiry->id,
+            'listing_id' => $listing->id,
+            'proposed_amount' => '80000.00',
+            'proposed_quantity' => 4,
+        ])->assertCreated()->json('data.id');
+
+        $this->postOfferAction('accept', $firstOffer, $this->buyer)->assertOk();
+        $this->postOfferAction('accept', $secondOffer, $this->stranger)->assertStatus(409);
+
+        $this->assertSame(1, (int) $listing->refresh()->quantity);
+        $this->assertSame(1, Transaction::query()->count());
+        $this->assertSame('pending', Offer::query()->findOrFail($secondOffer)->status->value);
     }
 
     #[Test]

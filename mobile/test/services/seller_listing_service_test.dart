@@ -69,7 +69,9 @@ void main() {
             'gender': 'female',
             'weight_value': '320.5',
             'weight_unit': 'kg',
-            'quantity': 4,
+            'age_information': 'approximate',
+            'weight_information': 'measured',
+            'total_quantity': 4,
             'asking_price': '42500',
             'location': 'Mabalacat, Pampanga',
             'health_status': 'Healthy',
@@ -78,7 +80,7 @@ void main() {
             'additional_notes': 'Weekend delivery.',
           });
 
-      expect(body, hasLength(14));
+      expect(body, hasLength(16));
       expect(body['gender'], 'female');
     });
 

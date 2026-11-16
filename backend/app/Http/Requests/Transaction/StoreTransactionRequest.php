@@ -27,7 +27,7 @@ class StoreTransactionRequest extends FormRequest
     {
         return [
             'listing_id' => ['required', 'integer', 'exists:listings,id'],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:4294967295'],
 
             'buyer_id' => ['prohibited'],
             'seller_id' => ['prohibited'],

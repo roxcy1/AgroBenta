@@ -15,7 +15,8 @@ class ListSellerVerificationsRequest extends FormRequest
     {
         return [
             'search' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'string', 'in:submitted,pending_review,approved,rejected'],
+            'status' => ['nullable', 'string', 'in:submitted,pending_review,approved,rejected,pending'],
+            'all_submissions' => ['nullable', 'boolean'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],
         ];

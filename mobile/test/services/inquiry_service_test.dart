@@ -100,6 +100,7 @@ void main() {
       // were never chosen and must not be invented as empty strings.
       expect(recorded.single.body, <String, dynamic>{
         'listing_id': 12,
+        'requested_quantity': 1,
         'message': 'Just a question.',
         'collection_date_option': 'specific_date',
         'purchase_interest': false,
@@ -120,6 +121,7 @@ void main() {
       expect(recorded.single.body.containsKey('delivery_fee'), isFalse);
       expect(recorded.single.body.keys.toSet(), <String>{
         'listing_id',
+        'requested_quantity',
         'message',
         'collection_date_option',
         'purchase_interest',

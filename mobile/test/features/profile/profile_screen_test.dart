@@ -307,6 +307,123 @@ void main() {
     },
   );
 
+  testWidgets('rapid Address taps open only one address editor', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final Finder addressRow = find.byKey(profileAddressTileKey);
+    expect(addressRow, findsOneWidget);
+    final VoidCallback? onTap = tester.widget<InkWell>(addressRow).onTap;
+    expect(onTap, isNotNull);
+
+    onTap!();
+    onTap();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit address'), findsOneWidget);
+    expect(find.byType(TrinidadLocationSelector), findsOneWidget);
+  });
+
+  testWidgets('the Address guard releases after the editor closes', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    Future<void> openAddress() async {
+      final VoidCallback? onTap = tester
+          .widget<InkWell>(find.byKey(profileAddressTileKey))
+          .onTap;
+      expect(onTap, isNotNull);
+      onTap!();
+      await tester.pumpAndSettle();
+    }
+
+    await openAddress();
+    expect(find.text('Edit address'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit address'), findsNothing);
+
+    // A guard that never releases would make the row dead after one visit.
+    await openAddress();
+    expect(find.text('Edit address'), findsOneWidget);
+  });
+
+  testWidgets('rapid Personal Information taps push only one edit form', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final VoidCallback? onTap = tester
+        .widget<ListTile>(find.widgetWithText(ListTile, 'Personal Information'))
+        .onTap;
+    expect(onTap, isNotNull);
+    onTap!();
+    onTap();
+    await settleAuth(tester, frames: 12);
+
+    expect(find.byType(EditProfileScreen), findsOneWidget);
+  });
+
+  testWidgets('rapid Change Password taps push only one password form', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final VoidCallback? onTap = tester
+        .widget<ListTile>(find.widgetWithText(ListTile, 'Change Password'))
+        .onTap;
+    expect(onTap, isNotNull);
+    onTap!();
+    onTap();
+    await settleAuth(tester, frames: 12);
+
+    expect(find.byType(ChangePasswordScreen), findsOneWidget);
+  });
+
+  testWidgets('rapid Start Seller Verification taps push only one flow', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final Finder button = find.widgetWithText(
+      FilledButton,
+      'Start Seller Verification',
+    );
+    expect(button, findsOneWidget);
+    final VoidCallback? onPressed = tester
+        .widget<FilledButton>(button)
+        .onPressed;
+    expect(onPressed, isNotNull);
+    onPressed!();
+    onPressed();
+    await settleAuth(tester, frames: 12);
+
+    expect(find.byType(SellerVerificationScreen), findsOneWidget);
+  });
+
   testWidgets('address editor saves through the existing profile update', (
     WidgetTester tester,
   ) async {

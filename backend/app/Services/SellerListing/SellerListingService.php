@@ -5,12 +5,14 @@ namespace App\Services\SellerListing;
 use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Enums\LivestockType;
+use App\Events\ListingInventoryUpdated;
 use App\Http\Requests\SellerListing\SellerListingRules;
 use App\Models\Listing;
 use App\Models\User;
 use App\Repositories\SellerListing\SellerListingRepository;
 use App\Repositories\Transaction\TransactionRepository;
 use App\Services\ActivityLogger;
+use App\Services\Listing\ListingReservationService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -67,6 +69,7 @@ class SellerListingService
         private readonly SellerListingRepository $listingRepository,
         private readonly TransactionRepository $transactions,
         private readonly ActivityLogger $activity,
+        private readonly ListingReservationService $reservations,
     ) {}
 
     /**
@@ -101,6 +104,11 @@ class SellerListingService
      */
     public function create(User $seller, array $attributes): Listing
     {
+        $totalQuantity = (int) ($attributes['total_quantity'] ?? $attributes['quantity'] ?? 0);
+        $attributes['total_quantity'] = $totalQuantity;
+        // `quantity` remains the available stock field for older API clients.
+        $attributes['quantity'] = $totalQuantity;
+
         // A listing that does not exist yet has no directory to upload into and
         // no id to scope a filename to, so any supplied photo is a claim this
         // server cannot verify. A draft stays photo-optional: absent or `[]` is
@@ -184,21 +192,67 @@ class SellerListingService
                 'Only a draft or an active listing can be edited.',
             );
 
-            // A reserved head has already been removed from `quantity`. Letting
-            // a seller overwrite that column while a pending transaction still
-            // holds stock would make the reservation invisible to the next
-            // available-stock check.
-            if (array_key_exists('quantity', $attributes) &&
-                (int) $attributes['quantity'] !== (int) $locked->quantity &&
-                $this->transactions->hasActiveReservationsForListing(
-                    (int) $locked->getKey(),
-                )) {
-                abort(409, 'Quantity cannot be changed while transactions are reserving stock.');
+            if (array_key_exists('quantity', $attributes) ||
+                array_key_exists('total_quantity', $attributes)) {
+                if ($locked->inventory_reconciliation_required || $locked->total_quantity === null) {
+                    abort(409, 'This listing requires inventory reconciliation before its quantity can be changed.');
+                }
+
+                $accounted = $this->reservations->accountedQuantities((int) $locked->getKey());
+                $committed = $accounted['reserved']
+                    + $accounted['completed']
+                    + (int) $locked->externally_sold_quantity;
+
+                if (array_key_exists('total_quantity', $attributes)) {
+                    $totalQuantity = (int) $attributes['total_quantity'];
+
+                    if ($totalQuantity < $committed) {
+                        abort(409, 'Total quantity cannot be lower than reserved and sold animals.');
+                    }
+
+                    $attributes['total_quantity'] = $totalQuantity;
+                    $attributes['quantity'] = $totalQuantity - $committed;
+                } elseif (array_key_exists('quantity', $attributes)) {
+                    // Legacy clients edit the available-stock field. Preserve
+                    // that meaning and refuse to replace it while a reservation
+                    // is active, as the previous API did.
+                    if ($this->transactions->hasActiveReservationsForListing((int) $locked->getKey())) {
+                        abort(409, 'Quantity cannot be changed while transactions are reserving stock.');
+                    }
+
+                    $availableQuantity = (int) $attributes['quantity'];
+                    $attributes['total_quantity'] = $availableQuantity + $committed;
+                    $attributes['quantity'] = $availableQuantity;
+                }
             }
 
             $before = $locked->getAttributes();
 
             $updated = $this->listingRepository->update($locked, $attributes);
+            $automaticallySold = (
+                array_key_exists('quantity', $attributes) ||
+                array_key_exists('total_quantity', $attributes)
+            ) && $this->reservations->markSoldIfExhausted((int) $updated->getKey());
+            if (! $automaticallySold &&
+                (array_key_exists('quantity', $attributes) ||
+                    array_key_exists('total_quantity', $attributes))) {
+                ListingInventoryUpdated::dispatch((int) $updated->getKey());
+            }
+            if ($automaticallySold) {
+                $updated->refresh();
+            }
+
+            $changes = $this->changedAttributes(
+                $before,
+                $updated->getAttributes(),
+                array_keys($attributes),
+            );
+            if ($automaticallySold) {
+                $changes['status'] = [
+                    'from' => ListingStatus::Active->value,
+                    'to' => ListingStatus::Sold->value,
+                ];
+            }
 
             $this->activity->log(
                 $locked->seller_id,
@@ -207,11 +261,7 @@ class SellerListingService
                 [
                     'target_type' => 'listing',
                     'target_id' => $locked->getKey(),
-                    'changes' => $this->changedAttributes(
-                        $before,
-                        $updated->getAttributes(),
-                        array_keys($attributes),
-                    ),
+                    'changes' => $changes,
                 ],
             );
 
@@ -298,9 +348,7 @@ class SellerListingService
             }
 
             $previousStatus = $locked->status->value;
-
-            $locked->status = ListingStatus::Sold;
-            $locked->save();
+            $externallySold = $this->reservations->markRemainingExternallySold($locked);
 
             $this->activity->log(
                 $locked->seller_id,
@@ -311,11 +359,18 @@ class SellerListingService
                     'target_id' => $locked->getKey(),
                     'changes' => [
                         'status' => ['from' => $previousStatus, 'to' => ListingStatus::Sold->value],
+                        'externally_sold_quantity' => [
+                            'from' => (int) $locked->externally_sold_quantity - $externallySold,
+                            'to' => (int) $locked->externally_sold_quantity,
+                        ],
                     ],
                 ],
             );
 
-            return $locked;
+            return $this->listingRepository->findOwned(
+                (int) $locked->getKey(),
+                $locked->seller,
+            ) ?? $locked;
         });
     }
 
@@ -327,6 +382,11 @@ class SellerListingService
     public function delete(Listing $listing): void
     {
         $this->ensureStatusIs($listing, self::DELETABLE_STATUSES, 'Only a draft or an inactive listing can be deleted.');
+
+        if ($listing->inventory_reconciliation_required ||
+            $this->transactions->hasActiveReservationsForListing((int) $listing->getKey())) {
+            abort(409, 'This listing cannot be deleted while inventory needs reconciliation or a transaction reserves stock.');
+        }
 
         // Completed sales are historical records. Deleting the listing would
         // cascade the transaction away, taking its receipt with it, so the
@@ -550,6 +610,7 @@ class SellerListingService
                 'weight_unit' => $listing->weight_unit,
                 'weight_information' => $listing->weight_information,
                 'quantity' => $listing->quantity,
+                'total_quantity' => $listing->total_quantity,
                 'asking_price' => $listing->getRawOriginal('asking_price', $listing->asking_price),
                 'location' => $listing->location,
                 'health_status' => $listing->health_status,

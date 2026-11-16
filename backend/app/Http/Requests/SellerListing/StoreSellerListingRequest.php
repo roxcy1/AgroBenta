@@ -9,16 +9,15 @@ use Illuminate\Validation\Validator;
 /**
  * Body for creating a listing.
  *
- * The four required fields are the minimum a listing needs to be *identifiable*,
- * which is what a draft needs to be: something the seller can name, place and
- * price, so they can come back to it. Everything else is optional and validated
- * only if sent.
+ * A draft needs enough information to be identifiable and to feed the AI price
+ * suggestion, but not the seller's final price or the barangay they have not
+ * chosen yet. The asking price and location are therefore optional here and
+ * required at submission, which [SellerListingRules::submissionRules()] and
+ * [SellerListingService::submit()] enforce against the stored row.
  *
- * The contract does not permit a wholly incomplete draft, and this request does
- * not invent one. Validation here is a contract- and storage-shaped decision,
- * not a workflow one: relaxing it to allow a seller to save an empty listing
- * would mean inventing a rule the documentation does not have, and the
- * browser-based Admin Web flow is where partial entry belongs.
+ * Everything else is validated only if sent. Age, weight and quantity remain
+ * create requirements because they are the model inputs and the stock record;
+ * the two publication fields are the only draft-optional ones.
  */
 class StoreSellerListingRequest extends FormRequest
 {
@@ -34,17 +33,28 @@ class StoreSellerListingRequest extends FormRequest
      */
     public function rules(): array
     {
-        // `required` is added last so it takes precedence over the optional
-        // definition of the same field; applied the other way, `livestock_type`
-        // would silently revert to optional and a listing could be created with no
-        // livestock type at all.
+        // The two quantity spellings are mutually exclusive and one is
+        // required. The other create-required fields come from the shared
+        // rules with `required` already attached; `total_quantity` is handled
+        // by the pair of `required_without` rules below, and the publication
+        // fields are deliberately omitted so a draft may save without them.
+        $required = $this->requiredFieldRules();
+        unset(
+            $required['total_quantity'],
+            $required['asking_price'],
+            $required['location'],
+        );
+
         return $this->mergeRules(
-            $this->submissionRules(),
+            $this->contentRules(),
+            $this->pairRules(),
+            $this->requiredMeasurementRules(),
             $this->ownershipRules(),
-            array_map(
-                static fn (array $rules): array => ['required', ...$rules],
-                $this->requiredFieldRules(),
-            ),
+            $required,
+            [
+                'quantity' => ['required_without:total_quantity', 'prohibits:total_quantity'],
+                'total_quantity' => ['required_without:quantity', 'prohibits:quantity'],
+            ],
         );
     }
 

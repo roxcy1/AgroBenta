@@ -50,6 +50,7 @@ class ReceivedInquiry {
     required this.paymentMethod,
     required this.collectionMethod,
     required this.createdAt,
+    this.requestedQuantity = 1,
     this.canMakeOffer = true,
   });
 
@@ -59,6 +60,7 @@ class ReceivedInquiry {
 
     return ReceivedInquiry(
       id: readInt(json, 'id'),
+      requestedQuantity: readNullableInt(json, 'requested_quantity') ?? 1,
       buyer: buyer == null ? null : InquiryBuyer.fromJson(buyer),
       listing: listing == null ? null : InquiryListing.fromJson(listing),
       subject: readNullableString(json, 'subject'),
@@ -103,6 +105,8 @@ class ReceivedInquiry {
 
   /// `inquiries.id`.
   final int id;
+
+  final int requestedQuantity;
 
   /// The buyer who sent the inquiry. Null only if the server response is
   /// missing a projection it always sends, which the screen handles as

@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'buyer_id', 'seller_id', 'listing_id', 'offer_id', 'quantity',
     'total_amount', 'pickup_date', 'payment_method', 'collection_method',
-    'inventory_reserved', 'status', 'fulfillment_status', 'completed_at',
+    'inventory_reserved', 'inventory_accounted', 'inventory_accounted_at',
+    'inventory_accounted_by', 'status', 'fulfillment_status', 'completed_at',
     'receipt_snapshot',
 ])]
 class Transaction extends Model
@@ -30,6 +31,8 @@ class Transaction extends Model
             'total_amount' => 'decimal:2',
             'pickup_date' => 'date',
             'inventory_reserved' => 'boolean',
+            'inventory_accounted' => 'boolean',
+            'inventory_accounted_at' => 'datetime',
             'completed_at' => 'datetime',
             'receipt_snapshot' => 'array',
         ];
@@ -60,5 +63,10 @@ class Transaction extends Model
     public function listing(): BelongsTo
     {
         return $this->belongsTo(Listing::class);
+    }
+
+    public function inventoryAccountedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'inventory_accounted_by')->withTrashed();
     }
 }

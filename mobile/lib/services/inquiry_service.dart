@@ -113,6 +113,7 @@ class InquiryService {
   ///  * [ApiErrorKind.unauthorized] on a `401`; the token has been cleared.
   Future<Inquiry> create({
     required int listingId,
+    int requestedQuantity = 1,
     required String message,
     InquiryCollectionDateOption? collectionDateOption,
     DateTime? preferredSchedule,
@@ -131,6 +132,7 @@ class InquiryService {
         // Explicit allow-list, in the order the contract lists them. Anything
         // a form adds later has to be named here to be sent.
         'listing_id': listingId,
+        'requested_quantity': requestedQuantity,
         if (_present(message)) 'message': message.trim(),
         if (collectionDateOption != null)
           'collection_date_option': collectionDateOption.value,

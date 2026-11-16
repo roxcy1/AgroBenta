@@ -102,7 +102,6 @@ export function buildReportsCsv(data: ReportData, params: ReportParams = {}): st
   });
 
   add('Seller verifications', 'Total submission records', data.seller_verifications.total, filteredPeriod);
-  add('Seller verifications', 'Submitted', data.seller_verifications.submitted, filteredPeriod);
   add('Seller verifications', 'Pending review', data.seller_verifications.pending_review, filteredPeriod);
   add('Seller verifications', 'Approved', data.seller_verifications.approved, filteredPeriod);
   add('Seller verifications', 'Rejected', data.seller_verifications.rejected, filteredPeriod);

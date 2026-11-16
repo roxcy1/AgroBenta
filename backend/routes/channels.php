@@ -33,3 +33,10 @@ Broadcast::channel('admin.{id}', function (User $user, int $id) {
 Broadcast::channel('admin', function (User $user) {
     return $user->isAdmin();
 });
+
+// Every authenticated mobile user may refresh public marketplace availability.
+// The event payload contains only a public listing id; all inventory fields are
+// read back through the caller's normal API authorization.
+Broadcast::channel('marketplace', function (User $user) {
+    return ! $user->trashed();
+});

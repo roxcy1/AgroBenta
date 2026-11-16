@@ -116,10 +116,7 @@ class MobileSellerListingTest extends TestCase
      */
     private function store(array $body = [], ?string $token = null): TestResponse
     {
-        return $this->withHeader(
-            'Authorization',
-            'Bearer '.($token ?? $this->mobileToken($this->seller)),
-        )->postJson('/api/seller/listings', array_merge([
+        $payload = array_merge([
             'livestock_type' => 'cattle',
             'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
             'asking_price' => 50000,
@@ -130,7 +127,16 @@ class MobileSellerListingTest extends TestCase
             'weight_value' => 500,
             'weight_unit' => 'kg',
             'weight_information' => 'measured',
-        ], $body));
+        ], $body);
+
+        if (array_key_exists('total_quantity', $body) && ! array_key_exists('quantity', $body)) {
+            unset($payload['quantity']);
+        }
+
+        return $this->withHeader(
+            'Authorization',
+            'Bearer '.($token ?? $this->mobileToken($this->seller)),
+        )->postJson('/api/seller/listings', $payload);
     }
 
     // ---------------------------------------------------------------- access
@@ -217,6 +223,21 @@ class MobileSellerListingTest extends TestCase
     }
 
     #[Test]
+    public function a_new_client_can_create_with_total_quantity_and_legacy_quantity_remains_available(): void
+    {
+        $data = $this->store(['total_quantity' => 4])
+            ->assertCreated()
+            ->assertJsonPath('data.quantity', 4)
+            ->assertJsonPath('data.total_quantity', 4)
+            ->assertJsonPath('data.available_quantity', 4)
+            ->assertJsonPath('data.reserved_quantity', 0)
+            ->assertJsonPath('data.sold_quantity', 0)
+            ->json('data');
+
+        $this->assertSame(4, (int) Listing::query()->findOrFail($data['id'])->total_quantity);
+    }
+
+    #[Test]
     public function a_created_listing_belongs_to_the_authenticated_seller(): void
     {
         $this->store([], $this->mobileToken($this->otherSeller));
@@ -248,14 +269,16 @@ class MobileSellerListingTest extends TestCase
     #[Test]
     public function the_required_fields_are_required(): void
     {
+        // The asking price and location are publication requirements, not draft
+        // requirements, so they are deliberately absent from this list. The
+        // submission test below asserts that they are still required to publish.
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings', [])
             ->assertStatus(422)
             ->assertJsonValidationErrors([
                 'livestock_type',
-                'location',
-                'asking_price',
                 'quantity',
+                'total_quantity',
                 'age_value',
                 'age_unit',
                 'age_information',
@@ -263,6 +286,34 @@ class MobileSellerListingTest extends TestCase
                 'weight_unit',
                 'weight_information',
             ]);
+    }
+
+    #[Test]
+    public function a_draft_can_be_created_without_an_asking_price_or_location(): void
+    {
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings', [
+                'livestock_type' => 'cattle',
+                'quantity' => 3,
+                'age_value' => 2,
+                'age_unit' => 'year',
+                'age_information' => 'known',
+                'weight_value' => 500,
+                'weight_unit' => 'kg',
+                'weight_information' => 'measured',
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.status', ListingStatus::Draft->value)
+            ->assertJsonPath('data.asking_price', null)
+            ->assertJsonPath('data.location', null);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $response->json('data.id'),
+            'asking_price' => null,
+            'location' => null,
+            'status' => ListingStatus::Draft->value,
+        ]);
     }
 
     /**
@@ -934,6 +985,42 @@ class MobileSellerListingTest extends TestCase
     }
 
     #[Test]
+    public function changing_total_quantity_preserves_accounted_sales_and_rejects_totals_below_commitments(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Active,
+            'quantity' => 2,
+            'total_quantity' => 5,
+        ]);
+        Transaction::query()->create([
+            'buyer_id' => User::factory()->create()->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 3,
+            'total_amount' => 150000,
+            'inventory_reserved' => true,
+            'inventory_accounted' => true,
+            'status' => TransactionStatus::Completed,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, ['total_quantity' => 2])
+            ->assertStatus(409);
+
+        $this->assertSame(5, (int) $listing->refresh()->total_quantity);
+        $this->assertSame(2, (int) $listing->quantity);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, ['total_quantity' => 4])
+            ->assertOk()
+            ->assertJsonPath('data.total_quantity', 4)
+            ->assertJsonPath('data.sold_quantity', 3)
+            ->assertJsonPath('data.available_quantity', 1);
+
+        $this->assertSame(1, (int) $listing->refresh()->quantity);
+    }
+
+    #[Test]
     public function an_active_listing_quantity_cannot_be_changed_while_stock_is_reserved(): void
     {
         $listing = $this->createListing($this->seller, [
@@ -1084,6 +1171,69 @@ class MobileSellerListingTest extends TestCase
             'id' => $listing->id,
             'status' => ListingStatus::Pending->value,
         ]);
+    }
+
+    #[Test]
+    public function a_draft_without_an_asking_price_or_location_can_be_updated(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'asking_price' => null,
+            'location' => null,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, ['quantity' => 4])
+            ->assertOk()
+            ->assertJsonPath('data.quantity', 4)
+            ->assertJsonPath('data.asking_price', null)
+            ->assertJsonPath('data.location', null);
+    }
+
+    #[Test]
+    public function a_draft_without_an_asking_price_or_location_cannot_be_submitted(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'asking_price' => null,
+            'location' => null,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['asking_price', 'location']);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+            'asking_price' => null,
+            'location' => null,
+        ]);
+    }
+
+    #[Test]
+    public function a_draft_can_be_submitted_after_adding_an_asking_price_and_location(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'asking_price' => null,
+            'location' => null,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'asking_price' => 50000,
+                'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.asking_price', '50000.00')
+            ->assertJsonPath('data.location', 'Purok 3, Barangay Poblacion, Trinidad, Bohol');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Pending->value);
     }
 
     #[Test]
@@ -1375,17 +1525,50 @@ class MobileSellerListingTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Listing marked as sold.')
             ->assertJsonPath('data.status', ListingStatus::Sold->value)
+            ->assertJsonPath('data.quantity', 0)
+            ->assertJsonPath('data.externally_sold_quantity', 1)
             ->assertJsonPath('data.id', $listing->id);
 
         $this->assertDatabaseHas('listings', [
             'id' => $listing->id,
             'status' => ListingStatus::Sold->value,
+            'quantity' => 0,
+            'externally_sold_quantity' => 1,
         ]);
 
         $this->assertDatabaseHas('activities', [
             'user_id' => $this->seller->id,
             'action' => ActivityAction::ListingMarkedSold->value,
         ]);
+    }
+
+    #[Test]
+    public function a_seller_cannot_manually_sell_stock_while_a_transaction_reserves_it(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Active,
+            'quantity' => 5,
+        ]);
+        $listing->quantity = 3;
+        $listing->save();
+        Transaction::query()->create([
+            'buyer_id' => User::factory()->create()->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 2,
+            'total_amount' => 100000,
+            'inventory_reserved' => true,
+            'inventory_accounted' => true,
+            'status' => TransactionStatus::Pending,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/mark-sold')
+            ->assertStatus(409);
+
+        $this->assertSame(ListingStatus::Active, $listing->refresh()->status);
+        $this->assertSame(3, (int) $listing->quantity);
+        $this->assertSame(0, (int) $listing->externally_sold_quantity);
     }
 
     #[Test]

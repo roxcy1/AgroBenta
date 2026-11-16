@@ -6,6 +6,8 @@ import {
   isOpenStatus,
   resolveStatusTab,
   statusLabel,
+  verificationDisplayStatus,
+  verificationQueryForTab,
   verificationActionsFor,
   verificationErrorMessage,
   verificationPollingInterval,
@@ -44,11 +46,39 @@ describe('resolveStatusTab', () => {
     expect(resolveStatusTab('pending_review')).toBe('pending_review');
   });
 
+  it('accepts the server name for the pending tab', () => {
+    expect(resolveStatusTab('pending')).toBe('pending_review');
+  });
+
   it('falls back to the default tab for an unknown, empty, or absent value', () => {
     expect(resolveStatusTab('archived')).toBe('submitted');
     expect(resolveStatusTab('')).toBe('submitted');
     expect(resolveStatusTab(null)).toBe('submitted');
     expect(resolveStatusTab(undefined)).toBe('submitted');
+  });
+});
+
+describe('verificationQueryForTab', () => {
+  it('loads the whole submission log, without a status, for Submitted', () => {
+    expect(verificationQueryForTab('submitted')).toEqual({ all_submissions: true });
+  });
+
+  it('loads every open application for Pending Review', () => {
+    expect(verificationQueryForTab('pending_review')).toEqual({ status: 'pending' });
+  });
+
+  it('loads each decision across every submission for Approved and Rejected', () => {
+    expect(verificationQueryForTab('approved')).toEqual({ status: 'approved', all_submissions: true });
+    expect(verificationQueryForTab('rejected')).toEqual({ status: 'rejected', all_submissions: true });
+  });
+});
+
+describe('verificationDisplayStatus', () => {
+  it('shows both open states as Pending and leaves decisions alone', () => {
+    expect(verificationDisplayStatus('submitted')).toBe('pending');
+    expect(verificationDisplayStatus('pending_review')).toBe('pending');
+    expect(verificationDisplayStatus('approved')).toBe('approved');
+    expect(verificationDisplayStatus('rejected')).toBe('rejected');
   });
 });
 

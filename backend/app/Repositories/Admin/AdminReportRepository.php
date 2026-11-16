@@ -282,6 +282,12 @@ class AdminReportRepository
     /**
      * Get seller verification report data.
      *
+     * The counts measure submissions, not applicants, and match the Admin Web
+     * review tabs: `submitted` is every submission in the period (the same
+     * figure as `total`, kept so existing consumers keep working),
+     * `pending_review` is every open submission (`submitted` + `pending_review`),
+     * and `submitted` = `approved` + `rejected` + `pending_review`.
+     *
      * @return array{total: int, submitted: int, pending_review: int, approved: int, rejected: int, submission_trend: array, status_distribution: array}
      */
     public function getSellerVerificationReport(?string $dateFrom = null, ?string $dateTo = null): array
@@ -292,8 +298,8 @@ class AdminReportRepository
 
         $aggregates = $query->selectRaw("
             COUNT(*) as total,
-            SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as submitted,
-            SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) as pending_review,
+            COUNT(*) as submitted,
+            SUM(CASE WHEN status IN ('submitted', 'pending_review') THEN 1 ELSE 0 END) as pending_review,
             SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
             SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
         ")->first();
@@ -335,8 +341,12 @@ class AdminReportRepository
      */
     private function getVerificationStatusDistribution(?string $dateFrom, ?string $dateTo): array
     {
-        $query = SellerVerification::selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
+        // Open applications (submitted and pending review) are one group, so the
+        // distribution reads Pending / Approved / Rejected like the review tabs.
+        $bucket = "CASE WHEN status IN ('submitted', 'pending_review') THEN 'pending_review' ELSE status END";
+
+        $query = SellerVerification::selectRaw("{$bucket} as status, COUNT(*) as count")
+            ->groupByRaw($bucket)
             ->orderByDesc('count');
 
         $this->applyDateFilter($query, $dateFrom, $dateTo);

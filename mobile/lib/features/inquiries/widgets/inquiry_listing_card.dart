@@ -51,7 +51,8 @@ class InquiryListingCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
                     AppFormatters.formatMoney(listing.askingPrice) ??
-                        listing.askingPrice,
+                        listing.askingPrice ??
+                        'Price not set',
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: AppColors.primary,
                     ),
@@ -86,7 +87,7 @@ class InquiryListingCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                  if (listing.location.trim().isNotEmpty) ...<Widget>[
+                  if (listing.hasLocation) ...<Widget>[
                     const SizedBox(height: AppSpacing.xs),
                     Row(
                       children: <Widget>[
@@ -98,7 +99,7 @@ class InquiryListingCard extends StatelessWidget {
                         const SizedBox(width: AppSpacing.xxs),
                         Expanded(
                           child: Text(
-                            listing.location,
+                            listing.location!,
                             style: theme.textTheme.bodySmall,
                           ),
                         ),

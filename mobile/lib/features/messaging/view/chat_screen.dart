@@ -144,6 +144,10 @@ class _ChatScreenState extends State<ChatScreen> {
           listingTitle: inquiry.listingTitle,
           askingPrice: inquiry.askingPrice,
           photoUrl: inquiry.photoUrl,
+          requestedQuantity: inquiry.requestedQuantity,
+          listingAvailableQuantity: inquiry.listingAvailableQuantity,
+          inventoryReconciliationRequired:
+              inquiry.inventoryReconciliationRequired,
           paymentMethod: inquiry.paymentMethod,
           collectionMethod: inquiry.collectionMethod,
           preferredSchedule: inquiry.preferredSchedule,

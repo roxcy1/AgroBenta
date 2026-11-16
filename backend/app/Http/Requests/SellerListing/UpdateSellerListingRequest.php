@@ -68,6 +68,11 @@ class UpdateSellerListingRequest extends StoreSellerListingRequest
             $rules[$field] = $rewritten;
         }
 
+        // A PATCH may omit both quantity fields, but it may not mix the legacy
+        // available value with the new total value in one ambiguous request.
+        $rules['quantity'][] = 'prohibits:total_quantity';
+        $rules['total_quantity'][] = 'prohibits:quantity';
+
         return $rules;
     }
 

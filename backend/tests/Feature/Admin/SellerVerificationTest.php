@@ -659,6 +659,102 @@ class SellerVerificationTest extends TestCase
         $this->assertEquals(0, $filtered->json('data.pagination.total'));
     }
 
+    public function test_pending_filter_lists_submitted_and_pending_review_together(): void
+    {
+        $this->createVerification(['status' => SellerVerificationStatus::Submitted]);
+        $this->createVerification(['status' => SellerVerificationStatus::PendingReview]);
+        $this->createVerification(['status' => SellerVerificationStatus::Approved]);
+        $this->createVerification(['status' => SellerVerificationStatus::Rejected]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/seller-verifications?status=pending');
+
+        $response->assertOk();
+        $this->assertEquals(2, $response->json('data.pagination.total'));
+        $statuses = collect($response->json('data.verifications'))->pluck('status')->sort()->values()->all();
+        $this->assertEquals(['pending_review', 'submitted'], $statuses);
+    }
+
+    public function test_submitted_log_keeps_decided_applications_and_every_resubmission(): void
+    {
+        $seller = $this->applicant();
+
+        $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Rejected,
+            'admin_note' => 'Blurry ID.',
+            'submitted_at' => now()->subDays(5),
+            'reviewed_at' => now()->subDays(4),
+        ]);
+        $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now(),
+            'reviewed_at' => now(),
+        ]);
+        $this->createVerification(['status' => SellerVerificationStatus::Submitted]);
+
+        $log = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/seller-verifications?all_submissions=1');
+
+        $log->assertOk();
+        $this->assertEquals(3, $log->json('data.pagination.total'));
+
+        // Without the option the list still narrows to each applicant's latest.
+        $latest = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/seller-verifications');
+
+        $this->assertEquals(2, $latest->json('data.pagination.total'));
+    }
+
+    public function test_submitted_equals_approved_plus_rejected_plus_pending(): void
+    {
+        $seller = $this->applicant();
+
+        $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Rejected,
+            'submitted_at' => now()->subDays(5),
+        ]);
+        $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now(),
+        ]);
+        $this->createVerification(['status' => SellerVerificationStatus::Submitted]);
+        $this->createVerification(['status' => SellerVerificationStatus::PendingReview]);
+        $this->createVerification(['status' => SellerVerificationStatus::Rejected]);
+
+        $total = fn (string $query): int => $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson("/api/admin/seller-verifications?per_page=1&{$query}")
+            ->json('data.pagination.total');
+
+        $submitted = $total('all_submissions=1');
+        $approved = $total('status=approved&all_submissions=1');
+        $rejected = $total('status=rejected&all_submissions=1');
+        $pending = $total('status=pending');
+
+        $this->assertEquals(5, $submitted);
+        $this->assertEquals(1, $approved);
+        $this->assertEquals(2, $rejected);
+        $this->assertEquals(2, $pending);
+        $this->assertEquals($submitted, $approved + $rejected + $pending);
+    }
+
+    public function test_deciding_an_application_moves_it_out_of_pending(): void
+    {
+        $verification = $this->createVerification(['status' => SellerVerificationStatus::Submitted]);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/approve")
+            ->assertOk();
+
+        $pending = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/seller-verifications?status=pending');
+        $this->assertEquals(0, $pending->json('data.pagination.total'));
+
+        $log = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->getJson('/api/admin/seller-verifications?all_submissions=1');
+        $this->assertEquals(1, $log->json('data.pagination.total'));
+        $this->assertEquals('approved', $log->json('data.verifications.0.status'));
+    }
+
     public function test_latest_record_ties_are_broken_by_id(): void
     {
         $seller = $this->applicant();

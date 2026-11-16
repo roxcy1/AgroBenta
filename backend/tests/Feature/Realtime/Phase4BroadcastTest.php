@@ -160,4 +160,30 @@ class Phase4BroadcastTest extends TestCase
                 'socket_id' => '1234.5678',
             ])->assertStatus(403);
     }
+
+    #[Test]
+    public function an_authenticated_mobile_user_can_subscribe_to_marketplace_inventory_updates(): void
+    {
+        $this->configureReverbForAuthTests();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->token($this->buyer))
+            ->postJson('/broadcasting/auth', [
+                'channel_name' => 'private-marketplace',
+                'socket_id' => '1234.5678',
+            ])->assertOk();
+    }
+
+    #[Test]
+    public function listing_inventory_updates_carry_only_the_public_listing_id(): void
+    {
+        $event = new \App\Events\ListingInventoryUpdated(42);
+        $channels = $event->broadcastOn();
+
+        $this->assertSame(
+            ['private-marketplace', 'private-admin'],
+            array_map(static fn ($channel): string => $channel->name, $channels),
+        );
+        $this->assertSame('listing.inventory.updated', $event->broadcastAs());
+        $this->assertSame(['listing_id' => 42], $event->broadcastWith());
+    }
 }

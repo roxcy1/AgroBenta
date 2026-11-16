@@ -284,7 +284,7 @@ abstract final class SellerListingEndpoints {
     'weight_value',
     'weight_unit',
     'weight_information',
-    'quantity',
+    'total_quantity',
     'asking_price',
     'location',
     'health_status',
@@ -295,20 +295,32 @@ abstract final class SellerListingEndpoints {
 
   /// The fields the create request requires.
   ///
+  /// The fields a draft cannot be stored without.
+  ///
   /// A subset of [writableFields]. Age and weight are required with their
-  /// units and information types, so a draft is a complete-but-unpublished
-  /// record rather than a half-filled one.
+  /// units and information types because they are the model inputs and the
+  /// stock record. Asking price and location are deliberately absent: they are
+  /// publication requirements, so a seller may save a draft (and request an AI
+  /// reference price) before deciding either.
   static const List<String> requiredFields = <String>[
     'livestock_type',
-    'location',
-    'asking_price',
-    'quantity',
+    'total_quantity',
     'age_value',
     'age_unit',
     'age_information',
     'weight_value',
     'weight_unit',
     'weight_information',
+  ];
+
+  /// The fields a listing must have before it can be submitted for review.
+  ///
+  /// The server owns this rule; the list is here for copy and client-side
+  /// completeness hints only.
+  static const List<String> publishRequiredFields = <String>[
+    ...requiredFields,
+    'asking_price',
+    'location',
   ];
 
   /// Page size used when the caller does not ask for a specific one.
@@ -611,6 +623,7 @@ abstract final class InquiryEndpoints {
   /// the schema stores or does not, as the buyer filled it in.
   static const List<String> writableFields = <String>[
     'listing_id',
+    'requested_quantity',
     'message',
     'collection_date_option',
     'subject',
@@ -702,8 +715,9 @@ abstract final class OfferEndpoints {
 
   /// `POST` — create a purchase offer as the listing's seller. 201.
   ///
-  /// Body allow-list is exactly `inquiry_id`, `listing_id` and
-  /// `proposed_amount`. `buyer_id`, `seller_id`, `status` and `responded_at`
+  /// Body includes `inquiry_id`, `listing_id`, the agreed
+  /// `proposed_quantity` and the total `proposed_amount`. `buyer_id`,
+  /// `seller_id`, `status` and `responded_at`
   /// are server-owned and refused with `422`.
   static const String create = '/offers';
 

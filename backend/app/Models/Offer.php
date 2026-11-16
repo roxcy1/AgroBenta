@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'inquiry_id', 'listing_id', 'seller_id', 'buyer_id',
-    'proposed_amount', 'proposed_pickup_date', 'payment_method',
+    'proposed_amount', 'proposed_quantity', 'proposed_pickup_date', 'payment_method',
     'collection_method', 'note', 'status', 'responded_at',
 ])]
 class Offer extends Model
@@ -25,6 +25,7 @@ class Offer extends Model
     {
         return [
             'proposed_amount' => 'decimal:2',
+            'proposed_quantity' => 'integer',
             'proposed_pickup_date' => 'date',
             'payment_method' => InquiryPaymentMethod::class,
             'collection_method' => InquiryCollectionMethod::class,

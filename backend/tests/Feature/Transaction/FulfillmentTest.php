@@ -100,7 +100,7 @@ class FulfillmentTest extends TestCase
 
     /**
      * A transaction already in the reservation model. The helper decrements the
-     * listing so cancellation tests start from a truthful available quantity.
+     * listing so cancellation tests start from truthful available stock.
      */
     private function createTransaction(
         Listing $listing,
@@ -122,6 +122,7 @@ class FulfillmentTest extends TestCase
             'total_amount' => 50000.00 * $quantity,
             'collection_method' => $collectionMethod,
             'inventory_reserved' => $reserved,
+            'inventory_accounted' => $reserved,
             'status' => TransactionStatus::Pending,
             'fulfillment_status' => FulfillmentStatus::Confirmed,
         ], $overrides));
@@ -374,11 +375,17 @@ class FulfillmentTest extends TestCase
     }
 
     #[Test]
-    public function a_legacy_transaction_reserves_stock_when_completed(): void
+    public function completing_a_legacy_unaccounted_transaction_does_not_adjust_stock(): void
     {
         $listing = $this->createListing(['quantity' => 1]);
+        $listing->forceFill([
+            'total_quantity' => null,
+            'inventory_reconciliation_required' => true,
+            'legacy_quantity_snapshot' => 1,
+        ])->save();
         $transaction = $this->createTransaction($listing, 'farm_pickup', [
             'inventory_reserved' => false,
+            'inventory_accounted' => false,
             'fulfillment_status' => FulfillmentStatus::PickedUp,
         ]);
 
@@ -388,28 +395,90 @@ class FulfillmentTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'completed');
 
-        $this->assertSame(0, $listing->refresh()->quantity);
-        $this->assertTrue((bool) $transaction->refresh()->inventory_reserved);
+        $this->assertSame(1, $listing->refresh()->quantity);
+        $this->assertFalse((bool) $transaction->refresh()->inventory_reserved);
+        $this->assertFalse((bool) $transaction->inventory_accounted);
+        $this->assertTrue((bool) $listing->inventory_reconciliation_required);
 
-        // A second confirmation is a state conflict and cannot reserve again.
+        // A second confirmation is a state conflict and cannot adjust stock.
         $this->act($transaction, $this->buyer, 'complete')->assertStatus(409);
+        $this->assertSame(1, $listing->refresh()->quantity);
+    }
+
+    #[Test]
+    public function a_legacy_pending_transaction_can_complete_without_fabricating_a_reservation(): void
+    {
+        $listing = $this->createListing(['quantity' => 0]);
+        $listing->forceFill([
+            'total_quantity' => null,
+            'inventory_reconciliation_required' => true,
+            'legacy_quantity_snapshot' => 0,
+        ])->save();
+        $transaction = $this->createTransaction($listing, 'farm_pickup', [
+            'inventory_reserved' => false,
+            'inventory_accounted' => false,
+            'fulfillment_status' => FulfillmentStatus::PickedUp,
+        ]);
+
+        $this->act($transaction, $this->buyer, 'complete')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+
+        $this->assertSame(TransactionStatus::Completed, $transaction->refresh()->status);
+        $this->assertFalse((bool) $transaction->refresh()->inventory_reserved);
+        $this->assertFalse((bool) $transaction->inventory_accounted);
         $this->assertSame(0, $listing->refresh()->quantity);
     }
 
     #[Test]
-    public function a_legacy_transaction_without_stock_cannot_complete(): void
+    public function partial_completion_moves_reserved_heads_to_sold_and_keeps_the_listing_available(): void
     {
-        $listing = $this->createListing(['quantity' => 0]);
+        $listing = $this->createListing(['quantity' => 5]);
         $transaction = $this->createTransaction($listing, 'farm_pickup', [
-            'inventory_reserved' => false,
+            'quantity' => 2,
             'fulfillment_status' => FulfillmentStatus::PickedUp,
         ]);
 
-        $this->act($transaction, $this->buyer, 'complete')->assertStatus(409);
+        $this->act($transaction, $this->buyer, 'complete')->assertOk();
 
-        $this->assertSame(TransactionStatus::Pending, $transaction->refresh()->status);
-        $this->assertFalse((bool) $transaction->refresh()->inventory_reserved);
-        $this->assertSame(0, $listing->refresh()->quantity);
+        $listingResponse = $this->withHeader(
+            'Authorization',
+            'Bearer '.$this->mobileToken($this->buyer),
+        )->getJson('/api/listings/'.$listing->id)->assertOk();
+
+        $listingResponse
+            ->assertJsonPath('data.total_quantity', 5)
+            ->assertJsonPath('data.reserved_quantity', 0)
+            ->assertJsonPath('data.sold_quantity', 2)
+            ->assertJsonPath('data.available_quantity', 3)
+            ->assertJsonPath('data.quantity', 3)
+            ->assertJsonPath('data.status', ListingStatus::Active->value);
+    }
+
+    #[Test]
+    public function completing_the_last_animal_marks_the_listing_sold_exactly_once(): void
+    {
+        $listing = $this->createListing(['quantity' => 3]);
+        $first = $this->createTransaction($listing, 'farm_pickup', [
+            'quantity' => 2,
+            'fulfillment_status' => FulfillmentStatus::PickedUp,
+        ]);
+        $last = $this->createTransaction($listing, 'farm_pickup', [
+            'quantity' => 1,
+            'fulfillment_status' => FulfillmentStatus::PickedUp,
+        ]);
+
+        $this->act($first, $this->buyer, 'complete')->assertOk();
+        $this->assertSame(ListingStatus::Active, $listing->refresh()->status);
+        $this->assertSame(0, (int) $listing->quantity);
+
+        $this->act($last, $this->buyer, 'complete')->assertOk();
+        $this->assertSame(ListingStatus::Sold, $listing->refresh()->status);
+        $this->assertSame(0, (int) $listing->quantity);
+        $this->assertSame(3, (int) $listing->total_quantity);
+
+        $this->act($last, $this->buyer, 'complete')->assertStatus(409);
+        $this->assertSame(ListingStatus::Sold, $listing->refresh()->status);
     }
 
     #[Test]

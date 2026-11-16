@@ -14,10 +14,10 @@ import 'realtime_event.dart';
 /// [PusherReverbClient] is the production implementation backed by the
 /// `pusher_reverb_flutter` package.
 abstract interface class RealtimeClient {
-  /// Connect to Reverb and subscribe to the user's `private-user.{id}`
-  /// channel. Returns once the connection and subscription are requested;
-  /// events arrive asynchronously over [events]. Reconnection (and
-  /// re-subscription) is handled by the underlying client.
+  /// Connect to Reverb and subscribe to the user's `private-user.{id}` channel
+  /// plus the authenticated marketplace inventory channel. Returns once the
+  /// connection and subscriptions are requested; events arrive asynchronously
+  /// over [events]. Reconnection and re-subscription are handled by the client.
   Future<void> connect({required int userId});
 
   /// Disconnect and release the socket. Safe to call when already stopped.
@@ -35,8 +35,9 @@ abstract interface class RealtimeClient {
 /// Production [RealtimeClient] using `pusher_reverb_flutter`.
 ///
 /// The bearer token is read from [TokenStore] on every private-channel
-/// subscription, so a token change (sign-out / new account) takes effect on
-/// the next subscription without recreating the client. The token is never
+/// subscription, including the shared authenticated marketplace channel, so a
+/// token change takes effect on the next subscription without recreating the
+/// client. The token is never
 /// logged or echoed.
 class PusherReverbClient implements RealtimeClient {
   PusherReverbClient(this._tokenStore);
@@ -44,8 +45,9 @@ class PusherReverbClient implements RealtimeClient {
   final TokenStore _tokenStore;
 
   reverb.ReverbClient? _client;
-  reverb.Channel? _channel;
-  StreamSubscription<reverb.ChannelEvent>? _eventSubscription;
+  final Map<String, reverb.Channel> _channels = <String, reverb.Channel>{};
+  final Map<String, StreamSubscription<reverb.ChannelEvent>> _eventSubscriptions =
+      <String, StreamSubscription<reverb.ChannelEvent>>{};
   int? _currentUserId;
 
   final StreamController<RealtimeEvent> _events =
@@ -107,9 +109,12 @@ class PusherReverbClient implements RealtimeClient {
 
   @override
   void disconnect() {
-    _eventSubscription?.cancel();
-    _eventSubscription = null;
-    _channel = null;
+    for (final StreamSubscription<reverb.ChannelEvent> subscription
+        in _eventSubscriptions.values) {
+      subscription.cancel();
+    }
+    _eventSubscriptions.clear();
+    _channels.clear();
     _currentUserId = null;
     _client?.disconnect();
     _client = null;
@@ -122,18 +127,23 @@ class PusherReverbClient implements RealtimeClient {
       return;
     }
 
-    final String channelName = 'private-user.$userId';
+    _subscribeToPrivateChannel(client, 'private-user.$userId');
+    _subscribeToPrivateChannel(client, 'private-marketplace');
+  }
 
-    // Guard against a duplicate subscription / duplicate stream listener.
-    if (_channel?.name == channelName) {
+  void _subscribeToPrivateChannel(
+    reverb.ReverbClient client,
+    String channelName,
+  ) {
+    // Guard each channel independently against duplicate subscriptions and
+    // duplicate stream listeners on reconnect.
+    if (_channels.containsKey(channelName)) {
       return;
     }
 
     final reverb.Channel channel = client.subscribeToPrivateChannel(channelName);
-    _channel = channel;
-
-    _eventSubscription?.cancel();
-    _eventSubscription = channel.stream.listen(
+    _channels[channelName] = channel;
+    _eventSubscriptions[channelName] = channel.stream.listen(
       (reverb.ChannelEvent event) => _onChannelEvent(event),
     );
   }

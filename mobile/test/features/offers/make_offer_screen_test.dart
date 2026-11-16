@@ -2,6 +2,7 @@ import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/core/utils/app_formatters.dart';
 import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
 import 'package:agrobenta_mobile/features/offers/view/make_offer_screen.dart';
+import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/models/inquiry.dart';
 import 'package:agrobenta_mobile/repositories/offer_repository.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
+import '../../support/marketplace_fakes.dart';
 import '../../support/offer_fakes.dart';
 
 /// A date that is always after the form's "tomorrow" floor, so the
@@ -45,6 +47,15 @@ void main() {
       handler,
       recorded: recorded,
     );
+    final marketplaceRepository = buildMarketplaceRepository(
+      tokenStore,
+      (_) async => listingDetailResponse(),
+    );
+    final marketplaceController = buildMarketplaceController(
+      tokenStore,
+      (_) async => listingDetailResponse(),
+    );
+    addTearDown(marketplaceController.dispose);
 
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1.0;
@@ -53,17 +64,21 @@ void main() {
     await tester.pumpWidget(
       OfferScope(
         repository: repository,
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: MakeOfferScreen.forConversation(
-            inquiryId: 55,
-            listingId: 12,
-            buyerName: 'Pedro Reyes',
-            listingTitle: 'Holstein Heifer',
-            askingPrice: '50000.00',
-            paymentMethod: InquiryPaymentMethod.gcash,
-            collectionMethod: InquiryCollectionMethod.farmPickup,
-            preferredSchedule: preferredSchedule ?? futurePickupDate(),
+        child: MarketplaceScope(
+          repository: marketplaceRepository,
+          controller: marketplaceController,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: MakeOfferScreen.forConversation(
+              inquiryId: 55,
+              listingId: 12,
+              buyerName: 'Pedro Reyes',
+              listingTitle: 'Holstein Heifer',
+              askingPrice: '50000.00',
+              paymentMethod: InquiryPaymentMethod.gcash,
+              collectionMethod: InquiryCollectionMethod.farmPickup,
+              preferredSchedule: preferredSchedule ?? futurePickupDate(),
+            ),
           ),
         ),
       ),

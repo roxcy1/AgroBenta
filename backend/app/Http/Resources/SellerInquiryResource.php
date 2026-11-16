@@ -37,6 +37,7 @@ class SellerInquiryResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'requested_quantity' => $this->requested_quantity,
             'buyer' => $this->buyer ? [
                 'id' => $this->buyer->id,
                 'name' => $this->buyer->name,
@@ -46,6 +47,11 @@ class SellerInquiryResource extends JsonResource
                 'livestock_type' => $listing->livestock_type,
                 'breed' => $listing->breed,
                 'asking_price' => $listing->asking_price,
+                'quantity' => $listing->quantity,
+                'total_quantity' => $listing->inventory_reconciliation_required
+                    ? null
+                    : $listing->total_quantity,
+                'inventory_reconciliation_required' => (bool) $listing->inventory_reconciliation_required,
                 'photo_url' => is_array($photos) && $photos !== []
                     ? (string) reset($photos)
                     : null,
@@ -77,6 +83,14 @@ class SellerInquiryResource extends JsonResource
         $status = $this->status?->value;
 
         if ($status !== 'open') {
+            return false;
+        }
+
+        $listing = $this->listing;
+        if ($listing === null ||
+            $listing->status?->value !== 'active' ||
+            $listing->inventory_reconciliation_required ||
+            (int) $listing->quantity < 1) {
             return false;
         }
 
