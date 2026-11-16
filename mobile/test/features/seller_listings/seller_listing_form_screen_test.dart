@@ -334,6 +334,17 @@ void main() {
   int currentStep(WidgetTester tester) =>
       tester.widget<Stepper>(find.byType(Stepper)).currentStep;
 
+  testWidgets('wide screens keep the full Stepper step title', (
+    WidgetTester tester,
+  ) async {
+    await openForm(tester, handler: emptyListHandler);
+
+    expect(find.text('Information'), findsOneWidget);
+    expect(find.text('Info'), findsNothing);
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('Review'), findsOneWidget);
+  });
+
   testWidgets('shows no validation errors before a field is touched', (
     WidgetTester tester,
   ) async {
@@ -921,7 +932,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(of: details, matching: find.text('2 year')),
+        find.descendant(of: details, matching: find.text('2 years')),
         findsOneWidget,
       );
       expect(
@@ -977,6 +988,55 @@ void main() {
       );
     },
   );
+
+  testWidgets('AI details pluralize the age unit correctly', (
+    WidgetTester tester,
+  ) async {
+    await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionResponse(
+            estimate: aiPriceEstimateJson(
+              inputSnapshot: <String, dynamic>{
+                'livestock_type': 'cattle',
+                'breed': 'brahman',
+                'sex': 'male',
+                'age_months': 12,
+                'weight_kg': 500,
+                'source': <String, dynamic>{
+                  'breed_raw': 'Brahman',
+                  'age_value': 1,
+                  'age_unit': 'year',
+                  'weight_value': 500,
+                  'weight_unit': 'kg',
+                },
+              },
+            ),
+          );
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await fillSuggestionInputs(tester);
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+
+    final Finder details = find.byKey(const ValueKey<String>('ai-details'));
+    expect(
+      find.descendant(of: details, matching: find.text('1 year')),
+      findsOneWidget,
+    );
+    expect(find.text('1 years'), findsNothing);
+  });
 
   testWidgets(
     'Use suggested price only changes the editable asking price when tapped',
@@ -1364,7 +1424,7 @@ void main() {
     expect(find.text("Please review the animal's age"), findsOneWidget);
     expect(
       find.text(
-        '8 year is outside the model\'s typical range for this breed. Check '
+        '8 years is outside the model\'s typical range for this breed. Check '
         'your details before using this price.',
       ),
       findsOneWidget,
@@ -1443,6 +1503,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('How is this price estimated?'));
     await tester.pumpAndSettle();
+    expect(
+      find.textContaining(
+        'This AI model estimates livestock prices using animal '
+        'characteristics. Suggestions are unavailable when inputs fall '
+        'outside its supported range.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Prototype model v'), findsNothing);
     expect(
       find.text('weight_kg=1000 is outside the supported envelope [230, 740].'),
       findsOneWidget,
@@ -1620,9 +1689,6 @@ void main() {
     );
 
     await fillSuggestionInputs(tester, quantity: '10');
-    // The existing Stepper header has a pre-existing overflow at this width;
-    // discard it so the assertion below isolates the AI card.
-    tester.takeException();
     await tapAiButton(tester);
     await settleSellerListings(tester, frames: 20);
 

@@ -863,45 +863,79 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                   child: ExcludeSemantics(
                     child: Form(
                       key: _formKey,
-                      child: Stepper(
-                        type: StepperType.horizontal,
-                        elevation: 0,
-                        margin: EdgeInsets.zero,
-                        currentStep: _step,
-                        onStepContinue: busy ? null : _onStepContinue,
-                        onStepCancel: busy ? null : _onStepCancel,
-                        // The actions live in the pinned bar below.
-                        controlsBuilder:
-                            (BuildContext context, ControlsDetails details) =>
-                                const SizedBox.shrink(),
-                        steps: <Step>[
-                          Step(
-                            title: const Text('Information'),
-                            isActive: _step >= 0,
-                            state: _step > 0
-                                ? StepState.complete
-                                : StepState.indexed,
-                            content: _buildInformationStep(state),
-                          ),
-                          Step(
-                            title: const Text('Details'),
-                            isActive: _step >= 1,
-                            state: _step > 1
-                                ? StepState.complete
-                                : (_step == 1
-                                      ? StepState.indexed
-                                      : StepState.disabled),
-                            content: _buildDetailsStep(state),
-                          ),
-                          Step(
-                            title: const Text('Review'),
-                            isActive: _step >= 2,
-                            state: _step == 2
-                                ? StepState.indexed
-                                : StepState.disabled,
-                            content: _buildReviewStep(state),
-                          ),
-                        ],
+                      child: LayoutBuilder(
+                        builder:
+                            (BuildContext context, BoxConstraints constraints) {
+                              // Flutter's horizontal Stepper lays its title
+                              // labels out at intrinsic width. At 320-360dp
+                              // the full "Information" label plus the default
+                              // 24dp header padding exceeds the viewport, so
+                              // the compact header uses a short label and
+                              // tighter spacing. Larger screens keep the
+                              // original design.
+                              final bool compact = constraints.maxWidth < 420;
+                              Widget title(String full, String short) {
+                                return compact
+                                    ? SizedBox(
+                                        width: 48,
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(short),
+                                        ),
+                                      )
+                                    : Text(full);
+                              }
+
+                              return Stepper(
+                                type: StepperType.horizontal,
+                                elevation: 0,
+                                margin: EdgeInsets.zero,
+                                headerPadding: EdgeInsets.symmetric(
+                                  horizontal: compact ? 4 : 24,
+                                ),
+                                stepIconMargin: compact
+                                    ? const EdgeInsets.only(right: 4)
+                                    : null,
+                                currentStep: _step,
+                                onStepContinue: busy ? null : _onStepContinue,
+                                onStepCancel: busy ? null : _onStepCancel,
+                                // The actions live in the pinned bar below.
+                                controlsBuilder:
+                                    (
+                                      BuildContext context,
+                                      ControlsDetails details,
+                                    ) => const SizedBox.shrink(),
+                                steps: <Step>[
+                                  Step(
+                                    title: title('Information', 'Info'),
+                                    isActive: _step >= 0,
+                                    state: _step > 0
+                                        ? StepState.complete
+                                        : StepState.indexed,
+                                    content: _buildInformationStep(state),
+                                  ),
+                                  Step(
+                                    title: title('Details', 'Details'),
+                                    isActive: _step >= 1,
+                                    state: _step > 1
+                                        ? StepState.complete
+                                        : (_step == 1
+                                              ? StepState.indexed
+                                              : StepState.disabled),
+                                    content: _buildDetailsStep(state),
+                                  ),
+                                  Step(
+                                    title: title('Review', 'Review'),
+                                    isActive: _step >= 2,
+                                    state: _step == 2
+                                        ? StepState.indexed
+                                        : StepState.disabled,
+                                    content: _buildReviewStep(state),
+                                  ),
+                                ],
+                              );
+                            },
                       ),
                     ),
                   ),
@@ -2063,12 +2097,14 @@ class _AiExplanation extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final String modelLine = _modelProvenanceLine(modelVersion, provenance);
     final List<String> lines = <String>[
-      'The AI uses livestock type, breed, sex, age, and weight. It compares '
-          'them with patterns in its training data to suggest a reference '
-          'price per animal.',
       if (unavailable)
-        'The model returns a price only when the details are inside its '
-            'supported training range.',
+        'This AI model estimates livestock prices using animal '
+            'characteristics. Suggestions are unavailable when inputs fall '
+            'outside its supported range.'
+      else
+        'The AI uses livestock type, breed, sex, age, and weight. It compares '
+            'them with patterns in its training data to suggest a reference '
+            'price per animal.',
       modelLine,
       if (measurementsEstimated)
         'Age or weight was entered as an estimate, so the comparison is only '
@@ -2359,22 +2395,47 @@ String? _measurementText(Map<String, dynamic> snapshot, String kind) {
     if (value != null && unit is String && unit.trim().isNotEmpty) {
       final String formatted = _formatMeasurement(value);
       if (formatted.isNotEmpty) {
-        return '$formatted ${unit.trim()}';
+        return isWeight
+            ? '$formatted ${unit.trim()}'
+            : '$formatted ${_ageUnitLabel(value, unit)}';
       }
     }
   }
 
   final Object? canonical = snapshot[isWeight ? 'weight_kg' : 'age_months'];
   if (canonical is num) {
-    return '${_formatMeasurement(canonical)} ${isWeight ? 'kg' : 'months'}';
+    return isWeight
+        ? '${_formatMeasurement(canonical)} kg'
+        : '${_formatMeasurement(canonical)} ${_ageUnitLabel(canonical, 'months')}';
   }
   return null;
 }
 
+String _ageUnitLabel(Object? value, String unit) {
+  final num? number = _numberValue(value);
+  final String base = unit.trim().toLowerCase();
+  final bool singular = number != null && number.abs() == 1;
+  if (singular) {
+    return switch (base) {
+      'years' => 'year',
+      'months' => 'month',
+      'days' => 'day',
+      _ => base,
+    };
+  }
+  return switch (base) {
+    'year' => 'years',
+    'month' => 'months',
+    'day' => 'days',
+    _ => base,
+  };
+}
+
+num? _numberValue(Object? value) =>
+    value is num ? value : num.tryParse(value?.toString() ?? '');
+
 String _formatMeasurement(Object? value) {
-  final num? number = value is num
-      ? value
-      : num.tryParse(value?.toString() ?? '');
+  final num? number = _numberValue(value);
   if (number == null) {
     return value?.toString().trim() ?? '';
   }
