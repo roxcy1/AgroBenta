@@ -295,13 +295,15 @@ abstract final class SellerListingEndpoints {
 
   /// The fields the create request requires.
   ///
+  /// The fields a draft cannot be stored without.
+  ///
   /// A subset of [writableFields]. Age and weight are required with their
-  /// units and information types, so a draft is a complete-but-unpublished
-  /// record rather than a half-filled one.
+  /// units and information types because they are the model inputs and the
+  /// stock record. Asking price and location are deliberately absent: they are
+  /// publication requirements, so a seller may save a draft (and request an AI
+  /// reference price) before deciding either.
   static const List<String> requiredFields = <String>[
     'livestock_type',
-    'location',
-    'asking_price',
     'total_quantity',
     'age_value',
     'age_unit',
@@ -309,6 +311,16 @@ abstract final class SellerListingEndpoints {
     'weight_value',
     'weight_unit',
     'weight_information',
+  ];
+
+  /// The fields a listing must have before it can be submitted for review.
+  ///
+  /// The server owns this rule; the list is here for copy and client-side
+  /// completeness hints only.
+  static const List<String> publishRequiredFields = <String>[
+    ...requiredFields,
+    'asking_price',
+    'location',
   ];
 
   /// Page size used when the caller does not ask for a specific one.

@@ -53,7 +53,7 @@ class _BuySheetFormState extends State<BuySheetForm> {
         content: Text(
           'You are requesting $_quantity × ${widget.listing.title}. '
           'The asking price is '
-          '${AppFormatters.formatMoney(widget.listing.askingPrice) ?? widget.listing.askingPrice} '
+          '${AppFormatters.formatMoney(widget.listing.askingPrice) ?? widget.listing.askingPrice ?? 'Price not set'} '
           'per head. The final amount is set by the server.',
         ),
         actions: <Widget>[

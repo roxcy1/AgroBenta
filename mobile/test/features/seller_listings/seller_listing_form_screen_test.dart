@@ -272,6 +272,7 @@ void main() {
     WidgetTester tester, {
     String quantity = '1',
     String? askingPrice = '42500',
+    String? barangay = 'Banlasan',
   }) async {
     await selectLivestockType(tester, 'Cattle');
     await selectBreed(tester, 'Brahman');
@@ -286,11 +287,19 @@ void main() {
     if (askingPrice != null) {
       await tester.enterText(field('Asking Price (₱) — Per Head'), askingPrice);
     }
-    await selectListingLocation(
-      tester,
-      barangay: 'Banlasan',
-      street: 'Purok 3',
-    );
+    if (barangay != null) {
+      await selectListingLocation(
+        tester,
+        barangay: barangay,
+        street: 'Purok 3',
+      );
+    } else {
+      // The gender field is below the location selector. Selecting a location
+      // scrolls the Details step into view; without one, do the same here so
+      // the gender dropdown is reachable.
+      await tester.drag(find.byType(Stepper), const Offset(0, -250));
+      await tester.pumpAndSettle();
+    }
     await selectGender(tester, 'Male');
     await tester.pump();
   }
@@ -1008,23 +1017,109 @@ void main() {
     },
   );
 
-  testWidgets('missing asking price prevents an unnecessary AI request', (
+  testWidgets('AI Suggest Price works without an asking price or barangay', (
     WidgetTester tester,
   ) async {
     final SellerListingsHarness harness = await openForm(
       tester,
-      handler: emptyListHandler,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'GET' && request.apiPath == '/seller/listings') {
+          return sellerListingListResponse(
+            listings: <Map<String, dynamic>>[],
+            total: 0,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(
+              id: 7,
+              askingPrice: null,
+              location: null,
+              status: 'draft',
+            ),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionResponse();
+        }
+        return http.Response('Not found', 404);
+      },
     );
 
-    await fillSuggestionInputs(tester, askingPrice: null);
+    await fillSuggestionInputs(
+      tester,
+      askingPrice: null,
+      barangay: null,
+    );
     await tapAiButton(tester);
-    await tester.pump();
+    await settleSellerListings(tester, frames: 14);
 
-    expect(find.text('Enter the asking price.'), findsOneWidget);
+    expect(find.text('Enter the asking price.'), findsNothing);
+    expect(find.text('Select a barangay.'), findsNothing);
+
+    final List<RecordedRequest> posts = harness.recorded
+        .where((RecordedRequest request) => request.method == 'POST')
+        .toList(growable: false);
+    expect(posts, hasLength(2));
+    expect(posts.first.body.containsKey('asking_price'), isFalse);
+    expect(posts.first.body.containsKey('location'), isFalse);
     expect(
-      harness.recorded.where((RecordedRequest r) => r.method == 'POST'),
-      isEmpty,
+      posts.last.apiPath,
+      '/seller/listings/7/price-suggestion',
     );
+    expect(find.text('AI Suggested Price per Head'), findsOneWidget);
+  });
+
+  testWidgets('a draft saves without an asking price or barangay', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'GET' && request.apiPath == '/seller/listings') {
+          return sellerListingListResponse(
+            listings: <Map<String, dynamic>>[],
+            total: 0,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(
+              id: 8,
+              askingPrice: null,
+              location: null,
+              status: 'draft',
+            ),
+            statusCode: 201,
+          );
+        }
+        return http.Response('Not found', 404);
+      },
+    );
+
+    await fillSuggestionInputs(
+      tester,
+      askingPrice: null,
+      barangay: null,
+    );
+    await tapContinue(tester);
+    await tapSave(tester);
+    await settleSellerListings(tester, frames: 14);
+
+    final List<RecordedRequest> posts = harness.recorded
+        .where((RecordedRequest request) => request.method == 'POST')
+        .toList(growable: false);
+    expect(posts, hasLength(1));
+    expect(posts.single.apiPath, '/seller/listings');
+    expect(posts.single.body.containsKey('asking_price'), isFalse);
+    expect(posts.single.body.containsKey('location'), isFalse);
+    expect(find.text('Enter the asking price.'), findsNothing);
+    expect(find.text('Select a barangay.'), findsNothing);
+    expect(find.byType(SellerListingFormScreen), findsNothing);
   });
 
   testWidgets('missing model input prevents an unnecessary AI request', (

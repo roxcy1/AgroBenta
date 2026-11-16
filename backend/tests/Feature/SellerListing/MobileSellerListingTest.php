@@ -269,13 +269,14 @@ class MobileSellerListingTest extends TestCase
     #[Test]
     public function the_required_fields_are_required(): void
     {
+        // The asking price and location are publication requirements, not draft
+        // requirements, so they are deliberately absent from this list. The
+        // submission test below asserts that they are still required to publish.
         $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
             ->postJson('/api/seller/listings', [])
             ->assertStatus(422)
             ->assertJsonValidationErrors([
                 'livestock_type',
-                'location',
-                'asking_price',
                 'quantity',
                 'total_quantity',
                 'age_value',
@@ -285,6 +286,34 @@ class MobileSellerListingTest extends TestCase
                 'weight_unit',
                 'weight_information',
             ]);
+    }
+
+    #[Test]
+    public function a_draft_can_be_created_without_an_asking_price_or_location(): void
+    {
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings', [
+                'livestock_type' => 'cattle',
+                'quantity' => 3,
+                'age_value' => 2,
+                'age_unit' => 'year',
+                'age_information' => 'known',
+                'weight_value' => 500,
+                'weight_unit' => 'kg',
+                'weight_information' => 'measured',
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.status', ListingStatus::Draft->value)
+            ->assertJsonPath('data.asking_price', null)
+            ->assertJsonPath('data.location', null);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $response->json('data.id'),
+            'asking_price' => null,
+            'location' => null,
+            'status' => ListingStatus::Draft->value,
+        ]);
     }
 
     /**
@@ -1142,6 +1171,69 @@ class MobileSellerListingTest extends TestCase
             'id' => $listing->id,
             'status' => ListingStatus::Pending->value,
         ]);
+    }
+
+    #[Test]
+    public function a_draft_without_an_asking_price_or_location_can_be_updated(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'asking_price' => null,
+            'location' => null,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, ['quantity' => 4])
+            ->assertOk()
+            ->assertJsonPath('data.quantity', 4)
+            ->assertJsonPath('data.asking_price', null)
+            ->assertJsonPath('data.location', null);
+    }
+
+    #[Test]
+    public function a_draft_without_an_asking_price_or_location_cannot_be_submitted(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'asking_price' => null,
+            'location' => null,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['asking_price', 'location']);
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $listing->id,
+            'status' => ListingStatus::Draft->value,
+            'asking_price' => null,
+            'location' => null,
+        ]);
+    }
+
+    #[Test]
+    public function a_draft_can_be_submitted_after_adding_an_asking_price_and_location(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Draft,
+            'asking_price' => null,
+            'location' => null,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->patchJson('/api/seller/listings/'.$listing->id, [
+                'asking_price' => 50000,
+                'location' => 'Purok 3, Barangay Poblacion, Trinidad, Bohol',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.asking_price', '50000.00')
+            ->assertJsonPath('data.location', 'Purok 3, Barangay Poblacion, Trinidad, Bohol');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/submit')
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Pending->value);
     }
 
     #[Test]

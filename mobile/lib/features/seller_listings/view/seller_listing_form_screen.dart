@@ -305,7 +305,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     return '';
   }
 
-  String? _validateLocation() {
+  String? _validateLocation({bool required = true}) {
     final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
     final String? formatted = catalog == null
         ? null
@@ -320,7 +320,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     if (_isEditing && !_locationWasTouched && _initialLocation.isNotEmpty) {
       return validateListingLocation(_initialLocation);
     }
-    return 'Select a barangay.';
+    return required ? 'Select a barangay.' : null;
   }
 
   @override
@@ -460,8 +460,11 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       case 1:
         return <String?>[
           validateQuantity(_quantity.text),
-          validateAskingPrice(_askingPrice.text),
-          _validateLocation(),
+          // Publication requirements, not save-draft requirements. A present
+          // value is still checked; an empty one is allowed so the AI action
+          // can persist the draft before asking for a reference price.
+          validateAskingPrice(_askingPrice.text, required: false),
+          _validateLocation(required: false),
           validateOptionalShortText(_healthStatus.text),
           validateOptionalShortText(_vaccination.text),
           validateOptionalShortText(_shortDescription.text),
@@ -684,17 +687,23 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       return weightUnitError;
     }
 
-    // The draft has to exist before the endpoint can read it, so the four
-    // create-required fields are checked here as well.
+    // The draft has to exist before the endpoint can read it, so the create
+    // requirements that are still required are checked here as well. Price and
+    // location are deliberately not among them: they are publication
+    // requirements, and the AI reference is precisely what may help the seller
+    // decide the price. A present value is still validated.
     final String? quantityError = validateQuantity(_quantity.text);
     if (quantityError != null) {
       return quantityError;
     }
-    final String? priceError = validateAskingPrice(_askingPrice.text);
+    final String? priceError = validateAskingPrice(
+      _askingPrice.text,
+      required: false,
+    );
     if (priceError != null) {
       return priceError;
     }
-    final String? locationError = _validateLocation();
+    final String? locationError = _validateLocation(required: false);
     if (locationError != null) {
       return locationError;
     }
@@ -1263,9 +1272,10 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               label: 'Asking Price (₱) — Per Head',
               hint: 'e.g. 42500',
               helper:
-                  'Required. Price for one animal. The total listing value is '
-                  'quantity × this price.',
-              validator: validateAskingPrice,
+                  'Required to publish. Price for one animal. The total '
+                  'listing value is quantity × this price.',
+              validator: (String? value) =>
+                  validateAskingPrice(value, required: false),
               serverErrors: state.validationErrors['asking_price'],
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
@@ -1349,14 +1359,22 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               value: _selectedLocation,
               legacyAddress: _legacyLocation,
               maxFormattedLength: TrinidadLocation.listingLocationMax,
-              isRequired:
-                  !_isEditing ||
-                  _locationWasTouched ||
-                  _selectedLocation != null ||
-                  _initialLocation.isEmpty,
+              // A draft may be saved without a barangay, so the selector
+              // cannot claim the field is required to save. Publication still
+              // requires it; the server enforces that at submission, and the
+              // helper below states it before the seller submits.
+              isRequired: false,
               enabled: !_submitting && !state.isActioning,
               externalError: state.validationErrors['location']?.first,
               onChanged: _handleLocationChanged,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Required to publish. Choose the barangay where the animals '
+              'are located.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -1464,7 +1482,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             ),
             _ReviewRow(
               label: 'Asking Price (₱) — Per Head',
-              value: '₱ ${_askingPrice.text}',
+              value: _askingPrice.text.trim().isEmpty
+                  ? 'Not set'
+                  : '₱ ${_askingPrice.text.trim()}',
             ),
             if (_totalListingValue != null)
               _ReviewRow(
@@ -1474,7 +1494,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             _ReviewRow(
               label: 'Location',
               value: _locationForSave().trim().isEmpty
-                  ? '—'
+                  ? 'Not set'
                   : _locationForSave(),
             ),
             if (_healthStatus.text.isNotEmpty)

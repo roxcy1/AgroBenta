@@ -86,10 +86,14 @@ String? validateBreed(String? value) {
 /// refused rather than stripped, because silently reformatting what a seller
 /// typed is how a price ends up different from what they read on screen. The
 /// field's own `keyboardType` already discourages them.
-String? validateAskingPrice(String? value) {
+///
+/// The price is required to publish, not to save a draft or request an AI
+/// suggestion, so those callers pass `required: false` and an empty value is
+/// accepted. A value that is present is still validated in full.
+String? validateAskingPrice(String? value, {bool required = true}) {
   final String trimmed = (value ?? '').trim();
   if (trimmed.isEmpty) {
-    return 'Enter the asking price.';
+    return required ? 'Enter the asking price.' : null;
   }
   if (!_isPlainDecimal(trimmed)) {
     return 'Enter a number with at most two decimal places, for example '

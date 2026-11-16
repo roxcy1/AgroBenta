@@ -73,7 +73,7 @@ Map<String, dynamic> listingJson({
   Object? externallySoldQuantity = 0,
   bool inventoryReconciliationRequired = false,
   Object? askingPrice = '42500.00',
-  String location = 'Mabalacat, Pampanga',
+  Object? location = 'Mabalacat, Pampanga',
   Object? healthStatus = 'Healthy',
   Object? vaccination = 'Vaccinated',
   String shortDescription = 'Healthy Holstein heifers, ready for breeding.',

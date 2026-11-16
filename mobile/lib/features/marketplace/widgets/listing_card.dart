@@ -77,7 +77,8 @@ class ListingCard extends StatelessWidget {
                   // without colour.
                   Text(
                     AppFormatters.formatMoneyCompact(listing.askingPrice) ??
-                        listing.askingPrice,
+                        listing.askingPrice ??
+                        'Price not set',
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w700,
@@ -110,7 +111,7 @@ class ListingCard extends StatelessWidget {
         : '${type[0].toUpperCase()}${type.substring(1)}';
     return <String>[
       if (species.isNotEmpty) species,
-      if (listing.location.trim().isNotEmpty) listing.location.trim(),
+      if (listing.hasLocation) listing.location!.trim(),
     ].join(' · ');
   }
 

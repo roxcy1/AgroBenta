@@ -60,7 +60,7 @@ class BuySheet extends StatelessWidget {
             Text(listing.title, style: theme.textTheme.bodyMedium),
             const SizedBox(height: AppSpacing.xxs),
             Text(
-              '${AppFormatters.formatMoney(listing.askingPrice) ?? listing.askingPrice} per head · '
+              '${AppFormatters.formatMoney(listing.askingPrice) ?? listing.askingPrice ?? 'Price not set'} per head · '
               '${listing.quantity} ${listing.quantity == 1 ? 'head' : 'heads'} available',
               style: theme.textTheme.bodySmall,
             ),

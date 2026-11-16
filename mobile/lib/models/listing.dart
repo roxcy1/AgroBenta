@@ -159,8 +159,8 @@ class Listing {
       externallySoldQuantity: readNullableInt(json, 'externally_sold_quantity'),
       inventoryReconciliationRequired:
           readNullableBool(json, 'inventory_reconciliation_required') ?? false,
-      askingPrice: readDecimalString(json, 'asking_price'),
-      location: readString(json, 'location'),
+      askingPrice: readNullableDecimalString(json, 'asking_price'),
+      location: readNullableString(json, 'location'),
       healthStatus: readNullableString(json, 'health_status'),
       vaccination: readNullableString(json, 'vaccination'),
       shortDescription: readString(json, 'short_description'),
@@ -244,11 +244,21 @@ class Listing {
 
   /// The seller's asking price as the API sent it, e.g. `"42500.00"`.
   ///
-  /// Kept as a `String` end to end. Parse it only in `AppFormatters`.
-  final String askingPrice;
+  /// Null on an incomplete draft: the price is required to publish, not to
+  /// save or to request an AI reference. Kept as a `String` end to end; parse
+  /// it only in `AppFormatters`.
+  final String? askingPrice;
 
   /// Free-text location, e.g. `Mabalacat, Pampanga`.
-  final String location;
+  ///
+  /// Null on an incomplete draft. Publication requires it.
+  final String? location;
+
+  /// Whether a price is present. A null or blank value is "not set", never ₱0.
+  bool get hasAskingPrice => (askingPrice ?? '').trim().isNotEmpty;
+
+  /// Whether a location is present.
+  bool get hasLocation => (location ?? '').trim().isNotEmpty;
 
   /// Free-text health note. Null when not recorded.
   final String? healthStatus;
