@@ -3,6 +3,7 @@ import '../core/network/api_exception.dart';
 import '../models/listing.dart';
 import '../models/marketplace_page.dart';
 import '../models/popular_livestock_category.dart';
+import '../models/seller_profile.dart';
 import '../services/marketplace_service.dart';
 
 /// Orchestration for the buyer marketplace.
@@ -56,6 +57,37 @@ class MarketplaceRepository {
   /// Throws [ApiException] with [ApiErrorKind.notFound] when the listing is not
   /// visible to the caller.
   Future<Listing> detail(int id) => _service.detail(id);
+
+  /// Fetches one seller's public profile.
+  ///
+  /// Throws [ApiException] with [ApiErrorKind.notFound] when the seller is
+  /// unknown, deleted or has nothing public to show.
+  Future<SellerProfile> sellerProfile(int sellerId) =>
+      _service.sellerProfile(sellerId);
+
+  /// Fetches one page of a seller's marketplace-visible listings.
+  ///
+  /// [perPage] is clamped to the same `1..[MarketplaceEndpoints.maxPerPage]`
+  /// range as [browse]; a page below 1 becomes page 1. [search],
+  /// [livestockType] and [sort] are forwarded to the server, where they narrow
+  /// the same visibility query the marketplace uses.
+  Future<MarketplacePage> sellerListings(
+    int sellerId, {
+    int page = 1,
+    int? perPage,
+    String? search,
+    String? livestockType,
+    String sort = 'newest',
+  }) {
+    return _service.sellerListings(
+      sellerId,
+      page: page < 1 ? 1 : page,
+      perPage: _clampPerPage(perPage),
+      search: search,
+      livestockType: livestockType,
+      sort: sort,
+    );
+  }
 
   /// Completed-sales ranking for Buyer Home's Popular Livestock section.
   Future<List<PopularLivestockCategory>> popularLivestock() =>

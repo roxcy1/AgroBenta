@@ -4,6 +4,7 @@ import '../core/network/api_exception.dart';
 import '../models/listing.dart';
 import '../models/marketplace_page.dart';
 import '../models/popular_livestock_category.dart';
+import '../models/seller_profile.dart';
 
 /// The buyer marketplace API surface.
 ///
@@ -84,6 +85,50 @@ class MarketplaceService {
       MarketplaceEndpoints.detail(id),
       parse: (Object? data) =>
           Listing.fromJson(_asObject(data, 'GET /listings/$id')),
+    );
+  }
+
+  /// `GET /marketplace/sellers/{seller}` — one seller's public profile.
+  ///
+  /// A `404` is a normal outcome: the account may be gone, soft-deleted, or
+  /// have nothing public to show. The screen renders an unavailable state; it
+  /// is not an error worth retrying.
+  Future<SellerProfile> sellerProfile(int sellerId) {
+    final String path = MarketplaceEndpoints.sellerProfile(sellerId);
+    return _apiClient.get<SellerProfile>(
+      path,
+      parse: (Object? data) =>
+          SellerProfile.fromJson(_asObject(data, 'GET $path')),
+    );
+  }
+
+  /// `GET /marketplace/sellers/{seller}/listings` — that seller's
+  /// marketplace-visible listings.
+  ///
+  /// The query map is an explicit allow-list, like [browse]: `search`, the
+  /// exact `livestock_type`, the documented `sort`, `page` and `per_page`. All
+  /// filtering happens server-side over the seller's whole visible inventory,
+  /// so a filtered result pages correctly and cannot widen visibility.
+  Future<MarketplacePage> sellerListings(
+    int sellerId, {
+    int page = 1,
+    int perPage = MarketplaceEndpoints.defaultPerPage,
+    String? search,
+    String? livestockType,
+    String sort = 'newest',
+  }) {
+    final String path = MarketplaceEndpoints.sellerListings(sellerId);
+    return _apiClient.get<MarketplacePage>(
+      path,
+      query: <String, dynamic>{
+        if (_present(search)) 'search': search!.trim(),
+        if (_present(livestockType)) 'livestock_type': livestockType!.trim(),
+        'sort': sort,
+        'page': page,
+        'per_page': perPage,
+      },
+      parse: (Object? data) =>
+          MarketplacePage.fromJson(_asObject(data, 'GET $path')),
     );
   }
 

@@ -70,6 +70,21 @@ abstract final class MarketplaceEndpoints {
   /// the caller may not see.
   static String detail(int id) => '/listings/$id';
 
+  /// `GET` — one seller's public profile. 200, plain envelope.
+  ///
+  /// [sellerId] is `users.id`, taken from the listing's narrowed seller
+  /// projection. A missing, deleted or non-public account is a 404 by design.
+  static String sellerProfile(int sellerId) =>
+      '/marketplace/sellers/$sellerId';
+
+  /// `GET` — one seller's marketplace-visible listings. 200, paginated
+  /// envelope (`listings` + four-key `pagination`).
+  ///
+  /// Query allow-list is `page` and `per_page` only; ownership and status
+  /// filters are refused server-side.
+  static String sellerListings(int sellerId) =>
+      '/marketplace/sellers/$sellerId/listings';
+
   /// Page size used when the caller does not ask for a specific one.
   ///
   /// Matches the server default, so the first request is an ordinary one rather

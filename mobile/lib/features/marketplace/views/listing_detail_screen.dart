@@ -11,6 +11,7 @@ import '../../../widgets/detail_row.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../inquiries/view/inquire_screen.dart';
 import '../../messaging/view/chat_screen.dart';
+import '../../seller_profile/view/seller_profile_screen.dart';
 import '../state/listing_detail_controller.dart';
 import '../state/listing_detail_state.dart';
 import '../state/marketplace_scope.dart';
@@ -416,41 +417,81 @@ class _TextSection extends StatelessWidget {
   }
 }
 
-/// The seller, as one bordered row.
+/// Identifies the tappable seller card on Listing Details.
+///
+/// Exported so widget tests can target the whole card rather than relying on
+/// the seller's name, which is data.
+const ValueKey<String> listingSellerCardKey = ValueKey<String>(
+  'listing-seller-card',
+);
+
+/// The seller, as one bordered, tappable row.
+///
+/// Tapping the avatar, the name or anywhere else on the card opens that
+/// seller's public profile. The card is the only interactive element here; the
+/// listing's Ask Seller / I'm Interested actions live in the pinned action bar
+/// below and are untouched by this navigation.
 class _SellerSection extends StatelessWidget {
   const _SellerSection({required this.listing});
 
   final Listing listing;
 
+  void _openProfile(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            SellerProfileScreen(sellerId: listing.seller.id),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
+    return Material(
+      key: listingSellerCardKey,
+      color: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
+      // A Material shape (rather than a decorated Container) keeps the ripple
+      // inside the rounded hairline border.
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.md),
+        side: const BorderSide(color: AppColors.border),
       ),
-      child: Row(
-        children: <Widget>[
-          InitialsAvatar(name: listing.seller.name, radius: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Seller', style: theme.textTheme.labelSmall),
-                Text(
-                  listing.seller.name,
-                  style: theme.textTheme.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+      child: InkWell(
+        onTap: () => _openProfile(context),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Row(
+            children: <Widget>[
+              InitialsAvatar(name: listing.seller.name, radius: 20),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('Seller', style: theme.textTheme.labelSmall),
+                    Text(
+                      listing.seller.name,
+                      style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const ExcludeSemantics(
+                child: Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
