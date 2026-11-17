@@ -167,6 +167,17 @@
   outline-offset: 1px;
 }
 
+.reports-page-shell .reports-filter-select {
+  min-width: 190px;
+  cursor: pointer;
+}
+
+.reports-page-shell .reports-export-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .reports-page-shell .reports-filter-actions {
   gap: 8px;
   flex-wrap: wrap;
@@ -465,6 +476,17 @@
   }
 
   .reports-page-shell .reports-filter-actions > * {
+    width: 100%;
+  }
+
+  .reports-page-shell .reports-export-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .reports-page-shell .reports-export-controls .reports-export-button {
     width: 100%;
   }
 }

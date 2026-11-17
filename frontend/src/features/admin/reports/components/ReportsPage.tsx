@@ -1,11 +1,12 @@
 import { ArrowLeftRight, CalendarDays, Download, Package, Store, Users as UsersIcon } from 'lucide-react';
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
-import { useReports } from '../api/useReports';
-import { buildReportsCsv, buildReportsFilename } from '../csv';
+import { useReports, type ReportParams } from '../api/useReports';
+import { fetchReportExport, REPORT_DATASETS, type ReportDataset } from '../api/exportReport';
+import { buildReportExportFilename } from '../csv';
 import { livestockTypeLabel, useLivestockTypes } from '../../livestock/api/useLivestockTypes';
 import { formatNumber, formatPeso } from '../../../../lib/format';
-import { downloadCsv } from '../../../../lib/csv';
+import { downloadBlob } from '../../../../lib/csv';
 import { statusChartColor } from '../../../../lib/status';
 import { CHART_AXIS, CHART_BAR, CHART_BAR_SECONDARY, CHART_GRID, CHART_LINE_ACCENT, CHART_PIE_COLORS, CHART_TICK_SMALL, CHART_TOOLTIP_STYLE } from '../../../../lib/chartTheme';
 
@@ -22,8 +23,11 @@ const REPORT_CHART_TOOLTIP_STYLE = {
 export function ReportsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [appliedFilters, setAppliedFilters] = useState<{ date_from?: string; date_to?: string }>({});
+  const [appliedFilters, setAppliedFilters] = useState<ReportParams>({});
   const [validationError, setValidationError] = useState('');
+  const [exportDataset, setExportDataset] = useState<ReportDataset>('transactions');
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   const { data, isLoading, isFetching, error, refetch } = useReports(appliedFilters);
   const { data: livestockTypes } = useLivestockTypes();
@@ -45,7 +49,7 @@ export function ReportsPage() {
 
     setValidationError('');
 
-    const filters: { date_from?: string; date_to?: string } = {};
+    const filters: ReportParams = {};
     if (dateFrom) filters.date_from = dateFrom;
     if (dateTo) filters.date_to = dateTo;
     setAppliedFilters(filters);
@@ -58,10 +62,20 @@ export function ReportsPage() {
     setAppliedFilters({});
   };
 
-  const handleExportCsv = () => {
-    if (!data || isLoading || isFetching || error) return;
+  const handleExportCsv = async () => {
+    if (isExporting) return;
 
-    downloadCsv(buildReportsFilename(appliedFilters), buildReportsCsv(data, appliedFilters));
+    setIsExporting(true);
+    setExportError('');
+
+    try {
+      const blob = await fetchReportExport(exportDataset, appliedFilters);
+      downloadBlob(buildReportExportFilename(exportDataset, appliedFilters), blob);
+    } catch {
+      setExportError('Failed to export report data. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const hasActiveFilter = Boolean(appliedFilters.date_from || appliedFilters.date_to);
@@ -117,21 +131,45 @@ export function ReportsPage() {
               Clear
             </button>
           )}
+        </div>
+        <div className="reports-export-controls">
+          <div className="reports-filter-group">
+            <label className="reports-filter-label" htmlFor="report-export-dataset">
+              Data to export
+            </label>
+            <select
+              id="report-export-dataset"
+              className="reports-filter-input reports-filter-select"
+              value={exportDataset}
+              onChange={(e) => setExportDataset(e.target.value as ReportDataset)}
+              disabled={isExporting}
+            >
+              {REPORT_DATASETS.map((dataset) => (
+                <option key={dataset.value} value={dataset.value}>
+                  {dataset.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             type="button"
             className="reports-clear-button reports-export-button"
             onClick={handleExportCsv}
-            disabled={!data || isLoading || isFetching || Boolean(error)}
-            aria-label="Export report data as CSV"
+            disabled={isExporting}
+            aria-label="Export the selected report data as CSV"
           >
             <Download aria-hidden="true" />
-            Export CSV
+            {isExporting ? 'Exporting…' : 'Export CSV'}
           </button>
         </div>
       </div>
 
       {validationError && (
         <p className="reports-filter-error" role="alert">{validationError}</p>
+      )}
+
+      {exportError && (
+        <p className="reports-filter-error" role="alert">{exportError}</p>
       )}
 
       <div className="reports-filter-meta">
@@ -143,6 +181,11 @@ export function ReportsPage() {
         Date range applies to transactions, seller verifications, activities, listing
         totals and price statistics, and registration trends. User totals and listing
         status counts are all-time.
+      </p>
+
+      <p className="reports-coverage-note">
+        CSV exports contain one row per record created in the selected range for the
+        chosen dataset.
       </p>
     </div>
   );

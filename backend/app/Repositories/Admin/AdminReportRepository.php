@@ -14,6 +14,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\LazyCollection;
 
 class AdminReportRepository
 {
@@ -424,6 +425,111 @@ class AdminReportRepository
         $this->applyDateFilter($query, $dateFrom, $dateTo, 'activities');
 
         return $query->get();
+    }
+
+    /**
+     * Every transaction created inside the range, newest first.
+     *
+     * This is the record-level counterpart of {@see getTransactionReport()}:
+     * the export writes one row per transaction instead of an aggregate, and
+     * applies the same `created_at` window so the file reconciles with the
+     * report's totals.
+     *
+     * @return LazyCollection<int, Transaction>
+     */
+    public function exportTransactions(?string $dateFrom = null, ?string $dateTo = null): LazyCollection
+    {
+        $query = Transaction::query()
+            ->with([
+                'buyer:id,name,email',
+                'seller:id,name,email',
+                'listing:id,livestock_type,breed',
+            ])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $this->applyDateFilter($query, $dateFrom, $dateTo);
+
+        return $query->cursor();
+    }
+
+    /**
+     * Every listing created inside the range, newest first.
+     *
+     * Sellers are read with trashed accounts so a deactivated account's listing
+     * still names its seller, matching the admin listing table.
+     *
+     * @return LazyCollection<int, Listing>
+     */
+    public function exportListings(?string $dateFrom = null, ?string $dateTo = null): LazyCollection
+    {
+        $query = Listing::query()
+            ->with([
+                'seller' => fn ($seller) => $seller->withTrashed()->select(['id', 'name', 'email']),
+            ])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $this->applyDateFilter($query, $dateFrom, $dateTo);
+
+        return $query->cursor();
+    }
+
+    /**
+     * Every active account that registered inside the range, newest first.
+     *
+     * Soft-deleted (deactivated) accounts are excluded by the model's default
+     * scope, which is the same population the report's user totals count.
+     *
+     * @return LazyCollection<int, User>
+     */
+    public function exportUsers(?string $dateFrom = null, ?string $dateTo = null): LazyCollection
+    {
+        $query = User::query()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $this->applyDateFilter($query, $dateFrom, $dateTo);
+
+        return $query->cursor();
+    }
+
+    /**
+     * Every verification submission record created inside the range, newest
+     * first.
+     *
+     * Rows are not narrowed to the latest record per applicant: the report
+     * counts submissions, so the export keeps superseded resubmissions too.
+     *
+     * @return LazyCollection<int, SellerVerification>
+     */
+    public function exportSellerVerifications(?string $dateFrom = null, ?string $dateTo = null): LazyCollection
+    {
+        $query = SellerVerification::query()
+            ->with(['seller:id,name,email', 'reviewer:id,name'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $this->applyDateFilter($query, $dateFrom, $dateTo);
+
+        return $query->cursor();
+    }
+
+    /**
+     * Every activity recorded inside the range, newest first.
+     *
+     * @return LazyCollection<int, Activity>
+     */
+    public function exportActivities(?string $dateFrom = null, ?string $dateTo = null): LazyCollection
+    {
+        $query = Activity::query()
+            ->with('user:id,name,email')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $this->applyDateFilter($query, $dateFrom, $dateTo);
+
+        return $query->cursor();
     }
 
     /**

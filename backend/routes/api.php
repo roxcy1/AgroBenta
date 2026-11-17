@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\SellerListing\SellerListingController;
 use App\Http\Controllers\Api\SellerVerification\SellerVerificationController as MobileSellerVerificationController;
 use App\Http\Controllers\Api\Transaction\TransactionController as MobileTransactionController;
 use App\Http\Controllers\Api\TrinidadLocationController;
+use App\Services\Admin\AdminReportExportService;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
@@ -376,6 +377,8 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::get('/activities/summary', [ActivityController::class, 'summary']);
     Route::get('/reports', [ReportsController::class, 'index']);
+    Route::get('/reports/export/{dataset}', [ReportsController::class, 'export'])
+        ->whereIn('dataset', array_keys(AdminReportExportService::DATASETS));
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::put('/settings', [SettingsController::class, 'update']);
 });
