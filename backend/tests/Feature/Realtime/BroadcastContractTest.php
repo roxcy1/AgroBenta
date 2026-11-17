@@ -5,6 +5,7 @@ namespace Tests\Feature\Realtime;
 use App\Events\ActivityRecorded;
 use App\Events\BroadcastEvent;
 use App\Events\InquiryCreated;
+use App\Events\ListingInventoryUpdated;
 use App\Events\MessageSent;
 use App\Events\NotificationCreated;
 use App\Events\OfferCreated;
@@ -41,6 +42,7 @@ class BroadcastContractTest extends TestCase
             'OfferUpdated' => [OfferUpdated::class],
             'TransactionCreated' => [TransactionCreated::class],
             'TransactionUpdated' => [TransactionUpdated::class],
+            'ListingInventoryUpdated' => [ListingInventoryUpdated::class],
             'NotificationCreated' => [NotificationCreated::class],
             'ActivityRecorded' => [ActivityRecorded::class],
         ];

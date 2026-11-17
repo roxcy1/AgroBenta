@@ -42,7 +42,7 @@ const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: Luc
 
 export function Sidebar() {
   const { data: pendingVerifications } = useSellerVerifications({
-    status: 'pending_review',
+    status: 'pending',
     per_page: 1,
   });
   const pendingReviewCount = pendingVerifications?.pagination.total ?? 0;

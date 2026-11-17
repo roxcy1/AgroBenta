@@ -43,6 +43,7 @@ const Map<String, int> _fieldStep = <String, int>{
   'weight_value': 0,
   'weight_unit': 0,
   'quantity': 1,
+  'total_quantity': 1,
   'asking_price': 1,
   'location': 1,
   'gender': 1,
@@ -51,6 +52,9 @@ const Map<String, int> _fieldStep = <String, int>{
   'short_description': 1,
   'additional_notes': 1,
 };
+
+/// The exact pounds-to-kilograms factor used by the backend.
+const double _kilogramsPerPound = 0.45359237;
 
 /// Create or edit a listing.
 ///
@@ -97,6 +101,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   String? _gender;
   String? _weightUnit;
   String _weightInformation = 'measured';
+  double? _weightKg;
+  bool _syncingWeightText = false;
   bool _clearBreed = false;
 
   late final LivestockTypesController _catalog;
@@ -209,6 +215,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       _weightValue.text = draft.weightValue;
       _weightUnit = draft.weightUnit;
       _weightInformation = draft.weightInformation;
+      _weightKg = _weightInKilograms(_weightValue.text, _weightUnit);
       _quantity.text = draft.quantity;
       _askingPrice.text = draft.askingPrice;
       _healthStatus.text = draft.healthStatus;
@@ -233,7 +240,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     // parameter to the shared text-field widget.
     _breed.addListener(_onSuggestionInputChanged);
     _ageValue.addListener(_onSuggestionInputChanged);
-    _weightValue.addListener(_onSuggestionInputChanged);
+    _weightValue.addListener(_onWeightValueChanged);
     // Quantity and asking price are listing totals, not model inputs. They
     // clear a stale input message but never discard a per-head estimate.
     _quantity.addListener(_onSuggestionDraftInputChanged);
@@ -304,7 +311,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     return '';
   }
 
-  String? _validateLocation() {
+  String? _validateLocation({bool required = true}) {
     final TrinidadLocationCatalog? catalog = _locationCatalog.state.catalog;
     final String? formatted = catalog == null
         ? null
@@ -319,14 +326,14 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     if (_isEditing && !_locationWasTouched && _initialLocation.isNotEmpty) {
       return validateListingLocation(_initialLocation);
     }
-    return 'Select a barangay.';
+    return required ? 'Select a barangay.' : null;
   }
 
   @override
   void dispose() {
     _breed.removeListener(_onSuggestionInputChanged);
     _ageValue.removeListener(_onSuggestionInputChanged);
-    _weightValue.removeListener(_onSuggestionInputChanged);
+    _weightValue.removeListener(_onWeightValueChanged);
     _quantity.removeListener(_onSuggestionDraftInputChanged);
     _askingPrice.removeListener(_onSuggestionDraftInputChanged);
     _locationCatalog.removeListener(_handleLocationCatalogChanged);
@@ -361,6 +368,28 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     shortDescription: _shortDescription.text,
     additionalNotes: _additionalNotes.text,
   );
+
+  /// A human-readable snapshot of the values the AI request was built from.
+  ///
+  /// A withheld response carries no `inputSnapshot`, so the card still needs
+  /// the details beside the explanation. The form values are the request's
+  /// values: the revision check prevents a result from being shown beside
+  /// edited inputs.
+  Map<String, dynamic> _suggestionSnapshotFromForm() {
+    return <String, dynamic>{
+      'livestock_type': _livestockType ?? '',
+      'breed': _breed.text.trim(),
+      'sex': _gender,
+      'weight_kg': _weightKg,
+      'source': <String, dynamic>{
+        'breed_raw': _breed.text.trim(),
+        'age_value': int.tryParse(_ageValue.text.trim()),
+        'age_unit': _ageUnit,
+        'weight_value': _weightValue.text.trim(),
+        'weight_unit': _weightUnit,
+      },
+    };
+  }
 
   LivestockType? _typeForValue(List<LivestockType> types, String value) {
     for (final LivestockType type in types) {
@@ -459,8 +488,11 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       case 1:
         return <String?>[
           validateQuantity(_quantity.text),
-          validateAskingPrice(_askingPrice.text),
-          _validateLocation(),
+          // Publication requirements, not save-draft requirements. A present
+          // value is still checked; an empty one is allowed so the AI action
+          // can persist the draft before asking for a reference price.
+          validateAskingPrice(_askingPrice.text, required: false),
+          _validateLocation(required: false),
           validateOptionalShortText(_healthStatus.text),
           validateOptionalShortText(_vaccination.text),
           validateOptionalShortText(_shortDescription.text),
@@ -683,21 +715,96 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       return weightUnitError;
     }
 
-    // The draft has to exist before the endpoint can read it, so the four
-    // create-required fields are checked here as well.
+    // The draft has to exist before the endpoint can read it, so the create
+    // requirements that are still required are checked here as well. Price and
+    // location are deliberately not among them: they are publication
+    // requirements, and the AI reference is precisely what may help the seller
+    // decide the price. A present value is still validated.
     final String? quantityError = validateQuantity(_quantity.text);
     if (quantityError != null) {
       return quantityError;
     }
-    final String? priceError = validateAskingPrice(_askingPrice.text);
+    final String? priceError = validateAskingPrice(
+      _askingPrice.text,
+      required: false,
+    );
     if (priceError != null) {
       return priceError;
     }
-    final String? locationError = _validateLocation();
+    final String? locationError = _validateLocation(required: false);
     if (locationError != null) {
       return locationError;
     }
     return null;
+  }
+
+  /// Updates the canonical weight when the seller edits the numeric field.
+  ///
+  /// The controller listener fires again when a unit switch rewrites the field,
+  /// so [_syncingWeightText] keeps that programmatic rewrite from re-deriving
+  /// the canonical value from its rounded display text.
+  void _onWeightValueChanged() {
+    if (!_syncingWeightText) {
+      _weightKg = _weightInKilograms(_weightValue.text, _weightUnit);
+    }
+    _onSuggestionInputChanged();
+  }
+
+  /// Converts the displayed weight when the seller changes kg/lb.
+  ///
+  /// The canonical kilogram value is the source of truth during a switch, so
+  /// switching back and forth cannot accumulate rounding drift. The backend
+  /// still receives the displayed value in the newly selected unit.
+  void _handleWeightUnitChanged(String? unit) {
+    final double? canonical =
+        _weightKg ??
+        _weightInKilograms(_weightValue.text, _weightUnit) ??
+        _weightInKilograms(_weightValue.text, unit);
+
+    setState(() {
+      _weightUnit = unit;
+      if (unit == null || canonical == null) {
+        _weightKg = null;
+        return;
+      }
+
+      _weightKg = canonical;
+      if (_weightValue.text.trim().isEmpty) {
+        return;
+      }
+
+      final String formatted = _formatWeightForUnit(canonical, unit);
+      if (formatted != _weightValue.text) {
+        _syncingWeightText = true;
+        _weightValue.text = formatted;
+        _syncingWeightText = false;
+      }
+    });
+
+    _onSuggestionInputChanged();
+  }
+
+  /// The typed weight in kilograms, or `null` while empty/invalid.
+  double? _weightInKilograms(String text, String? unit) {
+    final double? value = double.tryParse(text.trim());
+    if (value == null || !value.isFinite || value <= 0 || unit == null) {
+      return null;
+    }
+    return unit == 'lb' ? value * _kilogramsPerPound : value;
+  }
+
+  /// Formats a canonical kilogram value for the selected display unit.
+  String _formatWeightForUnit(double kilograms, String unit) {
+    final double value = unit == 'lb'
+        ? kilograms / _kilogramsPerPound
+        : kilograms;
+    final String fixed = value.toStringAsFixed(2);
+    if (!fixed.contains('.')) {
+      return fixed;
+    }
+    return fixed
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
   }
 
   /// Clears a result as soon as one of the model inputs changes.
@@ -760,6 +867,35 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     final ThemeData theme = Theme.of(context);
     final Listing? listing = widget.listing;
 
+    if (listing?.inventoryReconciliationRequired ?? false) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit listing')),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.screenGutter),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const NoticeBanner(
+                    accent: AppColors.warning,
+                    icon: Icons.inventory_2_outlined,
+                    message:
+                        'Inventory reconciliation is required before this listing can be edited.',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('Back to My Listings'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     // The server refuses an edit for a listing that is not a `draft` or an
     // `active` one, so the form is not even offered for the other states rather
     // than being shown and then failing on save.
@@ -803,45 +939,79 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                   child: ExcludeSemantics(
                     child: Form(
                       key: _formKey,
-                      child: Stepper(
-                        type: StepperType.horizontal,
-                        elevation: 0,
-                        margin: EdgeInsets.zero,
-                        currentStep: _step,
-                        onStepContinue: busy ? null : _onStepContinue,
-                        onStepCancel: busy ? null : _onStepCancel,
-                        // The actions live in the pinned bar below.
-                        controlsBuilder:
-                            (BuildContext context, ControlsDetails details) =>
-                                const SizedBox.shrink(),
-                        steps: <Step>[
-                          Step(
-                            title: const Text('Information'),
-                            isActive: _step >= 0,
-                            state: _step > 0
-                                ? StepState.complete
-                                : StepState.indexed,
-                            content: _buildInformationStep(state),
-                          ),
-                          Step(
-                            title: const Text('Details'),
-                            isActive: _step >= 1,
-                            state: _step > 1
-                                ? StepState.complete
-                                : (_step == 1
-                                      ? StepState.indexed
-                                      : StepState.disabled),
-                            content: _buildDetailsStep(state),
-                          ),
-                          Step(
-                            title: const Text('Review'),
-                            isActive: _step >= 2,
-                            state: _step == 2
-                                ? StepState.indexed
-                                : StepState.disabled,
-                            content: _buildReviewStep(state),
-                          ),
-                        ],
+                      child: LayoutBuilder(
+                        builder:
+                            (BuildContext context, BoxConstraints constraints) {
+                              // Flutter's horizontal Stepper lays its title
+                              // labels out at intrinsic width. At 320-360dp
+                              // the full "Information" label plus the default
+                              // 24dp header padding exceeds the viewport, so
+                              // the compact header uses a short label and
+                              // tighter spacing. Larger screens keep the
+                              // original design.
+                              final bool compact = constraints.maxWidth < 420;
+                              Widget title(String full, String short) {
+                                return compact
+                                    ? SizedBox(
+                                        width: 48,
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(short),
+                                        ),
+                                      )
+                                    : Text(full);
+                              }
+
+                              return Stepper(
+                                type: StepperType.horizontal,
+                                elevation: 0,
+                                margin: EdgeInsets.zero,
+                                headerPadding: EdgeInsets.symmetric(
+                                  horizontal: compact ? 4 : 24,
+                                ),
+                                stepIconMargin: compact
+                                    ? const EdgeInsets.only(right: 4)
+                                    : null,
+                                currentStep: _step,
+                                onStepContinue: busy ? null : _onStepContinue,
+                                onStepCancel: busy ? null : _onStepCancel,
+                                // The actions live in the pinned bar below.
+                                controlsBuilder:
+                                    (
+                                      BuildContext context,
+                                      ControlsDetails details,
+                                    ) => const SizedBox.shrink(),
+                                steps: <Step>[
+                                  Step(
+                                    title: title('Information', 'Info'),
+                                    isActive: _step >= 0,
+                                    state: _step > 0
+                                        ? StepState.complete
+                                        : StepState.indexed,
+                                    content: _buildInformationStep(state),
+                                  ),
+                                  Step(
+                                    title: title('Details', 'Details'),
+                                    isActive: _step >= 1,
+                                    state: _step > 1
+                                        ? StepState.complete
+                                        : (_step == 1
+                                              ? StepState.indexed
+                                              : StepState.disabled),
+                                    content: _buildDetailsStep(state),
+                                  ),
+                                  Step(
+                                    title: title('Review', 'Review'),
+                                    isActive: _step >= 2,
+                                    state: _step == 2
+                                        ? StepState.indexed
+                                        : StepState.disabled,
+                                    content: _buildReviewStep(state),
+                                  ),
+                                ],
+                              );
+                            },
                       ),
                     ),
                   ),
@@ -1145,10 +1315,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                         child: Text('Pounds'),
                       ),
                     ],
-                    onChanged: (String? value) {
-                      setState(() => _weightUnit = value);
-                      _onSuggestionInputChanged();
-                    },
+                    onChanged: _handleWeightUnitChanged,
                     validator: (String? value) =>
                         state.validationErrors['weight_unit']?.first ??
                         (_legacyWeightIncomplete &&
@@ -1212,15 +1379,18 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
           children: <Widget>[
             _TextField(
               controller: _quantity,
-              label: 'Number of Animals Available',
+              label: 'Total Animals in This Listing',
               hint: 'e.g. 12',
               helper:
-                  'Required. Animals grouped in one listing must have similar '
+                  'Required. This is the full listing quantity, including '
+                  'animals already reserved or sold. Animals grouped in one listing must have similar '
                   'characteristics and share one price per head. List '
                   'significantly different animals separately.',
               helperMaxLines: 4,
               validator: validateQuantity,
-              serverErrors: state.validationErrors['quantity'],
+              serverErrors:
+                  state.validationErrors['total_quantity'] ??
+                  state.validationErrors['quantity'],
               keyboardType: TextInputType.number,
               inputFormatters: const <TextInputFormatter>[
                 DigitsOnlyInputFormatter(),
@@ -1232,9 +1402,10 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               label: 'Asking Price (₱) — Per Head',
               hint: 'e.g. 42500',
               helper:
-                  'Required. Price for one animal. The total listing value is '
-                  'quantity × this price.',
-              validator: validateAskingPrice,
+                  'Required to publish. Price for one animal. The total '
+                  'listing value is quantity × this price.',
+              validator: (String? value) =>
+                  validateAskingPrice(value, required: false),
               serverErrors: state.validationErrors['asking_price'],
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
@@ -1307,8 +1478,10 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                         measurementsEstimated:
                             _ageInformation == 'estimated' ||
                             _weightInformation == 'estimated',
+                        fallbackSnapshot: _suggestionSnapshotFromForm(),
                         onUsePrice: _useSuggestedPrice,
                         onRetry: busy ? null : _suggestPrice,
+                        onReviewInputs: () => setState(() => _step = 0),
                       ),
                 ),
               ],
@@ -1318,14 +1491,22 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
               value: _selectedLocation,
               legacyAddress: _legacyLocation,
               maxFormattedLength: TrinidadLocation.listingLocationMax,
-              isRequired:
-                  !_isEditing ||
-                  _locationWasTouched ||
-                  _selectedLocation != null ||
-                  _initialLocation.isEmpty,
+              // A draft may be saved without a barangay, so the selector
+              // cannot claim the field is required to save. Publication still
+              // requires it; the server enforces that at submission, and the
+              // helper below states it before the seller submits.
+              isRequired: false,
               enabled: !_submitting && !state.isActioning,
               externalError: state.validationErrors['location']?.first,
               onChanged: _handleLocationChanged,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Required to publish. Choose the barangay where the animals '
+              'are located.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -1433,7 +1614,9 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             ),
             _ReviewRow(
               label: 'Asking Price (₱) — Per Head',
-              value: '₱ ${_askingPrice.text}',
+              value: _askingPrice.text.trim().isEmpty
+                  ? 'Not set'
+                  : '₱ ${_askingPrice.text.trim()}',
             ),
             if (_totalListingValue != null)
               _ReviewRow(
@@ -1443,7 +1626,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
             _ReviewRow(
               label: 'Location',
               value: _locationForSave().trim().isEmpty
-                  ? '—'
+                  ? 'Not set'
                   : _locationForSave(),
             ),
             if (_healthStatus.text.isNotEmpty)
@@ -1506,159 +1689,851 @@ class _AiPriceSuggestionPanel extends StatelessWidget {
     required this.onUsePrice,
     this.quantity,
     this.measurementsEstimated = false,
+    this.fallbackSnapshot,
     this.onRetry,
+    this.onReviewInputs,
   });
 
   final PriceSuggestionResult result;
   final int? quantity;
   final bool measurementsEstimated;
+  final Map<String, dynamic>? fallbackSnapshot;
   final ValueChanged<String> onUsePrice;
   final VoidCallback? onRetry;
+  final VoidCallback? onReviewInputs;
+
+  @override
+  Widget build(BuildContext context) {
+    if (result.hasEstimate) {
+      return _AiEstimateCard(
+        estimate: result.estimate!,
+        quantity: quantity,
+        measurementsEstimated: measurementsEstimated,
+        fallbackSnapshot: fallbackSnapshot,
+        onUsePrice: onUsePrice,
+      );
+    }
+
+    if (_isUnsupportedWithheld(result)) {
+      return _AiUnavailableCard(
+        result: result,
+        fallbackSnapshot: fallbackSnapshot,
+        onReviewInputs: onReviewInputs,
+      );
+    }
+
+    return _SuggestionProblem(
+      result: result,
+      onRetry: result.canRetry ? onRetry : null,
+    );
+  }
+}
+
+/// State 1 and State 2: a usable point estimate, with the optional warning.
+class _AiEstimateCard extends StatelessWidget {
+  const _AiEstimateCard({
+    required this.estimate,
+    required this.quantity,
+    required this.measurementsEstimated,
+    required this.fallbackSnapshot,
+    required this.onUsePrice,
+  });
+
+  final AiPriceEstimate estimate;
+  final int? quantity;
+  final bool measurementsEstimated;
+  final Map<String, dynamic>? fallbackSnapshot;
+  final ValueChanged<String> onUsePrice;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Map<String, dynamic> snapshot = estimate.inputSnapshot.isNotEmpty
+        ? estimate.inputSnapshot
+        : (fallbackSnapshot ?? const <String, dynamic>{});
+    final List<_AiDetail> details = _suggestionDetails(snapshot);
+    final String money =
+        AppFormatters.formatMoney(estimate.estimatedValue) ??
+        estimate.estimatedValue;
+    final int? count = quantity;
+    final _AiWarningCopy? warning = estimate.isWarning
+        ? _warningCopy(estimate, snapshot)
+        : null;
+    final bool isWarning = estimate.isWarning;
+
+    return _AiCardShell(
+      accent: isWarning ? AppColors.warning : AppColors.primary,
+      icon: Icons.auto_awesome,
+      badge: _AiBadge(
+        label: isWarning ? 'Review inputs' : 'Available',
+        accent: isWarning ? AppColors.warning : AppColors.primary,
+      ),
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.sm),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Semantics(
+            label: 'AI suggested price $money per animal',
+            child: ExcludeSemantics(
+              child: Text(
+                money,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxxs),
+        Text(
+          'Suggested price per animal',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        if (count != null && count > 0) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          _AiQuantitySummary(estimate: estimate, count: count),
+          const SizedBox(height: AppSpacing.xxxs),
+          Text(
+            'Estimated total if all animals are priced equally',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        _AiDetailsSection(details: details),
+        if (warning != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          NoticeBanner(
+            accent: AppColors.warning,
+            icon: Icons.info_outline,
+            title: warning.title,
+            message: warning.message,
+            backgroundColor: AppColors.warningSurface,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: () => onUsePrice(estimate.estimatedValue),
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            label: const Text('Use suggested price'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Optional estimate only. You can edit your asking price anytime '
+          'before submission.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        _AiExplanation(
+          modelVersion: estimate.modelVersion,
+          provenance: estimate.provenance,
+          warnings: estimate.warnings,
+          reasonCodes: estimate.reasonCodes,
+          measurementsEstimated: measurementsEstimated,
+        ),
+      ],
+    );
+  }
+}
+
+/// State 3: the backend explicitly withheld the estimate.
+class _AiUnavailableCard extends StatelessWidget {
+  const _AiUnavailableCard({
+    required this.result,
+    required this.fallbackSnapshot,
+    required this.onReviewInputs,
+  });
+
+  final PriceSuggestionResult result;
+  final Map<String, dynamic>? fallbackSnapshot;
+  final VoidCallback? onReviewInputs;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Map<String, dynamic> snapshot =
+        fallbackSnapshot ?? const <String, dynamic>{};
+    final List<_AiDetail> details = _suggestionDetails(snapshot);
+    final _AiUnavailableCopy copy = _unavailableCopy(result, snapshot);
+
+    return _AiCardShell(
+      accent: AppColors.warning,
+      icon: Icons.shield_outlined,
+      badge: const _AiBadge(label: 'Unavailable', accent: AppColors.warning),
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'AI price unavailable',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(copy.explanation, style: theme.textTheme.bodyMedium),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          copy.guidance,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _AiDetailsSection(details: details),
+        if (copy.reviewLabel != null && onReviewInputs != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onReviewInputs,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: Text(copy.reviewLabel!),
+            ),
+          ),
+        ],
+        _AiExplanation(
+          warnings: result.warnings,
+          reasonCodes: result.reasonCodes,
+          unavailable: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _AiCardShell extends StatelessWidget {
+  const _AiCardShell({
+    required this.accent,
+    required this.icon,
+    required this.badge,
+    required this.children,
+  });
+
+  final Color accent;
+  final IconData icon;
+  final Widget badge;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
-    if (!result.hasEstimate) {
-      return _SuggestionProblem(
-        result: result,
-        onRetry: result.canRetry ? onRetry : null,
-      );
-    }
-
-    final AiPriceEstimate estimate = result.estimate!;
-    final String money =
-        AppFormatters.formatMoney(estimate.estimatedValue) ??
-        estimate.estimatedValue;
-    final String? inputSummary = _suggestionInputSummary(
-      estimate.inputSnapshot,
-    );
-    final int? count = quantity;
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.primarySurface,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+        border: Border.all(color: accent.withValues(alpha: 0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
             children: <Widget>[
-              const Icon(
-                Icons.auto_awesome,
-                size: 18,
-                color: AppColors.primary,
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 18, color: accent),
               ),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
-                  'AI Suggested Price per Head',
-                  style: theme.textTheme.titleSmall,
+                  'AI Suggested Price',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              Text(
-                estimate.isWarning
-                    ? 'Review recommended'
-                    : 'Within model range',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: estimate.isWarning
-                      ? AppColors.warning
-                      : AppColors.primary,
-                ),
-              ),
+              const SizedBox(width: AppSpacing.xs),
+              badge,
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            money,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            'per head',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          if (count != null && count > 1) ...<Widget>[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'For $count animals: ${_estimatedTotal(estimate, count)} total '
-              '(reference only).',
-              key: const ValueKey<String>('ai-estimated-total'),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Synthetic Data — Reference Only. This is not a valuation; you '
-            'decide the final asking price.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          if (measurementsEstimated) ...<Widget>[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Prediction reliability depends on the seller-provided age and '
-              'weight estimates.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.warning,
-              ),
-            ),
-          ],
-          if (inputSummary != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Based on: $inputSummary',
-              key: const ValueKey<String>('ai-input-summary'),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            [
-              if (estimate.modelVersion != null)
-                'Model ${estimate.modelVersion}',
-              if (estimate.provenance != null) '${estimate.provenance} data',
-            ].join(' · '),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          if (estimate.isWarning) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            NoticeBanner(
-              accent: AppColors.warning,
-              icon: Icons.info_outline,
-              message: _friendlyWarningMessage(estimate),
-              backgroundColor: AppColors.warningSurface,
-            ),
-          ],
-          const SizedBox(height: AppSpacing.sm),
-          OutlinedButton.icon(
-            onPressed: () => onUsePrice(estimate.estimatedValue),
-            icon: const Icon(Icons.edit_outlined, size: 17),
-            label: const Text('Use per-head price'),
-          ),
-          _TechnicalDetails(
-            warnings: estimate.warnings,
-            reasonCodes: estimate.reasonCodes,
-          ),
+          ...children,
         ],
       ),
     );
   }
+}
+
+class _AiBadge extends StatelessWidget {
+  const _AiBadge({required this.label, required this.accent});
+
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxxs,
+      ),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: accent,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _AiQuantitySummary extends StatelessWidget {
+  const _AiQuantitySummary({required this.estimate, required this.count});
+
+  final AiPriceEstimate estimate;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String perHead =
+        AppFormatters.formatMoney(estimate.estimatedValue) ??
+        estimate.estimatedValue;
+    final String total = _estimatedTotal(estimate, count);
+    final String animals = count == 1 ? 'animal' : 'animals';
+
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: AppSpacing.md,
+      runSpacing: AppSpacing.xxs,
+      children: <Widget>[
+        Text(
+          '$count $animals \u00d7 $perHead',
+          key: const ValueKey<String>('ai-quantity-summary'),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        Text(
+          total,
+          key: const ValueKey<String>('ai-estimated-total'),
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiDetailsSection extends StatelessWidget {
+  const _AiDetailsSection({required this.details});
+
+  final List<_AiDetail> details;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Column(
+      key: const ValueKey<String>('ai-details'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'BASED ON YOUR LIVESTOCK DETAILS',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        if (details.isEmpty)
+          Text(
+            'The details used for this request are unavailable.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          )
+        else
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double width = constraints.maxWidth > 280
+                  ? (constraints.maxWidth - AppSpacing.md) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
+                children: details
+                    .map(
+                      (_AiDetail detail) => SizedBox(
+                        width: width,
+                        child: _AiDetailTile(detail: detail),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _AiDetailTile extends StatelessWidget {
+  const _AiDetailTile({required this.detail});
+
+  final _AiDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          detail.label.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: AppColors.textSecondary,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxxs),
+        Text(
+          detail.value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiDetail {
+  const _AiDetail(this.label, this.value);
+
+  final String label;
+  final String value;
+}
+
+class _AiWarningCopy {
+  const _AiWarningCopy({required this.title, required this.message});
+
+  final String title;
+  final String message;
+}
+
+class _AiUnavailableCopy {
+  const _AiUnavailableCopy({
+    required this.explanation,
+    required this.guidance,
+    this.reviewLabel,
+  });
+
+  final String explanation;
+  final String guidance;
+  final String? reviewLabel;
+}
+
+class _AiExplanation extends StatelessWidget {
+  const _AiExplanation({
+    this.modelVersion,
+    this.provenance,
+    this.warnings = const <String>[],
+    this.reasonCodes = const <String>[],
+    this.measurementsEstimated = false,
+    this.unavailable = false,
+  });
+
+  final String? modelVersion;
+  final String? provenance;
+  final List<String> warnings;
+  final List<String> reasonCodes;
+  final bool measurementsEstimated;
+  final bool unavailable;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String modelLine = _modelProvenanceLine(modelVersion, provenance);
+    final List<String> lines = <String>[
+      if (unavailable)
+        'This AI model estimates livestock prices using animal '
+            'characteristics. Suggestions are unavailable when inputs fall '
+            'outside its supported range.'
+      else
+        'The AI uses livestock type, breed, sex, age, and weight. It compares '
+            'them with patterns in its training data to suggest a reference '
+            'price per animal.',
+      modelLine,
+      if (measurementsEstimated)
+        'Age or weight was entered as an estimate, so the comparison is only '
+            'as precise as those values.',
+    ];
+
+    return Theme(
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ExpansionTile(
+          key: const ValueKey<String>('ai-explanation'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: AppSpacing.xs),
+          title: Text(
+            'How is this price estimated?',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          children: <Widget>[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                lines.join('\n\n'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            if (warnings.isNotEmpty || reasonCodes.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.xs),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Model diagnostics',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (warnings.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    warnings.join('\n'),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              if (reasonCodes.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Reason codes: ${reasonCodes.join(', ')}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+bool _isUnsupportedWithheld(PriceSuggestionResult result) {
+  if (result.outcome != PriceSuggestionOutcome.withheld) {
+    return false;
+  }
+  return !result.reasonCodes.any(
+    (String code) =>
+        code == 'missing_safety_profile' || code == 'model_unavailable',
+  );
+}
+
+_AiWarningCopy _warningCopy(
+  AiPriceEstimate estimate,
+  Map<String, dynamic> snapshot,
+) {
+  final List<String> codes = estimate.reasonCodes;
+  final bool hasWeight = codes.any((String code) => code.contains('weight'));
+  final bool hasAge = codes.any((String code) => code.contains('age'));
+  final String? weight = _measurementText(snapshot, 'weight');
+  final String? age = _measurementText(snapshot, 'age');
+
+  if (hasWeight && hasAge) {
+    return _AiWarningCopy(
+      title: "Please review the animal's age and weight",
+      message:
+          '${age ?? 'The age'} and ${weight ?? 'the weight'} are outside the '
+          "model's typical range for this animal. Check your details before "
+          'using this price.',
+    );
+  }
+
+  if (hasWeight) {
+    final bool breedReason = codes.any(
+      (String code) => code.contains('breed_weight'),
+    );
+    return _AiWarningCopy(
+      title: "Please review the animal's weight",
+      message:
+          '${weight ?? 'The weight'} is outside the model\'s typical range '
+          'for ${breedReason ? 'this breed' : 'this age'}. Check your details '
+          'before using this price.',
+    );
+  }
+
+  if (hasAge) {
+    return _AiWarningCopy(
+      title: "Please review the animal's age",
+      message:
+          '${age ?? 'The age'} is outside the model\'s typical range for this '
+          'breed. Check your details before using this price.',
+    );
+  }
+
+  return const _AiWarningCopy(
+    title: "Please review the animal's details",
+    message:
+        'The estimate is usable, but the model flagged these details. Check '
+        'them before using this price.',
+  );
+}
+
+_AiUnavailableCopy _unavailableCopy(
+  PriceSuggestionResult result,
+  Map<String, dynamic> snapshot,
+) {
+  final List<String> codes = result.reasonCodes;
+  bool has(String code) => codes.contains(code);
+  bool hasPrefix(String prefix) =>
+      codes.any((String code) => code.startsWith(prefix));
+
+  final String? weight = _measurementText(snapshot, 'weight');
+  final String? age = _measurementText(snapshot, 'age');
+  final bool weightIssue =
+      has('outside_supported_weight') ||
+      hasPrefix('outside_supported_weight') ||
+      has('insufficient_model_support');
+  final bool ageIssue =
+      has('outside_supported_age') || hasPrefix('outside_supported_age');
+  final bool both =
+      has('outside_supported_age_weight') || (weightIssue && ageIssue);
+
+  if (both) {
+    return _AiUnavailableCopy(
+      explanation:
+          "This animal's age (${age ?? 'entered age'}) and weight "
+          "(${weight ?? 'entered weight'}) are outside the range supported "
+          'by our AI model.',
+      guidance:
+          'Please check the age and weight or enter your own asking price. '
+          'You can still save and submit your listing once all required '
+          'fields are complete.',
+      reviewLabel: 'Review age and weight',
+    );
+  }
+
+  if (weightIssue) {
+    return _AiUnavailableCopy(
+      explanation: weight == null
+          ? "This animal's weight is outside the range supported by our AI "
+                'model.'
+          : "This animal's weight ($weight) is outside the range supported "
+                'by our AI model.',
+      guidance:
+          'Please check the weight or enter your own asking price. You can '
+          'still save and submit your listing once all required fields are '
+          'complete.',
+      reviewLabel: 'Review weight',
+    );
+  }
+
+  if (ageIssue) {
+    return _AiUnavailableCopy(
+      explanation: age == null
+          ? "This animal's age is outside the range supported by our AI "
+                'model.'
+          : "This animal's age ($age) is outside the range supported by our "
+                'AI model.',
+      guidance:
+          'Please check the age or enter your own asking price. You can still '
+          'save and submit your listing once all required fields are '
+          'complete.',
+      reviewLabel: 'Review age',
+    );
+  }
+
+  if (has('unsupported_breed_for_model')) {
+    return const _AiUnavailableCopy(
+      explanation:
+          'This breed is not covered by our AI model, so a price cannot be '
+          'generated.',
+      guidance:
+          'Choose a supported breed or enter your own asking price. You can '
+          'still save and submit your listing once all required fields are '
+          'complete.',
+      reviewLabel: 'Review livestock type and breed',
+    );
+  }
+
+  if (has('unsupported_category_for_model')) {
+    return const _AiUnavailableCopy(
+      explanation:
+          'This livestock type is not covered by our AI model, so a price '
+          'cannot be generated.',
+      guidance:
+          'Choose a supported livestock type or enter your own asking price. '
+          'You can still save and submit your listing once all required '
+          'fields are complete.',
+      reviewLabel: 'Review livestock type and breed',
+    );
+  }
+
+  if (has('missing_safety_profile') || has('model_unavailable')) {
+    return const _AiUnavailableCopy(
+      explanation: 'The AI price service is not available right now.',
+      guidance:
+          'Enter your own asking price. You can still save and submit your '
+          'listing normally.',
+    );
+  }
+
+  return _AiUnavailableCopy(
+    explanation:
+        "This animal's age or weight is outside the range supported by our AI "
+        'model.',
+    guidance:
+        'Please check the age and weight or enter your own asking price. You '
+        'can still save and submit your listing once all required fields are '
+        'complete.',
+    reviewLabel: 'Review livestock details',
+  );
+}
+
+String _modelProvenanceLine(String? modelVersion, String? provenance) {
+  final String model = modelVersion == null
+      ? 'This prototype model'
+      : 'Prototype model $modelVersion';
+  final String data = provenance == null
+      ? 'trained on synthetic data'
+      : '$provenance training data';
+  return '$model uses $data. It has not been validated against real livestock '
+      'sales and is not a guaranteed market valuation.';
+}
+
+List<_AiDetail> _suggestionDetails(Map<String, dynamic> snapshot) {
+  final Object? source = snapshot['source'];
+  String? breed;
+  if (source is Map) {
+    final Object? raw = source['breed_raw'];
+    if (raw is String && raw.trim().isNotEmpty) {
+      breed = raw.trim();
+    }
+  }
+  if (breed == null) {
+    final Object? raw = snapshot['breed'];
+    if (raw is String && raw.trim().isNotEmpty) {
+      breed = raw.trim();
+    }
+  }
+
+  final Object? sex = snapshot['sex'];
+  final String? age = _measurementText(snapshot, 'age');
+  final String? weight = _measurementText(snapshot, 'weight');
+
+  return <_AiDetail>[
+    if (breed != null) _AiDetail('Breed', _humanizeBreed(breed)),
+    if (sex is String && sex.trim().isNotEmpty)
+      _AiDetail('Sex', _humanizeLabel(sex)),
+    if (age != null) _AiDetail('Age', age),
+    if (weight != null) _AiDetail('Weight', weight),
+  ];
+}
+
+String? _measurementText(Map<String, dynamic> snapshot, String kind) {
+  final Object? source = snapshot['source'];
+  final bool isWeight = kind == 'weight';
+  if (source is Map) {
+    final Object? value = source[isWeight ? 'weight_value' : 'age_value'];
+    final Object? unit = source[isWeight ? 'weight_unit' : 'age_unit'];
+    if (value != null && unit is String && unit.trim().isNotEmpty) {
+      final String formatted = _formatMeasurement(value);
+      if (formatted.isNotEmpty) {
+        return isWeight
+            ? '$formatted ${unit.trim()}'
+            : '$formatted ${_ageUnitLabel(value, unit)}';
+      }
+    }
+  }
+
+  final Object? canonical = snapshot[isWeight ? 'weight_kg' : 'age_months'];
+  if (canonical is num) {
+    return isWeight
+        ? '${_formatMeasurement(canonical)} kg'
+        : '${_formatMeasurement(canonical)} ${_ageUnitLabel(canonical, 'months')}';
+  }
+  return null;
+}
+
+String _ageUnitLabel(Object? value, String unit) {
+  final num? number = _numberValue(value);
+  final String base = unit.trim().toLowerCase();
+  final bool singular = number != null && number.abs() == 1;
+  if (singular) {
+    return switch (base) {
+      'years' => 'year',
+      'months' => 'month',
+      'days' => 'day',
+      _ => base,
+    };
+  }
+  return switch (base) {
+    'year' => 'years',
+    'month' => 'months',
+    'day' => 'days',
+    _ => base,
+  };
+}
+
+num? _numberValue(Object? value) =>
+    value is num ? value : num.tryParse(value?.toString() ?? '');
+
+String _formatMeasurement(Object? value) {
+  final num? number = _numberValue(value);
+  if (number == null) {
+    return value?.toString().trim() ?? '';
+  }
+  final String raw = number.toStringAsFixed(number % 1 == 0 ? 0 : 2);
+  final List<String> parts = raw.split('.');
+  final String whole = parts.first.replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (Match match) => ',',
+  );
+  return parts.length > 1 ? '$whole.${parts[1]}' : whole;
+}
+
+String _humanizeBreed(String value) {
+  final String cleaned = value.trim().replaceAll('_', ' ');
+  if (cleaned.isEmpty) {
+    return cleaned;
+  }
+  return cleaned
+      .split(RegExp(r'\s+'))
+      .map(
+        (String word) => word.isEmpty
+            ? word
+            : '${word[0].toUpperCase()}${word.substring(1)}',
+      )
+      .join(' ');
 }
 
 /// A refusal or failure: no number, a friendly explanation, and a retry only
@@ -1671,15 +2546,26 @@ class _SuggestionProblem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool modelUnavailable =
+        result.outcome == PriceSuggestionOutcome.withheld &&
+        result.reasonCodes.any(
+          (String code) =>
+              code == 'missing_safety_profile' || code == 'model_unavailable',
+        );
     final bool isError =
         result.outcome == PriceSuggestionOutcome.error ||
-        result.outcome == PriceSuggestionOutcome.unavailable;
-    final String title = switch (result.outcome) {
-      PriceSuggestionOutcome.withheld => 'Price suggestion withheld',
-      PriceSuggestionOutcome.unavailable => 'Price suggestion unavailable',
-      PriceSuggestionOutcome.invalid => 'Cannot generate a price suggestion',
-      _ => 'Price suggestion failed',
-    };
+        result.outcome == PriceSuggestionOutcome.unavailable ||
+        modelUnavailable;
+    final String title = modelUnavailable
+        ? 'AI price service unavailable'
+        : switch (result.outcome) {
+            PriceSuggestionOutcome.withheld => 'Price suggestion withheld',
+            PriceSuggestionOutcome.unavailable =>
+              'Price suggestion unavailable',
+            PriceSuggestionOutcome.invalid =>
+              'Cannot generate a price suggestion',
+            _ => 'Price suggestion failed',
+          };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1779,21 +2665,6 @@ String _estimatedTotal(AiPriceEstimate estimate, int quantity) {
   return _formatPeso(value * quantity);
 }
 
-/// A seller-facing warning summary that does not restate model thresholds.
-String _friendlyWarningMessage(AiPriceEstimate estimate) {
-  final bool typical = estimate.reasonCodes.any(
-    (String code) =>
-        code.startsWith('outside_typical') ||
-        code == 'outside_typical_age_weight',
-  );
-  if (typical) {
-    return "The estimate is usable, but the details are outside the model's "
-        'usual range. Check the age and weight before using it.';
-  }
-  return 'The estimate is usable, but the model flagged the input. Review the '
-      'details before using it.';
-}
-
 /// A seller-facing refusal summary, mapped from stable reason codes.
 String _friendlyProblemMessage(PriceSuggestionResult result) {
   final List<String> codes = result.reasonCodes;
@@ -1851,58 +2722,6 @@ String _friendlyProblemMessage(PriceSuggestionResult result) {
   }
 }
 
-/// The model input summary, preferring the seller's original units when the
-/// server captured them.
-String? _suggestionInputSummary(Map<String, dynamic> snapshot) {
-  final List<String> parts = <String>[];
-  final Object? type = snapshot['livestock_type'];
-  if (type is String && type.trim().isNotEmpty) {
-    parts.add(_humanizeLabel(type));
-  }
-
-  final Object? source = snapshot['source'];
-  if (source is Map) {
-    final Object? breed = source['breed_raw'];
-    if (breed is String && breed.trim().isNotEmpty) {
-      parts.add(breed.trim());
-    }
-  } else {
-    final Object? breed = snapshot['breed'];
-    if (breed is String && breed.trim().isNotEmpty) {
-      parts.add(_humanizeLabel(breed));
-    }
-  }
-
-  final Object? sex = snapshot['sex'];
-  if (sex is String && sex.trim().isNotEmpty) {
-    parts.add(_humanizeLabel(sex));
-  }
-
-  if (source is Map) {
-    final Object? ageValue = source['age_value'];
-    final Object? ageUnit = source['age_unit'];
-    if (ageValue != null && ageUnit is String) {
-      parts.add('$ageValue $ageUnit');
-    }
-    final Object? weightValue = source['weight_value'];
-    final Object? weightUnit = source['weight_unit'];
-    if (weightValue != null && weightUnit is String) {
-      parts.add('$weightValue $weightUnit');
-    }
-  } else {
-    final Object? ageMonths = snapshot['age_months'];
-    if (ageMonths is num) {
-      parts.add('${_trimNumber(ageMonths)} months');
-    }
-    final Object? weightKg = snapshot['weight_kg'];
-    if (weightKg is num) {
-      parts.add('${_trimNumber(weightKg)} kg');
-    }
-  }
-
-  return parts.isEmpty ? null : parts.join(' · ');
-}
-
 String _humanizeLabel(String value) {
   final String trimmed = value.trim().replaceAll('_', ' ');
   if (trimmed.isEmpty) {
@@ -1917,8 +2736,6 @@ String _humanizeLabel(String value) {
       )
       .join(' ');
 }
-
-String _trimNumber(num value) => value.toStringAsFixed(value % 1 == 0 ? 0 : 2);
 
 String _formatPeso(double value) {
   final String raw = value.toStringAsFixed(2);

@@ -335,6 +335,27 @@ class MobileTransactionTest extends TestCase
     }
 
     #[Test]
+    public function an_unreconciled_listing_rejects_direct_transactions_without_changing_legacy_quantity(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'quantity' => 5,
+            'total_quantity' => null,
+            'inventory_reconciliation_required' => true,
+            'legacy_quantity_snapshot' => 5,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(409);
+
+        $this->assertSame(5, (int) $listing->refresh()->quantity);
+        $this->assertSame(0, Transaction::query()->count());
+    }
+
+    #[Test]
     public function two_buyers_cannot_reserve_the_same_last_head(): void
     {
         $listing = $this->createListing($this->seller, ['quantity' => 1]);

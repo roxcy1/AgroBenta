@@ -239,6 +239,37 @@ class ReportsTest extends TestCase
         $this->assertArrayHasKey('by_livestock', $transactions);
     }
 
+    public function test_seller_verification_report_counts_add_up(): void
+    {
+        foreach ([
+            SellerVerificationStatus::Submitted,
+            SellerVerificationStatus::PendingReview,
+            SellerVerificationStatus::Approved,
+            SellerVerificationStatus::Rejected,
+        ] as $status) {
+            SellerVerification::create([
+                'user_id' => User::factory()->create(['role' => UserRole::User])->id,
+                'business_name' => 'Farm',
+                'status' => $status,
+                'submitted_at' => now(),
+            ]);
+        }
+
+        $token = $this->admin->createToken('admin_token', ['admin'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/admin/reports');
+
+        $v = $response->json('data.seller_verifications');
+        $this->assertEquals(4, $v['submitted']);
+        $this->assertEquals(2, $v['pending_review']);
+        $this->assertEquals($v['submitted'], $v['approved'] + $v['rejected'] + $v['pending_review']);
+
+        $distribution = collect($v['status_distribution'])->pluck('count', 'status');
+        $this->assertEquals(2, $distribution['pending_review']);
+        $this->assertFalse($distribution->has('submitted'));
+    }
+
     public function test_seller_verification_report_returns_expected_data(): void
     {
         SellerVerification::create([

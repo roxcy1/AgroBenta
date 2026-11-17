@@ -2,6 +2,8 @@ import 'package:agrobenta_mobile/core/constants/api_constants.dart';
 import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/core/network/api_exception.dart';
 import 'package:agrobenta_mobile/models/listing.dart';
+import 'package:agrobenta_mobile/models/marketplace_page.dart';
+import 'package:agrobenta_mobile/models/seller_profile.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
 import 'package:agrobenta_mobile/services/marketplace_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,7 @@ import 'package:http/testing.dart';
 
 import '../support/auth_fakes.dart';
 import '../support/marketplace_fakes.dart';
+import '../support/seller_profile_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -333,6 +336,156 @@ void main() {
     });
   });
 
+  group('MarketplaceService.sellerProfile', () {
+    test('requests GET /marketplace/sellers/{id} with no query', () async {
+      final MarketplaceService service = buildService(
+        (_) async => sellerProfileResponse(),
+      );
+
+      final SellerProfile profile = await service.sellerProfile(3);
+
+      expect(recorded.single.method, 'GET');
+      expect(recorded.single.apiPath, '/marketplace/sellers/3');
+      expect(recorded.single.query, isEmpty);
+      expect(profile.name, 'Joseph Basilad');
+      expect(profile.isVerified, isTrue);
+      expect(profile.publicLocation, 'Barangay San Isidro, Trinidad, Bohol');
+      expect(profile.activeListingsCount, 1);
+    });
+
+    test('never sends a seller filter or status override', () async {
+      final MarketplaceService service = buildService(
+        (_) async => sellerProfileResponse(),
+      );
+
+      await service.sellerProfile(3);
+
+      expect(recorded.single.query, isEmpty);
+      expect(recorded.single.apiPath, isNot(contains('/listings')));
+    });
+
+    test('translates a 404 into a notFound ApiException', () async {
+      final MarketplaceService service = buildService(
+        (_) async => sellerNotFoundResponse(),
+      );
+
+      await expectLater(
+        service.sellerProfile(99),
+        throwsA(
+          isA<ApiException>().having(
+            (ApiException e) => e.kind,
+            'kind',
+            ApiErrorKind.notFound,
+          ),
+        ),
+      );
+    });
+
+    test('does not clear the token on an unavailable seller', () async {
+      final MarketplaceService service = buildService(
+        (_) async => sellerNotFoundResponse(),
+      );
+
+      await expectLater(
+        service.sellerProfile(99),
+        throwsA(isA<ApiException>()),
+      );
+
+      expect(tokenStore.token, 'valid-mobile-token');
+    });
+  });
+
+  group('MarketplaceService.sellerListings', () {
+    test(
+      'requests the seller listing path with an explicit allow-list',
+      () async {
+        final MarketplaceService service = buildService(
+          (_) async => sellerListingsResponse(),
+        );
+
+        await service.sellerListings(3, page: 2, perPage: 20);
+
+        expect(recorded.single.method, 'GET');
+        expect(recorded.single.apiPath, '/marketplace/sellers/3/listings');
+        expect(recorded.single.query, <String, String>{
+          'sort': 'newest',
+          'page': '2',
+          'per_page': '20',
+        });
+      },
+    );
+
+    test('sends the search, category and sort filters', () async {
+      final MarketplaceService service = buildService(
+        (_) async => sellerListingsResponse(),
+      );
+
+      await service.sellerListings(
+        3,
+        search: '  angus  ',
+        livestockType: 'cattle',
+        sort: 'price_asc',
+      );
+
+      expect(recorded.single.query, <String, String>{
+        'search': 'angus',
+        'livestock_type': 'cattle',
+        'sort': 'price_asc',
+        'page': '1',
+        'per_page': '15',
+      });
+    });
+
+    test('omits a blank search and category', () async {
+      final MarketplaceService service = buildService(
+        (_) async => sellerListingsResponse(),
+      );
+
+      await service.sellerListings(3, search: '  ', livestockType: '');
+
+      expect(recorded.single.query.containsKey('search'), isFalse);
+      expect(recorded.single.query.containsKey('livestock_type'), isFalse);
+      expect(recorded.single.query['sort'], 'newest');
+    });
+
+    test('parses the listings and pagination out of the envelope', () async {
+      final MarketplaceService service = buildService(
+        (_) async => sellerListingsResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 12),
+            listingJson(id: 11),
+          ],
+          currentPage: 1,
+          lastPage: 3,
+          total: 40,
+        ),
+      );
+
+      final MarketplacePage page = await service.sellerListings(3);
+
+      expect(page.listings.map((Listing l) => l.id), <int>[12, 11]);
+      expect(page.pagination.lastPage, 3);
+      expect(page.hasMore, isTrue);
+    });
+
+    test('translates an unavailable seller to notFound', () async {
+      final MarketplaceService service = buildService(
+        (_) async => sellerNotFoundResponse(),
+      );
+
+      await expectLater(
+        service.sellerListings(99),
+        throwsA(
+          isA<ApiException>().having(
+            (ApiException e) => e.kind,
+            'kind',
+            ApiErrorKind.notFound,
+          ),
+        ),
+      );
+    });
+  });
+
   group('MarketplaceRepository', () {
     MarketplaceRepository buildRepository(
       Future<http.Response> Function(RecordedRequest request) handler,
@@ -424,6 +577,46 @@ void main() {
 
       await expectLater(
         repository.detail(99),
+        throwsA(
+          isA<ApiException>().having(
+            (ApiException e) => e.kind,
+            'kind',
+            ApiErrorKind.notFound,
+          ),
+        ),
+      );
+    });
+
+    test('clamps the seller listing page size and page number', () async {
+      final MarketplaceRepository repository = buildRepository(
+        (_) async => sellerListingsResponse(),
+      );
+
+      await repository.sellerListings(3, page: -2, perPage: 200);
+
+      expect(recorded.single.apiPath, '/marketplace/sellers/3/listings');
+      expect(recorded.single.query['page'], '1');
+      expect(recorded.single.query['per_page'], '50');
+    });
+
+    test('uses the default seller listing page size', () async {
+      final MarketplaceRepository repository = buildRepository(
+        (_) async => sellerListingsResponse(),
+      );
+
+      await repository.sellerListings(3);
+
+      expect(recorded.single.query['page'], '1');
+      expect(recorded.single.query['per_page'], '15');
+    });
+
+    test('forwards a seller profile notFound outcome', () async {
+      final MarketplaceRepository repository = buildRepository(
+        (_) async => sellerNotFoundResponse(),
+      );
+
+      await expectLater(
+        repository.sellerProfile(99),
         throwsA(
           isA<ApiException>().having(
             (ApiException e) => e.kind,

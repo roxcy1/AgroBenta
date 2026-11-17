@@ -412,7 +412,7 @@ void main() {
       expect(sent.method, 'POST');
       expect(sent.apiPath, '/seller/listings');
       expect(sent.body['livestock_type'], 'cattle');
-      expect(sent.body['quantity'], 4);
+      expect(sent.body['total_quantity'], 4);
       // An omitted optional field is absent, not null: on a PATCH a null would be
       // asking the server to clear something the seller never touched.
       expect(sent.body.containsKey('breed'), isFalse);

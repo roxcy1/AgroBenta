@@ -59,6 +59,7 @@ class Offer {
     required this.sellerId,
     required this.buyerId,
     required this.proposedAmount,
+    this.proposedQuantity = 1,
     required this.status,
     required this.respondedAt,
     required this.createdAt,
@@ -79,6 +80,7 @@ class Offer {
 
     return Offer(
       id: readInt(json, 'id'),
+      proposedQuantity: readNullableInt(json, 'proposed_quantity') ?? 1,
       inquiryId: readInt(json, 'inquiry_id'),
       listingId: readInt(json, 'listing_id'),
       sellerId: readInt(json, 'seller_id'),
@@ -140,6 +142,10 @@ class Offer {
   /// Never computed on the client: it is the agreed price once accepted and is
   /// stored independently of the listing's asking price.
   final String proposedAmount;
+
+  /// The agreed number of animals. `proposedAmount` is the total price for this
+  /// quantity, matching the transaction amount written by the backend.
+  final int proposedQuantity;
 
   /// The pickup date the seller proposed, if any.
   final DateTime? proposedPickupDate;

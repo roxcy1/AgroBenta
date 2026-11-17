@@ -151,6 +151,65 @@ class PriceSuggestionTest extends TestCase
     }
 
     #[Test]
+    public function success_works_when_the_draft_has_no_asking_price_or_location(): void
+    {
+        $listing = $this->createListing([
+            'asking_price' => null,
+            'location' => null,
+        ]);
+        Http::fake([
+            'http://ml-service:8002/v1/predict' => Http::response($this->successPayload(), 200),
+        ]);
+
+        $response = $this->predict($listing);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.estimated_value', '50000.55');
+
+        $listing->refresh();
+        $this->assertNull($listing->asking_price);
+        $this->assertNull($listing->location);
+        $this->assertSame(ListingStatus::Draft, $listing->status);
+        $this->assertDatabaseCount('ai_price_estimates', 1);
+    }
+
+    #[Test]
+    public function pound_and_kilogram_listings_reach_the_provider_at_the_same_canonical_weight(): void
+    {
+        $pounds = $this->createListing([
+            'weight_value' => 1102.31,
+            'weight_unit' => 'lb',
+        ]);
+        $kilograms = $this->createListing([
+            'weight_value' => 500,
+            'weight_unit' => 'kg',
+        ]);
+
+        Http::fake([
+            'http://ml-service:8002/v1/predict' => Http::response($this->successPayload(), 200),
+        ]);
+
+        $this->predict($pounds)->assertOk();
+        $this->predict($kilograms)->assertOk();
+
+        $weights = Http::recorded()
+            ->map(fn (array $pair): float => (float) $pair[0]['weight_kg'])
+            ->values();
+
+        $this->assertCount(2, $weights);
+        $this->assertEqualsWithDelta(500.0, $weights[0], 0.001);
+        $this->assertEqualsWithDelta(500.0, $weights[1], 0.001);
+
+        $pounds->refresh();
+        $kilograms->refresh();
+        $this->assertSame('1102.31', $pounds->weight_value);
+        $this->assertSame('lb', $pounds->weight_unit);
+        $this->assertSame('500.00', $kilograms->weight_value);
+        $this->assertSame('kg', $kilograms->weight_unit);
+    }
+
+    #[Test]
     public function quantity_is_not_sent_to_the_provider_and_the_estimate_stays_per_head(): void
     {
         $listing = $this->createListing(['quantity' => 12]);

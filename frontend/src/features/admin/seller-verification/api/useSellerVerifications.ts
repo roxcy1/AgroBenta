@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 import {
   verificationPollingInterval,
+  verificationQueryForTab,
   type VerificationStatus,
 } from '../components/verificationModeration';
 
@@ -93,6 +94,8 @@ interface ReviewResponse {
 export interface VerificationsParams {
   search?: string;
   status?: string;
+  /** Skip the latest-record-per-applicant narrowing: one row per submission. */
+  all_submissions?: boolean;
   page?: number;
   per_page?: number;
 }
@@ -101,6 +104,7 @@ async function fetchVerifications(params: VerificationsParams): Promise<Verifica
   const query = new URLSearchParams();
   if (params.search) query.set('search', params.search);
   if (params.status) query.set('status', params.status);
+  if (params.all_submissions) query.set('all_submissions', '1');
   if (params.page) query.set('page', String(params.page));
   if (params.per_page) query.set('per_page', String(params.per_page));
 
@@ -207,16 +211,16 @@ export interface SellerVerificationCounts {
  * There is no counting endpoint, and one is not needed: `GET
  * /admin/seller-verifications` already reports `pagination.total` for the query
  * it ran — the server's `count(*)`, not the size of the page. Asking it once per
- * status with `per_page=1` therefore yields exact totals without a new backend
- * surface. Because the list is deduplicated to the latest record per applicant,
- * each record is counted under exactly one status.
+ * tab with `per_page=1` therefore yields exact totals without a new backend
+ * surface. Each tab sends the same query it loads (see
+ * `verificationQueryForTab`), so Submitted = Approved + Rejected + Pending.
  */
 export async function fetchVerificationCounts(): Promise<SellerVerificationCounts> {
   const [submitted, pendingReview, approved, rejected] = await Promise.all([
-    fetchVerifications({ status: 'submitted', per_page: 1 }),
-    fetchVerifications({ status: 'pending_review', per_page: 1 }),
-    fetchVerifications({ status: 'approved', per_page: 1 }),
-    fetchVerifications({ status: 'rejected', per_page: 1 }),
+    fetchVerifications({ ...verificationQueryForTab('submitted'), per_page: 1 }),
+    fetchVerifications({ ...verificationQueryForTab('pending_review'), per_page: 1 }),
+    fetchVerifications({ ...verificationQueryForTab('approved'), per_page: 1 }),
+    fetchVerifications({ ...verificationQueryForTab('rejected'), per_page: 1 }),
   ]);
 
   return {

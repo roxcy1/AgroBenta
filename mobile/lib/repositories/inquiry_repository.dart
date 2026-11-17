@@ -51,6 +51,7 @@ class InquiryRepository {
   /// which is what the confirmation screen shows.
   Future<Inquiry> create({
     required int listingId,
+    int requestedQuantity = 1,
     required String message,
     InquiryCollectionDateOption? collectionDateOption,
     DateTime? preferredSchedule,
@@ -65,6 +66,7 @@ class InquiryRepository {
   }) {
     return _service.create(
       listingId: listingId,
+      requestedQuantity: requestedQuantity,
       message: message,
       collectionDateOption: collectionDateOption,
       preferredSchedule: preferredSchedule,

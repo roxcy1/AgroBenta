@@ -487,6 +487,55 @@ directly viewable by URL is not stated by D-02 — **D-23**. Until answered, tre
 
 ---
 
+#### `GET /marketplace/sellers/{seller}`
+
+| Dimension | Specification |
+|---|---|
+| **Endpoint** | `/api/marketplace/sellers/{seller}` |
+| **Method** | `GET` |
+| **Authentication** | Required — `auth:sanctum` + `ability:mobile` |
+| **Request fields** | None (the route id is a selector) |
+| **Validation** | Numeric id; `whereNumber` rejects anything else with `404` |
+| **Response** | `200`, §3.1. `data` = `MobileSellerProfileResource` (§8.2a) |
+| **Errors** | `401`, `403`, `404` |
+| **Authorization** | Any authenticated mobile user; **no** seller capability gate. A non-deleted account is public when `seller_capability = seller` or it has at least one marketplace-visible listing. Otherwise `404`, so an ordinary buyer account with no inventory is not enumerable. |
+| **Ownership** | N/A — public profile. |
+
+`public_location` is the barangay-level Trinidad address only; the stored
+`users.location` may contain a street/purok and is never returned raw. An
+unparseable legacy value is withheld (`null`). `is_verified` is the server's
+`User::isApprovedSeller()` decision. `member_since` is `users.created_at`.
+`active_listings_count` uses the same visibility predicates as the listing page.
+
+Absent by construction: `email`, `phone`, raw `location`, verification
+documents and paths, `admin_note`, reviewer identity, `role`,
+`seller_capability`.
+
+---
+
+#### `GET /marketplace/sellers/{seller}/listings`
+
+| Dimension | Specification |
+|---|---|
+| **Endpoint** | `/api/marketplace/sellers/{seller}/listings` |
+| **Method** | `GET` |
+| **Authentication** | Required — `auth:sanctum` + `ability:mobile` |
+| **Request fields** | `search` (string, optional)<br>`livestock_type` (string, optional, exact)<br>`sort` (`newest`/`oldest`/`price_asc`/`price_desc`, optional, default `newest`)<br>`page` (int, optional, default 1)<br>`per_page` (int, optional, default 15, max 50) |
+| **Validation** | `search` `sometimes`,`string`,`max:255`<br>`livestock_type` `sometimes`,`string`,`max:255`<br>`sort` `sometimes`,`in:newest,oldest,price_asc,price_desc`<br>`page` `sometimes`,`integer`,`min:1`<br>`per_page` `sometimes`,`integer`,`between:1,50`<br>`seller_id`, `status`, `user_id` `prohibited` (`422`) |
+| **Response** | `200`, §3.2. `data.listings` = `MobileListingResource[]`, `data.pagination` = 4 keys |
+| **Errors** | `401`, `403`, `404`, `422` |
+| **Authorization** | Any authenticated mobile user. The same public-profile predicate gates the route; a non-public seller is `404`. |
+| **Visibility** | The buyer marketplace query: `active`, not inventory-reconciled, `quantity > 0`, non-deleted seller. Draft, pending, sold, inactive and fully reserved listings are excluded. |
+| **Ordering** | `created_at DESC, id DESC`. |
+
+This is deliberately a separate read surface rather than a `seller_id` filter on
+`GET /listings`: ownership is never a client-selected scope there, and the
+existing request prohibits it. Search, category and ordering are applied in SQL
+before the page is taken, so filtered pagination covers the seller's whole
+visible inventory.
+
+---
+
 ### 5.3 Seller verification
 
 ---
@@ -594,8 +643,8 @@ Unlike §5.2, a seller sees **all** their own statuses including `draft` and
 | **Method** | `POST` |
 | **Authentication** | Required |
 | **Ability** | `mobile` |
-| **Request fields** | `livestock_type` **required**<br>`location` **required**<br>`asking_price` **required**<br>`quantity` **required**<br>`breed`, `age_value`, `age_unit`, `gender`, `weight_value`, `weight_unit`, `health_status`, `vaccination`, `short_description`, `additional_notes` (all optional)<br>`photos` optional array, default `[]`<br>**`status` is NOT accepted.** |
-| **Validation** | `livestock_type` `required`,`string`,`max:255` — free text, no enum (functional doc §4.1)<br>`location` `required`,`string`,`max:255`<br>`asking_price` `required`,`numeric`,`min:0`,`max:99999999999.99`,`decimal:0,2` **[DEC-02]**<br>`quantity` `required`,`integer`,`min:1`<br>`age_value` `sometimes`,`integer`,`min:0`, maximum by unit — `9125` day / `300` month / `25` year **[DEC-01]**<br>`age_unit` `sometimes`,`Rule::in(['day','month','year'])`<br>`gender` `sometimes`,`Rule::in(['male','female'])`<br>`weight_value` `sometimes`,`numeric`,`min:0`,`decimal:0,2` **[DEC-02]**<br>`weight_unit` `sometimes`,`Rule::in(['kg','lb'])`<br>`age_value`↔`age_unit` and `weight_value`↔`weight_unit` must be supplied together — `required_with`<br>`photos` `sometimes`,`array`,`max:10` — an empty array is valid on create **[DEC-03]**<br>`photos.*` `string`,`max:2048`<br>**`status` and `seller_id` must be rejected if present** — [SEC] §4.5 |
+| **Request fields** | `livestock_type` **required**<br>`location` optional on a draft, **required to submit**<br>`asking_price` optional on a draft, **required to submit**<br>`quantity` **required**<br>`breed`, `age_value`, `age_unit`, `gender`, `weight_value`, `weight_unit`, `health_status`, `vaccination`, `short_description`, `additional_notes` (all optional)<br>`photos` optional array, default `[]`<br>**`status` is NOT accepted.** |
+| **Validation** | `livestock_type` `required`, `Rule::enum(LivestockType::class)`<br>`location` optional on create; when present `string`,`max:255` and the Trinidad catalog rule. Submission re-checks the stored row and requires it<br>`asking_price` optional on create; when present `numeric`,`min:0`,`max:99999999999.99`,`decimal:0,2` **[DEC-02]**. Submission requires it<br>`quantity` `required`,`integer`,`min:1`<br>`age_value` `sometimes`,`integer`,`min:0`, maximum by unit — `9125` day / `300` month / `25` year **[DEC-01]**<br>`age_unit` `sometimes`,`Rule::in(['day','month','year'])`<br>`gender` `sometimes`,`Rule::in(['male','female'])`<br>`weight_value` `sometimes`,`numeric`,`min:0`,`decimal:0,2` **[DEC-02]**<br>`weight_unit` `sometimes`,`Rule::in(['kg','lb'])`<br>`age_value`↔`age_unit` and `weight_value`↔`weight_unit` must be supplied together — `required_with`<br>`photos` `sometimes`,`array`,`max:10` — an empty array is valid on create **[DEC-03]**<br>`photos.*` `string`,`max:2048`<br>**`status` and `seller_id` must be rejected if present** — [SEC] §4.5 |
 | **Response** | `201`, §3.1. `data` = listing, `status` is `draft` |
 | **Errors** | `401`, `403` not an approved seller, `422` |
 | **Authorization** | `seller_capability = seller` |
@@ -1381,6 +1430,31 @@ Reuse the existing field set, with three changes:
 `price_suggestion` is present **only** on the owner-scoped response, and only if
 D-13 permits a buyer to see it. It is `null` for a buyer under the current
 proposal.
+
+### 8.2a `MobileSellerProfileResource` — new
+
+```json
+{
+  "id": 3,
+  "name": "Joseph Basilad",
+  "avatar_url": null,
+  "bio": null,
+  "is_verified": true,
+  "public_location": "Barangay San Isidro, Trinidad, Bohol",
+  "member_since": "2026-09-20T08:15:00.000000Z",
+  "active_listings_count": 3
+}
+```
+
+* **No `email`, `phone`, raw `location`, documents, `admin_note`, reviewer,
+  `role` or `seller_capability`.** §8.1 applies.
+* `public_location` is already reduced to the barangay, municipality and
+  province. A `null` means the account has no parseable public address; do not
+  reconstruct one.
+* `is_verified` is a boolean, not the four-state internal verification status.
+  Only an approved seller is public as verified.
+* `active_listings_count` is the count under the marketplace visibility rules,
+  so it always agrees with the Listings tab.
 
 ### 8.3 `NotificationResource` (mobile) — new
 

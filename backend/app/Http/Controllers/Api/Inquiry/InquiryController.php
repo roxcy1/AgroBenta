@@ -112,6 +112,7 @@ class InquiryController extends Controller
                 'payment_method',
                 'collection_method',
             ]),
+            (int) ($request->validated('requested_quantity') ?? 1),
         );
 
         return response()->json([

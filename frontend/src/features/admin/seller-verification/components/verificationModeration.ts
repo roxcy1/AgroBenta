@@ -44,7 +44,8 @@ export const VERIFICATION_TABS: readonly VerificationTab[] = [
  * Kept here, beside the tab list, so the URL contract and the tabs cannot drift.
  */
 export function resolveStatusTab(value: string | null | undefined): VerificationStatus {
-  const known = VERIFICATION_TABS.find((tab) => tab.value === value);
+  // `pending` is the server's name for the Pending Review tab.
+  const known = VERIFICATION_TABS.find((tab) => tab.value === (value === 'pending' ? 'pending_review' : value));
 
   return known ? known.value : 'submitted';
 }
@@ -57,6 +58,43 @@ export const OPEN_VERIFICATION_STATUSES: readonly VerificationStatus[] = [
   'submitted',
   'pending_review',
 ];
+
+/**
+ * What each tab asks the server for.
+ *
+ * - Submitted: the cumulative log of every submission (`all_submissions`), no
+ *   status filter. It never shrinks; a decided application stays in it.
+ * - Pending Review: every application still waiting for a decision (`pending`,
+ *   the server's name for submitted + pending review together). It empties as
+ *   applications are approved or rejected.
+ * - Approved / Rejected: that decision, across every submission.
+ *
+ * So Submitted = Approved + Rejected + Pending.
+ */
+export interface VerificationTabQuery {
+  status?: string;
+  all_submissions?: boolean;
+}
+
+export function verificationQueryForTab(tab: VerificationStatus): VerificationTabQuery {
+  switch (tab) {
+    case 'submitted':
+      return { all_submissions: true };
+    case 'pending_review':
+      return { status: 'pending' };
+    default:
+      return { status: tab, all_submissions: true };
+  }
+}
+
+/**
+ * The status a row shows. An open application is simply "Pending" to the
+ * administrator whichever of the two open states it is stored in, so a row in
+ * the Submitted log reads Pending, Approved or Rejected.
+ */
+export function verificationDisplayStatus(status: string): string {
+  return isOpenStatus(status) ? 'pending' : status;
+}
 
 export function isOpenStatus(status: string): boolean {
   return (OPEN_VERIFICATION_STATUSES as readonly string[]).includes(status);

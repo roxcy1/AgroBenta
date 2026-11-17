@@ -34,6 +34,7 @@ class MobileInquiryResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'requested_quantity' => $this->requested_quantity,
             'listing' => $this->listing ? [
                 'id' => $this->listing->id,
                 'livestock_type' => $this->listing->livestock_type,

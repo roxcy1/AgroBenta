@@ -97,6 +97,11 @@ class InquiryMessageCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.sm),
+              _row(
+                theme,
+                'Requested quantity',
+                '${inquiry.requestedQuantity} ${inquiry.requestedQuantity == 1 ? 'animal' : 'animals'}',
+              ),
               if (inquiry.paymentMethod != null)
                 _row(theme, 'Payment', inquiry.paymentMethod!.label),
               if (inquiry.collectionMethod != null)

@@ -13,6 +13,9 @@ class MakeOfferState {
     this.errorMessage,
     this.amountErrorMessage,
     this.created,
+    this.refreshedAvailableQuantity,
+    this.inventoryReconciliationRequired = false,
+    this.listingUnavailable = false,
   });
 
   final MakeOfferStatus status;
@@ -26,6 +29,13 @@ class MakeOfferState {
   /// The offer the server created. Non-null only after a success.
   final Offer? created;
 
+  /// Fresh stock read after the server rejects a stale offer quantity.
+  final int? refreshedAvailableQuantity;
+
+  final bool inventoryReconciliationRequired;
+
+  final bool listingUnavailable;
+
   bool get isSubmitting => status == MakeOfferStatus.submitting;
 
   MakeOfferState copyWith({
@@ -33,7 +43,11 @@ class MakeOfferState {
     String? errorMessage,
     String? amountErrorMessage,
     Offer? created,
+    int? refreshedAvailableQuantity,
+    bool? inventoryReconciliationRequired,
+    bool? listingUnavailable,
     bool clearErrors = false,
+    bool clearAvailability = false,
   }) {
     return MakeOfferState(
       status: status ?? this.status,
@@ -42,6 +56,15 @@ class MakeOfferState {
           ? null
           : (amountErrorMessage ?? this.amountErrorMessage),
       created: created ?? this.created,
+      refreshedAvailableQuantity: clearAvailability
+          ? null
+          : (refreshedAvailableQuantity ?? this.refreshedAvailableQuantity),
+      inventoryReconciliationRequired: clearAvailability
+          ? false
+          : (inventoryReconciliationRequired ?? this.inventoryReconciliationRequired),
+      listingUnavailable: clearAvailability
+          ? false
+          : (listingUnavailable ?? this.listingUnavailable),
     );
   }
 }

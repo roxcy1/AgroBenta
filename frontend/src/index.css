@@ -2621,6 +2621,18 @@ input {
   cursor: wait;
 }
 
+.lv-inventory-warning {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border: 1px solid #ead5a5;
+  border-radius: 6px;
+  color: #6b4d12;
+  background: #fbf0d9;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .lv-action-modal-label {
   display: block;
   font-size: 14px;

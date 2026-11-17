@@ -56,7 +56,7 @@ export interface DashboardRecentListing {
   id: number;
   livestock_type: string;
   breed: string;
-  asking_price: string;
+  asking_price: string | null;
   status: ListingStatus;
   seller: DashboardActivityUser | null;
   created_at: string;

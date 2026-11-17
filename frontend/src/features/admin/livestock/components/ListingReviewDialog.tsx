@@ -83,7 +83,7 @@ export default function ListingReviewDialog({
     ['Weight', listing.weight_value !== null ? `${listing.weight_value} ${listing.weight_unit ?? ''}`.trim() : null],
     ['Quantity', String(listing.quantity)],
     ['Asking price', formatPeso(listing.asking_price)],
-    ['Location', listing.location],
+    ['Location', listing.location ?? '—'],
     ['Health status', listing.health_status],
     ['Vaccination', listing.vaccination],
     ['Description', listing.short_description],
