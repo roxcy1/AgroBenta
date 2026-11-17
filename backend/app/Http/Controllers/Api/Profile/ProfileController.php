@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Api\Profile;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\ChangePasswordRequest;
 use App\Http\Requests\Profile\UpdateProfileRequest;
+use App\Http\Requests\Profile\UploadAvatarRequest;
 use App\Http\Resources\UserResource;
+use App\Services\Profile\AvatarService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
-use App\Http\Requests\Profile\UploadAvatarRequest;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * The authenticated user's own profile.
@@ -24,6 +24,12 @@ use Illuminate\Support\Facades\Storage;
  */
 class ProfileController extends Controller
 {
+    public function __construct(
+        private readonly AvatarService $avatars,
+    ) {
+        //
+    }
+
     /**
      * `GET /api/profile` — the caller's own profile.
      */
@@ -82,30 +88,24 @@ class ProfileController extends Controller
         ], 200);
     }
 
-        /**
-     * `POST /api/profile/avatar` — uploads a new avatar.
+    /**
+     * `POST /api/profile/avatar` — replace the caller's own avatar.
+     *
+     * The file is validated by the Form Request. Storage, persistence, and the
+     * safe removal of the previous file live in {@see AvatarService}; the
+     * controller only hands off and serializes the result.
      */
     public function uploadAvatar(UploadAvatarRequest $request): JsonResponse
     {
-        $user = $request->user();
-
-        // Delete old avatar if it exists (para dili mo-puno ang storage)
-        if ($user->avatar_url) {
-            $oldPath = str_replace(Storage::disk('public')->url(''), '', $user->avatar_url);
-            Storage::disk('public')->delete($oldPath);
-        }
-
-        // Save new file sa storage/app/public/avatars
-        $path = $request->file('avatar')->store('avatars', 'public');
-
-        // I-save ang bag-ong URL sa database
-        $user->avatar_url = Storage::disk('public')->url($path);
-        $user->save();
+        $user = $this->avatars->upload(
+            $request->user(),
+            $request->file('avatar'),
+        );
 
         return response()->json([
             'success' => true,
             'message' => 'Profile picture updated.',
-            'data' => new \App\Http\Resources\UserResource($user->fresh()),
+            'data' => new UserResource($user),
         ], 200);
     }
 }

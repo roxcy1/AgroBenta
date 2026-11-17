@@ -43,4 +43,19 @@ class UserRepository
 
         return $user;
     }
+
+    /**
+     * Persist a new avatar URL for [user].
+     *
+     * Only `avatar_url` is written. The caller has already decided which file
+     * the URL points at; ownership of that file is enforced by the avatar
+     * service before this runs.
+     */
+    public function updateAvatarUrl(User $user, string $url): User
+    {
+        $user->avatar_url = $url;
+        $user->save();
+
+        return $user;
+    }
 }
