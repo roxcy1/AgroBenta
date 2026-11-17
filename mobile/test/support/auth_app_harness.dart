@@ -31,6 +31,7 @@ import 'package:http/testing.dart';
 import 'auth_fakes.dart';
 import 'livestock_type_fakes.dart';
 import 'seller_verification_app_harness.dart';
+import 'app_update_fakes.dart';
 
 /// The signed-in destination the gate is given in tests. Kept as a function
 /// rather than a widget so it matches how `main.dart` supplies it.
@@ -198,12 +199,14 @@ class AuthTestHarness {
                 repository: notificationRepository,
                 controller: notificationsController,
                 child: NeverSubmittedVerificationScope(
-                  child: ProfileScope(
-                    repository: profileRepository,
-                    controller: profileController,
-                    child: MaterialApp(
-                      theme: AppTheme.light(),
-                      home: const AuthGate(authenticatedView: _signedInView),
+                  child: NoReleaseAppUpdateScope(
+                    child: ProfileScope(
+                      repository: profileRepository,
+                      controller: profileController,
+                      child: MaterialApp(
+                        theme: AppTheme.light(),
+                        home: const AuthGate(authenticatedView: _signedInView),
+                      ),
                     ),
                   ),
                 ),

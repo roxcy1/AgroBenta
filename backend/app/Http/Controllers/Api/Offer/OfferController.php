@@ -74,6 +74,9 @@ class OfferController extends Controller
             (int) $request->validated('inquiry_id'),
             (int) $request->validated('listing_id'),
             (string) $request->validated('proposed_amount'),
+            $request->validated('proposed_quantity') === null
+                ? null
+                : (int) $request->validated('proposed_quantity'),
             [
                 'proposed_pickup_date' => $request->validated('proposed_pickup_date'),
                 'payment_method' => $request->validated('payment_method'),

@@ -21,6 +21,11 @@ vi.mock('./pages/LoginPage', () => ({ default: () => <p>Login page</p> }));
 vi.mock('./pages/AdminHomePage', () => ({ default: () => <p>Dashboard page</p> }));
 vi.mock('./pages/UsersPage', () => ({ default: () => <p>Users page</p> }));
 vi.mock('./pages/SettingsPage', () => ({ default: () => <p>Settings page</p> }));
+// The home page's download button reads the latest release; no request here.
+vi.mock('./features/appRelease/useAppRelease', () => ({
+  useAppRelease: () => ({ data: null }),
+  formatReleaseSize: () => '',
+}));
 
 function renderAt(path: string) {
   render(

@@ -44,6 +44,7 @@ Map<String, dynamic> messageJson({
 /// The `inquiry` card payload `MessageResource` attaches to the opener.
 Map<String, dynamic> inquiryCardJson({
   Object? id = 55,
+  int requestedQuantity = 1,
   Object? listingId = 12,
   String title = 'Holstein Heifer',
   String? askingPrice = '50000.00',
@@ -55,6 +56,7 @@ Map<String, dynamic> inquiryCardJson({
 }) {
   return <String, dynamic>{
     'id': id,
+    'requested_quantity': requestedQuantity,
     'listing': <String, dynamic>{
       'id': listingId,
       'title': title,
@@ -118,6 +120,7 @@ Map<String, dynamic> conversationOfferJson({
   Object? id = 41,
   String status = 'pending',
   String proposedAmount = '47500.00',
+  int proposedQuantity = 1,
   Object? listingId = 12,
   String? listingTitle = 'Holstein Heifer',
 }) {
@@ -125,6 +128,7 @@ Map<String, dynamic> conversationOfferJson({
     'id': id,
     'status': status,
     'proposed_amount': proposedAmount,
+    'proposed_quantity': proposedQuantity,
     'listing_id': listingId,
     'listing_title': listingTitle,
   };
@@ -133,9 +137,12 @@ Map<String, dynamic> conversationOfferJson({
 /// The `eligible_inquiry` projection `ConversationResource` sends.
 Map<String, dynamic> eligibleInquiryJson({
   Object? id = 55,
+  int requestedQuantity = 1,
   Object? listingId = 12,
   String? listingTitle = 'Holstein Heifer',
   String? askingPrice = '50000.00',
+  int? listingAvailableQuantity = 5,
+  bool listingInventoryReconciliationRequired = false,
   String? listingPhotoUrl,
   String? paymentMethod = 'gcash',
   String? collectionMethod = 'farm_pickup',
@@ -143,9 +150,12 @@ Map<String, dynamic> eligibleInquiryJson({
 }) {
   return <String, dynamic>{
     'id': id,
+    'requested_quantity': requestedQuantity,
     'listing_id': listingId,
     'listing_title': listingTitle,
     'asking_price': askingPrice,
+    'listing_available_quantity': listingAvailableQuantity,
+    'listing_inventory_reconciliation_required': listingInventoryReconciliationRequired,
     'listing_photo_url': listingPhotoUrl,
     'payment_method': paymentMethod,
     'collection_method': collectionMethod,

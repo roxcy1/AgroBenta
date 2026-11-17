@@ -225,6 +225,9 @@ class InquiryListing {
     required this.breed,
     this.askingPrice,
     this.photoUrl,
+    this.availableQuantity,
+    this.totalQuantity,
+    this.inventoryReconciliationRequired = false,
   });
 
   factory InquiryListing.fromJson(Map<String, dynamic> json) {
@@ -234,6 +237,10 @@ class InquiryListing {
       breed: readStringOrEmpty(json, 'breed'),
       askingPrice: readNullableDecimalString(json, 'asking_price'),
       photoUrl: readNullableString(json, 'photo_url'),
+      availableQuantity: readNullableInt(json, 'quantity'),
+      totalQuantity: readNullableInt(json, 'total_quantity'),
+      inventoryReconciliationRequired:
+          readNullableBool(json, 'inventory_reconciliation_required') ?? false,
     );
   }
 
@@ -249,6 +256,13 @@ class InquiryListing {
 
   /// The listing's first photo, already an absolute URL.
   final String? photoUrl;
+
+  /// Legacy `quantity` projection: available animals, not total listed.
+  final int? availableQuantity;
+
+  final int? totalQuantity;
+
+  final bool inventoryReconciliationRequired;
 
   /// A buyer-facing title: the breed when there is one, else the species.
   String get title => breed.trim().isEmpty ? livestockType : breed;
@@ -280,6 +294,7 @@ class Inquiry {
     required this.paymentMethod,
     required this.collectionMethod,
     required this.createdAt,
+    this.requestedQuantity = 1,
     this.conversationCounterpartId,
   });
 
@@ -288,6 +303,7 @@ class Inquiry {
 
     return Inquiry(
       id: readInt(json, 'id'),
+      requestedQuantity: readNullableInt(json, 'requested_quantity') ?? 1,
       listing: listing == null ? null : InquiryListing.fromJson(listing),
       subject: readNullableString(json, 'subject'),
       message: readStringOrEmpty(json, 'message'),
@@ -334,6 +350,9 @@ class Inquiry {
 
   /// `inquiries.id`.
   final int id;
+
+  /// The buyer's immutable requested amount for this inquiry.
+  final int requestedQuantity;
 
   /// The listing asked about, or `null` if the listing was deleted after the
   /// inquiry was sent. The inquiry itself remains valid without it.

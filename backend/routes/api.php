@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Admin\SellerVerificationController;
 use App\Http\Controllers\Api\Admin\SettingsController;
 use App\Http\Controllers\Api\Admin\TransactionController;
 use App\Http\Controllers\Api\Admin\UserController;
+use App\Http\Controllers\Api\AppReleaseController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
 use App\Http\Controllers\Api\Device\DeviceTokenController;
@@ -38,6 +39,10 @@ Route::middleware('auth:sanctum')->get('/user', CurrentUserController::class);
 Route::middleware('auth:sanctum')->get('/livestock-types', LivestockTypeController::class);
 Route::middleware('auth:sanctum', 'ability:mobile')
     ->get('/locations/trinidad/barangays', TrinidadLocationController::class);
+
+// The latest Android app release. Public: the home page's download button and
+// the app's update check read it, the first before anyone has an account.
+Route::get('/app-release', AppReleaseController::class)->middleware('throttle:60,1');
 
 Route::post('/admin/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1');
@@ -355,6 +360,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::post('/listings/{listing}/approve', [ListingController::class, 'approve']);
     Route::post('/listings/{listing}/reject', [ListingController::class, 'reject']);
     Route::post('/listings/{listing}/deactivate', [ListingController::class, 'deactivate']);
+    Route::post('/listings/{listing}/inventory/reconcile', [ListingController::class, 'reconcileInventory']);
     Route::get('/listings/{listing}', [ListingController::class, 'show']);
     Route::get('/seller-verifications', [SellerVerificationController::class, 'index']);
     Route::get('/seller-verifications/{sellerVerification}', [SellerVerificationController::class, 'show']);

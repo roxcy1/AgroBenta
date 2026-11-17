@@ -70,9 +70,9 @@ class SellerListingDraft {
       weightValue: listing.weightValue ?? '',
       weightUnit: listing.weightUnit,
       weightInformation: listing.weightInformation ?? 'measured',
-      quantity: listing.quantity.toString(),
-      askingPrice: listing.askingPrice,
-      location: listing.location,
+      quantity: listing.totalQuantity?.toString() ?? '',
+      askingPrice: listing.askingPrice ?? '',
+      location: listing.location ?? '',
       healthStatus: listing.healthStatus ?? '',
       vaccination: listing.vaccination ?? '',
       shortDescription: listing.shortDescription,
@@ -164,9 +164,9 @@ class SellerListingDraft {
           if (weightValue.trim().isNotEmpty && weightUnit != null) {
             body[key] = weightInformation;
           }
-        case 'quantity':
-          // Same guard as `age_value`: the contract holds this to an integer,
-          // and an unparseable value is left out rather than thrown on.
+        case 'total_quantity':
+          // Total animals in the listing. The backend derives the available
+          // compatibility value after reserved and sold quantities.
           final int? amount = int.tryParse(quantity.trim());
           if (amount != null) {
             body[key] = amount;
@@ -190,13 +190,11 @@ class SellerListingDraft {
     return body;
   }
 
-  /// The fields the contract requires at create, absent from the body.
+  /// The fields the contract requires at draft-create, absent from the body.
   ///
-  /// Surfaces in the form before a request is made, so an incomplete draft is
-  /// caught in the app rather than as a `422`. A draft is a complete but
-  /// unpublished record: the contract requires these four, and the form does not
-  /// pretend otherwise by offering a "save and finish later" that the server
-  /// would refuse.
+  /// Asking price and location are deliberately not here: they are publication
+  /// requirements, so a draft may be saved (and an AI suggestion requested)
+  /// before the seller has decided either.
   List<String> get missingRequiredFields => SellerListingEndpoints
       .requiredFields
       .where((String field) => !toRequestBody().containsKey(field))

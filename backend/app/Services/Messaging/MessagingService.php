@@ -137,6 +137,7 @@ class MessagingService
 
         return [
             'id' => (int) $inquiry->id,
+            'requested_quantity' => (int) $inquiry->requested_quantity,
             'listing' => $listing === null ? null : [
                 'id' => (int) $listing->id,
                 'title' => trim(($listing->livestock_type ?? '').' '.($listing->breed ?? '')),

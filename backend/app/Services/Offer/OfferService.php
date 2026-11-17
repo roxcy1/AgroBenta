@@ -3,7 +3,6 @@
 namespace App\Services\Offer;
 
 use App\Enums\ActivityAction;
-use App\Enums\ListingStatus;
 use App\Enums\OfferStatus;
 use App\Events\OfferCreated;
 use App\Events\OfferUpdated;
@@ -73,6 +72,7 @@ class OfferService
         int $inquiryId,
         int $listingId,
         string $proposedAmount,
+        ?int $proposedQuantity = null,
         array $terms = [],
     ): Offer {
         return DB::transaction(function () use (
@@ -80,6 +80,7 @@ class OfferService
             $inquiryId,
             $listingId,
             $proposedAmount,
+            $proposedQuantity,
             $terms,
         ): Offer {
             $inquiry = $this->offers->lockInquiry($inquiryId);
@@ -87,14 +88,8 @@ class OfferService
                 abort(404, 'Inquiry not found.');
             }
 
-            $listing = $this->offers->findListing($listingId);
-            if ($listing === null) {
-                abort(404, 'Listing not found.');
-            }
-
-            if ($listing->status !== ListingStatus::Active) {
-                abort(409, 'This listing is not available for offers.');
-            }
+            $quantity = $proposedQuantity ?? (int) $inquiry->requested_quantity;
+            $listing = $this->reservations->lockForOffer($listingId, $quantity);
 
             if ((int) $listing->seller_id !== (int) $seller->getKey()) {
                 abort(409, 'You may only make an offer on your own listing.');
@@ -106,6 +101,10 @@ class OfferService
 
             if ((int) $inquiry->buyer_id === (int) $seller->getKey()) {
                 abort(409, 'You cannot make an offer on your own inquiry.');
+            }
+
+            if ($quantity < 1 || $quantity > (int) $inquiry->requested_quantity) {
+                abort(409, 'An offer quantity must be between one and the buyer\'s requested quantity.');
             }
 
             if ($this->offers->findPendingForInquiry($inquiryId) !== null) {
@@ -122,6 +121,7 @@ class OfferService
                 'seller_id' => (int) $seller->getKey(),
                 'buyer_id' => (int) $inquiry->buyer_id,
                 'proposed_amount' => $proposedAmount,
+                'proposed_quantity' => $quantity,
                 'proposed_pickup_date' => $terms['proposed_pickup_date'] ?? null,
                 'payment_method' => $terms['payment_method'] ?? null,
                 'collection_method' => $terms['collection_method'] ?? null,
@@ -147,6 +147,7 @@ class OfferService
                         'seller_id' => (int) $seller->getKey(),
                         'buyer_id' => (int) $inquiry->buyer_id,
                         'proposed_amount' => $proposedAmount,
+                        'proposed_quantity' => $quantity,
                     ],
                 ],
             );
@@ -190,7 +191,10 @@ class OfferService
             // purchase. If the seller was deactivated after the offer was
             // created, throwing here rolls the reservation back and leaves the
             // offer pending so the seller can still withdraw it.
-            $listing = $this->reservations->reserve((int) $offer->listing_id, 1);
+            $listing = $this->reservations->reserve(
+                (int) $offer->listing_id,
+                (int) $offer->proposed_quantity,
+            );
             if ($listing->seller === null) {
                 abort(409, 'This listing is not available for new transactions.');
             }
@@ -204,7 +208,7 @@ class OfferService
                 $buyer,
                 (int) $accepted->seller_id,
                 (int) $accepted->listing_id,
-                1,
+                (int) $accepted->proposed_quantity,
                 (string) $accepted->proposed_amount,
                 (int) $accepted->getKey(),
                 $accepted->payment_method?->value,
@@ -238,6 +242,7 @@ class OfferService
                         'listing_id' => $accepted->listing_id,
                         'buyer_id' => $buyer->getKey(),
                         'seller_id' => (int) $accepted->seller_id,
+                        'quantity' => (int) $accepted->proposed_quantity,
                     ],
                 ],
             );

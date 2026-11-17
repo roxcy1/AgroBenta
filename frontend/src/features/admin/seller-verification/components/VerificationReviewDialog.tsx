@@ -5,10 +5,11 @@ import {
   useRejectVerification,
 } from '../api/useSellerVerifications';
 import type { VerificationActionConfig } from './verificationModeration';
-import { verificationErrorMessage } from './verificationModeration';
+import { verificationDisplayStatus, verificationErrorMessage } from './verificationModeration';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDateTime } from '../../../../lib/format';
 import { VerificationModalHeader } from './VerificationModalHeader';
+import { VerificationDocumentGallery } from './VerificationDocuments';
 import './VerificationReviewDialog.css';
 
 interface VerificationReviewDialogProps {
@@ -106,7 +107,7 @@ export default function VerificationReviewDialog({
                 <tr>
                   <th>Status</th>
                   <td>
-                    <StatusBadge status={verification.status} />
+                    <StatusBadge status={verificationDisplayStatus(verification.status)} />
                   </td>
                 </tr>
                 {rows.map(([label, value]) => (
@@ -124,6 +125,9 @@ export default function VerificationReviewDialog({
               </tbody>
             </table>
           </div>
+
+          <h3 className="verification-review-section-title">Submitted documents</h3>
+          <VerificationDocumentGallery verification={verification} />
 
           <div className="lv-action-modal-field">
             <label className="lv-action-modal-label" htmlFor="verification-admin-note">

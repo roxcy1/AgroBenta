@@ -12,6 +12,8 @@ import {
   VERIFICATION_TABS,
   resolveStatusTab,
   verificationActionsFor,
+  verificationDisplayStatus,
+  verificationQueryForTab,
 } from './verificationModeration';
 import VerificationDetailsDialog from './VerificationDetailsDialog';
 import VerificationReviewDialog from './VerificationReviewDialog';
@@ -37,7 +39,7 @@ export function SellerVerificationTab() {
 
   const { data, isLoading, error, refetch } = useSellerVerifications({
     search: search || undefined,
-    status: activeStatus,
+    ...verificationQueryForTab(activeStatus),
     page,
     per_page: 15,
   });
@@ -194,7 +196,7 @@ export function SellerVerificationTab() {
                       {verification.business_location ?? '\u2014'}
                     </td>
                     <td>
-                      <StatusBadge status={verification.status} />
+                      <StatusBadge status={verificationDisplayStatus(verification.status)} />
                     </td>
                     <td className="lv-date-cell">{formatDate(verification.submitted_at)}</td>
                     <td className="lv-date-cell">{formatDate(verification.reviewed_at)}</td>

@@ -5,18 +5,21 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListListingsRequest;
 use App\Http\Requests\Admin\ModerateListingRequest;
+use App\Http\Requests\Admin\ReconcileListingInventoryRequest;
 use App\Http\Requests\Admin\RejectListingRequest;
+use App\Http\Resources\ListingInventoryReconciliationResource;
 use App\Http\Resources\ListingResource;
 use App\Models\Listing;
 use App\Services\Admin\AdminListingService;
+use App\Services\Admin\ListingInventoryReconciliationService;
 use Illuminate\Http\JsonResponse;
 
 class ListingController extends Controller
 {
-    public function __construct(private readonly AdminListingService $listings)
-    {
-        //
-    }
+    public function __construct(
+        private readonly AdminListingService $listings,
+        private readonly ListingInventoryReconciliationService $inventory,
+    ) {}
 
     /**
      * List livestock listings with optional search, filtering, and pagination.
@@ -61,15 +64,63 @@ class ListingController extends Controller
      */
     public function show(Listing $listing): JsonResponse
     {
-        $listing->load([
-            'seller' => fn ($seller) => $seller
-                ->withTrashed()
-                ->select(['id', 'name', 'email']),
-        ]);
+        $listing = Listing::query()
+            ->withInventoryTotals()
+            ->with([
+                'seller' => fn ($seller) => $seller
+                    ->withTrashed()
+                    ->select(['id', 'name', 'email']),
+                'inventoryReconciliations.admin:id,name',
+                'unaccountedInventoryTransactions:id,listing_id,status,quantity,inventory_accounted',
+            ])
+            ->whereKey($listing->getKey())
+            ->firstOrFail();
 
         return response()->json([
             'success' => true,
             'data' => new ListingResource($listing),
+        ], 200);
+    }
+
+    /**
+     * Reconcile a quarantined listing from administrator-verified inventory
+     * and evidence-backed allocation of legacy transactions.
+     */
+    public function reconcileInventory(
+        ReconcileListingInventoryRequest $request,
+        Listing $listing,
+    ): JsonResponse {
+        $result = $this->inventory->reconcile(
+            (int) $listing->getKey(),
+            $request->user(),
+            (int) $request->validated('verified_physical_quantity'),
+            (int) $request->validated('verified_externally_sold_quantity'),
+            array_map('intval', $request->validated('accounted_transaction_ids')),
+            $request->validated('reason'),
+            $request->validated('evidence'),
+        );
+
+        $updated = Listing::query()
+            ->withInventoryTotals()
+            ->with([
+                'seller' => fn ($seller) => $seller
+                    ->withTrashed()
+                    ->select(['id', 'name', 'email']),
+                'inventoryReconciliations.admin:id,name',
+                'unaccountedInventoryTransactions:id,listing_id,status,quantity,inventory_accounted',
+            ])
+            ->whereKey($result['listing']->getKey())
+            ->firstOrFail();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Listing inventory reconciled.',
+            'data' => [
+                'listing' => new ListingResource($updated),
+                'reconciliation' => new ListingInventoryReconciliationResource(
+                    $result['reconciliation']->load('admin:id,name'),
+                ),
+            ],
         ], 200);
     }
 

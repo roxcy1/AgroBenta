@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/realtime/realtime_event.dart';
 import '../../../models/listing.dart';
 import '../../../models/marketplace_page.dart';
 import '../../../repositories/marketplace_repository.dart';
@@ -44,7 +45,12 @@ import 'marketplace_state.dart';
 /// has been cleared by then and the auth gate takes the app to sign-in, so
 /// writing a "session expired" message into the list would only flash.
 class MarketplaceController extends ChangeNotifier {
-  MarketplaceController(this._repository);
+  MarketplaceController(
+    this._repository, {
+    Stream<RealtimeEvent>? realtimeEvents,
+  }) {
+    _realtimeSubscription = realtimeEvents?.listen(_handleRealtimeEvent);
+  }
 
   /// How long typing must pause before the list is re-queried.
   ///
@@ -58,6 +64,7 @@ class MarketplaceController extends ChangeNotifier {
   MarketplaceState get state => _state;
 
   Timer? _searchDebounce;
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   bool _disposed = false;
 
   /// Incremented for every first-page request. A response whose generation is
@@ -127,6 +134,12 @@ class MarketplaceController extends ChangeNotifier {
     }
 
     await _loadFirstPage(keepResults: true);
+  }
+
+  void _handleRealtimeEvent(RealtimeEvent event) {
+    if (event.name == 'listing.inventory.updated' && !_disposed) {
+      refresh();
+    }
   }
 
   /// Records new search text and schedules a debounced request.
@@ -382,6 +395,8 @@ class MarketplaceController extends ChangeNotifier {
     _disposed = true;
     _searchDebounce?.cancel();
     _searchDebounce = null;
+    unawaited(_realtimeSubscription?.cancel());
+    _realtimeSubscription = null;
     super.dispose();
   }
 }

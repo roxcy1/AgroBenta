@@ -23,8 +23,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *   'listing_id'     => int|null,             // most relevant listing context
  *   'listing_title'  => string|null,          // human-readable listing
  *   'listing_price'  => string|null,          // that listing's asking price
- *   'last_message'   => string,               // the newest message body
- *   'last_message_at'=> Carbon,               // when it was sent
+ *   'last_message'   => string,               // the newest message body, or a
+ *                                             // placeholder for a counterpart
+ *                                             // with no message yet, from the
+ *                                             // caller's side: "Inquiry sent"/
+ *                                             // "Inquiry received", "Offer
+ *                                             // sent"/"Offer received",
+ *                                             // "Transaction started"
+ *   'last_message_at'=> Carbon,               // when it was sent (or when that
+ *                                             // latest activity happened)
  *   'unread_count'   => int,                  // unread messages for the caller
  *   'has_inquiry'    => bool,                 // an inquiry exists for the pair
  *   'has_transaction'=> bool,                 // a transaction exists for the pair

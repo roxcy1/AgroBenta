@@ -43,6 +43,7 @@ import 'seller_dashboard_fakes.dart';
 import 'seller_listing_fakes.dart';
 import 'seller_verification_app_harness.dart';
 import 'transaction_fakes.dart';
+import 'app_update_fakes.dart';
 
 /// Pumps [AccountModeShell] with the scopes `main.dart` installs above
 /// `MaterialApp`, over one recorded mock transport.
@@ -241,27 +242,29 @@ class AccountModeShellHarness {
               child: SellerListingScope(
                 repository: sellerListingRepository,
                 controller: sellerListingController,
-                child: ProfileScope(
-                  repository: profileRepository,
-                  controller: profileController,
-                  child: TransactionScope(
-                    repository: transactionRepository,
-                    child: MessagingScope(
-                      repository: messagingRepository,
-                      conversationsController: conversationsController,
-                      child: NotificationsScope(
-                        repository: notificationRepository,
-                        controller: notificationsController,
-                        child: InquiryScope(
-                          repository: inquiryRepository,
-                          child: SellerDashboardScope(
-                            repository: sellerDashboardRepository,
-                            child: SellerActivityScope(
-                              repository: sellerActivityRepository,
-                              child: NeverSubmittedVerificationScope(
-                                child: MaterialApp(
-                                  theme: AppTheme.light(),
-                                  home: const AccountModeShell(),
+                child: NoReleaseAppUpdateScope(
+                  child: ProfileScope(
+                    repository: profileRepository,
+                    controller: profileController,
+                    child: TransactionScope(
+                      repository: transactionRepository,
+                      child: MessagingScope(
+                        repository: messagingRepository,
+                        conversationsController: conversationsController,
+                        child: NotificationsScope(
+                          repository: notificationRepository,
+                          controller: notificationsController,
+                          child: InquiryScope(
+                            repository: inquiryRepository,
+                            child: SellerDashboardScope(
+                              repository: sellerDashboardRepository,
+                              child: SellerActivityScope(
+                                repository: sellerActivityRepository,
+                                child: NeverSubmittedVerificationScope(
+                                  child: MaterialApp(
+                                    theme: AppTheme.light(),
+                                    home: const AccountModeShell(),
+                                  ),
                                 ),
                               ),
                             ),

@@ -5,7 +5,6 @@ namespace App\Services\Inquiry;
 use App\Enums\ActivityAction;
 use App\Enums\InquiryCollectionMethod;
 use App\Enums\InquiryPaymentMethod;
-use App\Enums\ListingStatus;
 use App\Events\InquiryCreated;
 use App\Models\Inquiry;
 use App\Models\Listing;
@@ -13,6 +12,7 @@ use App\Models\User;
 use App\Repositories\Inquiry\InquiryRepository;
 use App\Services\ActivityLogger;
 use App\Services\Messaging\MessagingService;
+use App\Services\Listing\ListingReservationService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
@@ -54,6 +54,7 @@ class InquiryService
         private readonly InquiryRepository $inquiries,
         private readonly ActivityLogger $activity,
         private readonly MessagingService $messaging,
+        private readonly ListingReservationService $reservations,
     ) {
         //
     }
@@ -102,42 +103,64 @@ class InquiryService
      *
      * @param  array<string, mixed>  $preferences  The allow-listed form fields from `StoreInquiryRequest`.
      */
-    public function create(User $buyer, Listing $listing, ?string $message, array $preferences): Inquiry
+    public function create(
+        User $buyer,
+        Listing $listing,
+        ?string $message,
+        array $preferences,
+        int $requestedQuantity = 1,
+    ): Inquiry
     {
-        if ($listing->status !== ListingStatus::Active) {
-            abort(409, 'This listing is not available for inquiries.');
-        }
-
-        if ((int) $listing->seller_id === (int) $buyer->getKey()) {
-            abort(409, 'You cannot inquire about your own listing.');
-        }
-
-        // One inquiry per buyer per listing, whatever its status. This lookup
-        // answers the ordinary repeat; the unique index below answers the race
-        // between two requests that both pass it.
-        if ($this->findForBuyerAndListing($buyer, $listing) !== null) {
-            abort(409, 'You have already sent an inquiry about this listing.');
-        }
-
         try {
-            return DB::transaction(function () use ($buyer, $listing, $message, $preferences): Inquiry {
+            return DB::transaction(function () use (
+                $buyer,
+                $listing,
+                $message,
+                $preferences,
+                $requestedQuantity,
+            ): Inquiry {
+                // Lock the same listing row the reservation path locks. An
+                // inquiry still reserves nothing, but it validates its requested
+                // quantity against an authoritative available-stock snapshot.
+                $lockedListing = $this->reservations->lockForInquiry(
+                    (int) $listing->getKey(),
+                    $requestedQuantity,
+                );
+
+                if ((int) $lockedListing->seller_id === (int) $buyer->getKey()) {
+                    abort(409, 'You cannot inquire about your own listing.');
+                }
+
+                // One inquiry per buyer per listing, whatever its status. The
+                // unique index remains the final guard against concurrent writes.
+                if ($this->findForBuyerAndListing($buyer, $lockedListing) !== null) {
+                    abort(409, 'You have already sent an inquiry about this listing.');
+                }
+
                 $inquiry = $this->inquiries->create(
                     $buyer,
-                    (int) $listing->seller_id,
-                    (int) $listing->getKey(),
+                    (int) $lockedListing->seller_id,
+                    (int) $lockedListing->getKey(),
                     $message,
                     $preferences,
+                    $requestedQuantity,
                 );
 
                 // Create the initial buyer→seller message inside the same
                 // transaction, and notify the seller for every inquiry.
-                $seller = User::findOrFail((int) $listing->seller_id);
-                $body = $this->buildMessageBody($buyer, $listing, $message, $preferences);
+                $seller = User::findOrFail((int) $lockedListing->seller_id);
+                $body = $this->buildMessageBody(
+                    $buyer,
+                    $lockedListing,
+                    $message,
+                    $preferences,
+                    $requestedQuantity,
+                );
                 $this->messaging->sendMessage(
                     $buyer,
                     $seller,
                     $body,
-                    (int) $listing->getKey(),
+                    (int) $lockedListing->getKey(),
                     true,
                 );
 
@@ -147,14 +170,14 @@ class InquiryService
                     sprintf(
                         'Inquiry #%d sent for listing #%d.',
                         $inquiry->getKey(),
-                        $listing->getKey(),
+                        $lockedListing->getKey(),
                     ),
                     [
                         'target_type' => 'inquiry',
                         'target_id' => $inquiry->getKey(),
                         'context' => [
-                            'listing_id' => $listing->getKey(),
-                            'seller_id' => (int) $listing->seller_id,
+                            'listing_id' => $lockedListing->getKey(),
+                            'seller_id' => (int) $lockedListing->seller_id,
                         ],
                     ],
                 );
@@ -190,6 +213,7 @@ class InquiryService
         Listing $listing,
         ?string $message,
         array $preferences,
+        int $requestedQuantity,
     ): string {
         $price = $listing->asking_price !== null
             ? number_format((float) $listing->asking_price, 2)
@@ -206,6 +230,7 @@ class InquiryService
         $lines = [
             "New inquiry from {$buyer->name}.",
             "Listing: {$listing->displayLabel()}.",
+            "Requested quantity: {$requestedQuantity}.",
             "Asking price: ₱{$price}.",
             'Preferred payment: '.($payment?->label() ?? 'not specified'),
             'Preferred collection: '.($collection?->label() ?? 'not specified'),

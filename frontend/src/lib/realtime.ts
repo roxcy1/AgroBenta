@@ -28,6 +28,10 @@ export interface ActivityEvent {
   created_at: string | null;
 }
 
+export interface ListingInventoryEvent {
+  listing_id: number;
+}
+
 /**
  * Connect the Admin Web's WebSocket client and subscribe to the shared admin
  * channel. Returns a cleanup function.
@@ -40,6 +44,7 @@ export interface ActivityEvent {
 export function connectAdminRealtime(
   onActivity: (event: ActivityEvent) => void,
   onReconnected?: () => void,
+  onListingInventoryUpdated?: (event: ListingInventoryEvent) => void,
 ): () => void {
   const token = localStorage.getItem('admin_token');
   if (!token) {
@@ -76,7 +81,11 @@ export function connectAdminRealtime(
 
   echo
     .private('admin')
-    .listen('.activity.recorded', (event: ActivityEvent) => onActivity(event));
+    .listen('.activity.recorded', (event: ActivityEvent) => onActivity(event))
+    .listen(
+      '.listing.inventory.updated',
+      (event: ListingInventoryEvent) => onListingInventoryUpdated?.(event),
+    );
 
   return () => {
     echo.disconnect();

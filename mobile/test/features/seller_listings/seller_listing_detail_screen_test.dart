@@ -138,6 +138,109 @@ void main() {
     );
   });
 
+  testWidgets('an incomplete draft shows Not set for price and location', (
+    WidgetTester tester,
+  ) async {
+    final Listing draft = Listing.fromJson(
+      listingJson(
+        id: 2,
+        status: 'draft',
+        askingPrice: null,
+        location: null,
+      ),
+    );
+
+    await pumpDetailScreen(
+      tester,
+      listing: draft,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath == '/seller/listings') {
+          return sellerListingSingleResponse(listing: draft);
+        }
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'success': true,
+            'message': null,
+            'data': null,
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      },
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Price not set'), findsOneWidget);
+    expect(find.text('Location not set'), findsOneWidget);
+    expect(find.text('₱0.00'), findsNothing);
+  });
+
+  testWidgets('submission errors name the missing publication fields', (
+    WidgetTester tester,
+  ) async {
+    final Listing draft = Listing.fromJson(
+      listingJson(
+        id: 3,
+        status: 'draft',
+        askingPrice: null,
+        location: null,
+        photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+      ),
+    );
+
+    await pumpDetailScreen(
+      tester,
+      listing: draft,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath == '/seller/listings') {
+          return sellerListingListResponse(
+            listings: <Map<String, dynamic>>[
+              listingJson(
+                id: 3,
+                status: 'draft',
+                askingPrice: null,
+                location: null,
+                photos: <Object?>['https://api.test/storage/listings/a.jpg'],
+              ),
+            ],
+            total: 1,
+          );
+        }
+        if (request.apiPath == '/seller/listings/3/submit') {
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'success': false,
+              'message': 'The asking price field is required.',
+              'errors': <String, dynamic>{
+                'asking_price': <String>[
+                  'The asking price field is required.',
+                ],
+                'location': <String>['The location field is required.'],
+              },
+            }),
+            422,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        }
+        return http.Response('Not found', 404);
+      },
+    );
+
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Submit for review'),
+    );
+    for (int frame = 0; frame < 12; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(
+      find.textContaining('asking price field is required'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('shows per-head pricing and the informational listing total', (
     WidgetTester tester,
   ) async {
@@ -166,7 +269,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Asking Price (₱) — Per Head'), findsOneWidget);
-    expect(find.text('Number of Animals Available'), findsOneWidget);
+    expect(find.text('Total animals listed'), findsOneWidget);
     expect(find.text('Total listing value'), findsOneWidget);
     expect(find.text('₱170,000.00 (informational only)'), findsOneWidget);
   });

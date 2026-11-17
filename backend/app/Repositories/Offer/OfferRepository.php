@@ -205,7 +205,13 @@ class OfferRepository
         return Offer::query()
             ->with([
                 'inquiry:buyer_id,seller_id,listing_id,status,payment_method,collection_method,preferred_schedule',
-                'listing:id,livestock_type,breed,asking_price,seller_id',
+                'listing' => fn ($query) => $query
+                    ->select([
+                        'id', 'livestock_type', 'breed', 'asking_price', 'seller_id',
+                        'quantity', 'total_quantity', 'externally_sold_quantity',
+                        'inventory_reconciliation_required',
+                    ])
+                    ->withInventoryTotals(),
                 'seller:id,name,avatar_url',
                 'buyer:id,name,avatar_url',
             ])

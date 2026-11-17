@@ -115,6 +115,13 @@ class Listing {
     required this.weightUnit,
     required this.weightInformation,
     required this.quantity,
+    this.totalQuantity,
+    this.reservedQuantity,
+    this.platformSoldQuantity,
+    this.soldQuantity,
+    this.availableQuantity,
+    this.externallySoldQuantity,
+    this.inventoryReconciliationRequired = false,
     required this.askingPrice,
     required this.location,
     required this.healthStatus,
@@ -142,8 +149,18 @@ class Listing {
       weightUnit: readString(json, 'weight_unit'),
       weightInformation: readNullableString(json, 'weight_information'),
       quantity: readInt(json, 'quantity'),
-      askingPrice: readDecimalString(json, 'asking_price'),
-      location: readString(json, 'location'),
+      totalQuantity: json.containsKey('total_quantity')
+          ? readNullableInt(json, 'total_quantity')
+          : readInt(json, 'quantity'),
+      reservedQuantity: readNullableInt(json, 'reserved_quantity'),
+      platformSoldQuantity: readNullableInt(json, 'platform_sold_quantity'),
+      soldQuantity: readNullableInt(json, 'sold_quantity'),
+      availableQuantity: readNullableInt(json, 'available_quantity'),
+      externallySoldQuantity: readNullableInt(json, 'externally_sold_quantity'),
+      inventoryReconciliationRequired:
+          readNullableBool(json, 'inventory_reconciliation_required') ?? false,
+      askingPrice: readNullableDecimalString(json, 'asking_price'),
+      location: readNullableString(json, 'location'),
       healthStatus: readNullableString(json, 'health_status'),
       vaccination: readNullableString(json, 'vaccination'),
       shortDescription: readString(json, 'short_description'),
@@ -201,16 +218,47 @@ class Listing {
   /// selector. The value is the seller's declaration, not a verification.
   final String? weightInformation;
 
-  /// Whole units available. Never negative.
+  /// Legacy API field, retained as the available-stock quantity.
   final int quantity;
+
+  /// The full quantity the seller listed, or null for an unverified legacy row.
+  final int? totalQuantity;
+
+  /// Quantity committed to active transactions, or null while reconciliation is required.
+  final int? reservedQuantity;
+
+  /// Animals in transactions completed through AgroBenta.
+  final int? platformSoldQuantity;
+
+  /// Platform-completed plus externally reported sales, or null while reconciliation is required.
+  final int? soldQuantity;
+
+  /// Current uncommitted quantity, or null while reconciliation is required.
+  final int? availableQuantity;
+
+  /// Animals the seller reported as sold outside AgroBenta.
+  final int? externallySoldQuantity;
+
+  /// Legacy inventory is quarantined until an administrator verifies it.
+  final bool inventoryReconciliationRequired;
 
   /// The seller's asking price as the API sent it, e.g. `"42500.00"`.
   ///
-  /// Kept as a `String` end to end. Parse it only in `AppFormatters`.
-  final String askingPrice;
+  /// Null on an incomplete draft: the price is required to publish, not to
+  /// save or to request an AI reference. Kept as a `String` end to end; parse
+  /// it only in `AppFormatters`.
+  final String? askingPrice;
 
   /// Free-text location, e.g. `Mabalacat, Pampanga`.
-  final String location;
+  ///
+  /// Null on an incomplete draft. Publication requires it.
+  final String? location;
+
+  /// Whether a price is present. A null or blank value is "not set", never ₱0.
+  bool get hasAskingPrice => (askingPrice ?? '').trim().isNotEmpty;
+
+  /// Whether a location is present.
+  bool get hasLocation => (location ?? '').trim().isNotEmpty;
 
   /// Free-text health note. Null when not recorded.
   final String? healthStatus;

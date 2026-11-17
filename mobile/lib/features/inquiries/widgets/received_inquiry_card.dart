@@ -40,6 +40,7 @@ class ReceivedInquiryCard extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final String buyerName = inquiry.buyer?.name ?? 'Unknown buyer';
     final String date = AppFormatters.formatDateTime(inquiry.createdAt);
+    final int? availableQuantity = inquiry.listing?.availableQuantity;
     final String? subject = inquiry.subject?.trim();
     final String? preferences = _preferences();
     final String? schedule = inquiry.preferredSchedule == null
@@ -82,6 +83,28 @@ class ReceivedInquiryCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             _ListingStrip(listing: inquiry.listing, label: _listingLabel()),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Requested: ${inquiry.requestedQuantity} ${inquiry.requestedQuantity == 1 ? 'animal' : 'animals'}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (inquiry.listing?.inventoryReconciliationRequired ?? false) ...<Widget>[
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                'Inventory requires administrator reconciliation.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.warning,
+                ),
+              ),
+            ] else if (availableQuantity != null)
+              Text(
+                '$availableQuantity ${availableQuantity == 1 ? 'animal' : 'animals'} currently available',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
             if (subject != null && subject.isNotEmpty) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
               Text(subject, style: theme.textTheme.titleSmall),

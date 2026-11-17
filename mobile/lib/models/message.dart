@@ -36,6 +36,7 @@ class ChatUser {
 class MessageInquiry {
   const MessageInquiry({
     required this.id,
+    this.requestedQuantity = 1,
     required this.listing,
     required this.paymentMethod,
     required this.collectionMethod,
@@ -48,6 +49,7 @@ class MessageInquiry {
 
     return MessageInquiry(
       id: readInt(json, 'id'),
+      requestedQuantity: readNullableInt(json, 'requested_quantity') ?? 1,
       listing: listing == null ? null : MessageInquiryListing.fromJson(listing),
       paymentMethod: readNullableEnum(
         json,
@@ -65,6 +67,7 @@ class MessageInquiry {
   }
 
   final int id;
+  final int requestedQuantity;
   final MessageInquiryListing? listing;
   final InquiryPaymentMethod? paymentMethod;
   final InquiryCollectionMethod? collectionMethod;

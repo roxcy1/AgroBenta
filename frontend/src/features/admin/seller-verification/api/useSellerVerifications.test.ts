@@ -38,19 +38,19 @@ describe('fetchVerificationCounts', () => {
     expect(counts).toEqual({ submitted: 3, pending_review: 5, approved: 8, rejected: 1 });
   });
 
-  it('queries each status separately with per_page=1', async () => {
+  it('asks each tab the same question it loads, with per_page=1', async () => {
     getSpy.mockResolvedValue(countsResponse(0));
 
     await fetchVerificationCounts();
 
     const urls = getSpy.mock.calls.map((call) => call[0] as string);
 
-    expect(urls).toHaveLength(4);
-    for (const status of ['submitted', 'pending_review', 'approved', 'rejected']) {
-      expect(
-        urls.some((url) => url.includes(`status=${status}`) && url.includes('per_page=1')),
-      ).toBe(true);
-    }
+    expect(urls).toEqual([
+      '/admin/seller-verifications?all_submissions=1&per_page=1',
+      '/admin/seller-verifications?status=pending&per_page=1',
+      '/admin/seller-verifications?status=approved&all_submissions=1&per_page=1',
+      '/admin/seller-verifications?status=rejected&all_submissions=1&per_page=1',
+    ]);
   });
 });
 

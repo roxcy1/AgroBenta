@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
+use App\Events\ListingInventoryUpdated;
 use App\Models\Listing;
 use App\Models\User;
 use App\Notifications\ListingApproved;
@@ -157,6 +158,8 @@ class AdminListingService
             $moderated = $this->listings->transition($listing, $from, $to, $adminNote);
 
             abort_if($moderated === null, 409, $conflictMessage);
+
+            ListingInventoryUpdated::dispatch((int) $moderated->getKey());
 
             // Written in the same transaction as the transition, so an audit
             // entry can never describe a moderation that did not commit.
