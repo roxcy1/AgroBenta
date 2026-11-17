@@ -1,20 +1,32 @@
 {
   "schema_version": 1,
-  "updated_at_utc": "2026-11-05T13:56:51Z",
+  "updated_at_utc": "2026-11-17T02:15:29Z",
   "active": {
-    "model_version": "v1",
-    "model_file": "catboost_price_v1_20261105T064332748490Z.cbm",
-    "metadata_file": "catboost_price_v1_20261105T064332748490Z.metadata.json",
-    "safety_profile_file": "catboost_price_v1_20261105T064332748490Z.safety.json",
-    "sha256": "0971ccbaec34daaca134a00a2b1d27cfcc52b8d2da9411c0fb0b16f23de70816",
+    "model_version": "v5",
+    "model_file": "candidate_catboost_v5_20261116T160623284919Z.cbm",
+    "metadata_file": "candidate_catboost_v5_20261116T160623284919Z.metadata.json",
+    "safety_profile_file": "candidate_catboost_v5_20261116T160623284919Z.safety_v2.json",
+    "safety_schema_version": 2,
+    "sha256": "8a270cb743ebd9573d5bba45e9aeaf46ebe271611e06f10456dbc87f4e0b66a7",
     "provenance": "synthetic",
     "status": "active",
-    "training_rows": 1597
+    "training_rows": 2800
   },
   "rollback": {
-    "available": false,
-    "target_model_file": null,
-    "reason": "v1 is the initial active model. v2 and v3 are candidates and must not be promoted automatically."
+    "available": true,
+    "target_model_file": "catboost_price_v1_20261105T064332748490Z.cbm",
+    "target_model_version": "v1",
+    "entry": {
+      "model_version": "v1",
+      "model_file": "catboost_price_v1_20261105T064332748490Z.cbm",
+      "metadata_file": "catboost_price_v1_20261105T064332748490Z.metadata.json",
+      "safety_profile_file": "catboost_price_v1_20261105T064332748490Z.safety.json",
+      "sha256": "0971ccbaec34daaca134a00a2b1d27cfcc52b8d2da9411c0fb0b16f23de70816",
+      "provenance": "synthetic",
+      "status": "active",
+      "training_rows": 1597
+    },
+    "reason": "Activated v5; rollback entry preserves the previously active model."
   },
   "candidates": [
     {
@@ -36,6 +48,16 @@
       "provenance": "synthetic",
       "status": "candidate",
       "training_rows": 1697
+    },
+    {
+      "model_version": "v4",
+      "model_file": "candidate_catboost_v4_20261116T102851392542Z.cbm",
+      "metadata_file": "candidate_catboost_v4_20261116T102851392542Z.metadata.json",
+      "safety_profile_file": "candidate_catboost_v4_20261116T102851392542Z.safety.json",
+      "sha256": "1c6ded72cfa70de7e38ff13ba2f4bdf86ce2ea8ab9c45e180421499ad67947bb",
+      "provenance": "synthetic",
+      "status": "candidate",
+      "training_rows": 2100
     }
   ],
   "safety_policy": {

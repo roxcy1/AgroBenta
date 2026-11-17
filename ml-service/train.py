@@ -34,7 +34,12 @@ from features import (
     DatasetValidationError,
     validate_and_normalize_frame,
 )
-from validation import build_training_profile, save_training_profile
+from validation import (
+    build_safety_profile,
+    build_training_profile,
+    save_safety_profile,
+    save_training_profile,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DATASET = BASE_DIR / "data" / "synthetic_livestock_sales.csv"
@@ -65,8 +70,13 @@ def sha256_file(path: Path) -> str:
 
 
 def infer_provenance(path: Path) -> str:
-    """Infer ``synthetic`` from the filename, otherwise ``real``."""
-    return "synthetic" if "synthetic" in path.stem.lower() else "real"
+    """Infer provenance only when the filename explicitly says ``synthetic``.
+
+    Anything else is ``unknown`` and must be supplied explicitly. Treating an
+    unlabelled client file as ``real`` is unsafe: synthetic review data would be
+    described as verified market data.
+    """
+    return "synthetic" if "synthetic" in path.stem.lower() else "unknown"
 
 
 def load_and_validate_dataset(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -272,7 +282,7 @@ def split_summary(
 
 
 def regression_metrics(y_true: Any, y_pred: Any) -> dict[str, float]:
-    """Return MAE, RMSE and MAPE (as a percentage) in PHP."""
+    """Return MAE, RMSE, MAPE and R² in PHP."""
     actual = np.asarray(y_true, dtype=float)
     predicted = np.asarray(y_pred, dtype=float)
 
@@ -286,11 +296,18 @@ def regression_metrics(y_true: Any, y_pred: Any) -> dict[str, float]:
     absolute_error = np.abs(actual - predicted)
     squared_error = np.square(actual - predicted)
     percentage_error = np.abs((actual - predicted) / actual)
+    total_variance = float(np.sum(np.square(actual - np.mean(actual))))
+    r2 = (
+        1.0 - float(np.sum(squared_error)) / total_variance
+        if total_variance > 0
+        else 0.0
+    )
 
     return {
         "mae": round(float(np.mean(absolute_error)), 4),
         "rmse": round(float(np.sqrt(np.mean(squared_error))), 4),
         "mape_percent": round(float(np.mean(percentage_error) * 100), 4),
+        "r2": round(r2, 4),
     }
 
 
@@ -417,9 +434,37 @@ def train(
     depth: int = DEFAULT_DEPTH,
     learning_rate: float = DEFAULT_LEARNING_RATE,
     l2_leaf_reg: float = DEFAULT_L2_LEAF_REG,
+    version: str = MODEL_VERSION,
+    report_path: Path | None = None,
+    write_safety_profile: bool = False,
 ) -> tuple[Path, Path, dict[str, Any]]:
-    """Train, evaluate and persist one model and its report."""
+    """Train, evaluate and persist one model and its report.
+
+    ``version`` and ``report_path`` make candidate training possible without
+    overwriting the active v1 model's report. ``write_safety_profile`` writes
+    the sidecar required by the verified FastAPI loading path.
+    """
     frame, dataset_summary = load_and_validate_dataset(dataset_path)
+
+    protected_report = (
+        report_path is None
+        and version == MODEL_VERSION
+        and Path(dataset_path).resolve() != DEFAULT_DATASET.resolve()
+    )
+    if protected_report:
+        raise DatasetValidationError(
+            "Refusing to train a new dataset under the v1 label: it would "
+            "overwrite reports/metrics.json. Pass --version and --report for "
+            "a candidate run."
+        )
+
+    dataset_provenance = provenance or infer_provenance(dataset_path)
+    if dataset_provenance not in ("synthetic", "real"):
+        raise DatasetValidationError(
+            "Dataset provenance is unknown. Pass --provenance synthetic or "
+            "--provenance real explicitly; a client file must not be assumed "
+            "to be verified market data."
+        )
 
     train_frame, test_frame = assign_split(
         frame, test_fraction=test_fraction, seed=seed
@@ -483,8 +528,7 @@ def train(
         },
     }
 
-    dataset_provenance = provenance or infer_provenance(dataset_path)
-    model_path = _unique_model_path(MODEL_VERSION)
+    model_path = _unique_model_path(version)
     model.save_model(str(model_path))
     training_profile = build_training_profile(
         train_frame,
@@ -493,10 +537,21 @@ def train(
     )
     save_training_profile(model_path, training_profile)
 
+    safety_path: Path | None = None
+    if write_safety_profile:
+        safety_path = save_safety_profile(
+            model_path,
+            build_safety_profile(
+                train_frame,
+                model_file=model_path.name,
+                provenance=dataset_provenance,
+            ),
+        )
+
     trained_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     report: dict[str, Any] = {
         "model": {
-            "version": MODEL_VERSION,
+            "version": version,
             "file": model_path.name,
             "sha256": sha256_file(model_path),
             "trained_at_utc": trained_at,
@@ -514,6 +569,7 @@ def train(
                 category: list(breeds)
                 for category, breeds in SUPPORTED_BREEDS.items()
             },
+            "safety_profile_file": safety_path.name if safety_path else None,
         },
         "dataset": {
             **dataset_summary,
@@ -526,13 +582,23 @@ def train(
     }
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    report_path = REPORTS_DIR / "metrics.json"
-    report_path.write_text(
+    report_file = report_path or (
+        REPORTS_DIR / "metrics.json"
+        if version == MODEL_VERSION
+        else REPORTS_DIR
+        / (
+            "candidate_"
+            f"{version}_training_"
+            f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}.json"
+        )
+    )
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+    report_file.write_text(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
 
-    return model_path, report_path, report
+    return model_path, report_file, report
 
 
 def _print_report(model_path: Path, report_path: Path, report: dict[str, Any]) -> None:
@@ -615,6 +681,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--l2-leaf-reg", type=float, default=DEFAULT_L2_LEAF_REG
     )
+    parser.add_argument(
+        "--version",
+        default=MODEL_VERSION,
+        help="Model version label written to the artifact and report.",
+    )
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="Report path. Defaults to reports/metrics.json.",
+    )
+    parser.add_argument(
+        "--write-safety-profile",
+        action="store_true",
+        help="Write the .safety.json sidecar required by verified loading.",
+    )
 
     args = parser.parse_args(argv)
     if not 0 < args.test_fraction < 1:
@@ -643,6 +725,9 @@ def main(argv: list[str] | None = None) -> int:
             depth=args.depth,
             learning_rate=args.learning_rate,
             l2_leaf_reg=args.l2_leaf_reg,
+            version=args.version,
+            report_path=args.report,
+            write_safety_profile=args.write_safety_profile,
         )
     except (DatasetValidationError, FileNotFoundError, ValueError) as exc:
         print(f"Training failed: {exc}")

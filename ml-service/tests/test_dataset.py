@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from features import DatasetValidationError
-from train import load_and_validate_dataset
+from train import infer_provenance, load_and_validate_dataset
 
 
 HEADER = [
@@ -95,6 +95,16 @@ class DatasetLoadingTests(unittest.TestCase):
             )
             with self.assertRaises(DatasetValidationError):
                 load_and_validate_dataset(path)
+
+    def test_unlabelled_dataset_provenance_is_unknown_not_real(self):
+        self.assertEqual(
+            infer_provenance(Path("synthetic_livestock_sales.csv")),
+            "synthetic",
+        )
+        self.assertEqual(
+            infer_provenance(Path("livestock_sales_v4.csv")),
+            "unknown",
+        )
 
 
 if __name__ == "__main__":

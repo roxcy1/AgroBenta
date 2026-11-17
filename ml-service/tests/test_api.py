@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app import create_app
 from features import SUPPORTED_BREEDS
+from model_registry import load_manifest
 from train import assign_split, load_and_validate_dataset
 from train_young_chicken import split_young_chickens
 
@@ -70,7 +71,11 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(health.status_code, 200)
             self.assertEqual(ready.status_code, 200)
             self.assertEqual(ready.json()["contract_version"], "1.0")
-            self.assertEqual(ready.json()["model_version"], "v1")
+            active = load_manifest()["active"]
+            self.assertEqual(
+                ready.json()["model_version"], active["model_version"]
+            )
+            self.assertEqual(ready.json()["model_sha256"], active["sha256"])
             self.assertEqual(client.app.state.load_count, 1)
             model_id = id(client.app.state.model)
 

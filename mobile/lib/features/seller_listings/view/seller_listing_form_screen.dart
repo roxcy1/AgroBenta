@@ -53,6 +53,9 @@ const Map<String, int> _fieldStep = <String, int>{
   'additional_notes': 1,
 };
 
+/// The exact pounds-to-kilograms factor used by the backend.
+const double _kilogramsPerPound = 0.45359237;
+
 /// Create or edit a listing.
 ///
 /// The same screen for both. The contract's create and update differ only in
@@ -98,6 +101,8 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   String? _gender;
   String? _weightUnit;
   String _weightInformation = 'measured';
+  double? _weightKg;
+  bool _syncingWeightText = false;
   bool _clearBreed = false;
 
   late final LivestockTypesController _catalog;
@@ -210,6 +215,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       _weightValue.text = draft.weightValue;
       _weightUnit = draft.weightUnit;
       _weightInformation = draft.weightInformation;
+      _weightKg = _weightInKilograms(_weightValue.text, _weightUnit);
       _quantity.text = draft.quantity;
       _askingPrice.text = draft.askingPrice;
       _healthStatus.text = draft.healthStatus;
@@ -234,7 +240,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
     // parameter to the shared text-field widget.
     _breed.addListener(_onSuggestionInputChanged);
     _ageValue.addListener(_onSuggestionInputChanged);
-    _weightValue.addListener(_onSuggestionInputChanged);
+    _weightValue.addListener(_onWeightValueChanged);
     // Quantity and asking price are listing totals, not model inputs. They
     // clear a stale input message but never discard a per-head estimate.
     _quantity.addListener(_onSuggestionDraftInputChanged);
@@ -327,7 +333,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
   void dispose() {
     _breed.removeListener(_onSuggestionInputChanged);
     _ageValue.removeListener(_onSuggestionInputChanged);
-    _weightValue.removeListener(_onSuggestionInputChanged);
+    _weightValue.removeListener(_onWeightValueChanged);
     _quantity.removeListener(_onSuggestionDraftInputChanged);
     _askingPrice.removeListener(_onSuggestionDraftInputChanged);
     _locationCatalog.removeListener(_handleLocationCatalogChanged);
@@ -374,6 +380,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       'livestock_type': _livestockType ?? '',
       'breed': _breed.text.trim(),
       'sex': _gender,
+      'weight_kg': _weightKg,
       'source': <String, dynamic>{
         'breed_raw': _breed.text.trim(),
         'age_value': int.tryParse(_ageValue.text.trim()),
@@ -729,6 +736,75 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
       return locationError;
     }
     return null;
+  }
+
+  /// Updates the canonical weight when the seller edits the numeric field.
+  ///
+  /// The controller listener fires again when a unit switch rewrites the field,
+  /// so [_syncingWeightText] keeps that programmatic rewrite from re-deriving
+  /// the canonical value from its rounded display text.
+  void _onWeightValueChanged() {
+    if (!_syncingWeightText) {
+      _weightKg = _weightInKilograms(_weightValue.text, _weightUnit);
+    }
+    _onSuggestionInputChanged();
+  }
+
+  /// Converts the displayed weight when the seller changes kg/lb.
+  ///
+  /// The canonical kilogram value is the source of truth during a switch, so
+  /// switching back and forth cannot accumulate rounding drift. The backend
+  /// still receives the displayed value in the newly selected unit.
+  void _handleWeightUnitChanged(String? unit) {
+    final double? canonical =
+        _weightKg ??
+        _weightInKilograms(_weightValue.text, _weightUnit) ??
+        _weightInKilograms(_weightValue.text, unit);
+
+    setState(() {
+      _weightUnit = unit;
+      if (unit == null || canonical == null) {
+        _weightKg = null;
+        return;
+      }
+
+      _weightKg = canonical;
+      if (_weightValue.text.trim().isEmpty) {
+        return;
+      }
+
+      final String formatted = _formatWeightForUnit(canonical, unit);
+      if (formatted != _weightValue.text) {
+        _syncingWeightText = true;
+        _weightValue.text = formatted;
+        _syncingWeightText = false;
+      }
+    });
+
+    _onSuggestionInputChanged();
+  }
+
+  /// The typed weight in kilograms, or `null` while empty/invalid.
+  double? _weightInKilograms(String text, String? unit) {
+    final double? value = double.tryParse(text.trim());
+    if (value == null || !value.isFinite || value <= 0 || unit == null) {
+      return null;
+    }
+    return unit == 'lb' ? value * _kilogramsPerPound : value;
+  }
+
+  /// Formats a canonical kilogram value for the selected display unit.
+  String _formatWeightForUnit(double kilograms, String unit) {
+    final double value = unit == 'lb'
+        ? kilograms / _kilogramsPerPound
+        : kilograms;
+    final String fixed = value.toStringAsFixed(2);
+    if (!fixed.contains('.')) {
+      return fixed;
+    }
+    return fixed
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
   }
 
   /// Clears a result as soon as one of the model inputs changes.
@@ -1239,10 +1315,7 @@ class _SellerListingFormScreenState extends State<SellerListingFormScreen> {
                         child: Text('Pounds'),
                       ),
                     ],
-                    onChanged: (String? value) {
-                      setState(() => _weightUnit = value);
-                      _onSuggestionInputChanged();
-                    },
+                    onChanged: _handleWeightUnitChanged,
                     validator: (String? value) =>
                         state.validationErrors['weight_unit']?.first ??
                         (_legacyWeightIncomplete &&
