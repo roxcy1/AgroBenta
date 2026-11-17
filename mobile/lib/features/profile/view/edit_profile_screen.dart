@@ -1,13 +1,13 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/user.dart';
 import '../../../widgets/field_label.dart';
+import '../../../widgets/local_image_preview.dart';
 import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
@@ -29,7 +29,11 @@ import '../state/profile_state.dart';
 /// require users to host the image elsewhere first, which is not a viable
 /// mobile flow.
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  const EditProfileScreen({this.imagePicker, super.key});
+
+  /// The picker used for the avatar. Tests pass a fake; the app leaves it
+  /// `null` so the real platform picker is used.
+  final ImagePicker? imagePicker;
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -47,7 +51,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   /// The image the user has just picked. Shown as a preview while the upload
   /// is in flight; cleared to null once the server confirms.
-  File? _selectedImage;
+  XFile? _selectedImage;
 
   /// Whether the avatar upload is in flight. Disables the save button so a
   /// half-finished avatar cannot be committed.
@@ -57,7 +61,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   /// then overridden by a fresh upload.
   String? _currentAvatarUrl;
 
-  final ImagePicker _imagePicker = ImagePicker();
+  late final ImagePicker _imagePicker;
 
   /// The field errors currently on screen, so a repeat of the same server error
   /// does not re-validate for nothing.
@@ -66,6 +70,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _imagePicker = widget.imagePicker ?? ImagePicker();
     // `readOf`, not `of`: a dependency cannot be registered from `initState`.
     _controller = ProfileScope.readOf(context);
     _initial =
@@ -144,14 +149,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
 
     setState(() {
-      _selectedImage = File(picked.path);
+      _selectedImage = picked;
       _uploadingAvatar = true;
     });
 
     try {
       final User updated = await ProfileScope.readOf(
         context,
-      ).uploadAvatar(File(picked.path));
+      ).uploadAvatar(picked);
       if (!mounted) {
         return;
       }
@@ -159,21 +164,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _currentAvatarUrl = updated.avatarUrl;
         _selectedImage = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile picture updated.')),
-      );
-    } on Object {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile picture updated.')));
+    } on Object catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
         _selectedImage = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not upload the picture. Please try again.'),
-        ),
-      );
+      // A server rejection carries the clearest wording available (for example
+      // a 422 naming the size or type restriction); anything else keeps the
+      // generic retry copy.
+      final String message = error is ApiException
+          ? error.message
+          : 'Could not upload the picture. Please try again.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() => _uploadingAvatar = false);
@@ -404,35 +413,54 @@ class _AvatarPicker extends StatelessWidget {
     required this.onTap,
   });
 
-  final File? selectedImage;
+  final XFile? selectedImage;
   final String? currentAvatarUrl;
   final bool isUploading;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final ImageProvider? imageProvider = selectedImage != null
-        ? FileImage(selectedImage!)
-        : (currentAvatarUrl != null && currentAvatarUrl!.isNotEmpty
-              ? NetworkImage(currentAvatarUrl!)
-              : null);
+    final bool hasNetworkAvatar =
+        currentAvatarUrl != null && currentAvatarUrl!.isNotEmpty;
 
     return Center(
       child: Stack(
         children: <Widget>[
           GestureDetector(
             onTap: onTap,
-            child: CircleAvatar(
-              radius: 56,
-              backgroundColor: AppColors.background,
-              backgroundImage: imageProvider,
-              child: imageProvider == null
-                  ? const Icon(
-                      Icons.person,
-                      size: 56,
-                      color: AppColors.textSecondary,
+            // A locally picked file is previewed from its bytes, so the photo
+            // step does not depend on `dart:io` and works on Flutter Web too.
+            child: SizedBox.square(
+              dimension: 112,
+              child: selectedImage != null
+                  ? ClipOval(
+                      child: LocalImagePreview(
+                        file: selectedImage!,
+                        fallback: Container(
+                          color: AppColors.background,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.person,
+                            size: 56,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
                     )
-                  : null,
+                  : CircleAvatar(
+                      radius: 56,
+                      backgroundColor: AppColors.background,
+                      backgroundImage: hasNetworkAvatar
+                          ? NetworkImage(currentAvatarUrl!)
+                          : null,
+                      child: hasNetworkAvatar
+                          ? null
+                          : const Icon(
+                              Icons.person,
+                              size: 56,
+                              color: AppColors.textSecondary,
+                            ),
+                    ),
             ),
           ),
           if (isUploading)
@@ -453,11 +481,7 @@ class _AvatarPicker extends StatelessWidget {
                 onTap: onTap,
                 child: const Padding(
                   padding: EdgeInsets.all(8),
-                  child: Icon(
-                    Icons.camera_alt,
-                    color: Colors.white,
-                    size: 18,
-                  ),
+                  child: Icon(Icons.camera_alt, color: Colors.white, size: 18),
                 ),
               ),
             ),

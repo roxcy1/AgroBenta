@@ -1,15 +1,25 @@
-import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../models/user.dart';
 
+/// The profile transport.
+///
+/// Thin on purpose: every request goes through [ApiClient], which owns the
+/// bearer token, the envelope unwrapping and the `401` handling. The service's
+/// only jobs are to know the paths and to shape the bodies from the allow-list
+/// in [ProfileEndpoints.writableFields] so a screen cannot accidentally send a
+/// server-owned field.
 class ProfileService {
   const ProfileService(this._client);
 
   final ApiClient _client;
 
+  /// `GET /profile` — the caller's own profile.
   Future<User> show() {
     return _client.get<User>(
       ProfileEndpoints.show,
@@ -17,6 +27,15 @@ class ProfileService {
     );
   }
 
+  /// `PUT /profile` — updates the fields that are not `null`.
+  ///
+  /// A `null` argument means "leave this field alone"; an empty string is a
+  /// real value the user has cleared, and is sent. This is what makes the
+  /// request a patch in effect: the caller names what changed.
+  ///
+  /// The `?` before a value is Dart's null-aware map entry: the entry is
+  /// omitted entirely when the value is `null`, which is exactly the older
+  /// `if (value != null)` behaviour in the form the SDK prefers now.
   Future<User> update({
     String? name,
     String? email,
@@ -43,6 +62,11 @@ class ProfileService {
     );
   }
 
+  /// `PUT /profile/password` — changes the caller's password.
+  ///
+  /// Returns nothing: the server's response is message-only, and the value the
+  /// screen needs is "did it succeed", which the absence of an exception
+  /// already answers.
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -60,14 +84,20 @@ class ProfileService {
 
   /// `POST /profile/avatar` — uploads a new avatar.
   ///
+  /// Reads the picked file into memory and sends it with
+  /// `MultipartFile.fromBytes` rather than `fromPath`: an `XFile.path` is not
+  /// a filesystem path on Flutter Web, so `fromPath` would throw there.
+  ///
   /// Uses the shared `postMultipart` on [ApiClient] so the token, timeout,
   /// envelope unmarshaling and [ApiException] translation are all identical
   /// to a JSON request. Rolling a raw `http.MultipartRequest` here would
   /// duplicate that logic and drift.
-  Future<User> uploadAvatar(File imageFile) async {
-    final http.MultipartFile file = await http.MultipartFile.fromPath(
+  Future<User> uploadAvatar(XFile imageFile) async {
+    final Uint8List bytes = await imageFile.readAsBytes();
+    final http.MultipartFile file = http.MultipartFile.fromBytes(
       'avatar',
-      imageFile.path,
+      bytes,
+      filename: imageFile.name,
     );
 
     return _client.postMultipart<User>(

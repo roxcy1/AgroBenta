@@ -31,6 +31,9 @@ class PersonalInformationScreen extends StatefulWidget {
 class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
   late final ProfileController _controller;
 
+  /// Ensure a fast second tap cannot stack two edit forms.
+  bool _openingEdit = false;
+
   @override
   void initState() {
     super.initState();
@@ -44,16 +47,24 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
   }
 
   Future<void> _openEdit() async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (BuildContext context) => const EditProfileScreen(),
-        fullscreenDialog: true,
-      ),
-    );
-    // On return, refresh so a save performed in the edit form is reflected
-    // here without a manual reload.
-    if (mounted) {
-      await _controller.refresh();
+    if (_openingEdit) {
+      return;
+    }
+    _openingEdit = true;
+    try {
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (BuildContext context) => const EditProfileScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+      // On return, refresh so a save performed in the edit form is reflected
+      // here without a manual reload.
+      if (mounted) {
+        await _controller.refresh();
+      }
+    } finally {
+      _openingEdit = false;
     }
   }
 
@@ -63,9 +74,16 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
       appBar: AppBar(
         title: const Text('Personal Information'),
         actions: <Widget>[
-          TextButton(
-            onPressed: _openEdit,
-            child: const Text('Edit'),
+          ListenableBuilder(
+            listenable: _controller,
+            builder: (BuildContext context, Widget? child) {
+              return TextButton(
+                // Opening the form while the profile is still loading would
+                // throw: EditProfileScreen requires a loaded user.
+                onPressed: _controller.state.user == null ? null : _openEdit,
+                child: const Text('Edit'),
+              );
+            },
           ),
         ],
       ),
@@ -165,11 +183,7 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xxs),
-          Text(
-            value,
-            style: theme.textTheme.bodyLarge,
-            softWrap: true,
-          ),
+          Text(value, style: theme.textTheme.bodyLarge, softWrap: true),
         ],
       ),
     );
