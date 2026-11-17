@@ -99,6 +99,12 @@ class ProfileController extends ChangeNotifier {
     }
   }
 
+  /// Re-fetches the profile while keeping what is on screen.
+  ///
+  /// On failure the previous profile stays in place — a refresh that loses
+  /// data because the network blinked is worse than a stale screen.
+  Future<void> refresh() => load();
+
   /// Saves the given fields. Returns `true` when the server accepted the update.
   ///
   /// Only the fields the caller passes are sent; a `null` argument means
