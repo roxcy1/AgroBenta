@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Repositories\SellerListing\SellerListingRepository;
 use App\Repositories\Transaction\TransactionRepository;
 use App\Services\ActivityLogger;
+use App\Services\Listing\ListingReactivationEligibility;
 use App\Services\Listing\ListingReservationService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -72,6 +73,7 @@ class SellerListingService
         private readonly TransactionRepository $transactions,
         private readonly ActivityLogger $activity,
         private readonly ListingReservationService $reservations,
+        private readonly ListingReactivationEligibility $reactivationEligibility,
     ) {}
 
     /**
@@ -96,6 +98,52 @@ class SellerListingService
         int $perPage = 15,
     ): LengthAwarePaginator {
         return $this->listingRepository->paginateForSeller($seller, $status, $search, $perPage);
+    }
+
+    /**
+     * Seller-only affordance hints, calculated outside the Eloquent model and
+     * keyed by listing id for explicit resource construction.
+     *
+     * @param  list<Listing>  $listings
+     * @return array<int, array{seller_can_reactivate: bool, seller_can_delete: bool}>
+     */
+    public function actionHintsForSeller(User $seller, array $listings): array
+    {
+        if ($listings === []) {
+            return [];
+        }
+
+        $listingIds = array_map(
+            static fn (Listing $listing): int => (int) $listing->getKey(),
+            $listings,
+        );
+        $latestLifecycle = $this->listingRepository->latestLifecycleActivitiesForListings($listingIds);
+        $listingsWithTransactions = $this->transactions->listingIdsWithTransactionHistory($listingIds);
+        $hints = [];
+
+        foreach ($listings as $listing) {
+            $id = (int) $listing->getKey();
+            $latest = $latestLifecycle[$id] ?? null;
+            $sellerVoluntarilyDeactivated = $latest !== null &&
+                $latest->action === ActivityAction::ListingSellerDeactivated->value &&
+                (int) $latest->user_id === (int) $seller->getKey();
+
+            $hints[$id] = [
+                'seller_can_reactivate' => $listing->status === ListingStatus::Inactive &&
+                    $sellerVoluntarilyDeactivated &&
+                    ($listing->admin_note === null || trim((string) $listing->admin_note) === '') &&
+                    $this->reactivationEligibility->failureMessage($listing) === null,
+                'seller_can_delete' => in_array(
+                    $listing->status,
+                    [ListingStatus::Draft, ListingStatus::Inactive],
+                    true,
+                ) &&
+                    ! $listing->inventory_reconciliation_required &&
+                    ! isset($listingsWithTransactions[$id]),
+            ];
+        }
+
+        return $hints;
     }
 
     /**
@@ -425,6 +473,7 @@ class SellerListingService
     {
         return DB::transaction(function () use ($listing, $seller): Listing {
             $locked = Listing::query()
+                ->withInventoryTotals()
                 ->whereKey($listing->getKey())
                 ->lockForUpdate()
                 ->first();
@@ -437,30 +486,20 @@ class SellerListingService
             if (! $seller->isApprovedSeller()) {
                 abort(403, 'Only an approved seller can reactivate a listing.');
             }
+            $latestLifecycle = $this->listingRepository->latestLifecycleActivitiesForListings([
+                (int) $locked->getKey(),
+            ])[(int) $locked->getKey()] ?? null;
             if ($locked->status !== ListingStatus::Inactive ||
-                ! $this->listingRepository->wasMostRecentlyDeactivatedBySeller(
-                    (int) $locked->getKey(),
-                    (int) $seller->getKey(),
-                )) {
+                $latestLifecycle?->action !== ActivityAction::ListingSellerDeactivated->value ||
+                (int) $latestLifecycle->user_id !== (int) $seller->getKey()) {
                 abort(409, 'Only a listing deactivated by you can be reactivated.');
             }
             if ($locked->admin_note !== null && trim((string) $locked->admin_note) !== '') {
                 abort(409, 'This listing has an administrator restriction and cannot be reactivated by a seller.');
             }
-            if ($locked->inventory_reconciliation_required || $locked->total_quantity === null) {
-                abort(409, 'This listing requires inventory reconciliation before it can be reactivated.');
-            }
-
-            $accounted = $this->reservations->accountedQuantities((int) $locked->getKey());
-            $committed = $accounted['reserved']
-                + $accounted['completed']
-                + (int) $locked->externally_sold_quantity;
-            $available = (int) $locked->total_quantity - $committed;
-            if ($available !== (int) $locked->quantity) {
-                abort(409, 'This listing requires inventory reconciliation before it can be reactivated.');
-            }
-            if ($available < 1) {
-                abort(409, 'A listing must have available inventory before it can be reactivated.');
+            $inventoryFailure = $this->reactivationEligibility->failureMessage($locked);
+            if ($inventoryFailure !== null) {
+                abort(409, $inventoryFailure);
             }
 
             $locked->status = ListingStatus::Active;

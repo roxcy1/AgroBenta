@@ -264,6 +264,31 @@ class TransactionRepository
     }
 
     /**
+     * Listing ids with any transaction history in one batch.
+     *
+     * Used for seller action hints so a paginated listings response does not
+     * issue one transaction query per row.
+     *
+     * @param  list<int>  $listingIds
+     * @return array<int, true>
+     */
+    public function listingIdsWithTransactionHistory(array $listingIds): array
+    {
+        if ($listingIds === []) {
+            return [];
+        }
+
+        $ids = Transaction::query()
+            ->whereIn('listing_id', $listingIds)
+            ->distinct()
+            ->pluck('listing_id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        return array_fill_keys($ids, true);
+    }
+
+    /**
      * The caller's transactions, optionally narrowed to one side.
      */
     private function scopedQuery(User $user, ?string $role = null): Builder

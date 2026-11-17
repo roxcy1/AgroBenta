@@ -10,7 +10,7 @@ use App\Http\Requests\SellerListing\SellerListingActionRequest;
 use App\Http\Requests\SellerListing\StoreListingPhotoRequest;
 use App\Http\Requests\SellerListing\StoreSellerListingRequest;
 use App\Http\Requests\SellerListing\UpdateSellerListingRequest;
-use App\Http\Resources\MobileListingResource;
+use App\Http\Resources\SellerListingResource;
 use App\Models\Listing;
 use App\Models\User;
 use App\Services\SellerListing\SellerListingService;
@@ -21,8 +21,8 @@ use Illuminate\Http\Request;
  * A seller's own listing management.
  *
  * Read/write, and the only write path a seller has. Every method resolves the
- * seller from the token — never from the body or the query — and returns
- * `MobileListingResource`, so a seller sees the same projection of their own
+ * seller from the token — never from the body or the query — and returns the
+ * seller-owned projection layered on `MobileListingResource`, so a seller sees the same projection of their own
  * listing that a buyer would see if it were active. The administrator-facing
  * `ListingResource` is never used here.
  *
@@ -48,9 +48,10 @@ class SellerListingController extends Controller
     public function index(IndexSellerListingRequest $request): JsonResponse
     {
         $status = $request->validated('status');
+        $seller = $this->seller($request);
 
         $paginator = $this->listings->listForSeller(
-            seller: $this->seller($request),
+            seller: $seller,
             // The `in:` rule has already proved the value is one of the five, so
             // the only way this throws is a status added to the enum without being
             // added to the filter — and that is the safe direction to fail in.
@@ -58,11 +59,22 @@ class SellerListingController extends Controller
             search: $request->validated('search'),
             perPage: (int) $request->validated('per_page', 15),
         );
+        $items = $paginator->items();
+        $hintsById = $this->listings->actionHintsForSeller($seller, $items);
 
         return response()->json([
             'success' => true,
             'data' => [
-                'listings' => MobileListingResource::collection($paginator->items()),
+                'listings' => array_map(
+                    fn (Listing $item): SellerListingResource => new SellerListingResource(
+                        $item,
+                        $hintsById[(int) $item->getKey()] ?? [
+                            'seller_can_reactivate' => false,
+                            'seller_can_delete' => false,
+                        ],
+                    ),
+                    $items,
+                ),
                 'pagination' => [
                     'current_page' => $paginator->currentPage(),
                     'last_page' => $paginator->lastPage(),
@@ -83,7 +95,7 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Listing saved as a draft.',
-            'data' => new MobileListingResource($listing),
+            'data' => $this->sellerListingResource($listing, $this->seller($request)),
         ], 201);
     }
 
@@ -100,7 +112,7 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Listing updated.',
-            'data' => new MobileListingResource($updated),
+            'data' => $this->sellerListingResource($updated, $this->seller($request)),
         ], 200);
     }
 
@@ -117,7 +129,7 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Listing submitted for review.',
-            'data' => new MobileListingResource($submitted),
+            'data' => $this->sellerListingResource($submitted, $this->seller($request)),
         ], 200);
     }
 
@@ -135,7 +147,7 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Listing marked as sold.',
-            'data' => new MobileListingResource($marked),
+            'data' => $this->sellerListingResource($marked, $this->seller($request)),
         ], 200);
     }
 
@@ -147,7 +159,7 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Listing deactivated.',
-            'data' => new MobileListingResource($deactivated),
+            'data' => $this->sellerListingResource($deactivated, $this->seller($request)),
         ], 200);
     }
 
@@ -162,7 +174,7 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Listing reactivated.',
-            'data' => new MobileListingResource($reactivated),
+            'data' => $this->sellerListingResource($reactivated, $this->seller($request)),
         ], 200);
     }
 
@@ -198,7 +210,7 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Photos uploaded.',
-            'data' => new MobileListingResource($photos),
+            'data' => $this->sellerListingResource($photos, $this->seller($request)),
         ], 201);
     }
 
@@ -218,7 +230,7 @@ class SellerListingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Photo removed.',
-            'data' => new MobileListingResource($remaining),
+            'data' => $this->sellerListingResource($remaining, $this->seller($request)),
         ], 200);
     }
 
@@ -232,6 +244,19 @@ class SellerListingController extends Controller
     private function seller(Request $request): User
     {
         return $request->user();
+    }
+
+    private function sellerListingResource(Listing $listing, User $seller): SellerListingResource
+    {
+        $hints = $this->listings->actionHintsForSeller($seller, [$listing]);
+
+        return new SellerListingResource(
+            $listing,
+            $hints[(int) $listing->getKey()] ?? [
+                'seller_can_reactivate' => false,
+                'seller_can_delete' => false,
+            ],
+        );
     }
 
     /**

@@ -6,11 +6,9 @@ use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Models\Activity;
 use App\Models\Listing;
-use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 
 /**
  * Data access for a seller's own listings.
@@ -29,15 +27,21 @@ use Illuminate\Support\Collection;
 class SellerListingRepository
 {
     /**
-     * Whether the latest moderation/deactivation decision for this listing was
-     * the seller's own deactivation. Missing or ambiguous audit history fails
-     * closed, especially for legacy inactive listings.
+     * Latest status-changing lifecycle activity for each requested listing.
+     * Missing audit history is absent from the map and therefore fails closed.
+     *
+     * @param  list<int>  $listingIds
+     * @return array<int, Activity>
      */
-    public function wasMostRecentlyDeactivatedBySeller(int $listingId, int $sellerId): bool
+    public function latestLifecycleActivitiesForListings(array $listingIds): array
     {
-        $activity = Activity::query()
+        if ($listingIds === []) {
+            return [];
+        }
+
+        return Activity::query()
             ->where('metadata->target_type', 'listing')
-            ->where('metadata->target_id', $listingId)
+            ->whereIn('metadata->target_id', $listingIds)
             ->whereIn('action', [
                 ActivityAction::ListingApproved->value,
                 ActivityAction::ListingRejected->value,
@@ -48,11 +52,10 @@ class SellerListingRepository
                 ActivityAction::ListingMarkedSold->value,
             ])
             ->orderByDesc('id')
-            ->first();
-
-        return $activity !== null &&
-            $activity->action === ActivityAction::ListingSellerDeactivated->value &&
-            (int) $activity->user_id === $sellerId;
+            ->get()
+            ->groupBy(static fn (Activity $activity): string => (string) ($activity->metadata['target_id'] ?? ''))
+            ->mapWithKeys(static fn ($activities, string $id): array => [(int) $id => $activities->first()])
+            ->all();
     }
 
     /**
@@ -81,8 +84,6 @@ class SellerListingRepository
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($perPage);
-
-        $this->attachSellerActionAvailability($paginator->getCollection(), (int) $seller->getKey());
 
         return $paginator;
     }
@@ -133,80 +134,7 @@ class SellerListingRepository
             ->where('seller_id', $seller->getKey())
             ->first();
 
-        if ($listing !== null) {
-            $this->attachSellerActionAvailability(collect([$listing]), (int) $seller->getKey());
-        }
-
         return $listing;
-    }
-
-    /**
-     * Attach a fail-closed seller-only action hint without adding a listing
-     * status or migration. Activity history distinguishes voluntary seller
-     * withdrawal from rejection/admin moderation.
-     *
-     * @param  Collection<int, Listing>  $listings
-     */
-    private function attachSellerActionAvailability($listings, int $sellerId): void
-    {
-        if ($listings->isEmpty()) {
-            return;
-        }
-
-        $ids = $listings->map(static fn (Listing $listing): int => (int) $listing->getKey())->all();
-        $latestDecisions = Activity::query()
-            ->where('metadata->target_type', 'listing')
-            ->whereIn('metadata->target_id', $ids)
-            ->whereIn('action', [
-                ActivityAction::ListingApproved->value,
-                ActivityAction::ListingRejected->value,
-                ActivityAction::ListingDeactivated->value,
-                ActivityAction::ListingSellerDeactivated->value,
-                ActivityAction::ListingSellerReactivated->value,
-                ActivityAction::ListingAdminReactivated->value,
-                ActivityAction::ListingMarkedSold->value,
-            ])
-            ->orderByDesc('id')
-            ->get()
-            ->groupBy(static fn (Activity $activity): string => (string) ($activity->metadata['target_id'] ?? ''));
-        $listingsWithTransactions = Transaction::query()
-            ->whereIn('listing_id', $ids)
-            ->distinct()
-            ->pluck('listing_id')
-            ->map(static fn (mixed $id): string => (string) $id)
-            ->all();
-        $hasTransactionHistory = array_fill_keys($listingsWithTransactions, true);
-
-        foreach ($listings as $listing) {
-            $activity = $latestDecisions->get((string) $listing->getKey())?->first();
-            $validProvenance = $activity !== null &&
-                $activity->action === ActivityAction::ListingSellerDeactivated->value &&
-                (int) $activity->user_id === $sellerId;
-            $inventoryKnown = ! $listing->inventory_reconciliation_required &&
-                $listing->total_quantity !== null;
-            $reserved = (int) ($listing->getAttribute('reserved_quantity') ?? 0);
-            $completed = (int) ($listing->getAttribute('accounted_completed_quantity') ?? 0);
-            $available = (int) ($listing->total_quantity ?? 0)
-                - $reserved
-                - $completed
-                - (int) $listing->externally_sold_quantity;
-
-            $listing->setRelation('sellerActionHints', [
-                'seller_can_reactivate' => $listing->status === ListingStatus::Inactive &&
-                    $validProvenance &&
-                    ($listing->admin_note === null || trim((string) $listing->admin_note) === '') &&
-                    $inventoryKnown &&
-                    $available > 0 &&
-                    $available === (int) $listing->quantity,
-                'seller_can_delete' => in_array(
-                    $listing->status,
-                    [ListingStatus::Draft, ListingStatus::Inactive],
-                    true,
-                ) &&
-                    ! $listing->inventory_reconciliation_required &&
-                    ! isset($hasTransactionHistory[(string) $listing->getKey()]),
-            ]);
-        }
     }
 
     /**

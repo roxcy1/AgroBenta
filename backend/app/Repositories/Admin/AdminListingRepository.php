@@ -13,6 +13,24 @@ use Illuminate\Support\Facades\DB;
 class AdminListingRepository
 {
     /**
+     * Load and lock the current listing row, including the seller state and
+     * inventory ledger needed for an administrator reactivation decision.
+     */
+    public function lockForReactivation(int $listingId): ?Listing
+    {
+        return Listing::query()
+            ->withInventoryTotals()
+            ->with([
+                'seller' => fn ($seller) => $seller
+                    ->withTrashed()
+                    ->select(['id', 'name', 'email', 'role', 'seller_capability', 'deleted_at']),
+            ])
+            ->whereKey($listingId)
+            ->lockForUpdate()
+            ->first();
+    }
+
+    /**
      * Confirm the listing's latest inactive decision was an administrator
      * deactivation, not seller withdrawal or rejection.
      */
@@ -35,6 +53,16 @@ class AdminListingRepository
 
         return $activity !== null &&
             $activity->action === ActivityAction::ListingDeactivated->value;
+    }
+
+    /** Persist restoration after lifecycle and inventory eligibility are checked. */
+    public function restoreAdminDeactivated(Listing $listing): Listing
+    {
+        $listing->status = ListingStatus::Active;
+        $listing->admin_note = null;
+        $listing->save();
+
+        return $listing;
     }
 
     public function list(
@@ -88,9 +116,8 @@ class AdminListingRepository
         ListingStatus $from,
         ListingStatus $to,
         ?string $adminNote = null,
-        bool $clearAdminNote = false,
     ): ?Listing {
-        return DB::transaction(function () use ($listing, $from, $to, $adminNote, $clearAdminNote): ?Listing {
+        return DB::transaction(function () use ($listing, $from, $to, $adminNote): ?Listing {
             $current = Listing::query()
                 ->withInventoryTotals()
                 ->with([
@@ -112,8 +139,6 @@ class AdminListingRepository
 
             if ($adminNote !== null) {
                 $current->admin_note = $adminNote;
-            } elseif ($clearAdminNote) {
-                $current->admin_note = null;
             }
 
             $current->save();

@@ -838,7 +838,21 @@ class MobileSellerListingTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.listings.0.seller.email', null)
             ->assertJsonPath('data.listings.0.seller.name', 'Juan Dela Cruz')
+            ->assertJsonPath('data.listings.0.seller_can_reactivate', false)
+            ->assertJsonPath('data.listings.0.seller_can_delete', true)
             ->assertJsonMissingPath('data.listings.0.user_id');
+    }
+
+    #[Test]
+    public function seller_action_hints_are_not_exposed_on_public_marketplace_resources(): void
+    {
+        $this->createListing($this->seller, ['status' => ListingStatus::Active]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->getJson('/api/listings')
+            ->assertOk()
+            ->assertJsonMissingPath('data.listings.0.seller_can_reactivate')
+            ->assertJsonMissingPath('data.listings.0.seller_can_delete');
     }
 
     // ---------------------------------------------------------------- update
