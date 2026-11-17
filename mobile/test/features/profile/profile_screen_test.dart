@@ -22,7 +22,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:agrobenta_mobile/features/profile/view/personal_information_screen.dart';
-import 'package:agrobenta_mobile/features/profile/view/profile_screen.dart';
 
 import '../../support/auth_app_harness.dart';
 import '../../support/auth_fakes.dart';
@@ -361,28 +360,31 @@ void main() {
     expect(find.text('Edit address'), findsOneWidget);
   });
 
-      testWidgets('rapid Personal Information taps push only one read-only screen', (
-    WidgetTester tester,
-  ) async {
-    // ✅ Balik ang setup aron ma-load ang profile screen
-    await pumpProfile(
-      tester,
-      handler: (_) async =>
-          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
-    );
+  testWidgets(
+    'rapid Personal Information taps push only one read-only screen',
+    (WidgetTester tester) async {
+      // ✅ Balik ang setup aron ma-load ang profile screen
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      );
 
-    final VoidCallback? onTap = tester
-        .widget<ListTile>(find.widgetWithText(ListTile, 'Personal Information'))
-        .onTap;
-    expect(onTap, isNotNull);
-    onTap!();
-    onTap();
-    await settleAuth(tester, frames: 12);
+      final VoidCallback? onTap = tester
+          .widget<ListTile>(
+            find.widgetWithText(ListTile, 'Personal Information'),
+          )
+          .onTap;
+      expect(onTap, isNotNull);
+      onTap!();
+      onTap();
+      await settleAuth(tester, frames: 12);
 
-    // ✅ KINI ANG BAG-O
-    expect(find.byType(PersonalInformationScreen), findsOneWidget);
-    expect(find.byType(EditProfileScreen), findsNothing);
-  });
+      // ✅ KINI ANG BAG-O
+      expect(find.byType(PersonalInformationScreen), findsOneWidget);
+      expect(find.byType(EditProfileScreen), findsNothing);
+    },
+  );
 
   testWidgets('rapid Change Password taps push only one password form', (
     WidgetTester tester,
@@ -628,30 +630,31 @@ void main() {
     expect(find.text('Browse and purchase livestock.'), findsOneWidget);
   });
 
-   testWidgets('Personal Information opens the read-only screen, then Edit opens the form', (
-    WidgetTester tester,
-  ) async {
-    await pumpProfile(
-      tester,
-      handler: (_) async =>
-          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
-    );
+  testWidgets(
+    'Personal Information opens the read-only screen, then Edit opens the form',
+    (WidgetTester tester) async {
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      );
 
-    // 1. Tap "Personal Information" from the Profile tab.
-    await tapAction(tester, 'Personal Information');
+      // 1. Tap "Personal Information" from the Profile tab.
+      await tapAction(tester, 'Personal Information');
 
-    // 2. The read-only screen opens; the edit form does not yet.
-    expect(find.byType(PersonalInformationScreen), findsOneWidget);
-    expect(find.byType(EditProfileScreen), findsNothing);
+      // 2. The read-only screen opens; the edit form does not yet.
+      expect(find.byType(PersonalInformationScreen), findsOneWidget);
+      expect(find.byType(EditProfileScreen), findsNothing);
 
-    // 3. Tap "Edit" in the read-only screen's app bar.
-    await tester.tap(find.widgetWithText(TextButton, 'Edit'));
-    await settleAuth(tester, frames: 12);
+      // 3. Tap "Edit" in the read-only screen's app bar.
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+      await settleAuth(tester, frames: 12);
 
-    // 4. Now the edit form appears.
-    expect(find.byType(EditProfileScreen), findsOneWidget);
-    expect(find.byType(TrinidadLocationSelector), findsNothing);
-  });
+      // 4. Now the edit form appears.
+      expect(find.byType(EditProfileScreen), findsOneWidget);
+      expect(find.byType(TrinidadLocationSelector), findsNothing);
+    },
+  );
 
   testWidgets('Change Password opens the existing password form', (
     WidgetTester tester,

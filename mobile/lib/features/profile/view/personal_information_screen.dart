@@ -47,7 +47,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Personal Information'),
-                actions: <Widget>[
+        actions: <Widget>[
           // Disable the Edit button while the profile is still loading or
           // has failed to load. EditProfileScreen requires a non-null user,
           // so tapping Edit during a failed load would throw.
@@ -159,11 +159,7 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xxs),
-          Text(
-            value,
-            style: theme.textTheme.bodyLarge,
-            softWrap: true,
-          ),
+          Text(value, style: theme.textTheme.bodyLarge, softWrap: true),
         ],
       ),
     );
