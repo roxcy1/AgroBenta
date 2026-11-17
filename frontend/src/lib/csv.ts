@@ -13,8 +13,7 @@ export function buildCsvContent(rows: readonly (readonly CsvField[])[]): string 
   return rows.map((row) => row.map(escapeCsvField).join(',')).join('\r\n');
 }
 
-export function downloadCsv(filename: string, content: string): void {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+export function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -23,4 +22,8 @@ export function downloadCsv(filename: string, content: string): void {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+export function downloadCsv(filename: string, content: string): void {
+  downloadBlob(filename, new Blob([content], { type: 'text/csv;charset=utf-8' }));
 }
