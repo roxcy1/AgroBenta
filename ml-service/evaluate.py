@@ -1,8 +1,7 @@
 """Validate the saved prototype model and analyse its held-out errors.
 
-This script does not tune or retrain. It reconstructs the Phase 2 split, loads
-the existing v1 model, writes its training-distribution sidecar if missing,
-and produces:
+This script does not tune or retrain, and it never rewrites a model sidecar. It
+reconstructs the Phase 2 split, loads the existing v1 model, and produces:
 
     reports/error_analysis.json
     reports/prediction_validation.json
@@ -44,7 +43,6 @@ from train import (
 from validation import (
     build_training_profile,
     out_of_distribution_warnings,
-    save_training_profile,
 )
 
 PHASE2_SEED = 42
@@ -606,7 +604,9 @@ def main(argv: list[str] | None = None) -> int:
         model_file=model_path.name,
         provenance="synthetic",
     )
-    save_training_profile(model_path, profile)
+    # Do not rewrite the model's metadata sidecar from an evaluation run. The
+    # profile below is consumed in memory only; writing it would overwrite the
+    # artifact's recorded training provenance and ranges.
 
     error_report = build_error_analysis(
         model,

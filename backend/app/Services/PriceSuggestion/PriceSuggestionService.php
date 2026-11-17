@@ -11,6 +11,7 @@ use App\Models\AiPriceEstimate;
 use App\Models\Listing;
 use App\Repositories\PriceSuggestion\AiPriceEstimateRepository;
 use App\Support\PriceSuggestion\BreedNormalizer;
+use App\Support\WeightConverter;
 use Illuminate\Support\Str;
 
 /**
@@ -153,9 +154,7 @@ class PriceSuggestionService
             'year' => (float) $ageValue * 12,
             default => (float) $ageValue,
         };
-        $weightKg = $weightUnit === 'lb'
-            ? (float) $weightValue * 0.45359237
-            : (float) $weightValue;
+        $weightKg = WeightConverter::toKilograms($weightValue, $weightUnit);
 
         if ($ageMonths <= 0 || $weightKg <= 0) {
             throw new PriceSuggestionRejected(

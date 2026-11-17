@@ -272,6 +272,7 @@ void main() {
     WidgetTester tester, {
     String quantity = '1',
     String weight = '500',
+    String weightUnit = 'Kilograms',
     String? askingPrice = '42500',
     String? barangay = 'Banlasan',
   }) async {
@@ -280,7 +281,7 @@ void main() {
     await tester.enterText(field('Age'), '2');
     await selectAgeUnit(tester, 'Year');
     await tester.enterText(field('Weight'), weight);
-    await selectWeightUnit(tester, 'Kilograms');
+    await selectWeightUnit(tester, weightUnit);
     await tester.pump();
     await tapContinue(tester);
 
@@ -511,6 +512,50 @@ void main() {
 
     // The third decimal is refused rather than rounded by the validator.
     expect(fieldError(tester, 'Weight'), isNull);
+  });
+
+  testWidgets('switching weight units preserves the physical weight', (
+    WidgetTester tester,
+  ) async {
+    await openForm(tester, handler: emptyListHandler);
+
+    await tester.enterText(field('Weight'), '500');
+    await selectWeightUnit(tester, 'Kilograms');
+    expect(fieldText(tester, 'Weight'), '500');
+
+    await selectWeightUnit(tester, 'Pounds');
+    expect(fieldText(tester, 'Weight'), '1102.31');
+
+    await selectWeightUnit(tester, 'Kilograms');
+    expect(fieldText(tester, 'Weight'), '500');
+
+    // Repeating the switch must not accumulate rounding drift.
+    await selectWeightUnit(tester, 'Pounds');
+    expect(fieldText(tester, 'Weight'), '1102.31');
+    await selectWeightUnit(tester, 'Kilograms');
+    expect(fieldText(tester, 'Weight'), '500');
+  });
+
+  testWidgets('an lb draft reopens with its value and unit intact', (
+    WidgetTester tester,
+  ) async {
+    final Listing draft = Listing.fromJson(
+      listingJson(
+        id: 42,
+        status: 'draft',
+        weightValue: '1102.31',
+        weightUnit: 'lb',
+      ),
+    );
+
+    await pumpEditForm(
+      tester,
+      listing: draft,
+      handler: (_) async => sellerListingListResponse(),
+    );
+
+    expect(fieldText(tester, 'Weight'), '1102.31');
+    expect(find.text('Pounds'), findsOneWidget);
   });
 
   testWidgets('offers Day and applies the 9,125-day age limit', (
@@ -989,6 +1034,60 @@ void main() {
     },
   );
 
+  testWidgets('AI details use the seller selected pound weight', (
+    WidgetTester tester,
+  ) async {
+    final SellerListingsHarness harness = await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionResponse(
+            estimate: aiPriceEstimateJson(
+              inputSnapshot: <String, dynamic>{
+                'livestock_type': 'cattle',
+                'breed': 'brahman',
+                'sex': 'male',
+                'age_months': 24,
+                'weight_kg': 500,
+                'source': <String, dynamic>{
+                  'breed_raw': 'Brahman',
+                  'age_value': 2,
+                  'age_unit': 'year',
+                  'weight_value': 1102.31,
+                  'weight_unit': 'lb',
+                },
+              },
+            ),
+          );
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await fillSuggestionInputs(tester, weight: '1102.31', weightUnit: 'Pounds');
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+
+    final Finder details = find.byKey(const ValueKey<String>('ai-details'));
+    expect(
+      find.descendant(of: details, matching: find.text('1,102.31 lb')),
+      findsOneWidget,
+    );
+    final RecordedRequest create = harness.recorded.firstWhere(
+      (RecordedRequest request) =>
+          request.method == 'POST' && request.apiPath == '/seller/listings',
+    );
+    expect(create.body['weight_value'], '1102.31');
+    expect(create.body['weight_unit'], 'lb');
+  });
+
   testWidgets('AI details pluralize the age unit correctly', (
     WidgetTester tester,
   ) async {
@@ -1380,6 +1479,61 @@ void main() {
     expect(find.text('Reason codes: outside_typical_weight'), findsOneWidget);
   });
 
+  testWidgets('an lb warning uses the seller selected pound weight', (
+    WidgetTester tester,
+  ) async {
+    await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionResponse(
+            estimate: aiPriceEstimateJson(
+              status: 'warning',
+              reasonCodes: <String>['outside_typical_weight'],
+              inputSnapshot: <String, dynamic>{
+                'livestock_type': 'cattle',
+                'breed': 'brahman',
+                'sex': 'male',
+                'age_months': 48,
+                'weight_kg': 500,
+                'source': <String, dynamic>{
+                  'breed_raw': 'Brahman',
+                  'age_value': 4,
+                  'age_unit': 'year',
+                  'weight_value': 1102.31,
+                  'weight_unit': 'lb',
+                },
+              },
+            ),
+          );
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await fillSuggestionInputs(tester, weight: '1102.31', weightUnit: 'Pounds');
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+
+    expect(find.text('Review inputs'), findsOneWidget);
+    expect(find.text("Please review the animal's weight"), findsOneWidget);
+    expect(
+      find.text(
+        '1,102.31 lb is outside the model\'s typical range for this age. '
+        'Check your details before using this price.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Use suggested price'), findsOneWidget);
+  });
+
   testWidgets('an age warning names the age', (WidgetTester tester) async {
     await openForm(
       tester,
@@ -1524,6 +1678,44 @@ void main() {
     await tester.tap(find.text('Review weight'));
     await tester.pumpAndSettle();
     expect(currentStep(tester), 0);
+  });
+
+  testWidgets('an lb withheld prediction uses the selected pound weight', (
+    WidgetTester tester,
+  ) async {
+    await openForm(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.method == 'POST' && request.apiPath == '/seller/listings') {
+          return sellerListingResponse(
+            listing: listingJson(id: 7, status: 'draft'),
+            statusCode: 201,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.apiPath == '/seller/listings/7/price-suggestion') {
+          return aiPriceSuggestionErrorResponse(
+            status: 'withheld',
+            reasonCodes: <String>['outside_supported_weight'],
+          );
+        }
+        return emptyListHandler(request);
+      },
+    );
+
+    await fillSuggestionInputs(tester, weight: '2000', weightUnit: 'Pounds');
+    await tapAiButton(tester);
+    await settleSellerListings(tester, frames: 20);
+
+    expect(find.text('AI price unavailable'), findsOneWidget);
+    expect(
+      find.text(
+        "This animal's weight (2,000 lb) is outside the range supported by "
+        'our AI model.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Use suggested price'), findsNothing);
   });
 
   testWidgets(

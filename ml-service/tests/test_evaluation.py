@@ -15,6 +15,7 @@ class MetricTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["mae"], 15.0)
         self.assertAlmostEqual(metrics["rmse"], 15.8114, places=4)
         self.assertAlmostEqual(metrics["mape_percent"], 10.0, places=4)
+        self.assertAlmostEqual(metrics["r2"], 0.9, places=4)
 
     def test_per_category_metrics(self):
         frame = pd.DataFrame(
