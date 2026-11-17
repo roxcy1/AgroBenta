@@ -2,11 +2,15 @@
 
 namespace App\Repositories\SellerListing;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
+use App\Models\Activity;
 use App\Models\Listing;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * Data access for a seller's own listings.
@@ -24,6 +28,33 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class SellerListingRepository
 {
+    /**
+     * Whether the latest moderation/deactivation decision for this listing was
+     * the seller's own deactivation. Missing or ambiguous audit history fails
+     * closed, especially for legacy inactive listings.
+     */
+    public function wasMostRecentlyDeactivatedBySeller(int $listingId, int $sellerId): bool
+    {
+        $activity = Activity::query()
+            ->where('metadata->target_type', 'listing')
+            ->where('metadata->target_id', $listingId)
+            ->whereIn('action', [
+                ActivityAction::ListingApproved->value,
+                ActivityAction::ListingRejected->value,
+                ActivityAction::ListingDeactivated->value,
+                ActivityAction::ListingSellerDeactivated->value,
+                ActivityAction::ListingSellerReactivated->value,
+                ActivityAction::ListingAdminReactivated->value,
+                ActivityAction::ListingMarkedSold->value,
+            ])
+            ->orderByDesc('id')
+            ->first();
+
+        return $activity !== null &&
+            $activity->action === ActivityAction::ListingSellerDeactivated->value &&
+            (int) $activity->user_id === $sellerId;
+    }
+
     /**
      * Paginate one seller's listings, optionally narrowed to one status.
      */
@@ -44,12 +75,16 @@ class SellerListingRepository
 
         $this->applySearch($query, $search);
 
-        return $query
+        $paginator = $query
             // A total order, so two listings written in the same second cannot
             // appear on two pages at once.
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($perPage);
+
+        $this->attachSellerActionAvailability($paginator->getCollection(), (int) $seller->getKey());
+
+        return $paginator;
     }
 
     /**
@@ -91,12 +126,87 @@ class SellerListingRepository
      */
     public function findOwned(int $listingId, User $seller): ?Listing
     {
-        return Listing::query()
+        $listing = Listing::query()
             ->withInventoryTotals()
             ->with('seller:id,name')
             ->where('id', $listingId)
             ->where('seller_id', $seller->getKey())
             ->first();
+
+        if ($listing !== null) {
+            $this->attachSellerActionAvailability(collect([$listing]), (int) $seller->getKey());
+        }
+
+        return $listing;
+    }
+
+    /**
+     * Attach a fail-closed seller-only action hint without adding a listing
+     * status or migration. Activity history distinguishes voluntary seller
+     * withdrawal from rejection/admin moderation.
+     *
+     * @param  Collection<int, Listing>  $listings
+     */
+    private function attachSellerActionAvailability($listings, int $sellerId): void
+    {
+        if ($listings->isEmpty()) {
+            return;
+        }
+
+        $ids = $listings->map(static fn (Listing $listing): int => (int) $listing->getKey())->all();
+        $latestDecisions = Activity::query()
+            ->where('metadata->target_type', 'listing')
+            ->whereIn('metadata->target_id', $ids)
+            ->whereIn('action', [
+                ActivityAction::ListingApproved->value,
+                ActivityAction::ListingRejected->value,
+                ActivityAction::ListingDeactivated->value,
+                ActivityAction::ListingSellerDeactivated->value,
+                ActivityAction::ListingSellerReactivated->value,
+                ActivityAction::ListingAdminReactivated->value,
+                ActivityAction::ListingMarkedSold->value,
+            ])
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy(static fn (Activity $activity): string => (string) ($activity->metadata['target_id'] ?? ''));
+        $listingsWithTransactions = Transaction::query()
+            ->whereIn('listing_id', $ids)
+            ->distinct()
+            ->pluck('listing_id')
+            ->map(static fn (mixed $id): string => (string) $id)
+            ->all();
+        $hasTransactionHistory = array_fill_keys($listingsWithTransactions, true);
+
+        foreach ($listings as $listing) {
+            $activity = $latestDecisions->get((string) $listing->getKey())?->first();
+            $validProvenance = $activity !== null &&
+                $activity->action === ActivityAction::ListingSellerDeactivated->value &&
+                (int) $activity->user_id === $sellerId;
+            $inventoryKnown = ! $listing->inventory_reconciliation_required &&
+                $listing->total_quantity !== null;
+            $reserved = (int) ($listing->getAttribute('reserved_quantity') ?? 0);
+            $completed = (int) ($listing->getAttribute('accounted_completed_quantity') ?? 0);
+            $available = (int) ($listing->total_quantity ?? 0)
+                - $reserved
+                - $completed
+                - (int) $listing->externally_sold_quantity;
+
+            $listing->setRelation('sellerActionHints', [
+                'seller_can_reactivate' => $listing->status === ListingStatus::Inactive &&
+                    $validProvenance &&
+                    ($listing->admin_note === null || trim((string) $listing->admin_note) === '') &&
+                    $inventoryKnown &&
+                    $available > 0 &&
+                    $available === (int) $listing->quantity,
+                'seller_can_delete' => in_array(
+                    $listing->status,
+                    [ListingStatus::Draft, ListingStatus::Inactive],
+                    true,
+                ) &&
+                    ! $listing->inventory_reconciliation_required &&
+                    ! isset($hasTransactionHistory[(string) $listing->getKey()]),
+            ]);
+        }
     }
 
     /**
@@ -128,11 +238,8 @@ class SellerListingRepository
         $listing->fill($attributes);
         $listing->save();
 
-        return Listing::query()
-            ->withInventoryTotals()
-            ->with('seller:id,name')
-            ->whereKey($listing->getKey())
-            ->firstOrFail();
+        return $this->findOwned((int) $listing->getKey(), $listing->seller)
+            ?? throw new \RuntimeException('Updated listing could not be reloaded.');
     }
 
     /**
@@ -140,11 +247,9 @@ class SellerListingRepository
      *
      * Hard delete, not a soft one: the `listings` table has no `deleted_at`
      * column, and adding one is a schema change this phase does not authorise.
-     * The service restricts the call to the states the contract allows to be
-     * destroyed, so a removed draft or withdrawn listing leaves nothing behind
-     * for moderation to review. An `active` listing is never reachable here.
-     *
-     * @see \App\Services\SellerListing\SellerListingService::delete()
+     * The service restricts the call to eligible states and confirms that no
+     * transaction history will be removed. An `active` listing is never
+     * reachable here.
      */
     public function delete(Listing $listing): void
     {

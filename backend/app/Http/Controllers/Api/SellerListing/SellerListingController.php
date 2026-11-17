@@ -27,10 +27,9 @@ use Illuminate\Http\Request;
  * `ListingResource` is never used here.
  *
  * The lifecycle itself is not in this class. It belongs to
- * [SellerListingService], which is the only place that knows a draft may be
- * submitted, that an active listing may be edited, and that a seller cannot
- * publish, deactivate or mark anything sold. A controller that also decided those
- * things would be a second, divergent copy of [D-02].
+ * [SellerListingService], which is the only place that knows the permitted
+ * content edits and seller transitions. A controller that also decided those
+ * things would be a second, divergent copy of the documented lifecycle.
  */
 class SellerListingController extends Controller
 {
@@ -137,6 +136,33 @@ class SellerListingController extends Controller
             'success' => true,
             'message' => 'Listing marked as sold.',
             'data' => new MobileListingResource($marked),
+        ], 200);
+    }
+
+    /** Voluntarily hide an active listing from the buyer marketplace. */
+    public function deactivate(SellerListingActionRequest $request, string $listing): JsonResponse
+    {
+        $deactivated = $this->listings->deactivate($this->findOwnedListing($request, $listing));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Listing deactivated.',
+            'data' => new MobileListingResource($deactivated),
+        ], 200);
+    }
+
+    /** Reactivate the seller's own voluntarily deactivated listing. */
+    public function reactivate(SellerListingActionRequest $request, string $listing): JsonResponse
+    {
+        $reactivated = $this->listings->reactivate(
+            $this->findOwnedListing($request, $listing),
+            $this->seller($request),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Listing reactivated.',
+            'data' => new MobileListingResource($reactivated),
         ], 200);
     }
 

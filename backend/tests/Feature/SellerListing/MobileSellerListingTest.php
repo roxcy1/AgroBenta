@@ -6,6 +6,7 @@ use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
 use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
+use App\Models\Activity;
 use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\Transaction;
@@ -21,9 +22,9 @@ use Tests\TestCase;
  * Seller listing management — contract §5.4.
  *
  * The lifecycle is the point of this file. A seller may create a draft, submit
- * it, edit a draft or an active listing, mark an active listing as sold, and
- * delete a draft or a withdrawn one. Everything else — publishing, deactivating,
- * or reaching another seller's row — is refused, and each refusal is asserted
+ * it, edit a draft or an active listing, deactivate/reactivate eligible listings,
+ * mark an active listing as sold, and delete only listings without transaction
+ * history. Every other transition or another seller's row is refused, and each refusal is asserted
  * rather than assumed: this is the surface where "the client just won't offer
  * that button" is not a security property.
  */
@@ -159,6 +160,8 @@ class MobileSellerListingTest extends TestCase
             'update' => ['PATCH', '/api/seller/listings/{listing}'],
             'submit' => ['POST', '/api/seller/listings/{listing}/submit'],
             'markSold' => ['POST', '/api/seller/listings/{listing}/mark-sold'],
+            'deactivate' => ['POST', '/api/seller/listings/{listing}/deactivate'],
+            'reactivate' => ['POST', '/api/seller/listings/{listing}/reactivate'],
             'destroy' => ['DELETE', '/api/seller/listings/{listing}'],
         ];
     }
@@ -1562,6 +1565,163 @@ class MobileSellerListingTest extends TestCase
     }
 
     #[Test]
+    public function a_seller_can_deactivate_without_changing_reserved_inventory_or_transactions(): void
+    {
+        $listing = $this->createListing($this->seller, [
+            'status' => ListingStatus::Active,
+            'quantity' => 5,
+        ]);
+        $listing->quantity = 3;
+        $listing->save();
+        $transaction = Transaction::query()->create([
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 2,
+            'total_amount' => 100000,
+            'inventory_reserved' => true,
+            'inventory_accounted' => true,
+            'status' => TransactionStatus::Pending,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$listing->id.'/deactivate')
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Inactive->value)
+            ->assertJsonPath('data.quantity', 3)
+            ->assertJsonPath('data.reserved_quantity', 2);
+
+        $this->assertSame(ListingStatus::Inactive, $listing->refresh()->status);
+        $this->assertSame(3, (int) $listing->quantity);
+        $this->assertSame(2, (int) $transaction->fresh()->quantity);
+        $this->assertTrue((bool) $transaction->fresh()->inventory_reserved);
+        $this->assertDatabaseHas('activities', [
+            'user_id' => $this->seller->id,
+            'action' => ActivityAction::ListingSellerDeactivated->value,
+        ]);
+    }
+
+    #[Test]
+    public function deactivation_and_reactivation_reject_client_supplied_status(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Active]);
+        $token = $this->mobileToken($this->seller);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/seller/listings/'.$listing->id.'/deactivate', ['status' => 'inactive'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+        $this->assertSame(ListingStatus::Active, $listing->refresh()->status);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/seller/listings/'.$listing->id.'/deactivate')
+            ->assertOk();
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/seller/listings/'.$listing->id.'/reactivate', ['status' => 'active'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+        $this->assertSame(ListingStatus::Inactive, $listing->refresh()->status);
+    }
+
+    #[Test]
+    public function a_seller_can_reactivate_only_their_own_voluntarily_deactivated_listing(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Active]);
+        $token = $this->mobileToken($this->seller);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/seller/listings/'.$listing->id.'/deactivate')
+            ->assertOk()
+            ->assertJsonPath('data.seller_can_reactivate', true);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/seller/listings/'.$listing->id.'/reactivate')
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Active->value)
+            ->assertJsonPath('data.quantity', 1);
+
+        $this->assertSame(ListingStatus::Active, $listing->refresh()->status);
+        $this->assertDatabaseHas('activities', [
+            'user_id' => $this->seller->id,
+            'action' => ActivityAction::ListingSellerReactivated->value,
+        ]);
+    }
+
+    #[Test]
+    public function seller_actions_are_owner_scoped_and_deactivation_requires_active_status(): void
+    {
+        $foreignActive = $this->createListing($this->otherSeller, ['status' => ListingStatus::Active]);
+        $foreignInactive = $this->createListing($this->otherSeller, ['status' => ListingStatus::Inactive]);
+        $token = $this->mobileToken($this->seller);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/seller/listings/'.$foreignActive->id.'/deactivate')
+            ->assertNotFound();
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/seller/listings/'.$foreignInactive->id.'/reactivate')
+            ->assertNotFound();
+
+        foreach ([ListingStatus::Draft, ListingStatus::Pending, ListingStatus::Sold, ListingStatus::Inactive] as $status) {
+            $listing = $this->createListing($this->seller, ['status' => $status]);
+            $this->withHeader('Authorization', 'Bearer '.$token)
+                ->postJson('/api/seller/listings/'.$listing->id.'/deactivate')
+                ->assertStatus(409);
+            $this->assertSame($status, $listing->refresh()->status);
+        }
+    }
+
+    #[Test]
+    public function seller_reactivation_refuses_admin_deactivated_and_sold_listings(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $adminDeactivated = $this->createListing($this->seller, ['status' => ListingStatus::Inactive]);
+        Activity::query()->create([
+            'user_id' => $admin->id,
+            'action' => ActivityAction::ListingDeactivated->value,
+            'metadata' => [
+                'target_type' => 'listing',
+                'target_id' => $adminDeactivated->id,
+            ],
+        ]);
+        $sold = $this->createListing($this->seller, ['status' => ListingStatus::Sold]);
+
+        foreach ([$adminDeactivated, $sold] as $listing) {
+            $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+                ->postJson('/api/seller/listings/'.$listing->id.'/reactivate')
+                ->assertStatus(409);
+        }
+
+        $this->assertSame(ListingStatus::Inactive, $adminDeactivated->refresh()->status);
+        $this->assertSame(ListingStatus::Sold, $sold->refresh()->status);
+    }
+
+    #[Test]
+    public function seller_reactivation_refuses_unavailable_or_unreconciled_inventory(): void
+    {
+        $empty = $this->createListing($this->seller, [
+            'status' => ListingStatus::Active,
+            'quantity' => 0,
+            'total_quantity' => 1,
+            'externally_sold_quantity' => 1,
+        ]);
+        $unreconciled = $this->createListing($this->seller, [
+            'status' => ListingStatus::Active,
+            'inventory_reconciliation_required' => true,
+        ]);
+        $token = $this->mobileToken($this->seller);
+
+        foreach ([$empty, $unreconciled] as $listing) {
+            $this->withHeader('Authorization', 'Bearer '.$token)
+                ->postJson('/api/seller/listings/'.$listing->id.'/deactivate')
+                ->assertOk();
+            $this->withHeader('Authorization', 'Bearer '.$token)
+                ->postJson('/api/seller/listings/'.$listing->id.'/reactivate')
+                ->assertStatus(409);
+            $this->assertSame(ListingStatus::Inactive, $listing->refresh()->status);
+        }
+    }
+
+    #[Test]
     public function a_seller_cannot_manually_sell_stock_while_a_transaction_reserves_it(): void
     {
         $listing = $this->createListing($this->seller, [
@@ -1711,6 +1871,62 @@ class MobileSellerListingTest extends TestCase
         $this->assertDatabaseMissing('listings', ['id' => $listing->id]);
     }
 
+    #[Test]
+    public function seller_listing_projection_hides_delete_when_transaction_history_exists(): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Inactive]);
+        Transaction::query()->create([
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 1,
+            'total_amount' => 50000,
+            'inventory_reserved' => false,
+            'inventory_accounted' => false,
+            'status' => TransactionStatus::Cancelled,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->getJson('/api/seller/listings?status=inactive')
+            ->assertOk()
+            ->assertJsonPath('data.listings.0.seller_can_delete', false)
+            ->assertJsonPath('data.listings.0.seller_can_reactivate', false);
+    }
+
+    #[Test]
+    #[DataProvider('transactionHistoryStatuses')]
+    public function a_listing_with_any_transaction_history_cannot_be_deleted(TransactionStatus $status): void
+    {
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Inactive]);
+        $transaction = Transaction::query()->create([
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 1,
+            'total_amount' => 50000,
+            'inventory_reserved' => $status === TransactionStatus::Pending,
+            'inventory_accounted' => $status === TransactionStatus::Pending,
+            'status' => $status,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->deleteJson('/api/seller/listings/'.$listing->id)
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('listings', ['id' => $listing->id]);
+        $this->assertDatabaseHas('transactions', ['id' => $transaction->id, 'listing_id' => $listing->id]);
+    }
+
+    /** @return array<string, array{TransactionStatus}> */
+    public static function transactionHistoryStatuses(): array
+    {
+        return [
+            'pending' => [TransactionStatus::Pending],
+            'completed' => [TransactionStatus::Completed],
+            'cancelled' => [TransactionStatus::Cancelled],
+        ];
+    }
+
     /**
      * @return array<string, array{ListingStatus}>
      */
@@ -1818,13 +2034,33 @@ class MobileSellerListingTest extends TestCase
     }
 
     #[Test]
-    public function the_seller_api_exposes_no_publish_or_deactivate_route(): void
+    public function seller_deactivation_hides_the_listing_and_reactivation_restores_visibility(): void
     {
-        // The strongest form of the guarantee. "A seller cannot set `active`" is
-        // asserted behaviourally above, but it is also worth asserting that there
-        // is no endpoint at all for a seller to activate or withdraw a listing:
-        // such a rule cannot be forgotten inside a controller, because there is
-        // no controller to forget it in.
+        $listing = $this->createListing($this->seller, ['status' => ListingStatus::Active]);
+        $sellerToken = $this->mobileToken($this->seller);
+        $buyerToken = $this->mobileToken($this->buyer);
+
+        $this->withHeader('Authorization', 'Bearer '.$sellerToken)
+            ->postJson('/api/seller/listings/'.$listing->id.'/deactivate')
+            ->assertOk();
+        $this->withHeader('Authorization', 'Bearer '.$buyerToken)
+            ->getJson('/api/listings')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 0);
+
+        $this->withHeader('Authorization', 'Bearer '.$sellerToken)
+            ->postJson('/api/seller/listings/'.$listing->id.'/reactivate')
+            ->assertOk();
+        $this->withHeader('Authorization', 'Bearer '.$buyerToken)
+            ->getJson('/api/listings')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
+    public function the_seller_api_exposes_no_publish_or_admin_moderation_route(): void
+    {
+        // There is no seller publication or administrator-moderation bypass.
         $sellerRoutes = collect(app('router')->getRoutes())
             ->filter(fn ($route): bool => str_starts_with($route->uri(), 'api/seller/listings'))
             ->flatMap(fn ($route): array => array_map(
@@ -1843,6 +2079,8 @@ class MobileSellerListingTest extends TestCase
                 'POST api/seller/listings',
                 'POST api/seller/listings/{listing}/submit',
                 'POST api/seller/listings/{listing}/mark-sold',
+                'POST api/seller/listings/{listing}/deactivate',
+                'POST api/seller/listings/{listing}/reactivate',
                 'PATCH api/seller/listings/{listing}',
                 'DELETE api/seller/listings/{listing}',
                 // Listing photos (functional documentation §4.5, D-10): file

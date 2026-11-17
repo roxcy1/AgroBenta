@@ -692,6 +692,23 @@ class ListingModerationTest extends TestCase
     }
 
     #[Test]
+    public function an_admin_can_restore_a_listing_previously_deactivated_by_an_admin(): void
+    {
+        $listing = $this->createListing([
+            'status' => ListingStatus::Active,
+            'admin_note' => 'Original moderation issue.',
+        ]);
+        $this->moderate("/api/admin/listings/{$listing->id}/deactivate")->assertOk();
+
+        $this->moderate("/api/admin/listings/{$listing->id}/reactivate")
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Active->value);
+
+        $this->assertSame(ListingStatus::Active, $listing->fresh()->status);
+        $this->assertNull($listing->fresh()->admin_note);
+    }
+
+    #[Test]
     public function a_deactivated_listing_stays_hidden_from_buyers(): void
     {
         $listing = $this->createListing(['status' => ListingStatus::Active]);
@@ -751,6 +768,11 @@ class ListingModerationTest extends TestCase
 
         $this->moderate("/api/admin/listings/{$listing->id}/approve", $this->mobileToken($this->admin))
             ->assertForbidden();
+
+        $active = $this->createListing(['status' => ListingStatus::Active]);
+        $this->moderate("/api/admin/listings/{$active->id}/deactivate")->assertOk();
+        $this->moderate("/api/admin/listings/{$active->id}/reactivate", $this->mobileToken($this->admin))
+            ->assertForbidden();
     }
 
     #[Test]
@@ -758,7 +780,7 @@ class ListingModerationTest extends TestCase
     {
         $listing = $this->createListing();
 
-        foreach (['approve', 'reject'] as $action) {
+        foreach (['approve', 'reject', 'reactivate'] as $action) {
             $this->postAs("/api/admin/listings/{$listing->id}/{$action}")
                 ->assertUnauthorized();
         }
@@ -773,7 +795,7 @@ class ListingModerationTest extends TestCase
         $listing = $this->createListing();
         $token = $this->mobileToken($this->seller);
 
-        foreach (['approve', 'reject', 'deactivate'] as $action) {
+        foreach (['approve', 'reject', 'deactivate', 'reactivate'] as $action) {
             $this->moderate("/api/admin/listings/{$listing->id}/{$action}", $token)
                 ->assertForbidden();
         }
@@ -833,11 +855,11 @@ class ListingModerationTest extends TestCase
     #[Test]
     public function an_inactive_listing_cannot_be_reactivated(): void
     {
-        // [D-02]: `inactive -> active` is not a permitted transition and no
-        // reactivation route is specified (A-02 / OQ-16). Every action refuses.
+        // An inactive row with no administrator-deactivation audit provenance
+        // cannot be restored through admin moderation.
         $listing = $this->createListing(['status' => ListingStatus::Inactive]);
 
-        foreach (['approve', 'reject', 'deactivate'] as $action) {
+        foreach (['approve', 'reject', 'deactivate', 'reactivate'] as $action) {
             $this->moderate("/api/admin/listings/{$listing->id}/{$action}")->assertStatus(409);
         }
 

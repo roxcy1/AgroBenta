@@ -165,6 +165,62 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
     setState(() => _listing = marked);
   }
 
+  Future<void> _deactivate() async {
+    final Listing current = _current();
+    if (!SellerListingController.canDeactivate(current)) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Deactivate this listing?'),
+        content: const Text(
+          'It will disappear from the Marketplace. Existing reservations and '
+          'transactions will continue unchanged.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep active'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Deactivate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final Listing? deactivated = await _controller.deactivate(current.id);
+    if (mounted && deactivated != null) setState(() => _listing = deactivated);
+  }
+
+  Future<void> _reactivate() async {
+    final Listing current = _current();
+    if (!SellerListingController.canReactivate(current)) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Reactivate this listing?'),
+        content: const Text(
+          'This listing will appear in the Marketplace again. Existing '
+          'reservations and transaction history will be preserved.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reactivate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final Listing? reactivated = await _controller.reactivate(current.id);
+    if (mounted && reactivated != null) setState(() => _listing = reactivated);
+  }
+
   Future<void> _delete() async {
     final Listing current = _current();
     final bool? confirmed = await showDialog<bool>(
@@ -306,6 +362,8 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
                 onEdit: editInBar ? _edit : null,
                 onSubmit: _submit,
                 onMarkSold: inventoryKnown ? _markSold : null,
+                onDeactivate: _deactivate,
+                onReactivate: _reactivate,
                 onDelete: _delete,
               ),
             ],
@@ -327,7 +385,8 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
         const NoticeBanner(
           accent: AppColors.warning,
           icon: Icons.inventory_2_outlined,
-          message: 'Inventory reconciliation is required. The displayed legacy quantity is not confirmed as available stock.',
+          message:
+              'Inventory reconciliation is required. The displayed legacy quantity is not confirmed as available stock.',
         )
       else ...<Widget>[
         DetailRow(
@@ -339,10 +398,7 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
           value:
               '${listing.availableQuantity ?? listing.quantity} ${(listing.availableQuantity ?? listing.quantity) == 1 ? 'head' : 'heads'}',
         ),
-        DetailRow(
-          label: 'Reserved',
-          value: '${listing.reservedQuantity ?? 0}',
-        ),
+        DetailRow(label: 'Reserved', value: '${listing.reservedQuantity ?? 0}'),
         DetailRow(
           label: 'Sold through AgroBenta',
           value: '${listing.platformSoldQuantity ?? 0}',
@@ -351,10 +407,7 @@ class _SellerListingDetailScreenState extends State<SellerListingDetailScreen> {
           label: 'Sold externally',
           value: '${listing.externallySoldQuantity ?? 0}',
         ),
-        DetailRow(
-          label: 'Total sold',
-          value: '${listing.soldQuantity ?? 0}',
-        ),
+        DetailRow(label: 'Total sold', value: '${listing.soldQuantity ?? 0}'),
       ],
       // The asking price is per head; the total is shown for reference only.
       if (totalValue != null)
@@ -615,6 +668,8 @@ class _ActionBar extends StatelessWidget {
     required this.onEdit,
     required this.onSubmit,
     required this.onMarkSold,
+    required this.onDeactivate,
+    required this.onReactivate,
     required this.onDelete,
   });
 
@@ -625,14 +680,20 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback onSubmit;
   final VoidCallback? onMarkSold;
+  final VoidCallback? onDeactivate;
+  final VoidCallback onReactivate;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final bool inventoryKnown = !listing.inventoryReconciliationRequired;
-    final bool canSubmit = inventoryKnown && SellerListingController.canSubmit(listing);
-    final bool canMarkSold = inventoryKnown && SellerListingController.canMarkSold(listing);
-    final bool canDelete = inventoryKnown && SellerListingController.canDelete(listing);
+    final bool canSubmit =
+        inventoryKnown && SellerListingController.canSubmit(listing);
+    final bool canMarkSold =
+        inventoryKnown && SellerListingController.canMarkSold(listing);
+    final bool canDelete =
+        inventoryKnown && SellerListingController.canDelete(listing);
+    final bool canReactivate = SellerListingController.canReactivate(listing);
     final bool hasPhotos = SellerListingController.hasSubmissionPhotos(listing);
 
     return Container(
@@ -659,24 +720,35 @@ class _ActionBar extends StatelessWidget {
               // them in priority order avoids enumerating impossible boolean
               // combinations or hiding one behind a wildcard.
               if (canMarkSold)
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    if (onEdit != null) ...<Widget>[
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: busy ? null : onEdit,
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                          label: const Text('Edit listing'),
+                    Row(
+                      children: <Widget>[
+                        if (onEdit != null) ...<Widget>[
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: busy ? null : onEdit,
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: const Text('Edit listing'),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                        ],
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: busy ? null : onMarkSold,
+                            icon: const Icon(Icons.check, size: 18),
+                            label: const Text('Mark as sold'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                    ],
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: busy ? null : onMarkSold,
-                        icon: const Icon(Icons.check, size: 18),
-                        label: const Text('Mark as sold'),
-                      ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    OutlinedButton.icon(
+                      onPressed: busy ? null : onDeactivate,
+                      icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                      label: const Text('Deactivate listing'),
                     ),
                   ],
                 )
@@ -711,10 +783,37 @@ class _ActionBar extends StatelessWidget {
                   ],
                 )
               else if (canDelete)
-                // `inactive`: only Delete.
-                OutlinedButton(
-                  onPressed: busy ? null : onDelete,
-                  child: const Text('Delete listing'),
+                // An eligible seller-deactivated listing may be restored or
+                // permanently deleted only if it has no transaction history.
+                Row(
+                  children: <Widget>[
+                    if (canReactivate) ...<Widget>[
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: busy ? null : onReactivate,
+                          child: const Text('Reactivate listing'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                    ],
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: busy ? null : onDelete,
+                        child: const Text('Delete listing'),
+                      ),
+                    ),
+                  ],
+                )
+              else if (canReactivate)
+                FilledButton(
+                  onPressed: busy ? null : onReactivate,
+                  child: const Text('Reactivate listing'),
+                )
+              else if (listing.status == ListingStatus.active)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : onDeactivate,
+                  icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                  label: const Text('Deactivate listing'),
                 )
               else
                 // A `pending` listing is in an administrator's queue, a `sold`
@@ -734,7 +833,10 @@ class _ActionBar extends StatelessWidget {
 String? _totalListingValueFor(Listing listing) {
   final double? unitPrice = AppFormatters.parseDecimal(listing.askingPrice);
   final int? totalQuantity = listing.totalQuantity;
-  if (unitPrice == null || unitPrice < 0 || totalQuantity == null || totalQuantity < 1) {
+  if (unitPrice == null ||
+      unitPrice < 0 ||
+      totalQuantity == null ||
+      totalQuantity < 1) {
     return null;
   }
   final String raw = (unitPrice * totalQuantity).toStringAsFixed(2);

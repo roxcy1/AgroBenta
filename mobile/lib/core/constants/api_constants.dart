@@ -74,8 +74,7 @@ abstract final class MarketplaceEndpoints {
   ///
   /// [sellerId] is `users.id`, taken from the listing's narrowed seller
   /// projection. A missing, deleted or non-public account is a 404 by design.
-  static String sellerProfile(int sellerId) =>
-      '/marketplace/sellers/$sellerId';
+  static String sellerProfile(int sellerId) => '/marketplace/sellers/$sellerId';
 
   /// `GET` — one seller's marketplace-visible listings. 200, paginated
   /// envelope (`listings` + four-key `pagination`).
@@ -203,8 +202,9 @@ abstract final class SellerVerificationEndpoints {
 ///
 /// No path here takes a seller id. The scope is the token, resolved server-side,
 /// so there is no way for a client to name somebody else's inventory. There is
-/// also no `activate` path: `active` is an administrator decision. A seller may
-/// mark one of their own `active` listings as `sold` through `markSold`.
+/// A seller may voluntarily deactivate an owned active listing and may restore
+/// only an eligible listing they deactivated. Admin moderation remains separate;
+/// seller code cannot reverse an administrative restriction.
 abstract final class SellerListingEndpoints {
   /// `GET` — the caller's own listings, in every status. 200, paginated
   /// envelope.
@@ -250,6 +250,14 @@ abstract final class SellerListingEndpoints {
   /// answers `409` otherwise. Terminal for the listing: no new transactions can
   /// be created against it afterwards.
   static String markSold(int id) => '/seller/listings/$id/mark-sold';
+
+  /// `POST` — voluntarily deactivate an active listing without cancelling
+  /// existing reservations.
+  static String deactivate(int id) => '/seller/listings/$id/deactivate';
+
+  /// `POST` — reactivate an eligible listing voluntarily deactivated by its
+  /// owning seller. Sold/admin-deactivated/rejected listings are not eligible.
+  static String reactivate(int id) => '/seller/listings/$id/reactivate';
 
   /// `DELETE` — destroy a draft or withdrawn listing. 200.
   ///

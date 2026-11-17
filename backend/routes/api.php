@@ -141,15 +141,18 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('seller-verification
 // repository, so there is no parameter that could widen a seller's list to
 // somebody else's, and no id that could redirect a write at a foreign row.
 //
-// `submit` and `destroy` are declared before `/seller/listings/{listing}` for the
+// Named listing actions are declared before `/seller/listings/{listing}` for the
 // same reason `/me` is declared before its group: a static segment must never be
-// swallowed by a parameter. Neither is a deactivation — `active -> inactive` is an
-// administrator action [D-02 rule 4] and is not exposed to sellers.
+// swallowed by a parameter. Seller deactivation/reactivation follow the voluntary
+// lifecycle rules in functional documentation §4.4. Admin moderation remains
+// on a separate surface.
 Route::middleware('auth:sanctum', 'ability:mobile', 'seller')->prefix('seller/listings')->group(function (): void {
     Route::get('/', [SellerListingController::class, 'index']);
     Route::post('/', [SellerListingController::class, 'store']);
     Route::post('/{listing}/submit', [SellerListingController::class, 'submit']);
     Route::post('/{listing}/mark-sold', [SellerListingController::class, 'markSold']);
+    Route::post('/{listing}/deactivate', [SellerListingController::class, 'deactivate']);
+    Route::post('/{listing}/reactivate', [SellerListingController::class, 'reactivate']);
     Route::patch('/{listing}', [SellerListingController::class, 'update']);
     Route::delete('/{listing}', [SellerListingController::class, 'destroy']);
 
@@ -371,6 +374,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::post('/listings/{listing}/approve', [ListingController::class, 'approve']);
     Route::post('/listings/{listing}/reject', [ListingController::class, 'reject']);
     Route::post('/listings/{listing}/deactivate', [ListingController::class, 'deactivate']);
+    Route::post('/listings/{listing}/reactivate', [ListingController::class, 'reactivate']);
     Route::post('/listings/{listing}/inventory/reconcile', [ListingController::class, 'reconcileInventory']);
     Route::get('/listings/{listing}', [ListingController::class, 'show']);
     Route::get('/seller-verifications', [SellerVerificationController::class, 'index']);

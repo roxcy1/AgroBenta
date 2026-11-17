@@ -31,7 +31,7 @@ class MobileListingResource extends JsonResource
         $reserved = $this->resource->getAttribute('reserved_quantity');
         $completed = $this->resource->getAttribute('accounted_completed_quantity');
 
-        return [
+        $data = [
             'id' => $this->id,
             'seller' => new MobileSellerResource($this->seller),
             'livestock_type' => $this->livestock_type,
@@ -71,6 +71,16 @@ class MobileListingResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
+
+        // Seller-only management hint. Buyers never receive provenance about
+        // inactive inventory, and seller actions remain enforced by the service.
+        if ($request->user() !== null && (int) $request->user()->getKey() === (int) $this->seller_id) {
+            $hints = $this->resource->getRelations()['sellerActionHints'] ?? [];
+            $data['seller_can_reactivate'] = (bool) ($hints['seller_can_reactivate'] ?? false);
+            $data['seller_can_delete'] = (bool) ($hints['seller_can_delete'] ?? false);
+        }
+
+        return $data;
     }
 
     /**

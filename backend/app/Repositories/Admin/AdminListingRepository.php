@@ -2,7 +2,9 @@
 
 namespace App\Repositories\Admin;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
+use App\Models\Activity;
 use App\Models\Listing;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,6 +12,31 @@ use Illuminate\Support\Facades\DB;
 
 class AdminListingRepository
 {
+    /**
+     * Confirm the listing's latest inactive decision was an administrator
+     * deactivation, not seller withdrawal or rejection.
+     */
+    public function wasMostRecentlyDeactivatedByAdmin(int $listingId): bool
+    {
+        $activity = Activity::query()
+            ->where('metadata->target_type', 'listing')
+            ->where('metadata->target_id', $listingId)
+            ->whereIn('action', [
+                ActivityAction::ListingApproved->value,
+                ActivityAction::ListingRejected->value,
+                ActivityAction::ListingDeactivated->value,
+                ActivityAction::ListingSellerDeactivated->value,
+                ActivityAction::ListingSellerReactivated->value,
+                ActivityAction::ListingAdminReactivated->value,
+                ActivityAction::ListingMarkedSold->value,
+            ])
+            ->orderByDesc('id')
+            ->first();
+
+        return $activity !== null &&
+            $activity->action === ActivityAction::ListingDeactivated->value;
+    }
+
     public function list(
         ?string $search = null,
         ?string $livestockType = null,
@@ -61,8 +88,9 @@ class AdminListingRepository
         ListingStatus $from,
         ListingStatus $to,
         ?string $adminNote = null,
+        bool $clearAdminNote = false,
     ): ?Listing {
-        return DB::transaction(function () use ($listing, $from, $to, $adminNote): ?Listing {
+        return DB::transaction(function () use ($listing, $from, $to, $adminNote, $clearAdminNote): ?Listing {
             $current = Listing::query()
                 ->withInventoryTotals()
                 ->with([
@@ -84,6 +112,8 @@ class AdminListingRepository
 
             if ($adminNote !== null) {
                 $current->admin_note = $adminNote;
+            } elseif ($clearAdminNote) {
+                $current->admin_note = null;
             }
 
             $current->save();

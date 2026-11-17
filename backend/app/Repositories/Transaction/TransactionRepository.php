@@ -251,6 +251,19 @@ class TransactionRepository
     }
 
     /**
+     * Whether any transaction history references this listing.
+     *
+     * Listing deletion cascades to transactions, so every status must preserve
+     * the listing record—not only pending reservations and completed receipts.
+     */
+    public function hasAnyForListing(int $listingId): bool
+    {
+        return Transaction::query()
+            ->where('listing_id', $listingId)
+            ->exists();
+    }
+
+    /**
      * The caller's transactions, optionally narrowed to one side.
      */
     private function scopedQuery(User $user, ?string $role = null): Builder

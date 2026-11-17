@@ -28,8 +28,9 @@ enum ListingStatus {
   /// No longer available: the sale completed. Terminal.
   sold('sold'),
 
-  /// Removed from sale, either rejected in review or deactivated by an
-  /// administrator. There is no path back to [active] under [D-02].
+  /// Not visible to buyers: rejected, administrator-deactivated, or voluntarily
+  /// deactivated by the seller. Restoration eligibility is a separate
+  /// seller-only server hint.
   inactive('inactive');
 
   const ListingStatus(this.value);
@@ -122,6 +123,8 @@ class Listing {
     this.availableQuantity,
     this.externallySoldQuantity,
     this.inventoryReconciliationRequired = false,
+    this.sellerCanReactivate = false,
+    this.sellerCanDelete,
     required this.askingPrice,
     required this.location,
     required this.healthStatus,
@@ -159,6 +162,9 @@ class Listing {
       externallySoldQuantity: readNullableInt(json, 'externally_sold_quantity'),
       inventoryReconciliationRequired:
           readNullableBool(json, 'inventory_reconciliation_required') ?? false,
+      sellerCanReactivate:
+          readNullableBool(json, 'seller_can_reactivate') ?? false,
+      sellerCanDelete: readNullableBool(json, 'seller_can_delete'),
       askingPrice: readNullableDecimalString(json, 'asking_price'),
       location: readNullableString(json, 'location'),
       healthStatus: readNullableString(json, 'health_status'),
@@ -241,6 +247,12 @@ class Listing {
 
   /// Legacy inventory is quarantined until an administrator verifies it.
   final bool inventoryReconciliationRequired;
+
+  /// Seller-only server hint for a voluntarily deactivated, eligible listing.
+  final bool sellerCanReactivate;
+
+  /// Seller-only delete eligibility hint. Null means an older API omitted it.
+  final bool? sellerCanDelete;
 
   /// The seller's asking price as the API sent it, e.g. `"42500.00"`.
   ///

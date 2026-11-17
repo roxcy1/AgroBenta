@@ -53,6 +53,35 @@ void main() {
       expect(_canDelete(ListingStatus.sold), isFalse);
     });
 
+    test(
+      'reactivation requires the seller-specific server eligibility hint',
+      () {
+        final Map<String, dynamic> eligibleJson = listingJson(
+          id: 10,
+          status: 'inactive',
+        )..['seller_can_reactivate'] = true;
+        final Map<String, dynamic> ineligibleJson = listingJson(
+          id: 11,
+          status: 'inactive',
+        );
+
+        expect(
+          SellerListingController.canReactivate(Listing.fromJson(eligibleJson)),
+          isTrue,
+        );
+        expect(
+          SellerListingController.canReactivate(
+            Listing.fromJson(ineligibleJson),
+          ),
+          isFalse,
+        );
+        expect(
+          SellerListingController.canReactivate(_listing(ListingStatus.sold)),
+          isFalse,
+        );
+      },
+    );
+
     test('canMarkSold covers active only', () {
       // Marking sold is one-way and terminal: only an active listing may be
       // marked, and once sold it stays sold.
@@ -61,6 +90,16 @@ void main() {
       expect(_canMarkSold(ListingStatus.pending), isFalse);
       expect(_canMarkSold(ListingStatus.sold), isFalse);
       expect(_canMarkSold(ListingStatus.inactive), isFalse);
+    });
+
+    test('reconciled-unknown inventory cannot be marked sold', () {
+      final Map<String, dynamic> listing = listingJson(id: 20, status: 'active')
+        ..['inventory_reconciliation_required'] = true;
+
+      expect(
+        SellerListingController.canMarkSold(Listing.fromJson(listing)),
+        isFalse,
+      );
     });
 
     test('submission requires at least one stored photo', () {
@@ -710,15 +749,20 @@ void main() {
 
     test('a 409 becomes a conflict message and re-reads the list', () async {
       // The listing has already moved on — already sold, or not active.
+      int listRequests = 0;
       final harness = buildRecordedController((RecordedRequest request) async {
         if (request.apiPath.endsWith('/mark-sold')) {
           return listingConflictResponse(
             message: 'Only an active listing can be marked as sold.',
           );
         }
+        listRequests++;
         return sellerListingListResponse(
           listings: <Map<String, dynamic>>[
-            listingJson(id: 1, status: 'pending'),
+            listingJson(
+              id: 1,
+              status: listRequests == 1 ? 'active' : 'pending',
+            ),
           ],
           total: 1,
         );
@@ -727,12 +771,120 @@ void main() {
 
       await harness.controller.loadInitial();
       await harness.controller.markSold(1);
+      await pumpEventQueue();
 
       expect(harness.controller.state.conflictMessage, isNotNull);
       expect(harness.controller.state.actionErrorMessage, isNull);
       expect(
         harness.controller.state.listings.single.status,
         ListingStatus.pending,
+      );
+    });
+  });
+
+  group('deactivate and reactivate', () {
+    test(
+      'deactivate posts the named route and updates the loaded listing',
+      () async {
+        final harness = buildRecordedController((
+          RecordedRequest request,
+        ) async {
+          if (request.apiPath.endsWith('/deactivate')) {
+            return sellerListingResponse(
+              listing: listingJson(id: 1, status: 'inactive'),
+            );
+          }
+          return sellerListingListResponse(
+            listings: <Map<String, dynamic>>[
+              listingJson(id: 1, status: 'active'),
+            ],
+            total: 1,
+          );
+        });
+        addTearDown(harness.controller.dispose);
+
+        await harness.controller.loadInitial();
+        await harness.controller.deactivate(1);
+
+        expect(
+          harness.recorded.any(
+            (RecordedRequest request) =>
+                request.method == 'POST' &&
+                request.apiPath == '/seller/listings/1/deactivate',
+          ),
+          isTrue,
+        );
+        expect(
+          harness.controller.state.findListing(1)?.status,
+          ListingStatus.inactive,
+        );
+      },
+    );
+
+    test(
+      'reactivation is guarded by the backend hint and restores active state',
+      () async {
+        final harness = buildRecordedController((
+          RecordedRequest request,
+        ) async {
+          if (request.apiPath.endsWith('/reactivate')) {
+            return sellerListingResponse(
+              listing: listingJson(id: 1, status: 'active'),
+            );
+          }
+          final Map<String, dynamic> inactive = listingJson(
+            id: 1,
+            status: 'inactive',
+          )..['seller_can_reactivate'] = true;
+          return sellerListingListResponse(
+            listings: <Map<String, dynamic>>[inactive],
+            total: 1,
+          );
+        });
+        addTearDown(harness.controller.dispose);
+
+        await harness.controller.loadInitial();
+        final Listing? result = await harness.controller.reactivate(1);
+
+        expect(result?.status, ListingStatus.active);
+        expect(
+          harness.recorded.any(
+            (RecordedRequest request) =>
+                request.method == 'POST' &&
+                request.apiPath == '/seller/listings/1/reactivate',
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('a conflict re-reads status and clears the action state', () async {
+      int listRequests = 0;
+      final harness = buildRecordedController((RecordedRequest request) async {
+        if (request.apiPath.endsWith('/deactivate')) {
+          return listingConflictResponse(
+            message: 'Only an active listing can be deactivated.',
+          );
+        }
+        listRequests++;
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 1, status: listRequests == 1 ? 'active' : 'sold'),
+          ],
+          total: 1,
+        );
+      });
+      addTearDown(harness.controller.dispose);
+
+      await harness.controller.loadInitial();
+      await harness.controller.deactivate(1);
+      await pumpEventQueue();
+
+      expect(harness.controller.state.action.name, 'none');
+      expect(harness.controller.state.conflictMessage, isNotNull);
+      expect(
+        harness.controller.state.findListing(1)?.status,
+        ListingStatus.sold,
       );
     });
   });

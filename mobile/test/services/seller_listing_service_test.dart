@@ -18,6 +18,46 @@ final Uint8List _pngBytes = base64Decode(
 /// through it may construct a body containing `status` or `seller_id`, and no
 /// undecided contract field (`photos`) may sneak in.
 void main() {
+  group('seller listing lifecycle actions', () {
+    test('deactivate and reactivate use the named action routes', () async {
+      final FakeTokenStore tokenStore = FakeTokenStore('1|test-mobile-token');
+      final List<RecordedRequest> recorded = <RecordedRequest>[];
+      final SellerListingRepository repository = buildSellerListingRepository(
+        tokenStore,
+        (RecordedRequest request) async => sellerListingResponse(
+          listing: listingJson(
+            id: 9,
+            status: request.apiPath.endsWith('/deactivate')
+                ? 'inactive'
+                : 'active',
+          ),
+        ),
+        recorded: recorded,
+      );
+
+      await repository.deactivate(9);
+      await repository.reactivate(9);
+
+      expect(
+        recorded.map((RecordedRequest request) => request.method),
+        <String>['POST', 'POST'],
+      );
+      expect(
+        recorded.map((RecordedRequest request) => request.apiPath),
+        <String>[
+          '/seller/listings/9/deactivate',
+          '/seller/listings/9/reactivate',
+        ],
+      );
+      expect(
+        recorded.every(
+          (RecordedRequest request) => request.request.body.isEmpty,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('uploadPhotos multipart', () {
     test('every file part is named photos[] so PHP parses an array', () async {
       // The wire name is the whole contract: PHP only builds an array from a

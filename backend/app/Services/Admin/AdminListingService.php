@@ -131,6 +131,48 @@ class AdminListingService
     }
 
     /**
+     * Administrator-only restoration of a listing that an administrator
+     * previously deactivated. Rejection and seller withdrawal are not restored
+     * through this moderation decision.
+     */
+    public function reactivate(Listing $listing, User $actor): Listing
+    {
+        return DB::transaction(function () use ($listing, $actor): Listing {
+            if (! $this->listings->wasMostRecentlyDeactivatedByAdmin((int) $listing->getKey())) {
+                abort(409, 'Only an administrator-deactivated listing can be restored by an administrator.');
+            }
+
+            $reactivated = $this->listings->transition(
+                $listing,
+                ListingStatus::Inactive,
+                ListingStatus::Active,
+                clearAdminNote: true,
+            );
+            abort_if($reactivated === null, 409, 'Only an inactive listing can be reactivated.');
+
+            ListingInventoryUpdated::dispatch((int) $reactivated->getKey());
+            $this->activity->log(
+                $actor,
+                ActivityAction::ListingAdminReactivated,
+                sprintf('Listing #%d reactivated by an administrator.', $reactivated->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $reactivated->getKey(),
+                    'context' => ['seller_id' => $reactivated->seller_id],
+                    'changes' => [
+                        'status' => [
+                            'from' => ListingStatus::Inactive->value,
+                            'to' => ListingStatus::Active->value,
+                        ],
+                    ],
+                ],
+            );
+
+            return $reactivated;
+        });
+    }
+
+    /**
      * Apply one documented transition, or refuse it.
      *
      * The allowed source status is a private detail of each method above, so a

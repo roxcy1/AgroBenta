@@ -33,7 +33,9 @@ use RuntimeException;
  *  - `draft` becomes `pending` on submit, and that is the only way out of it;
  *  - `draft` and `active` are editable [D-24];
  *  - `draft` and `inactive` are destroyable [D-25];
- *  - `active → inactive` is an **administrator** action;
+ *  - `active → inactive` is either administrator moderation or voluntary
+ *    seller deactivation, recorded distinctly in the activity log;
+ *  - only a seller-deactivated `inactive` listing can return to `active`;
  *  - `active → sold` is a seller action via `markSold()`;
  *
  * A seller therefore cannot publish a listing. Approval is a moderation step this
@@ -141,7 +143,7 @@ class SellerListingService
                 ],
             );
 
-            return $listing;
+            return $this->listingRepository->findOwned((int) $listing->getKey(), $seller) ?? $listing;
         });
     }
 
@@ -305,7 +307,7 @@ class SellerListingService
                 ],
             );
 
-            return $listing;
+            return $this->listingRepository->findOwned((int) $listing->getKey(), $listing->seller) ?? $listing;
         });
     }
 
@@ -375,33 +377,152 @@ class SellerListingService
     }
 
     /**
+     * Voluntarily hide an active listing without changing its inventory or
+     * touching existing transaction reservations.
+     */
+    public function deactivate(Listing $listing): Listing
+    {
+        return DB::transaction(function () use ($listing): Listing {
+            $locked = Listing::query()
+                ->whereKey($listing->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($locked === null || (int) $locked->seller_id !== (int) $listing->seller_id) {
+                abort(404, 'Listing not found.');
+            }
+            if ($locked->status !== ListingStatus::Active) {
+                abort(409, 'Only an active listing can be deactivated.');
+            }
+
+            $locked->status = ListingStatus::Inactive;
+            $locked->save();
+
+            $this->activity->log(
+                $locked->seller_id,
+                ActivityAction::ListingSellerDeactivated,
+                sprintf('Listing #%d deactivated by its seller.', $locked->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $locked->getKey(),
+                    'changes' => [
+                        'status' => ['from' => ListingStatus::Active->value, 'to' => ListingStatus::Inactive->value],
+                    ],
+                ],
+            );
+            ListingInventoryUpdated::dispatch((int) $locked->getKey());
+
+            return $this->listingRepository->findOwned((int) $locked->getKey(), $locked->seller) ?? $locked;
+        });
+    }
+
+    /**
+     * Reactivate only a listing whose most recent deactivation was voluntary
+     * and performed by this seller. Sold or moderator-inactivated listings are
+     * intentionally not reversible through the seller API.
+     */
+    public function reactivate(Listing $listing, User $seller): Listing
+    {
+        return DB::transaction(function () use ($listing, $seller): Listing {
+            $locked = Listing::query()
+                ->whereKey($listing->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($locked === null ||
+                (int) $locked->seller_id !== (int) $seller->getKey() ||
+                (int) $locked->seller_id !== (int) $listing->seller_id) {
+                abort(404, 'Listing not found.');
+            }
+            if (! $seller->isApprovedSeller()) {
+                abort(403, 'Only an approved seller can reactivate a listing.');
+            }
+            if ($locked->status !== ListingStatus::Inactive ||
+                ! $this->listingRepository->wasMostRecentlyDeactivatedBySeller(
+                    (int) $locked->getKey(),
+                    (int) $seller->getKey(),
+                )) {
+                abort(409, 'Only a listing deactivated by you can be reactivated.');
+            }
+            if ($locked->admin_note !== null && trim((string) $locked->admin_note) !== '') {
+                abort(409, 'This listing has an administrator restriction and cannot be reactivated by a seller.');
+            }
+            if ($locked->inventory_reconciliation_required || $locked->total_quantity === null) {
+                abort(409, 'This listing requires inventory reconciliation before it can be reactivated.');
+            }
+
+            $accounted = $this->reservations->accountedQuantities((int) $locked->getKey());
+            $committed = $accounted['reserved']
+                + $accounted['completed']
+                + (int) $locked->externally_sold_quantity;
+            $available = (int) $locked->total_quantity - $committed;
+            if ($available !== (int) $locked->quantity) {
+                abort(409, 'This listing requires inventory reconciliation before it can be reactivated.');
+            }
+            if ($available < 1) {
+                abort(409, 'A listing must have available inventory before it can be reactivated.');
+            }
+
+            $locked->status = ListingStatus::Active;
+            $locked->save();
+            $this->activity->log(
+                $seller,
+                ActivityAction::ListingSellerReactivated,
+                sprintf('Listing #%d reactivated by its seller.', $locked->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $locked->getKey(),
+                    'changes' => [
+                        'status' => ['from' => ListingStatus::Inactive->value, 'to' => ListingStatus::Active->value],
+                    ],
+                ],
+            );
+            ListingInventoryUpdated::dispatch((int) $locked->getKey());
+
+            return $this->listingRepository->findOwned((int) $locked->getKey(), $seller) ?? $locked;
+        });
+    }
+
+    /**
      * Destroy a listing the seller owns.
      *
      * @throws ValidationException if the listing is not in a destroyable state
      */
     public function delete(Listing $listing): void
     {
-        $this->ensureStatusIs($listing, self::DELETABLE_STATUSES, 'Only a draft or an inactive listing can be deleted.');
-
-        if ($listing->inventory_reconciliation_required ||
-            $this->transactions->hasActiveReservationsForListing((int) $listing->getKey())) {
-            abort(409, 'This listing cannot be deleted while inventory needs reconciliation or a transaction reserves stock.');
-        }
-
-        // Completed sales are historical records. Deleting the listing would
-        // cascade the transaction away, taking its receipt with it, so the
-        // delete is refused while a completed transaction references it.
-        if ($this->transactions->hasCompletedForListing((int) $listing->getKey())) {
-            abort(409, 'This listing cannot be deleted because it has a completed transaction.');
-        }
-
         DB::transaction(function () use ($listing): void {
-            $targetId = $listing->getKey();
-            $sellerId = $listing->seller_id;
-            $previousStatus = $listing->status->value;
-            $livestockType = $listing->livestock_type;
+            $locked = Listing::query()
+                ->whereKey($listing->getKey())
+                ->lockForUpdate()
+                ->first();
 
-            $this->listingRepository->delete($listing);
+            if ($locked === null || (int) $locked->seller_id !== (int) $listing->seller_id) {
+                abort(404, 'Listing not found.');
+            }
+
+            $this->ensureStatusIs(
+                $locked,
+                self::DELETABLE_STATUSES,
+                'Only a draft or an inactive listing can be deleted.',
+            );
+
+            if ($locked->inventory_reconciliation_required ||
+                $this->transactions->hasActiveReservationsForListing((int) $locked->getKey())) {
+                abort(409, 'This listing cannot be deleted while inventory needs reconciliation or a transaction reserves stock.');
+            }
+
+            // Listing deletion cascades to transactions. Preserve every
+            // transaction record, including cancelled history.
+            if ($this->transactions->hasAnyForListing((int) $locked->getKey())) {
+                abort(409, 'This listing cannot be deleted because it has transaction history.');
+            }
+
+            $targetId = $locked->getKey();
+            $sellerId = $locked->seller_id;
+            $previousStatus = $locked->status->value;
+            $livestockType = $locked->livestock_type;
+
+            $this->listingRepository->delete($locked);
 
             $this->activity->log(
                 $sellerId,

@@ -103,8 +103,8 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
         title: const Text('Delete this listing?'),
         content: Text(
           '"${listing.title}" will be removed permanently. This cannot be '
-          'undone. If you only want to stop it appearing in the marketplace, '
-          'ask an administrator to deactivate it instead.',
+          'undone. Listings with any transaction history cannot be deleted. '
+          'To hide an active listing, use Deactivate instead.',
         ),
         actions: <Widget>[
           TextButton(
@@ -212,6 +212,55 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
       return;
     }
     await _controller.markSold(listing.id);
+  }
+
+  Future<void> _confirmDeactivate(Listing listing) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Deactivate this listing?'),
+        content: const Text(
+          'It will no longer appear in the Marketplace. Existing reservations '
+          'and transactions will continue unchanged. You can reactivate this '
+          'listing later if it remains eligible and has available animals.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep active'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Deactivate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _controller.deactivate(listing.id);
+  }
+
+  Future<void> _confirmReactivate(Listing listing) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Reactivate this listing?'),
+        content: const Text(
+          'This listing will be visible in the Marketplace again. Existing '
+          'transaction history and reservations will be preserved.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reactivate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _controller.reactivate(listing.id);
   }
 
   @override
@@ -335,6 +384,8 @@ class _SellerListingsScreenState extends State<SellerListingsScreen> {
                           onOpen: _openDetail,
                           onSubmit: _confirmSubmit,
                           onMarkSold: _confirmMarkSold,
+                          onDeactivate: _confirmDeactivate,
+                          onReactivate: _confirmReactivate,
                           onDelete: _confirmDelete,
                         ),
                       },
@@ -359,6 +410,8 @@ class _ListingList extends StatelessWidget {
     required this.onOpen,
     required this.onSubmit,
     required this.onMarkSold,
+    required this.onDeactivate,
+    required this.onReactivate,
     required this.onDelete,
   });
 
@@ -368,6 +421,8 @@ class _ListingList extends StatelessWidget {
   final ValueChanged<Listing> onOpen;
   final ValueChanged<Listing> onSubmit;
   final ValueChanged<Listing> onMarkSold;
+  final ValueChanged<Listing> onDeactivate;
+  final ValueChanged<Listing> onReactivate;
   final ValueChanged<Listing> onDelete;
 
   @override
@@ -397,6 +452,8 @@ class _ListingList extends StatelessWidget {
           onTap: () => onOpen(listing),
           onSubmit: () => onSubmit(listing),
           onMarkSold: () => onMarkSold(listing),
+          onDeactivate: () => onDeactivate(listing),
+          onReactivate: () => onReactivate(listing),
           // The row's context, which is a descendant of the `Navigator`. A
           // `StatelessWidget` has no `context` of its own to reach for, and
           // holding the enclosing `State`'s would outlive the row.

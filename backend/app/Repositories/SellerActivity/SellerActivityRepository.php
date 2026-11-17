@@ -29,6 +29,8 @@ class SellerActivityRepository
         ActivityAction::InquiryCreated,
         ActivityAction::ListingApproved,
         ActivityAction::ListingRejected,
+        ActivityAction::ListingSellerDeactivated,
+        ActivityAction::ListingSellerReactivated,
         ActivityAction::OfferCreated,
         ActivityAction::OfferAccepted,
         ActivityAction::OfferDeclined,
@@ -48,6 +50,8 @@ class SellerActivityRepository
         'listings' => [
             ActivityAction::ListingApproved,
             ActivityAction::ListingRejected,
+            ActivityAction::ListingSellerDeactivated,
+            ActivityAction::ListingSellerReactivated,
             ActivityAction::ListingMarkedSold,
         ],
         'inquiries' => [
