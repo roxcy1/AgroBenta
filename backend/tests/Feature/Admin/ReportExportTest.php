@@ -12,7 +12,9 @@ use App\Models\Listing;
 use App\Models\SellerVerification;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Repositories\Admin\AdminReportRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -346,5 +348,167 @@ class ReportExportTest extends TestCase
     public function test_unknown_dataset_is_not_found(): void
     {
         $this->exportCsv('inquiries')->assertStatus(404);
+    }
+
+    public function test_transactions_export_names_soft_deleted_buyer_and_seller(): void
+    {
+        $listing = $this->createListing();
+        $this->createTransaction($listing);
+
+        $this->buyer->delete();
+        $this->seller->delete();
+
+        $rows = $this->rows($this->exportCsv('transactions'));
+
+        $this->assertCount(2, $rows);
+
+        $row = $rows[1];
+
+        $this->assertSame((string) $this->buyer->id, $row[4]);
+        $this->assertSame($this->buyer->name, $row[5]);
+        $this->assertSame($this->buyer->email, $row[6]);
+        $this->assertSame((string) $this->seller->id, $row[7]);
+        $this->assertSame($this->seller->name, $row[8]);
+        $this->assertSame($this->seller->email, $row[9]);
+    }
+
+    public function test_listings_export_names_a_soft_deleted_seller(): void
+    {
+        $listing = $this->createListing();
+
+        $this->seller->delete();
+
+        $rows = $this->rows($this->exportCsv('listings'));
+
+        $this->assertCount(2, $rows);
+
+        $row = $rows[1];
+
+        $this->assertSame((string) $listing->id, $row[0]);
+        $this->assertSame((string) $this->seller->id, $row[3]);
+        $this->assertSame($this->seller->name, $row[4]);
+        $this->assertSame($this->seller->email, $row[5]);
+    }
+
+    public function test_seller_verifications_export_names_soft_deleted_applicant_and_reviewer(): void
+    {
+        $reviewer = User::factory()->create([
+            'role' => UserRole::Admin,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        SellerVerification::forceCreate([
+            'user_id' => $this->seller->id,
+            'business_name' => 'Test Livestock Farm',
+            'business_location' => 'Trinidad, Bohol',
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDay(),
+            'reviewed_at' => now(),
+            'reviewed_by' => $reviewer->id,
+            'created_at' => now()->subDay(),
+        ]);
+
+        $this->seller->delete();
+        $reviewer->delete();
+
+        $rows = $this->rows($this->exportCsv('seller-verifications'));
+
+        $this->assertCount(2, $rows);
+
+        $row = $rows[1];
+
+        $this->assertSame((string) $this->seller->id, $row[4]);
+        $this->assertSame($this->seller->name, $row[5]);
+        $this->assertSame($this->seller->email, $row[6]);
+        $this->assertSame('Test Livestock Farm', $row[7]);
+        $this->assertSame($reviewer->name, $row[11]);
+    }
+
+    public function test_activities_export_names_a_soft_deleted_actor(): void
+    {
+        $actor = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        Activity::factory()->create([
+            'user_id' => $actor->id,
+            'action' => 'settings_updated',
+            'description' => 'Updated platform settings',
+            'created_at' => now()->subDay(),
+        ]);
+
+        $actor->delete();
+
+        $rows = $this->rows($this->exportCsv('activities'));
+
+        $this->assertCount(2, $rows);
+
+        $row = $rows[1];
+
+        $this->assertSame((string) $actor->id, $row[2]);
+        $this->assertSame($actor->name, $row[3]);
+        $this->assertSame($actor->email, $row[4]);
+    }
+
+    public function test_users_export_excludes_deactivated_accounts(): void
+    {
+        $this->buyer->delete();
+
+        $rows = $this->rows($this->exportCsv('users'));
+
+        $ids = array_column(array_slice($rows, 1), 0);
+
+        $this->assertContains((string) $this->seller->id, $ids);
+        $this->assertNotContains((string) $this->buyer->id, $ids);
+    }
+
+    public function test_transaction_export_eager_loads_related_accounts_once_per_chunk(): void
+    {
+        $listing = $this->createListing();
+        $this->createTransaction($listing);
+
+        $reports = app(AdminReportRepository::class);
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+
+        $singleRowExport = $this->exportTransactionRows($reports);
+        $oneRowQueries = count(DB::getQueryLog());
+
+        foreach (range(1, 4) as $index) {
+            $this->createTransaction($listing, ['created_at' => now()->subMinutes($index)]);
+        }
+
+        DB::flushQueryLog();
+
+        $fiveRowExport = $this->exportTransactionRows($reports);
+        $fiveRowQueries = count(DB::getQueryLog());
+
+        DB::disableQueryLog();
+
+        $this->assertSame(1, $singleRowExport);
+        $this->assertSame(5, $fiveRowExport);
+        $this->assertSame($oneRowQueries, $fiveRowQueries);
+        $this->assertLessThanOrEqual(6, $oneRowQueries);
+    }
+
+    /**
+     * Read the transaction export the way the CSV writer does — including the
+     * related accounts it writes — and return how many rows were read.
+     */
+    private function exportTransactionRows(AdminReportRepository $reports): int
+    {
+        $count = 0;
+
+        foreach ($reports->exportTransactions() as $transaction) {
+            $count++;
+
+            $this->assertNotNull($transaction->buyer);
+            $this->assertNotNull($transaction->seller);
+            $this->assertNotNull($transaction->listing);
+        }
+
+        return $count;
     }
 }

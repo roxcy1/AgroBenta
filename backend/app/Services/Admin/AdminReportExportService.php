@@ -154,8 +154,10 @@ class AdminReportExportService
     /**
      * Write one dataset to an open stream as CSV.
      *
-     * Rows are read through a lazy cursor, so an all-time export is never loaded
-     * into memory, and every cell is normalised before it is written.
+     * Rows are read through a lazy chunked query, so the related accounts are
+     * eager loaded once per chunk instead of once per row, and an all-time
+     * export is never loaded into memory. Every cell is normalised before it is
+     * written.
      *
      * @param  resource  $handle
      */

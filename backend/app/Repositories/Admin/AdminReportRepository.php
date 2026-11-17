@@ -435,6 +435,11 @@ class AdminReportRepository
      * applies the same `created_at` window so the file reconciles with the
      * report's totals.
      *
+     * The rows are paged with `lazy()`, not `cursor()`: `cursor()` streams the
+     * raw query and silently drops `with()`, which turns the related accounts
+     * into one query per row. `lazy()` pages with `get()`, so the eager loads
+     * above run once per chunk and the newest-first order is preserved.
+     *
      * @return LazyCollection<int, Transaction>
      */
     public function exportTransactions(?string $dateFrom = null, ?string $dateTo = null): LazyCollection
@@ -450,14 +455,16 @@ class AdminReportRepository
 
         $this->applyDateFilter($query, $dateFrom, $dateTo);
 
-        return $query->cursor();
+        return $query->lazy();
     }
 
     /**
      * Every listing created inside the range, newest first.
      *
      * Sellers are read with trashed accounts so a deactivated account's listing
-     * still names its seller, matching the admin listing table.
+     * still names its seller, matching the admin listing table. That constraint
+     * only takes effect because the rows are paged with `lazy()`; `cursor()`
+     * ignores `with()` entirely.
      *
      * @return LazyCollection<int, Listing>
      */
@@ -472,7 +479,7 @@ class AdminReportRepository
 
         $this->applyDateFilter($query, $dateFrom, $dateTo);
 
-        return $query->cursor();
+        return $query->lazy();
     }
 
     /**
@@ -480,6 +487,9 @@ class AdminReportRepository
      *
      * Soft-deleted (deactivated) accounts are excluded by the model's default
      * scope, which is the same population the report's user totals count.
+     *
+     * This is the one export with no relations, so it keeps `cursor()`: the
+     * raw stream needs no eager loading and holds no models in memory.
      *
      * @return LazyCollection<int, User>
      */
@@ -501,6 +511,9 @@ class AdminReportRepository
      * Rows are not narrowed to the latest record per applicant: the report
      * counts submissions, so the export keeps superseded resubmissions too.
      *
+     * `lazy()` (not `cursor()`) so the applicant and reviewer eager loads above
+     * actually run instead of one query per submission.
+     *
      * @return LazyCollection<int, SellerVerification>
      */
     public function exportSellerVerifications(?string $dateFrom = null, ?string $dateTo = null): LazyCollection
@@ -512,7 +525,7 @@ class AdminReportRepository
 
         $this->applyDateFilter($query, $dateFrom, $dateTo);
 
-        return $query->cursor();
+        return $query->lazy();
     }
 
     /**
@@ -529,7 +542,7 @@ class AdminReportRepository
 
         $this->applyDateFilter($query, $dateFrom, $dateTo);
 
-        return $query->cursor();
+        return $query->lazy();
     }
 
     /**

@@ -65,8 +65,10 @@ Notes:
 * Numeric cells stay numeric so spreadsheets can total them.
 * Text beginning with `=`, `+`, `-`, `@`, tab or carriage return is prefixed
   with `'` to prevent spreadsheet formula execution.
-* Rows stream through a lazy cursor; an all-time export is not loaded into
-  memory.
+* Rows are read with a lazy chunked query (`lazy()`, not `cursor()`): each
+  chunk eager loads the related accounts above, so an export does not issue one
+  query per row, and an all-time export is not loaded into memory. Row order
+  stays newest first (`created_at desc, id desc`).
 * An empty result writes the header row only.
 * No credentials, tokens or document storage paths are exported.
 
@@ -82,7 +84,11 @@ uses the currently **applied** date range (not dates typed but not applied).
 
 * `backend/tests/Feature/Admin/ReportExportTest.php` covers authorization,
   per-dataset headers and rows, range boundaries, empty ranges, unknown
-  datasets, invalid ranges and formula neutralisation.
+  datasets, invalid ranges and formula neutralisation. It also covers
+  soft-deleted related accounts (buyer, seller, reviewer, actor), the intended
+  exclusion of deactivated accounts from the users export, and a query-count
+  guard that the transaction export eager loads relations once per chunk instead
+  of once per row.
 * `frontend/src/features/admin/reports/csv.test.ts` and
   `frontend/src/features/admin/reports/api/exportReport.test.ts` cover the
   filename and the request shape.
