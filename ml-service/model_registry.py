@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 from catboost import CatBoostRegressor
 
-from validation import load_safety_profile, load_training_profile
+from validation import SAFETY_SUFFIX, load_safety_profile, load_training_profile
 
 BASE_DIR = Path(__file__).resolve().parent
 MODELS_DIR = BASE_DIR / "models"
@@ -155,31 +155,36 @@ def _verify_paths(
     if not metadata.get("feature_ranges"):
         raise ModelIntegrityError("Model metadata has no feature ranges.")
 
-    safety = load_safety_profile(model_path)
-    if not safety:
+    safety_name = entry.get("safety_profile_file")
+    if not isinstance(safety_name, str) or not safety_name:
+        safety_name = model_path.with_suffix(SAFETY_SUFFIX).name
+    if Path(safety_name).name != safety_name:
         raise ModelIntegrityError(
-            f"Model safety profile is missing or unreadable: "
-            f"{model_path.with_suffix('.safety.json')}"
+            "Manifest safety_profile_file must be a plain filename."
         )
+    safety_path = model_path.parent / safety_name
+    if not safety_path.is_file():
+        raise ModelIntegrityError(
+            f"Model safety profile is missing or unreadable: {safety_path}"
+        )
+    try:
+        safety = json.loads(safety_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ModelIntegrityError(
+            f"Model safety profile is missing or unreadable: {safety_path}"
+        ) from exc
+    if not isinstance(safety, dict) or not safety.get("categories"):
+        raise ModelIntegrityError("Model safety profile has no category coverage.")
     if safety.get("model_file") != model_path.name:
         raise ModelIntegrityError(
             "Model safety profile model_file does not match the selected model."
         )
-    if not safety.get("categories"):
-        raise ModelIntegrityError("Model safety profile has no category coverage.")
 
     expected_metadata = entry.get("metadata_file")
     if expected_metadata and expected_metadata != model_path.with_suffix(
         ".metadata.json"
     ).name:
         raise ModelIntegrityError("Manifest metadata_file does not match the model.")
-    expected_safety = entry.get("safety_profile_file")
-    if expected_safety and expected_safety != model_path.with_suffix(
-        ".safety.json"
-    ).name:
-        raise ModelIntegrityError(
-            "Manifest safety_profile_file does not match the model."
-        )
 
     return dict(metadata), dict(safety)
 

@@ -316,6 +316,25 @@ class MobileSellerListingTest extends TestCase
         ]);
     }
 
+    #[Test]
+    public function pounds_are_stored_and_returned_without_conversion(): void
+    {
+        $response = $this->store([
+            'weight_value' => 1102.31,
+            'weight_unit' => 'lb',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.weight_value', '1102.31')
+            ->assertJsonPath('data.weight_unit', 'lb');
+
+        $this->assertDatabaseHas('listings', [
+            'id' => $response->json('data.id'),
+            'weight_value' => 1102.31,
+            'weight_unit' => 'lb',
+        ]);
+    }
+
     /**
      * @return array<string, array{string}>
      */

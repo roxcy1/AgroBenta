@@ -155,7 +155,9 @@ class PredictionTests(unittest.TestCase):
                 breed="brahman",
                 sex="male",
                 age_months=20,
-                weight_kg=500,
+                # Inside the approved 50-400 kg cattle range but above the
+                # mutated 300 kg typical ceiling, so this stays a warning.
+                weight_kg=350,
                 model=model,
                 model_path=path,
             )

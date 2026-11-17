@@ -1,0 +1,214 @@
+{
+  "model_file": "candidate_catboost_v5_20261116T160623284919Z.cbm",
+  "training_rows": 2800,
+  "dataset_provenance": "synthetic",
+  "feature_ranges": {
+    "age_months": {
+      "min": 1.0,
+      "max": 240.0,
+      "p01": 1.0,
+      "p99": 195.0
+    },
+    "weight_kg": {
+      "min": 0.34,
+      "max": 450.0,
+      "p01": 0.7599,
+      "p99": 381.63599999999985
+    }
+  },
+  "observed_categories": [
+    "carabao",
+    "cattle",
+    "chicken",
+    "goat",
+    "swine"
+  ],
+  "observed_breeds": {
+    "carabao": [
+      "murrah",
+      "native_murrah_cross",
+      "philippine_native_carabao"
+    ],
+    "cattle": [
+      "brahman",
+      "brahman_cross",
+      "holstein_friesian",
+      "philippine_native_cattle"
+    ],
+    "chicken": [
+      "boholano_native_chicken",
+      "broiler",
+      "improved_native_chicken",
+      "layer"
+    ],
+    "goat": [
+      "anglo_nubian",
+      "boer",
+      "saanen",
+      "ubay_boholano_native_goat"
+    ],
+    "swine": [
+      "duroc",
+      "duroc_landrace_cross",
+      "landrace",
+      "large_white_yorkshire",
+      "native_pig"
+    ]
+  },
+  "target": {
+    "name": "actual_sale_price",
+    "unit": "PHP",
+    "min": 100.0,
+    "max": 86865.0
+  },
+  "warning": "Synthetic training data only. Do not interpret this profile as real-market price evidence.",
+  "model_version": "v5",
+  "dataset_label": "synthetic: reviewed source, corrected for v5",
+  "split": {
+    "seed": 42,
+    "validation_seed": 43,
+    "test_fraction": 0.15,
+    "validation_fraction_of_pool": 0.17647058823529413,
+    "rows": {
+      "train": 2800,
+      "validation": 600,
+      "test": 600
+    },
+    "counts_by_category": {
+      "carabao": {
+        "train": 420,
+        "validation": 90,
+        "test": 90
+      },
+      "cattle": {
+        "train": 560,
+        "validation": 120,
+        "test": 120
+      },
+      "chicken": {
+        "train": 560,
+        "validation": 120,
+        "test": 120
+      },
+      "goat": {
+        "train": 560,
+        "validation": 120,
+        "test": 120
+      },
+      "swine": {
+        "train": 700,
+        "validation": 150,
+        "test": 150
+      }
+    },
+    "breed_counts": {
+      "cattle/brahman": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "cattle/brahman_cross": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "cattle/holstein_friesian": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "cattle/philippine_native_cattle": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "carabao/murrah": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "carabao/native_murrah_cross": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "carabao/philippine_native_carabao": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "goat/anglo_nubian": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "goat/boer": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "goat/saanen": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "goat/ubay_boholano_native_goat": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "swine/duroc": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "swine/duroc_landrace_cross": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "swine/landrace": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "swine/large_white_yorkshire": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "swine/native_pig": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "chicken/boholano_native_chicken": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "chicken/broiler": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "chicken/improved_native_chicken": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      },
+      "chicken/layer": {
+        "train": 140,
+        "validation": 30,
+        "test": 30
+      }
+    },
+    "feature_group_overlap": {
+      "train_test": 0,
+      "train_validation": 0,
+      "validation_test": 0
+    },
+    "dataset_filename": "livestock_sales_v5_synthetic.csv",
+    "dataset_sha256": "4e036759946fdb165865a815290a8b47d83af6ea5672fb895f371676d4131154"
+  }
+}
