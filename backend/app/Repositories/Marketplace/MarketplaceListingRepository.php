@@ -32,7 +32,13 @@ class MarketplaceListingRepository
      */
     public function paginateActive(
         ?string $search = null,
-        ?string $livestockType = null,
+        ?array $livestockTypes = null,
+        ?array $breeds = null,
+        ?string $gender = null,
+        ?float $minAge = null,
+        ?float $maxAge = null,
+        ?float $minWeight = null,
+        ?float $maxWeight = null,
         ?string $location = null,
         ?float $minPrice = null,
         ?float $maxPrice = null,
@@ -41,7 +47,19 @@ class MarketplaceListingRepository
         $query = $this->activeQuery();
 
         $this->applySearch($query, $search);
-        $this->applyFilters($query, $livestockType, $location, $minPrice, $maxPrice);
+        $this->applyFilters(
+            $query,
+            $livestockTypes,
+            $breeds,
+            $gender,
+            $minAge,
+            $maxAge,
+            $minWeight,
+            $maxWeight,
+            $location,
+            $minPrice,
+            $maxPrice,
+        );
         $this->applyOrder($query, self::SORT_NEWEST);
 
         return $this->paginateCards($query, $perPage);
@@ -92,8 +110,24 @@ class MarketplaceListingRepository
         $this->applySearch($query, $search);
         // The same exact-match category filter the marketplace uses, so a chip
         // means the same thing on both surfaces. Historical values outside the
-        // catalog remain discoverable here for the same reason.
-        $this->applyFilters($query, $livestockType, null, null, null);
+        // catalog remain discoverable here for the same reason. The public
+        // seller page keeps its single-value filter; it is wrapped here so both
+        // surfaces share one query implementation.
+        $this->applyFilters(
+            $query,
+            $livestockType === null || $livestockType === ''
+                ? null
+                : [$livestockType],
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+        );
         $this->applyOrder($query, $sort);
 
         return $this->paginateCards($query, $perPage);
@@ -316,20 +350,75 @@ class MarketplaceListingRepository
     /**
      * Apply the documented marketplace filters.
      *
-     * `livestock_type` is compared exactly and the read filter stays
-     * permissive, so historical values outside the approved write vocabulary
-     * remain discoverable. New and updated listings are validated against
-     * [\App\Enums\LivestockType].
+     * `livestock_type` and `breed` are compared exactly and the read filter
+     * stays permissive, so historical values outside the approved write
+     * vocabulary remain discoverable. New and updated listings are validated
+     * against [\App\Enums\LivestockType].
+     *
+     * Age and weight are stored in mixed units, so a range filter converts each
+     * row to the unit the client sent (months, kilograms) in SQL before
+     * comparing. A row whose measurement cannot be converted — a null age unit,
+     * a null weight — cannot satisfy either bound and is excluded.
+     *
+     * @param  list<string>|null  $livestockTypes
+     * @param  list<string>|null  $breeds
      */
     private function applyFilters(
         Builder $query,
-        ?string $livestockType,
+        ?array $livestockTypes,
+        ?array $breeds,
+        ?string $gender,
+        ?float $minAge,
+        ?float $maxAge,
+        ?float $minWeight,
+        ?float $maxWeight,
         ?string $location,
         ?float $minPrice,
         ?float $maxPrice,
     ): void {
-        if ($livestockType !== null && $livestockType !== '') {
-            $query->where('livestock_type', $livestockType);
+        $types = self::nonEmptyStrings($livestockTypes);
+        if ($types !== []) {
+            $query->whereIn('livestock_type', $types);
+        }
+
+        $breedNames = self::nonEmptyStrings($breeds);
+        if ($breedNames !== []) {
+            $query->whereIn('breed', $breedNames);
+        }
+
+        if ($gender !== null && $gender !== '') {
+            $query->where('gender', $gender);
+        }
+
+        if ($minAge !== null || $maxAge !== null) {
+            // 9,125 days is 300 months, so `day * 300 / 9125` lands on the same
+            // scale as `year * 12` and a month left alone.
+            $ageMonths = "CASE age_unit WHEN 'year' THEN age_value * 12"
+                ." WHEN 'day' THEN age_value * 300 / 9125"
+                .' ELSE age_value END';
+
+            $query->whereNotNull('age_unit');
+
+            if ($minAge !== null) {
+                $query->whereRaw("({$ageMonths}) >= CAST(? AS REAL)", [$minAge]);
+            }
+
+            if ($maxAge !== null) {
+                $query->whereRaw("({$ageMonths}) <= CAST(? AS REAL)", [$maxAge]);
+            }
+        }
+
+        if ($minWeight !== null || $maxWeight !== null) {
+            $weightKg = "CASE weight_unit WHEN 'lb' THEN weight_value * 0.45359237"
+                .' ELSE weight_value END';
+
+            if ($minWeight !== null) {
+                $query->whereRaw("({$weightKg}) >= CAST(? AS REAL)", [$minWeight]);
+            }
+
+            if ($maxWeight !== null) {
+                $query->whereRaw("({$weightKg}) <= CAST(? AS REAL)", [$maxWeight]);
+            }
         }
 
         if ($location !== null && $location !== '') {
@@ -343,5 +432,23 @@ class MarketplaceListingRepository
         if ($maxPrice !== null) {
             $query->where('asking_price', '<=', $maxPrice);
         }
+    }
+
+    /**
+     * The non-blank string entries of a normalised filter list.
+     *
+     * @param  list<string>|null  $values
+     * @return list<string>
+     */
+    private static function nonEmptyStrings(?array $values): array
+    {
+        if ($values === null) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $values,
+            static fn (mixed $value): bool => is_string($value) && trim($value) !== '',
+        ));
     }
 }

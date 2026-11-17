@@ -431,8 +431,8 @@ This endpoint **supersedes `GET /api/user`** for mobile. `GET /api/user`
 | **Method** | `GET` |
 | **Authentication** | Required — `auth:sanctum` + `ability:mobile` |
 | **Ability** | `mobile` |
-| **Request fields** | `search` (string, optional)<br>`livestock_type` (string, optional)<br>`location` (string, optional)<br>`min_price` (decimal, optional)<br>`max_price` (decimal, optional)<br>`page` (int, optional, default 1)<br>`per_page` (int, optional, default 15, max 50) |
-| **Validation** | `search` `sometimes`,`string`,`max:255`<br>`livestock_type` `sometimes`,`string`,`max:255` — free text, **not** an enum (functional documentation §4.1)<br>`min_price`/`max_price` `sometimes`,`numeric`,`min:0`<br>`page` `sometimes`,`integer`,`min:1`<br>`per_page` `sometimes`,`integer`,`between:1,50` |
+| **Request fields** | `search` (string, optional)<br>`livestock_type` (string or string[], optional)<br>`breed` (string or string[], optional)<br>`gender` (`male`/`female`, optional)<br>`min_age`/`max_age` (numeric months, optional)<br>`min_weight`/`max_weight` (numeric kilograms, optional)<br>`location` (string, optional)<br>`min_price` (decimal, optional)<br>`max_price` (decimal, optional)<br>`page` (int, optional, default 1)<br>`per_page` (int, optional, default 15, max 50) |
+| **Validation** | `search` `nullable`,`string`,`max:255`<br>`livestock_type` `nullable`,`array`; every entry `string`,`max:255`. A scalar is accepted and normalised to a one-element array<br>`breed` — the same shape as `livestock_type`<br>`gender` `nullable`,`string`,`in:male,female`<br>`min_age`/`max_age` `nullable`,`numeric`,`min:0`,`max:300` — months; the server converts stored day/year values<br>`min_weight`/`max_weight` `nullable`,`numeric`,`min:0`,`max:99999999.99` — kilograms; the server converts pounds<br>`location` `nullable`,`string`,`max:255`<br>`min_price`/`max_price` `nullable`,`numeric`,`min:0`<br>`page` `nullable`,`integer`,`min:1`<br>`per_page` `nullable`,`integer`,`between:1,50`<br>`status`, `seller_id` `prohibited` |
 | **Response** | `200`, §3.2. `data.listings` = `ListingResource[]`, `data.pagination` = 4 keys |
 | **Errors** | `401`, `403`, `422` |
 | **Authorization** | Any authenticated user. **`status` is not an accepted filter.** Per **[D-02] rule 9, buyers browse only `active` listings**, so the result set is hard-restricted server-side to `status = active`. `draft`, `pending`, `sold` and `inactive` never appear. |
@@ -450,6 +450,12 @@ This endpoint **supersedes `GET /api/user`** for mobile. `GET /api/user`
 
 This is a **server-side query restriction**, not a client-side filter. A
 `status` query parameter must be rejected, not honoured.
+
+`livestock_type` and `breed` are multi-select. A client sends one value as the
+scalar (`livestock_type=cattle`) and several as repeated keys
+(`livestock_type[]=cattle&livestock_type[]=goat`), the only spelling PHP parses
+into an array. Both are normalised server-side, so the scalar form keeps working
+for older clients.
 
 `seller.email` must **not** be returned here — see F-08 and the binding
 resource-separation requirement in §8.1. A marketplace listing response needs a

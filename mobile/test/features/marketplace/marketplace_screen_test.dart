@@ -464,7 +464,7 @@ void main() {
       );
 
       await harness.controller.applyFilters(
-        const ListingFilters(livestockType: 'carabao'),
+        const ListingFilters(livestockTypes: <String>['carabao']),
       );
       await tester.pumpAndSettle();
 
@@ -567,7 +567,7 @@ void main() {
       expect(find.text('Filter Livestock'), findsOneWidget);
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'Min price'),
+        find.widgetWithText(TextField, 'Minimum price'),
         '10000',
       );
       await tester.tap(find.text('Apply Filters'));
@@ -591,11 +591,11 @@ void main() {
       await settleMarketplace(tester);
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'Min price'),
+        find.widgetWithText(TextField, 'Minimum price'),
         '50000',
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Max price'),
+        find.widgetWithText(TextField, 'Maximum price'),
         '10000',
       );
       await tester.tap(find.text('Apply Filters'));
@@ -835,7 +835,7 @@ void main() {
 
     test('counts each set field', () {
       const ListingFilters filters = ListingFilters(
-        livestockType: 'cattle',
+        livestockTypes: <String>['cattle'],
         maxPrice: '50000',
       );
 
@@ -844,9 +844,24 @@ void main() {
     });
 
     test('treats whitespace as unset', () {
-      const ListingFilters filters = ListingFilters(livestockType: '   ');
+      const ListingFilters filters = ListingFilters(minPrice: '   ');
 
       expect(filters.isActive, isFalse);
+    });
+
+    test('detects an inverted age range', () {
+      const ListingFilters filters = ListingFilters(minAge: '24', maxAge: '12');
+
+      expect(filters.hasInvertedAgeRange, isTrue);
+    });
+
+    test('detects an inverted weight range', () {
+      const ListingFilters filters = ListingFilters(
+        minWeight: '500',
+        maxWeight: '200',
+      );
+
+      expect(filters.hasInvertedWeightRange, isTrue);
     });
 
     test('detects an inverted price range', () {
@@ -869,12 +884,17 @@ void main() {
 
     test('compares by value so a re-apply can be recognised', () {
       expect(
-        const ListingFilters(livestockType: 'cattle'),
-        const ListingFilters(livestockType: 'cattle'),
+        const ListingFilters(livestockTypes: <String>['cattle']),
+        const ListingFilters(livestockTypes: <String>['cattle']),
       );
       expect(
-        const ListingFilters(livestockType: 'cattle'),
-        isNot(const ListingFilters(livestockType: 'goat')),
+        const ListingFilters(livestockTypes: <String>['cattle']),
+        isNot(const ListingFilters(livestockTypes: <String>['goat'])),
+      );
+      expect(
+        const ListingFilters(livestockTypes: <String>['cattle', 'goat']),
+        const ListingFilters(livestockTypes: <String>['goat', 'cattle']),
+        reason: 'selection order is a UI detail, not a different query',
       );
     });
   });

@@ -492,33 +492,44 @@ When searching, preserve the user's existing marketplace context.
 
 # 16. Filters
 
-The prototype uses a dedicated filter screen.
-
-Recommended filters:
+The approved filter is a **dark modal dialog** — the one dark surface in the
+app — opened from the marketplace filter button and the Home search bar.
 
 ```text
-Livestock Type
-[ Cattle ▼ ]
+[ X ]        Filter Livestock        [ Reset ]
 
-Price
-₱0 ───────── ₱100,000
+Animal Type  [paw]
+Select one or more animal types.
+[ Cattle ] [ Carabao ] [ Goat ]
+[ Swine  ] [ Chicken ]
 
-Location
-[ Select Location ▼ ]
+Breed  [tag]
+Choose breed(s) for the selected animal types.
+[ Select an animal type first           ▾ ]
+Choose at least one animal type to see breeds.
 
-Age
-[ Any ▼ ]
+Price Range  [tag]
+[ Minimum price ₱ 0 ] [ Maximum price ₱ No limit ]
 
-Gender
-[ Any ▼ ]
+Additional Filters  [sliders]
+Sex
+[ Any ] [ Male ] [ Female ]
 
-Sort By
-[ Most Recent ▼ ]
+Age (months)  [cake]
+[ Min ] [ Max ]
 
-[ Apply Filters ]
+Weight (kg)  [scale]
+[ Min ] [ Max ]
 
-[ Reset ]
+[ Cancel ]          [ Apply Filters ]
 ```
+
+Animal Type and Breed are multi-select. The Breed list is the union of the
+selected types' catalog breeds; the selector is disabled until a type is chosen,
+and a breed is pruned when its type is removed.
+
+Age is entered in months and weight in kilograms; the server converts whatever
+unit the seller stored. Price is in pesos.
 
 ### Filter Rules
 
@@ -527,6 +538,8 @@ Sort By
 - Reset must restore default values.
 - Apply Filters should be the primary action.
 - Avoid excessive filter controls on the initial browse screen.
+- An inverted range is explained inline and is not applied.
+- The dialog is dark; every other screen stays light.
 
 ---
 

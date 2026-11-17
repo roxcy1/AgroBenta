@@ -204,6 +204,11 @@ abstract final class AppConfig {
   /// [path] is relative to the API root and must start with `/` — for example
   /// `/admin/dashboard`. Query parameters belong in the caller's `query` map,
   /// not in the path string.
+  ///
+  /// A query value may be an `Iterable<String>`, which is sent as repeated
+  /// `key=value` pairs. That is the only spelling PHP parses into an array, so
+  /// a multi-select filter (`livestock_type[]=cattle&livestock_type[]=goat`)
+  /// cannot be expressed by stringifying the list.
   static String resolve(String path, {Map<String, dynamic>? query}) {
     final String normalisedPath = path.startsWith('/') ? path : '/$path';
     final Uri base = Uri.parse(apiBaseUrl);
@@ -211,9 +216,12 @@ abstract final class AppConfig {
       path: '${base.path}$normalisedPath',
       queryParameters: (query == null || query.isEmpty)
           ? null
-          : <String, String>{
+          : <String, dynamic>{
               for (final MapEntry<String, dynamic> entry in query.entries)
-                if (entry.value != null) entry.key: '${entry.value}',
+                if (entry.value != null)
+                  entry.key: entry.value is Iterable<String>
+                      ? entry.value
+                      : '${entry.value}',
             },
     );
 

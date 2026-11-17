@@ -33,8 +33,13 @@ class MarketplaceRepository {
   /// rejected filter — still propagate as [ApiException].
   Future<MarketplacePage> browse({
     String? search,
-    String? livestockType,
-    String? location,
+    List<String>? livestockTypes,
+    List<String>? breeds,
+    String? gender,
+    String? minAge,
+    String? maxAge,
+    String? minWeight,
+    String? maxWeight,
     String? minPrice,
     String? maxPrice,
     int page = 1,
@@ -42,8 +47,13 @@ class MarketplaceRepository {
   }) {
     return _service.browse(
       search: search,
-      livestockType: livestockType,
-      location: location,
+      livestockTypes: livestockTypes,
+      breeds: breeds,
+      gender: gender,
+      minAge: minAge,
+      maxAge: maxAge,
+      minWeight: minWeight,
+      maxWeight: maxWeight,
       minPrice: minPrice,
       maxPrice: maxPrice,
       // A page below 1 is meaningless to Laravel, which treats it as page 1.

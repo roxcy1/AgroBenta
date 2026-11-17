@@ -14,7 +14,7 @@ import '../../livestock_types/state/livestock_types_state.dart';
 /// available here without a second client-side list. The filter value is the
 /// catalog value, sent as the marketplace's existing exact-match
 /// `livestock_type` filter — the category tiles do not invent an endpoint or a
-/// query parameter, they drive the same filter the marketplace sheet does.
+/// query parameter, they drive the same filter the marketplace dialog does.
 ///
 /// Historical listings may still hold seller-typed values outside the catalog;
 /// those remain readable, but a category tile filters by the canonical value.

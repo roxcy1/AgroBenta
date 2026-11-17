@@ -400,7 +400,7 @@ void main() {
 
         await controller.applyFilters(
           const ListingFilters(
-            livestockType: 'cattle',
+            livestockTypes: <String>['cattle'],
             minPrice: '10000',
             maxPrice: '50000',
           ),
@@ -432,7 +432,7 @@ void main() {
       expect(controller.state.currentPage, 2);
 
       await controller.applyFilters(
-        const ListingFilters(livestockType: 'goat'),
+        const ListingFilters(livestockTypes: <String>['goat']),
       );
 
       expect(controller.state.currentPage, 1);
@@ -444,7 +444,7 @@ void main() {
         (_) async => marketplaceListResponse(),
       );
 
-      const ListingFilters filters = ListingFilters(livestockType: 'cattle');
+      const ListingFilters filters = ListingFilters(livestockTypes: <String>['cattle']);
       await controller.applyFilters(filters);
       expect(recorded, hasLength(1));
 
@@ -457,13 +457,29 @@ void main() {
       );
     });
 
+    test('sends several selected types as livestock_type[]', () async {
+      final (:controller, :states) = build(
+        (_) async => marketplaceListResponse(),
+      );
+
+      await controller.applyFilters(
+        const ListingFilters(livestockTypes: <String>['cattle', 'goat']),
+      );
+
+      expect(
+        recorded.single.queryAll['livestock_type[]'],
+        <String>['cattle', 'goat'],
+      );
+      expect(recorded.single.query.containsKey('livestock_type'), isFalse);
+    });
+
     test('clearFilters drops every filter and reloads', () async {
       final (:controller, :states) = build(
         (_) async => marketplaceListResponse(),
       );
 
       await controller.applyFilters(
-        const ListingFilters(livestockType: 'cattle', maxPrice: '50000'),
+        const ListingFilters(livestockTypes: <String>['cattle'], maxPrice: '50000'),
       );
       await controller.clearFilters();
 
@@ -847,7 +863,7 @@ void main() {
 
       await harness.controller.loadInitial();
       await harness.controller.applyFilters(
-        const ListingFilters(livestockType: 'cattle', minPrice: '1000'),
+        const ListingFilters(livestockTypes: <String>['cattle'], minPrice: '1000'),
       );
       await harness.controller.submitSearch();
       expect(recorded, hasLength(3));

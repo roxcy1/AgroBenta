@@ -99,4 +99,39 @@ abstract final class AppColors {
   /// Placeholder text and the small icons inside a text field. Lighter than
   /// [textSecondary]; never used for copy a user has to read. (`#8B948D`)
   static const Color textHint = Color(0xFF8B948D);
+
+  // --- Filter dialog (dark) ------------------------------------------------
+  //
+  // The Filter Livestock dialog is the one dark surface in the app, approved
+  // against the supplied reference. It is a self-contained palette rather than
+  // a second ThemeData: the rest of the app is light-only (see AppTheme), and a
+  // full dark theme would imply a system-wide mode the product does not have.
+  // Do not reuse these for any other screen.
+
+  /// The dialog's outer surface. (`#1B1C1E`)
+  static const Color filterDarkSurface = Color(0xFF1B1C1E);
+
+  /// A section card inside the dialog. (`#242628`)
+  static const Color filterDarkCard = Color(0xFF242628);
+
+  /// Hairline borders between surfaces inside the dialog. (`#35383B`)
+  static const Color filterDarkBorder = Color(0xFF35383B);
+
+  /// A text field's fill inside the dialog. (`#191A1C`)
+  static const Color filterDarkField = Color(0xFF191A1C);
+
+  /// A text field's outline inside the dialog. (`#3A3D40`)
+  static const Color filterDarkFieldBorder = Color(0xFF3A3D40);
+
+  /// Body text on a dark surface. (`#FFFFFF`)
+  static const Color filterDarkText = Color(0xFFFFFFFF);
+
+  /// Helper and secondary text on a dark surface. (`#9BA1A6`)
+  static const Color filterDarkTextSecondary = Color(0xFF9BA1A6);
+
+  /// An animal-type tile's fill when it is not selected. (`#0E0F11`)
+  static const Color filterDarkTile = Color(0xFF0E0F11);
+
+  /// The bright accent used for the dialog's icons and actions. (`#22C55E`)
+  static const Color filterDarkAccent = Color(0xFF22C55E);
 }

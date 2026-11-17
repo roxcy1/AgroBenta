@@ -226,8 +226,13 @@ class MarketplaceController extends ChangeNotifier {
     try {
       final MarketplacePage page = await _repository.browse(
         search: _state.searchText,
-        livestockType: _state.filters.livestockType,
-        location: _state.filters.location,
+        livestockTypes: _state.filters.livestockTypes,
+        breeds: _state.filters.breeds,
+        gender: _state.filters.gender,
+        minAge: _state.filters.minAge,
+        maxAge: _state.filters.maxAge,
+        minWeight: _state.filters.minWeight,
+        maxWeight: _state.filters.maxWeight,
         minPrice: _state.filters.minPrice,
         maxPrice: _state.filters.maxPrice,
         page: _state.currentPage + 1,
@@ -289,11 +294,20 @@ class MarketplaceController extends ChangeNotifier {
   /// A stable string for the query a first-page request would send.
   ///
   /// Used only to recognise a duplicate request, so it has to capture everything
-  /// that changes the response and nothing that does not.
-  String get _firstPageQuery =>
-      '${_state.searchText}|${_state.filters.livestockType}|'
-      '${_state.filters.location}|${_state.filters.minPrice}|'
-      '${_state.filters.maxPrice}|1';
+  /// that changes the response and nothing that does not. The multi-select
+  /// lists are sorted first: selection order is a UI detail, and two requests
+  /// that differ only in the order of the same species are the same query.
+  String get _firstPageQuery {
+    final ListingFilters filters = _state.filters;
+    final List<String> sortedTypes = <String>[...filters.livestockTypes]
+      ..sort();
+    final List<String> sortedBreeds = <String>[...filters.breeds]..sort();
+
+    return '${_state.searchText}|${sortedTypes.join(',')}|'
+        '${sortedBreeds.join(',')}|${filters.gender}|'
+        '${filters.minAge}|${filters.maxAge}|${filters.minWeight}|'
+        '${filters.maxWeight}|${filters.minPrice}|${filters.maxPrice}|1';
+  }
 
   /// Requests page 1 and replaces everything on screen with the result.
   ///
@@ -327,8 +341,13 @@ class MarketplaceController extends ChangeNotifier {
     try {
       final MarketplacePage page = await _repository.browse(
         search: _state.searchText,
-        livestockType: _state.filters.livestockType,
-        location: _state.filters.location,
+        livestockTypes: _state.filters.livestockTypes,
+        breeds: _state.filters.breeds,
+        gender: _state.filters.gender,
+        minAge: _state.filters.minAge,
+        maxAge: _state.filters.maxAge,
+        minWeight: _state.filters.minWeight,
+        maxWeight: _state.filters.maxWeight,
         minPrice: _state.filters.minPrice,
         maxPrice: _state.filters.maxPrice,
         page: 1,

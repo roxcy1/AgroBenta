@@ -15,7 +15,7 @@ import 'package:http/testing.dart';
 
 import '../../support/auth_fakes.dart';
 
-/// Captures what the screen resolves to, so a test can tell "cancelled"
+/// Captures what the dialog resolves to, so a test can tell "cancelled"
 /// (`returned` true, `value` null) from "never came back".
 class _Result {
   ListingFilters? value;
@@ -23,12 +23,12 @@ class _Result {
 }
 
 void main() {
-  /// Pumps a host route that opens the filter screen through the real entry
+  /// Pumps a host route that opens the filter dialog through the real entry
   /// point, [showMarketplaceFilterScreen].
   ///
-  /// Deliberately builds **no** `MarketplaceScope` or `AuthScope`: the screen is
-  /// presentation over a form and must make no request of its own, so a missing
-  /// scope is the assertion that nothing here reaches the API.
+  /// Deliberately builds **no** `MarketplaceScope` or `AuthScope`: the dialog
+  /// is presentation over a form and must make no request of its own, so a
+  /// missing scope is the assertion that nothing here reaches the API.
   Future<_Result> open(
     WidgetTester tester, {
     ListingFilters initial = ListingFilters.none,
@@ -41,20 +41,31 @@ void main() {
           httpClient: MockClient(
             (_) async => http.Response(
               jsonEncode({
-                'data': [
-                  {'value': 'cattle', 'label': 'Cattle'},
-                  {'value': 'carabao', 'label': 'Carabao'},
-                  {'value': 'goat', 'label': 'Goat'},
-                  {'value': 'swine', 'label': 'Swine'},
+                'data': <Map<String, dynamic>>[
+                  {
+                    'value': 'cattle',
+                    'label': 'Cattle',
+                    'breeds': <String>['Brahman', 'Holstein Friesian'],
+                  },
+                  {
+                    'value': 'carabao',
+                    'label': 'Carabao',
+                    'breeds': <String>['Murrah'],
+                  },
+                  {
+                    'value': 'goat',
+                    'label': 'Goat',
+                    'breeds': <String>['Boer', 'Saanen'],
+                  },
+                  {
+                    'value': 'swine',
+                    'label': 'Swine',
+                    'breeds': <String>['Landrace'],
+                  },
                   {
                     'value': 'chicken',
                     'label': 'Chicken',
-                    'breeds': [
-                      'boholano_native_chicken',
-                      'broiler',
-                      'improved_native_chicken',
-                      'layer',
-                    ],
+                    'breeds': <String>['Broiler'],
                   },
                 ],
               }),
@@ -71,9 +82,8 @@ void main() {
     addTearDown(catalog.dispose);
 
     // The default 800x600 surface is shorter than the form, and the lazy list
-    // only builds what is on screen — so Condition, Health Status and Sort By
-    // would never be laid out for a finder to see. A tall portrait surface
-    // makes the whole form real.
+    // only builds what is on screen. A tall portrait surface makes the whole
+    // form real.
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -111,9 +121,7 @@ void main() {
   }
 
   group('layout', () {
-    testWidgets('shows the header, sections and actions', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('shows the header, sections and actions', (tester) async {
       await open(tester);
 
       expect(find.text('Filter Livestock'), findsOneWidget);
@@ -123,104 +131,69 @@ void main() {
 
       for (final String section in <String>[
         'Animal Type',
+        'Breed',
         'Price Range',
-        'Condition',
-        'Health Status',
-        'Sort By',
+        'Additional Filters',
       ]) {
         expect(find.text(section), findsOneWidget, reason: section);
       }
 
-      // "Location" is both the section heading and the field label, so it is
-      // asserted by presence rather than uniqueness.
-      expect(find.text('Location'), findsWidgets);
+      expect(
+        find.text('Select one or more animal types.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Choose breed(s) for the selected animal types.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Choose at least one animal type to see breeds.'),
+        findsOneWidget,
+      );
+
+      expect(find.text('Minimum price'), findsOneWidget);
+      expect(find.text('Maximum price'), findsOneWidget);
+      expect(find.text('Sex'), findsOneWidget);
+      expect(find.text('Age (months)'), findsOneWidget);
+      expect(find.text('Weight (kg)'), findsOneWidget);
+      expect(find.text('Any'), findsOneWidget);
+      expect(find.text('Male'), findsOneWidget);
+      expect(find.text('Female'), findsOneWidget);
+      expect(find.text('Min'), findsWidgets);
+      expect(find.text('Max'), findsWidgets);
 
       for (final String animal in <String>[
         'Cattle',
-        'Swine',
-        'Goat',
         'Carabao',
+        'Goat',
+        'Swine',
         'Chicken',
       ]) {
         expect(find.text(animal), findsOneWidget, reason: animal);
       }
-
-      expect(find.widgetWithText(TextField, 'Min price'), findsOneWidget);
-      expect(find.widgetWithText(TextField, 'Max price'), findsOneWidget);
-    });
-
-    testWidgets('offers the reference condition and health options', (
-      WidgetTester tester,
-    ) async {
-      await open(tester);
-
-      for (final String option in <String>[
-        'All',
-        'Young',
-        'Adult',
-        'Pregnant',
-        'Healthy',
-        'Needs Care',
-      ]) {
-        expect(find.text(option), findsWidgets, reason: option);
-      }
-    });
-  });
-
-  group('unsupported filters', () {
-    testWidgets('say so rather than pretending to filter', (
-      WidgetTester tester,
-    ) async {
-      await open(tester);
-
-      expect(find.textContaining('cannot filter by condition'), findsOneWidget);
-      expect(
-        find.textContaining('cannot filter by health status'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('show the only sort order the endpoint actually provides', (
-      WidgetTester tester,
-    ) async {
-      await open(tester);
-
-      expect(find.text('Newest First'), findsOneWidget);
-      expect(find.byIcon(Icons.sort), findsOneWidget);
-      expect(
-        find.textContaining('only order the marketplace provides'),
-        findsOneWidget,
-      );
     });
   });
 
   group('apply', () {
-    testWidgets('returns the selected type and price', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('returns every selected type', (tester) async {
       final _Result result = await open(tester);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('animal-type-cattle')),
       );
       await tester.pump();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Min price'),
-        '10000',
-      );
+      await tester.tap(find.byKey(const ValueKey<String>('animal-type-goat')));
+      await tester.pump();
       await tester.tap(find.text('Apply Filters'));
       await tester.pumpAndSettle();
 
-      expect(result.returned, isTrue);
       expect(
         result.value,
-        const ListingFilters(livestockType: 'cattle', minPrice: '10000'),
+        const ListingFilters(livestockTypes: <String>['cattle', 'goat']),
       );
     });
 
-    testWidgets('tapping a selected animal tile clears it', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('tapping a selected type clears it', (tester) async {
       final _Result result = await open(tester);
 
       await tester.tap(
@@ -237,17 +210,122 @@ void main() {
       expect(result.value, ListingFilters.none);
     });
 
-    testWidgets('keeps the screen open and explains an inverted range', (
-      WidgetTester tester,
+    testWidgets('applies sex, age and weight', (tester) async {
+      final _Result result = await open(tester);
+
+      await tester.tap(find.text('Female'));
+      await tester.pump();
+      await tester.enterText(find.widgetWithText(TextField, 'Min').at(0), '12');
+      await tester.enterText(find.widgetWithText(TextField, 'Max').at(0), '24');
+      await tester.enterText(find.widgetWithText(TextField, 'Min').at(1), '200');
+      await tester.enterText(find.widgetWithText(TextField, 'Max').at(1), '500');
+      await tester.tap(find.text('Apply Filters'));
+      await tester.pumpAndSettle();
+
+      expect(
+        result.value,
+        const ListingFilters(
+          gender: 'female',
+          minAge: '12',
+          maxAge: '24',
+          minWeight: '200',
+          maxWeight: '500',
+        ),
+      );
+    });
+  });
+
+  group('breed selector', () {
+    testWidgets('is disabled until a type is chosen', (tester) async {
+      await open(tester);
+
+      expect(find.text('Select an animal type first'), findsOneWidget);
+
+      await tester.tap(find.text('Select an animal type first'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Select breeds'), findsNothing);
+    });
+
+    testWidgets('offers the selected types\' breeds and returns them', (
+      tester,
+    ) async {
+      final _Result result = await open(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Select breed(s)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Select breeds'), findsOneWidget);
+      expect(find.text('Brahman'), findsOneWidget);
+      expect(find.text('Holstein Friesian'), findsOneWidget);
+
+      await tester.tap(find.text('Brahman'));
+      await tester.pump();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apply Filters'));
+      await tester.pumpAndSettle();
+
+      expect(
+        result.value,
+        const ListingFilters(
+          livestockTypes: <String>['cattle'],
+          breeds: <String>['Brahman'],
+        ),
+      );
+    });
+
+    testWidgets('prunes a breed when its type is removed', (tester) async {
+      final _Result result = await open(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('animal-type-goat')));
+      await tester.pump();
+      await tester.tap(find.text('Select breed(s)'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Brahman'));
+      await tester.pump();
+      await tester.tap(find.text('Boer'));
+      await tester.pump();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+
+      // Removing goat must drop Boer; Brahman belongs to cattle and stays.
+      await tester.tap(find.byKey(const ValueKey<String>('animal-type-goat')));
+      await tester.pump();
+      await tester.tap(find.text('Apply Filters'));
+      await tester.pumpAndSettle();
+
+      expect(
+        result.value,
+        const ListingFilters(
+          livestockTypes: <String>['cattle'],
+          breeds: <String>['Brahman'],
+        ),
+      );
+    });
+  });
+
+  group('validation', () {
+    testWidgets('explains an inverted price range and stays open', (
+      tester,
     ) async {
       final _Result result = await open(tester);
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'Min price'),
+        find.widgetWithText(TextField, 'Minimum price'),
         '50000',
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Max price'),
+        find.widgetWithText(TextField, 'Maximum price'),
         '10000',
       );
       await tester.tap(find.text('Apply Filters'));
@@ -261,22 +339,54 @@ void main() {
       // The input is explained, never cleared.
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Min price'))
+            .widget<TextField>(
+              find.widgetWithText(TextField, 'Minimum price'),
+            )
             .controller
             ?.text,
         '50000',
       );
     });
+
+    testWidgets('explains an inverted age range', (tester) async {
+      final _Result result = await open(tester);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Min').at(0), '24');
+      await tester.enterText(find.widgetWithText(TextField, 'Max').at(0), '12');
+      await tester.tap(find.text('Apply Filters'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('The minimum age is higher than the maximum age.'),
+        findsOneWidget,
+      );
+      expect(result.returned, isFalse);
+    });
+
+    testWidgets('explains an inverted weight range', (tester) async {
+      final _Result result = await open(tester);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Min').at(1), '500');
+      await tester.enterText(find.widgetWithText(TextField, 'Max').at(1), '200');
+      await tester.tap(find.text('Apply Filters'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('The minimum weight is higher than the maximum weight.'),
+        findsOneWidget,
+      );
+      expect(result.returned, isFalse);
+    });
   });
 
-  group('reset and cancel', () {
+  group('reset, cancel and initial values', () {
     testWidgets('reset clears the form without applying or closing', (
-      WidgetTester tester,
+      tester,
     ) async {
       final _Result result = await open(
         tester,
         initial: const ListingFilters(
-          livestockType: 'cattle',
+          livestockTypes: <String>['cattle'],
           minPrice: '10000',
         ),
       );
@@ -288,22 +398,20 @@ void main() {
       expect(find.text('Filter Livestock'), findsOneWidget);
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Min price'))
+            .widget<TextField>(
+              find.widgetWithText(TextField, 'Minimum price'),
+            )
             .controller
             ?.text,
         isEmpty,
       );
-      expect(
-        // The Animal Type section's "exact wording" field is the first text
-        // field in the tree, ahead of Min price, Max price and Location.
-        tester.widget<TextField>(find.byType(TextField).at(0)).controller?.text,
-        isEmpty,
-      );
+
+      await tester.tap(find.text('Apply Filters'));
+      await tester.pumpAndSettle();
+      expect(result.value, ListingFilters.none);
     });
 
-    testWidgets('cancel discards edits and resolves to null', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('cancel discards edits and resolves to null', (tester) async {
       final _Result result = await open(tester);
 
       await tester.tap(
@@ -315,6 +423,61 @@ void main() {
 
       expect(result.returned, isTrue);
       expect(result.value, isNull);
+    });
+
+    testWidgets('initializes every field from the applied filters', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        initial: const ListingFilters(
+          livestockTypes: <String>['cattle'],
+          breeds: <String>['Brahman'],
+          gender: 'female',
+          minAge: '12',
+          maxAge: '24',
+          minWeight: '200',
+          maxWeight: '500',
+          minPrice: '10000',
+          maxPrice: '50000',
+        ),
+      );
+
+      expect(find.text('Brahman'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(
+              find.widgetWithText(TextField, 'Minimum price'),
+            )
+            .controller
+            ?.text,
+        '10000',
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.widgetWithText(TextField, 'Maximum price'),
+            )
+            .controller
+            ?.text,
+        '50000',
+      );
+      expect(
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Min').at(0)).controller?.text,
+        '12',
+      );
+      expect(
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Max').at(0)).controller?.text,
+        '24',
+      );
+      expect(
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Min').at(1)).controller?.text,
+        '200',
+      );
+      expect(
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Max').at(1)).controller?.text,
+        '500',
+      );
     });
   });
 }

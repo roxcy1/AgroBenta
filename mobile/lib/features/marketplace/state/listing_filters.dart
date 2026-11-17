@@ -10,17 +10,28 @@ import '../../../core/utils/app_formatters.dart';
 ///
 /// ## Values stay as strings
 ///
-/// Prices are held exactly as the user typed them and are sent to the server as
-/// written. `IndexListingRequest` validates `min_price`/`max_price` with
-/// `numeric,min:0`, so the server is the authority on whether a value is
+/// Prices, ages and weights are held exactly as the user typed them and are
+/// sent to the server as written. `IndexListingRequest` validates them with
+/// `numeric` bounds, so the server is the authority on whether a value is
 /// acceptable; parsing here to a `double` first would only add a second,
-/// possibly-differing opinion. [minPriceAmount] and [maxPriceAmount] exist for
-/// the one thing the client does need to decide for itself — whether a range
-/// is inverted, which is a usability check, not a validation rule.
+/// possibly-differing opinion. The `min*Amount`/`max*Amount` getters exist for
+/// the one thing the client does need to decide for itself — whether a range is
+/// inverted, which is a usability check, not a validation rule.
+///
+/// ## Multi-select
+///
+/// [livestockTypes] and [breeds] are lists because the filter screen offers
+/// more than one. They hold the server's exact catalog values, never a
+/// client-side label, so the query is a direct match on the stored column.
 class ListingFilters {
   const ListingFilters({
-    this.livestockType = '',
-    this.location = '',
+    this.livestockTypes = const <String>[],
+    this.breeds = const <String>[],
+    this.gender = '',
+    this.minAge = '',
+    this.maxAge = '',
+    this.minWeight = '',
+    this.maxWeight = '',
     this.minPrice = '',
     this.maxPrice = '',
   });
@@ -28,24 +39,26 @@ class ListingFilters {
   /// No filters applied.
   static const ListingFilters none = ListingFilters();
 
-  /// Seller-entered species, free text.
-  ///
-  /// This is a text field and not a picker of chips or a dropdown for a reason:
-  /// `listings.livestock_type` is a plain string, is matched exactly by the
-  /// server, and must not become an enum without approval (functional
-  /// documentation §4.1). A controlled vocabulary is a desirable open item
-  /// (**OQ-04**) and is not this app's to invent. Offering "Cattle / Goat /
-  /// Sheep" would be a guess about seller vocabulary, and a wrong guess makes
-  /// the filter silently return nothing.
-  final String livestockType;
+  /// Approved species values, in the server's exact lowercase spelling.
+  final List<String> livestockTypes;
 
-  /// Seller-entered location, free text.
-  ///
-  /// `listings.location` is a plain string that the server matches exactly, the
-  /// same way as [livestockType] — so this is a text field too, until a
-  /// controlled vocabulary exists (**OQ-04**). Anything else would be a guess
-  /// about seller wording that a buyer cannot see.
-  final String location;
+  /// Approved breed names, exactly as the catalog spells them.
+  final List<String> breeds;
+
+  /// `''` (any), `male` or `female`.
+  final String gender;
+
+  /// Lowest acceptable age in months, as typed. Empty means no lower bound.
+  final String minAge;
+
+  /// Highest acceptable age in months, as typed. Empty means no upper bound.
+  final String maxAge;
+
+  /// Lowest acceptable weight in kilograms, as typed.
+  final String minWeight;
+
+  /// Highest acceptable weight in kilograms, as typed.
+  final String maxWeight;
 
   /// Lowest acceptable asking price, as typed. Empty means no lower bound.
   final String minPrice;
@@ -55,22 +68,42 @@ class ListingFilters {
 
   /// Whether any filter is set.
   bool get isActive =>
-      livestockType.trim().isNotEmpty ||
-      location.trim().isNotEmpty ||
+      livestockTypes.isNotEmpty ||
+      breeds.isNotEmpty ||
+      gender.trim().isNotEmpty ||
+      minAge.trim().isNotEmpty ||
+      maxAge.trim().isNotEmpty ||
+      minWeight.trim().isNotEmpty ||
+      maxWeight.trim().isNotEmpty ||
       minPrice.trim().isNotEmpty ||
       maxPrice.trim().isNotEmpty;
 
   /// How many filters are set, for the badge on the filter control.
   ///
-  /// Counts fields, not the filter as a whole, so a buyer who can see at a
-  /// glance that two things are narrowing the results is not left guessing why
-  /// the list is short.
+  /// Counts fields, not values, so selecting five species still reads as one
+  /// narrowing choice. A range with both bounds counts as two, matching the
+  /// price badge the marketplace has always shown.
   int get activeCount {
     int count = 0;
-    if (livestockType.trim().isNotEmpty) {
+    if (livestockTypes.isNotEmpty) {
       count++;
     }
-    if (location.trim().isNotEmpty) {
+    if (breeds.isNotEmpty) {
+      count++;
+    }
+    if (gender.trim().isNotEmpty) {
+      count++;
+    }
+    if (minAge.trim().isNotEmpty) {
+      count++;
+    }
+    if (maxAge.trim().isNotEmpty) {
+      count++;
+    }
+    if (minWeight.trim().isNotEmpty) {
+      count++;
+    }
+    if (maxWeight.trim().isNotEmpty) {
       count++;
     }
     if (minPrice.trim().isNotEmpty) {
@@ -88,34 +121,58 @@ class ListingFilters {
   /// [maxPrice] as a number, or `null` when blank or not a number.
   double? get maxPriceAmount => AppFormatters.parseDecimal(maxPrice);
 
-  /// Whether the range is the wrong way round, e.g. min 50000 / max 10000.
-  ///
-  /// Checked before sending so the user gets an explanation rather than a
-  /// `422`, and so the filters are not applied at all.
-  bool get hasInvertedPriceRange {
-    final double? min = minPriceAmount;
-    final double? max = maxPriceAmount;
-    if (min == null || max == null) {
-      return false;
-    }
-    return min > max;
-  }
+  /// [minAge] as a number of months, or `null` when blank or not a number.
+  double? get minAgeAmount => AppFormatters.parseDecimal(minAge);
 
-  /// A short human summary for the filter control, e.g. `Cattle · Pampanga`.
+  /// [maxAge] as a number of months, or `null` when blank or not a number.
+  double? get maxAgeAmount => AppFormatters.parseDecimal(maxAge);
+
+  /// [minWeight] as a number of kilograms, or `null` when blank or not a number.
+  double? get minWeightAmount => AppFormatters.parseDecimal(minWeight);
+
+  /// [maxWeight] as a number of kilograms, or `null` when blank or not a number.
+  double? get maxWeightAmount => AppFormatters.parseDecimal(maxWeight);
+
+  /// Whether the price range is the wrong way round, e.g. min 50000 / max 10000.
+  bool get hasInvertedPriceRange => _isInverted(minPriceAmount, maxPriceAmount);
+
+  /// Whether the age range is the wrong way round.
+  bool get hasInvertedAgeRange => _isInverted(minAgeAmount, maxAgeAmount);
+
+  /// Whether the weight range is the wrong way round.
+  bool get hasInvertedWeightRange => _isInverted(
+    minWeightAmount,
+    maxWeightAmount,
+  );
+
+  static bool _isInverted(double? min, double? max) =>
+      min != null && max != null && min > max;
+
+  /// A short human summary for the filter control.
   ///
   /// Empty when nothing is applied, so the button can fall back to its own
   /// label instead of showing a meaningless summary.
   String get summary {
     final List<String> parts = <String>[];
 
-    final String type = livestockType.trim();
-    if (type.isNotEmpty) {
-      parts.add(type);
+    if (livestockTypes.isNotEmpty) {
+      parts.add(_listSummary(livestockTypes));
+    }
+    if (breeds.isNotEmpty) {
+      parts.add(_listSummary(breeds));
+    }
+    if (gender.trim().isNotEmpty) {
+      parts.add(gender.trim() == 'male' ? 'Male' : 'Female');
     }
 
-    final String locationText = location.trim();
-    if (locationText.isNotEmpty) {
-      parts.add(locationText);
+    final String? age = _unitRange(minAgeAmount, maxAgeAmount, 'months');
+    if (age != null) {
+      parts.add(age);
+    }
+
+    final String? weight = _unitRange(minWeightAmount, maxWeightAmount, 'kg');
+    if (weight != null) {
+      parts.add(weight);
     }
 
     final double? min = minPriceAmount;
@@ -136,17 +193,47 @@ class ListingFilters {
     return parts.join(' · ');
   }
 
-  /// A copy with the given fields replaced. Blank [clear] arguments are ignored,
-  /// so callers only name what they are changing.
+  static String _listSummary(List<String> values) =>
+      values.length == 1 ? values.first : '${values.first} +${values.length - 1}';
+
+  static String? _unitRange(double? min, double? max, String unit) {
+    if (min == null && max == null) {
+      return null;
+    }
+    if (min != null && max != null) {
+      return '${_formatNumber(min)}–${_formatNumber(max)} $unit';
+    }
+    if (min != null) {
+      return '${_formatNumber(min)}+ $unit';
+    }
+    return 'up to ${_formatNumber(max!)} $unit';
+  }
+
+  /// Drops a trailing `.0` so a whole month or kilogram reads as a person typed it.
+  static String _formatNumber(double value) =>
+      value == value.roundToDouble() ? value.toInt().toString() : value.toString();
+
+  /// A copy with the given fields replaced. A `null` argument keeps the current
+  /// value; pass an empty list or `''` to clear a field.
   ListingFilters copyWith({
-    String? livestockType,
-    String? location,
+    List<String>? livestockTypes,
+    List<String>? breeds,
+    String? gender,
+    String? minAge,
+    String? maxAge,
+    String? minWeight,
+    String? maxWeight,
     String? minPrice,
     String? maxPrice,
   }) {
     return ListingFilters(
-      livestockType: livestockType ?? this.livestockType,
-      location: location ?? this.location,
+      livestockTypes: livestockTypes ?? this.livestockTypes,
+      breeds: breeds ?? this.breeds,
+      gender: gender ?? this.gender,
+      minAge: minAge ?? this.minAge,
+      maxAge: maxAge ?? this.maxAge,
+      minWeight: minWeight ?? this.minWeight,
+      maxWeight: maxWeight ?? this.maxWeight,
       minPrice: minPrice ?? this.minPrice,
       maxPrice: maxPrice ?? this.maxPrice,
     );
@@ -159,16 +246,55 @@ class ListingFilters {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ListingFilters &&
-          other.livestockType == livestockType &&
-          other.location == location &&
+          _sameValues(other.livestockTypes, livestockTypes) &&
+          _sameValues(other.breeds, breeds) &&
+          other.gender == gender &&
+          other.minAge == minAge &&
+          other.maxAge == maxAge &&
+          other.minWeight == minWeight &&
+          other.maxWeight == maxWeight &&
           other.minPrice == minPrice &&
           other.maxPrice == maxPrice;
 
   @override
-  int get hashCode => Object.hash(livestockType, location, minPrice, maxPrice);
+  int get hashCode => Object.hash(
+    Object.hashAll(<String>[...livestockTypes]..sort()),
+    Object.hashAll(<String>[...breeds]..sort()),
+    gender,
+    minAge,
+    maxAge,
+    minWeight,
+    maxWeight,
+    minPrice,
+    maxPrice,
+  );
+
+  /// Whether two selections hold the same values, regardless of order.
+  ///
+  /// The server matches a set (`whereIn`), so selection order is a UI detail.
+  /// Treating it as a difference would make a re-apply of the same selection
+  /// fire a duplicate request.
+  static bool _sameValues(List<String> a, List<String> b) {
+    if (a.length != b.length) {
+      return false;
+    }
+
+    final List<String> left = <String>[...a]..sort();
+    final List<String> right = <String>[...b]..sort();
+
+    for (int i = 0; i < left.length; i++) {
+      if (left[i] != right[i]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 
   @override
   String toString() =>
-      'ListingFilters(livestockType: "$livestockType", location: "$location", '
+      'ListingFilters(livestockTypes: $livestockTypes, breeds: $breeds, '
+      'gender: "$gender", minAge: "$minAge", maxAge: "$maxAge", '
+      'minWeight: "$minWeight", maxWeight: "$maxWeight", '
       'minPrice: "$minPrice", maxPrice: "$maxPrice")';
 }
