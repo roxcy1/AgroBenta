@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\Inquiry\InquiryController as MobileInquiryControlle
 use App\Http\Controllers\Api\LivestockTypeController;
 use App\Http\Controllers\Api\Marketplace\ListingController as MarketplaceListingController;
 use App\Http\Controllers\Api\Marketplace\PopularLivestockController;
+use App\Http\Controllers\Api\Marketplace\SellerProfileController;
 use App\Http\Controllers\Api\Messaging\ConversationController;
 use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
@@ -83,6 +84,15 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
     // categories only. Declared under its own prefix so it can never be
     // shadowed by `/listings/{listing}`.
     Route::get('/marketplace/popular-livestock', [PopularLivestockController::class, 'index']);
+
+    // The public seller profile behind the seller card on Listing Details.
+    // A buyer reads it, so no `seller` capability gate applies. The service
+    // decides who is public; a missing, deleted or non-public account is 404.
+    // `whereNumber` keeps a non-numeric segment out of the controller.
+    Route::get('/marketplace/sellers/{seller}', [SellerProfileController::class, 'show'])
+        ->whereNumber('seller');
+    Route::get('/marketplace/sellers/{seller}/listings', [SellerProfileController::class, 'listings'])
+        ->whereNumber('seller');
 });
 
 // Seller verification, for the caller's own account. `/me` is declared before

@@ -599,6 +599,35 @@ by design, so listing existence is not disclosed — the app renders a single
 by the app; it is admin-only and returns seller fields the marketplace must not
 expose.
 
+**Resolved for the public seller profile (clickable seller card).** The seller
+card at the bottom of Listing Details is tappable and opens a public seller
+profile with exactly two tabs, **Profile** and **Listings**. The backend exposes
+two read-only routes behind the same `auth:sanctum` + `ability:mobile` guard;
+neither requires seller capability, because a buyer reads them:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/marketplace/sellers/{seller}` | One public profile: `id`, `name`, `avatar_url`, `bio`, `is_verified`, `public_location`, `member_since`, `active_listings_count`. |
+| `GET /api/marketplace/sellers/{seller}/listings` | One `{listings, pagination}` page of that seller's marketplace-visible listings. Query allow-list is `search`, `livestock_type`, `sort` (`newest`/`oldest`/`price_asc`/`price_desc`), `page` and `per_page` (capped at 50); `seller_id`, `status` and `user_id` are `422`. |
+
+`is_verified` is the server's `seller_capability == seller` decision, so the
+Verified Seller badge is shown only for an approved seller. `public_location`
+is reduced server-side to the barangay-level Trinidad address; the account's
+street or purok is never sent, and an unparseable legacy address is withheld.
+The profile never carries email, phone, raw `location`, verification documents,
+`admin_note`, reviewer identity, `role` or `seller_capability`.
+
+A non-deleted account is public when it is an approved seller or has at least
+one marketplace-visible listing; otherwise both routes answer `404`. The
+listing page reuses the marketplace visibility query, so draft, pending, sold,
+inactive, reconciled and fully reserved inventory never appears, and
+`active_listings_count` matches the Listings tab. The Flutter screen reuses
+`MarketplaceService`, `MarketplaceRepository` and `MarketplaceScope` — no new
+scope or composition-root wiring — and reuses `ListingCard`, so a listing in the
+profile opens the existing listing detail. Ask Seller / I'm Interested remain
+listing actions only; the profile adds no message, offer, transaction or rating
+action.
+
 **Resolved for the Inquire screen (buyer inquiries).** Listing Details offers
 two actions: **Ask Seller** opens the existing buyer–seller conversation
 without creating an inquiry, offer, transaction or reservation; **I'm

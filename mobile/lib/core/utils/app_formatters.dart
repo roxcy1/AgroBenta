@@ -40,6 +40,7 @@ abstract final class AppFormatters {
 
   static final DateFormat _date = DateFormat('d MMM yyyy', 'en_PH');
   static final DateFormat _dateTime = DateFormat('d MMM yyyy, h:mm a', 'en_PH');
+  static final DateFormat _monthYear = DateFormat('MMMM yyyy', 'en_PH');
 
   /// Formats a decimal string for prominent display, e.g. `₱42,500.00`.
   ///
@@ -72,6 +73,15 @@ abstract final class AppFormatters {
   /// Formats a timestamp as a date and time, e.g. `20 Sep 2026, 4:12 PM`.
   static String formatDateTime(DateTime? value) =>
       value == null ? '' : _dateTime.format(value);
+
+  /// Formats a timestamp as a month and year, e.g. `September 2026`.
+  ///
+  /// A profile's "Member since" is a membership milestone, not an event: the
+  /// day adds noise and implies a precision the summary does not need. Returns
+  /// an empty string for a missing date so callers can choose their own
+  /// fallback.
+  static String formatMonthYear(DateTime? value) =>
+      value == null ? '' : _monthYear.format(value);
 
   /// A short relative description of when something was posted.
   ///

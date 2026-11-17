@@ -42,7 +42,85 @@ class MarketplaceListingRepository
 
         $this->applySearch($query, $search);
         $this->applyFilters($query, $livestockType, $location, $minPrice, $maxPrice);
+        $this->applyOrder($query, self::SORT_NEWEST);
 
+        return $this->paginateCards($query, $perPage);
+    }
+
+    /**
+     * The documented orderings for the public seller listing page.
+     */
+    public const SORT_NEWEST = 'newest';
+
+    public const SORT_OLDEST = 'oldest';
+
+    public const SORT_PRICE_ASC = 'price_asc';
+
+    public const SORT_PRICE_DESC = 'price_desc';
+
+    /**
+     * @var list<string>
+     */
+    public const SORTS = [
+        self::SORT_NEWEST,
+        self::SORT_OLDEST,
+        self::SORT_PRICE_ASC,
+        self::SORT_PRICE_DESC,
+    ];
+
+    /**
+     * Paginate one seller's marketplace-visible listings.
+     *
+     * This is the public profile's Listings tab, not the seller's own list.
+     * It reuses [activeQuery] so the public surface cannot drift from the
+     * marketplace: draft, pending, sold, inactive, reconciled and fully
+     * reserved inventory is excluded by the same predicates buyers browse.
+     *
+     * Search, category and ordering are applied in the query before the page is
+     * taken, so a filtered result paginates over the seller's whole visible
+     * inventory rather than only the records already sent to the device.
+     */
+    public function paginateActiveForSeller(
+        int $sellerId,
+        ?string $search = null,
+        ?string $livestockType = null,
+        string $sort = self::SORT_NEWEST,
+        int $perPage = 15,
+    ): LengthAwarePaginator {
+        $query = $this->activeQuery()->where('seller_id', $sellerId);
+
+        $this->applySearch($query, $search);
+        // The same exact-match category filter the marketplace uses, so a chip
+        // means the same thing on both surfaces. Historical values outside the
+        // catalog remain discoverable here for the same reason.
+        $this->applyFilters($query, $livestockType, null, null, null);
+        $this->applyOrder($query, $sort);
+
+        return $this->paginateCards($query, $perPage);
+    }
+
+    /**
+     * Count one seller's marketplace-visible listings.
+     *
+     * Used for the public profile's summary so the displayed count and the
+     * Listings tab can never describe different result sets.
+     */
+    public function countActiveForSeller(int $sellerId): int
+    {
+        return $this->activeQuery()
+            ->where('seller_id', $sellerId)
+            ->count();
+    }
+
+    /**
+     * Add the card aggregates to an active-listing query, then paginate it.
+     *
+     * Ordering is applied by the caller so the public seller page can offer a
+     * documented sort without changing the marketplace's fixed newest-first
+     * list.
+     */
+    private function paginateCards(Builder $query, int $perPage): LengthAwarePaginator
+    {
         return $query
             // Completed-sale count for the card, aggregated in the same query
             // (one sub-select, never per-row queries).
@@ -50,11 +128,35 @@ class MarketplaceListingRepository
                 'transactions as completed_sales' => fn (Builder $query) => $query
                     ->where('status', TransactionStatus::Completed),
             ])
-            // `created_at` alone is not a total order, so listings written in
-            // the same second would otherwise paginate unpredictably.
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
             ->paginate($perPage);
+    }
+
+    /**
+     * Apply one documented ordering.
+     *
+     * Every branch ends with the id as a deterministic tie-breaker, so records
+     * written in the same second cannot appear on two pages at once. Price
+     * sorts fall back to newest first for equal prices.
+     */
+    private function applyOrder(Builder $query, string $sort): void
+    {
+        match ($sort) {
+            self::SORT_OLDEST => $query
+                ->orderBy('created_at')
+                ->orderBy('id'),
+            self::SORT_PRICE_ASC => $query
+                ->orderBy('asking_price')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id'),
+            self::SORT_PRICE_DESC => $query
+                ->orderByDesc('asking_price')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id'),
+            // `newest` is the default for the marketplace and for this page.
+            default => $query
+                ->orderByDesc('created_at')
+                ->orderByDesc('id'),
+        };
     }
 
     /**

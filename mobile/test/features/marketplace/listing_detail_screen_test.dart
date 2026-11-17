@@ -5,6 +5,8 @@ import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/state/inquiry_scope.dart';
 import 'package:agrobenta_mobile/features/inquiries/view/inquire_screen.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
+import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
@@ -12,6 +14,7 @@ import 'package:agrobenta_mobile/features/messaging/state/conversations_controll
 import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
 import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
+import 'package:agrobenta_mobile/features/seller_profile/view/seller_profile_screen.dart';
 import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
 import 'package:agrobenta_mobile/repositories/messaging_repository.dart';
@@ -21,9 +24,11 @@ import 'package:http/http.dart' as http;
 
 import '../../support/auth_fakes.dart';
 import '../../support/inquiry_fakes.dart';
+import '../../support/livestock_type_fakes.dart';
 import '../../support/marketplace_fakes.dart';
 import '../../support/messaging_fakes.dart';
 import '../../support/offer_fakes.dart';
+import '../../support/seller_profile_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -64,6 +69,21 @@ void main() {
             ageInformation: ageInformation,
             weightInformation: weightInformation,
           ),
+        );
+      }
+      if (path == '/marketplace/sellers/$sellerId') {
+        return sellerProfileResponse(
+          profile: sellerProfileJson(
+            id: sellerId,
+            name: 'Rizal Farms',
+            activeListingsCount: 0,
+          ),
+        );
+      }
+      if (path == '/marketplace/sellers/$sellerId/listings') {
+        return sellerListingsResponse(
+          listings: <Map<String, dynamic>>[],
+          total: 0,
         );
       }
       return marketplaceListResponse();
@@ -121,6 +141,15 @@ void main() {
       (_) async => offersResponse(offers: <Map<String, dynamic>>[]),
     );
 
+    // The pushed seller profile builds its category chips from the shared
+    // catalog, so the harness installs the scope `main.dart` provides.
+    final catalogRepository = buildLivestockTypeRepository(tokenStore);
+    final LivestockTypesController catalogController = LivestockTypesController(
+      catalogRepository,
+    );
+    addTearDown(catalogController.dispose);
+    await catalogController.ensureLoaded();
+
     tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -138,9 +167,13 @@ void main() {
               conversationsController: conversationsController,
               child: OfferScope(
                 repository: offerRepository,
-                child: MaterialApp(
-                  theme: AppTheme.light(),
-                  home: const ListingDetailScreen(listingId: 12),
+                child: LivestockTypesScope(
+                  repository: catalogRepository,
+                  controller: catalogController,
+                  child: MaterialApp(
+                    theme: AppTheme.light(),
+                    home: const ListingDetailScreen(listingId: 12),
+                  ),
                 ),
               ),
             ),
@@ -317,6 +350,48 @@ void main() {
         recorded.where((RecordedRequest r) => r.method == 'POST'),
         isEmpty,
         reason: 'opening the form is navigation, not a submission',
+      );
+    });
+
+    testWidgets('the seller card opens that seller public profile', (
+      WidgetTester tester,
+    ) async {
+      await pumpDetail(tester, sellerId: 3, viewerId: 7);
+
+      await tester.ensureVisible(find.byKey(listingSellerCardKey));
+      await settle(tester);
+      await tester.tap(find.byKey(listingSellerCardKey));
+      await settle(tester);
+
+      expect(find.byType(SellerProfileScreen), findsOneWidget);
+      expect(find.text('Seller Profile'), findsOneWidget);
+      expect(
+        recorded.where((RecordedRequest r) => r.method == 'POST'),
+        isEmpty,
+        reason: 'opening a profile is navigation, not a message or inquiry',
+      );
+    });
+
+    testWidgets('returning from the profile preserves the listing detail', (
+      WidgetTester tester,
+    ) async {
+      await pumpDetail(tester, sellerId: 3, viewerId: 7);
+
+      await tester.ensureVisible(find.byKey(listingSellerCardKey));
+      await settle(tester);
+      await tester.tap(find.byKey(listingSellerCardKey));
+      await settle(tester);
+      expect(find.byType(SellerProfileScreen), findsOneWidget);
+
+      await tester.pageBack();
+      await settle(tester);
+
+      expect(find.byType(SellerProfileScreen), findsNothing);
+      expect(find.text('Holstein'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Ask Seller'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, "I'm Interested"),
+        findsOneWidget,
       );
     });
   });
