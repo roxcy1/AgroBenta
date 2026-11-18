@@ -23,7 +23,8 @@ Future<ListingFilters?> showMarketplaceFilterScreen({
   return showDialog<ListingFilters>(
     context: context,
     barrierColor: Colors.black,
-    builder: (BuildContext context) => MarketplaceFilterDialog(initial: filters),
+    builder: (BuildContext context) =>
+        MarketplaceFilterDialog(initial: filters),
   );
 }
 
@@ -57,7 +58,8 @@ class MarketplaceFilterDialog extends StatefulWidget {
   final ListingFilters initial;
 
   @override
-  State<MarketplaceFilterDialog> createState() => _MarketplaceFilterDialogState();
+  State<MarketplaceFilterDialog> createState() =>
+      _MarketplaceFilterDialogState();
 }
 
 class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
@@ -128,12 +130,12 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
       return;
     }
 
-    final ListingFilters next = _current;
-    if (
-      next.hasInvertedPriceRange ||
-      next.hasInvertedAgeRange ||
-      next.hasInvertedWeightRange
-    ) {
+    final ListingFilters next = _current.pruneIncompatibleBreeds(
+      _livestockTypes,
+    );
+    if (next.hasInvertedPriceRange ||
+        next.hasInvertedAgeRange ||
+        next.hasInvertedWeightRange) {
       setState(() {
         _showPriceError = next.hasInvertedPriceRange;
         _showAgeError = next.hasInvertedAgeRange;
@@ -227,77 +229,74 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (
-        BuildContext context,
-      ) => StatefulBuilder(
-        builder: (
-          BuildContext context,
-          void Function(void Function()) setSheetState,
-        ) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md,
-                  AppSpacing.md,
-                  AppSpacing.md,
-                  AppSpacing.xs,
-                ),
-                child: Text(
-                  'Select breeds',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(
-                    color: AppColors.filterDarkText,
-                  ),
-                ),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: <Widget>[
-                    for (final String breed in available)
-                      CheckboxListTile(
-                        value: selected.contains(breed),
-                        onChanged: (bool? value) {
-                          setSheetState(() {
-                            if (value == true) {
-                              selected.add(breed);
-                            } else {
-                              selected.remove(breed);
-                            }
-                          });
-                        },
-                        title: Text(
-                          breed,
-                          style: const TextStyle(
-                            color: AppColors.filterDarkText,
-                          ),
-                        ),
-                        activeColor: AppColors.filterDarkAccent,
-                        checkColor: Colors.black,
-                      ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(selected),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.filterDarkAccent,
-                      foregroundColor: Colors.white,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder:
+            (
+              BuildContext context,
+              void Function(void Function()) setSheetState,
+            ) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      AppSpacing.md,
+                      AppSpacing.md,
+                      AppSpacing.xs,
                     ),
-                    child: const Text('Done'),
+                    child: Text(
+                      'Select breeds',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.filterDarkText,
+                      ),
+                    ),
                   ),
-                ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: <Widget>[
+                        for (final String breed in available)
+                          CheckboxListTile(
+                            value: selected.contains(breed),
+                            onChanged: (bool? value) {
+                              setSheetState(() {
+                                if (value == true) {
+                                  selected.add(breed);
+                                } else {
+                                  selected.remove(breed);
+                                }
+                              });
+                            },
+                            title: Text(
+                              breed,
+                              style: const TextStyle(
+                                color: AppColors.filterDarkText,
+                              ),
+                            ),
+                            activeColor: AppColors.filterDarkAccent,
+                            checkColor: Colors.black,
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(selected),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.filterDarkAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Done'),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
       ),
     );
 
@@ -352,9 +351,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
           ),
           Text(
             'Filter Livestock',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.filterDarkText,
               fontWeight: FontWeight.w700,
             ),
@@ -580,7 +577,8 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
                 label: 'Minimum price',
                 hint: '0',
                 prefixText: '₱ ',
-                onChanged: (String _) => setState(() => _showPriceError = false),
+                onChanged: (String _) =>
+                    setState(() => _showPriceError = false),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -590,7 +588,8 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
                 label: 'Maximum price',
                 hint: 'No limit',
                 prefixText: '₱ ',
-                onChanged: (String _) => setState(() => _showPriceError = false),
+                onChanged: (String _) =>
+                    setState(() => _showPriceError = false),
               ),
             ),
           ],
@@ -653,7 +652,8 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
               child: _DarkTextField(
                 controller: _minWeight,
                 label: 'Min',
-                onChanged: (String _) => setState(() => _showWeightError = false),
+                onChanged: (String _) =>
+                    setState(() => _showWeightError = false),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -661,7 +661,8 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
               child: _DarkTextField(
                 controller: _maxWeight,
                 label: 'Max',
-                onChanged: (String _) => setState(() => _showWeightError = false),
+                onChanged: (String _) =>
+                    setState(() => _showWeightError = false),
               ),
             ),
           ],
@@ -717,9 +718,7 @@ class _FilterSection extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Text(
                 title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.filterDarkText,
                   fontWeight: FontWeight.w700,
                 ),

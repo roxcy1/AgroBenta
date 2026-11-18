@@ -140,10 +140,8 @@ class ListingFilters {
   bool get hasInvertedAgeRange => _isInverted(minAgeAmount, maxAgeAmount);
 
   /// Whether the weight range is the wrong way round.
-  bool get hasInvertedWeightRange => _isInverted(
-    minWeightAmount,
-    maxWeightAmount,
-  );
+  bool get hasInvertedWeightRange =>
+      _isInverted(minWeightAmount, maxWeightAmount);
 
   static bool _isInverted(double? min, double? max) =>
       min != null && max != null && min > max;
@@ -193,8 +191,9 @@ class ListingFilters {
     return parts.join(' · ');
   }
 
-  static String _listSummary(List<String> values) =>
-      values.length == 1 ? values.first : '${values.first} +${values.length - 1}';
+  static String _listSummary(List<String> values) => values.length == 1
+      ? values.first
+      : '${values.first} +${values.length - 1}';
 
   static String? _unitRange(double? min, double? max, String unit) {
     if (min == null && max == null) {
@@ -210,8 +209,9 @@ class ListingFilters {
   }
 
   /// Drops a trailing `.0` so a whole month or kilogram reads as a person typed it.
-  static String _formatNumber(double value) =>
-      value == value.roundToDouble() ? value.toInt().toString() : value.toString();
+  static String _formatNumber(double value) => value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toString();
 
   /// A copy with the given fields replaced. A `null` argument keeps the current
   /// value; pass an empty list or `''` to clear a field.
@@ -241,6 +241,29 @@ class ListingFilters {
 
   /// Returns filters with every field cleared, for the "Clear" action.
   ListingFilters cleared() => ListingFilters.none;
+
+  /// Prunes breeds that are incompatible with the given livestock types.
+  ///
+  /// When animal types change (e.g., switching from Cattle to Goat via category
+  /// chips or Home shortcuts), previously selected breeds that are not compatible
+  /// with the new animal type are automatically removed.
+  ///
+  /// [livestockTypes] are the currently selected animal types from the catalog.
+  /// If empty, all breeds are kept (no pruning needed).
+  ListingFilters pruneIncompatibleBreeds(List<String> livestockTypes) {
+    if (livestockTypes.isEmpty) return this;
+
+    // Keep only breeds that are compatible with at least one current livestock type
+    final List<String> filteredBreeds = breeds.where((breed) {
+      final lowerBreed = breed.toLowerCase();
+      // Check if breed matches any of the current livestock types
+      return livestockTypes.any(
+        (type) => type.toLowerCase().contains(lowerBreed),
+      );
+    }).toList();
+
+    return copyWith(breeds: filteredBreeds.isEmpty ? [] : filteredBreeds);
+  }
 
   @override
   bool operator ==(Object other) =>

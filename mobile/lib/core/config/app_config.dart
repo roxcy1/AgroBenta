@@ -206,9 +206,11 @@ abstract final class AppConfig {
   /// not in the path string.
   ///
   /// A query value may be an `Iterable<String>`, which is sent as repeated
-  /// `key=value` pairs. That is the only spelling PHP parses into an array, so
-  /// a multi-select filter (`livestock_type[]=cattle&livestock_type[]=goat`)
-  /// cannot be expressed by stringifying the list.
+  /// `key=value` pairs. PHP interprets `key[]=value` as an array and
+  /// `key=value1&key=value2` as repeated parameters; the mobile app uses
+  /// `key[]` syntax for multi-select filters (e.g.
+  /// `livestock_type[]=cattle&livestock_type[]=goat`), which cannot be
+  /// expressed by stringifying a single string.
   static String resolve(String path, {Map<String, dynamic>? query}) {
     final String normalisedPath = path.startsWith('/') ? path : '/$path';
     final Uri base = Uri.parse(apiBaseUrl);

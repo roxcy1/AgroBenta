@@ -409,8 +409,11 @@ class MarketplaceListingRepository
         }
 
         if ($minWeight !== null || $maxWeight !== null) {
-            $weightKg = "CASE weight_unit WHEN 'lb' THEN weight_value * 0.45359237"
-                .' ELSE weight_value END';
+            // Handle null weight_unit: treat as kg (the default client unit).
+            // When weight_unit is NULL, weight_value is assumed to be in kg.
+            $weightKg = "CASE weight_unit 
+                WHEN 'lb' THEN weight_value * 0.45359237
+                ELSE weight_value END";
 
             if ($minWeight !== null) {
                 $query->whereRaw("({$weightKg}) >= CAST(? AS REAL)", [$minWeight]);

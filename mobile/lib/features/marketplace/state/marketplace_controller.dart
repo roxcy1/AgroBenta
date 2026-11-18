@@ -176,8 +176,7 @@ class MarketplaceController extends ChangeNotifier {
     if (next == _state.filters) {
       return;
     }
-    _set(_state.copyWith(filters: next));
-    await _loadFirstPage();
+    _set(_state.copyWith(filters: next.pruneIncompatibleBreeds(next.livestockTypes)));\n    await _loadFirstPage();
   }
 
   /// Clears all filters and reloads from page 1.
