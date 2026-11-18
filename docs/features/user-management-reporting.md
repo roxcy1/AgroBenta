@@ -710,6 +710,51 @@ All admin endpoints use the existing `auth:sanctum` + `admin` +
 `ability:admin` group. Report counts include every status. The badge total is
 the list total.
 
+## API Compatibility and Review Follow-ups
+
+### Breaking API Change: Admin User Deactivation
+
+**Change introduced:** User Management and User Reporting enhancement (PR #86).
+
+The existing admin endpoint now requires a deactivation reason.
+
+**Endpoint:** `DELETE /api/admin/users/{id}`
+
+**Request body:**
+
+```json
+{
+  "reason": "Account deactivated due to a confirmed policy violation."
+}
+```
+
+**Compatibility impact:**
+- Previously, API consumers could call this endpoint without providing a reason.
+- The updated endpoint requires the `reason` field. Requests without a valid reason fail validation (HTTP 422).
+- The React Admin Web interface has been updated to collect and submit the reason.
+- Other API consumers, including external clients, scripts, and integrations, must update their requests accordingly.
+- This is a breaking request-contract change; the existing endpoint path and HTTP method remain unchanged.
+
+**Migration guidance:** Update any existing callers of the admin user deletion/deactivation endpoint to submit a valid `reason` in the request body. Verify that the caller handles validation errors appropriately.
+
+### Follow-up 1: Repeated User Reports
+
+**Current behavior:** A reporter may have only one pending report against the same user. Once the previous report is resolved or dismissed, a new report may be submitted.
+
+This behavior is intentional under the approved reporting rules.
+
+**Future consideration:** If repeated or abusive submissions become a problem, evaluate additional safeguards such as a targeted cooldown or stricter duplicate-report detection. Any future restriction should still permit reporting genuinely new incidents.
+
+**Status:** Future enhancement; no change required for PR #86.
+
+### Follow-up 2: Reporter Status Notifications
+
+**Current behavior:** Users can submit reports, but they do not receive notifications when administrators dismiss or take action on those reports.
+
+**Future consideration:** Provide privacy-conscious report status updates, such as confirmation of receipt and notification that review has concluded, without exposing confidential moderation decisions, reporter information, or other users' private data.
+
+**Status:** Future enhancement; outside the scope of PR #86.
+
 ### Admin user resource additions
 
 `status` (`active`/`deactivated`), `deactivated_at`, `deactivation_reason`,
