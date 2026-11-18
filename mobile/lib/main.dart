@@ -446,6 +446,10 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _marketplaceController = MarketplaceController(
       _marketplaceRepository,
       realtimeEvents: realtimeEvents,
+      // The catalog is the authority on which breeds belong to which animal
+      // type, so category chips and Home shortcuts prune through it exactly
+      // like the filter dialog does.
+      livestockCatalog: () => _livestockTypesController.state.types,
     );
     _sellerVerificationController = SellerVerificationController(
       _sellerVerificationRepository,

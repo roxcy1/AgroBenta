@@ -8,6 +8,7 @@ import 'package:agrobenta_mobile/features/home/widgets/home_categories.dart';
 import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
 import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
 import 'package:agrobenta_mobile/features/home/widgets/popular_livestock_section.dart';
+import 'package:agrobenta_mobile/features/marketplace/state/listing_filters.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_scope.dart';
 import 'package:agrobenta_mobile/features/marketplace/views/listing_detail_screen.dart';
@@ -18,7 +19,6 @@ import 'package:agrobenta_mobile/models/user.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
 import 'package:agrobenta_mobile/repositories/livestock_type_repository.dart';
 import 'package:agrobenta_mobile/repositories/notification_repository.dart';
-import 'package:agrobenta_mobile/services/livestock_type_service.dart';
 import 'package:agrobenta_mobile/services/notification_service.dart';
 import 'package:agrobenta_mobile/widgets/temporary_logo.dart';
 import 'package:agrobenta_mobile/widgets/livestock_type_icon.dart';
@@ -29,6 +29,7 @@ import 'package:http/testing.dart';
 
 import '../../support/auth_app_harness.dart';
 import '../../support/auth_fakes.dart';
+import '../../support/livestock_type_fakes.dart';
 import '../../support/marketplace_fakes.dart';
 import '../../support/seller_verification_app_harness.dart';
 
@@ -55,7 +56,7 @@ void main() {
   /// detail route this screen pushes); it defaults to one canonical fixture
   /// page. [recorded] collects every marketplace request, so a test can assert
   /// on what was actually sent.
-  Future<void> pumpSignedIn(
+  Future<MarketplaceController> pumpSignedIn(
     WidgetTester tester, {
     Map<String, dynamic>? user,
     Future<http.Response> Function(RecordedRequest request)? onMarketplace,
@@ -89,49 +90,19 @@ void main() {
           }
           return marketplaceListResponse();
         }, recorded: recorded);
-    final MarketplaceController marketplaceController = MarketplaceController(
-      marketplaceRepository,
-    );
-    addTearDown(marketplaceController.dispose);
-
-    final LivestockTypeRepository catalogRepository = LivestockTypeRepository(
-      LivestockTypeService(
-        ApiClient(
-          tokenStorage: tokenStore,
-          httpClient: MockClient(
-            (_) async => http.Response(
-              jsonEncode(<String, Object>{
-                'data': <Map<String, Object>>[
-                  <String, String>{'value': 'cattle', 'label': 'Cattle'},
-                  <String, String>{'value': 'carabao', 'label': 'Carabao'},
-                  <String, String>{'value': 'goat', 'label': 'Goat'},
-                  <String, String>{'value': 'swine', 'label': 'Swine'},
-                  <String, Object>{
-                    'value': 'chicken',
-                    'label': 'Chicken',
-                    'breeds': <String>[
-                      'boholano_native_chicken',
-                      'broiler',
-                      'improved_native_chicken',
-                      'layer',
-                    ],
-                  },
-                ],
-              }),
-              200,
-              headers: const <String, String>{
-                'content-type': 'application/json',
-              },
-            ),
-          ),
-        ),
-      ),
-    );
+    final LivestockTypeRepository catalogRepository =
+        buildLivestockTypeRepository(tokenStore);
     final LivestockTypesController catalogController = LivestockTypesController(
       catalogRepository,
     );
     addTearDown(catalogController.dispose);
     await catalogController.ensureLoaded();
+
+    final MarketplaceController marketplaceController = MarketplaceController(
+      marketplaceRepository,
+      livestockCatalog: () => catalogController.state.types,
+    );
+    addTearDown(marketplaceController.dispose);
 
     final NotificationRepository notificationRepository =
         NotificationRepository(
@@ -188,6 +159,8 @@ void main() {
       ),
     );
     await settleAuth(tester, frames: 12);
+
+    return marketplaceController;
   }
 
   testWidgets('greets the user', (WidgetTester tester) async {
@@ -293,6 +266,40 @@ void main() {
         reason:
             'a category tap must reuse the marketplace exact-match filter, '
             'not invent a query',
+      );
+    });
+
+    testWidgets('a category shortcut prunes a breed of another type', (
+      WidgetTester tester,
+    ) async {
+      final List<RecordedRequest> recorded = <RecordedRequest>[];
+      final MarketplaceController controller = await pumpSignedIn(
+        tester,
+        recorded: recorded,
+      );
+
+      await controller.applyFilters(
+        const ListingFilters(
+          livestockTypes: <String>['cattle'],
+          breeds: <String>['Brahman'],
+        ),
+      );
+      await settleAuth(tester, frames: 12);
+
+      await tester.ensureVisible(livestockIcon('goat'));
+      await tester.tap(livestockIcon('goat'));
+      await settleAuth(tester, frames: 12);
+
+      final RecordedRequest goatRequest = recorded.lastWhere(
+        (RecordedRequest request) =>
+            request.apiPath == '/listings' &&
+            request.query['livestock_type'] == 'goat',
+      );
+
+      expect(
+        goatRequest.query.containsKey('breed'),
+        isFalse,
+        reason: 'Brahman is a cattle breed and cannot match a goat listing',
       );
     });
 

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Marketplace;
 
 use App\Enums\ListingStatus;
+use App\Enums\LivestockType;
 use App\Enums\UserRole;
 use App\Models\Listing;
 use App\Models\Transaction;
@@ -784,6 +785,43 @@ class MarketplaceListingTest extends TestCase
     public function an_oversized_entry_in_a_breed_array_is_refused(): void
     {
         $this->browse(['breed' => [str_repeat('b', 256)]])->assertUnprocessable()
+            ->assertJsonValidationErrors(['breed']);
+    }
+
+    #[Test]
+    public function the_full_catalog_selection_is_accepted(): void
+    {
+        $breeds = [];
+        foreach (LivestockType::cases() as $type) {
+            $breeds = array_merge($breeds, $type->breeds());
+        }
+
+        $this->browse([
+            'livestock_type' => array_column(LivestockType::options(), 'value'),
+            'breed' => $breeds,
+        ])->assertOk();
+    }
+
+    #[Test]
+    public function a_livestock_type_selection_larger_than_the_catalog_is_refused(): void
+    {
+        $types = array_column(LivestockType::options(), 'value');
+        $types[] = 'horse';
+
+        $this->browse(['livestock_type' => $types])->assertUnprocessable()
+            ->assertJsonValidationErrors(['livestock_type']);
+    }
+
+    #[Test]
+    public function a_breed_selection_larger_than_the_catalog_is_refused(): void
+    {
+        $breeds = [];
+        foreach (LivestockType::cases() as $type) {
+            $breeds = array_merge($breeds, $type->breeds());
+        }
+        $breeds[] = 'Uncatalogued Breed';
+
+        $this->browse(['breed' => $breeds])->assertUnprocessable()
             ->assertJsonValidationErrors(['breed']);
     }
 

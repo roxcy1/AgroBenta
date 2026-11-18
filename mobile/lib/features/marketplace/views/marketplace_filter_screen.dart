@@ -132,6 +132,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
 
     final ListingFilters next = _current.pruneIncompatibleBreeds(
       _livestockTypes,
+      catalog: _catalog.state.types,
     );
     if (next.hasInvertedPriceRange ||
         next.hasInvertedAgeRange ||
@@ -191,32 +192,18 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
   /// A breed is only meaningful with its species, and leaving a stale breed in
   /// the selection would send a filter that can never match a visible listing.
   void _pruneBreeds() {
-    final Set<String> available = _availableBreeds().toSet();
+    final Set<String> available = ListingFilters.catalogBreeds(
+      _livestockTypes,
+      _catalog.state.types,
+    ).toSet();
     _breeds = _breeds
         .where((String breed) => available.contains(breed))
         .toList(growable: false);
   }
 
   /// The union of the selected types' catalog breeds, in catalog order.
-  List<String> _availableBreeds() {
-    final List<String> breeds = <String>[];
-    final List<LivestockType> catalog = _catalog.state.types;
-
-    for (final String type in _livestockTypes) {
-      for (final LivestockType entry in catalog) {
-        if (entry.value != type) {
-          continue;
-        }
-        for (final String breed in entry.breeds) {
-          if (!breeds.contains(breed)) {
-            breeds.add(breed);
-          }
-        }
-      }
-    }
-
-    return breeds;
-  }
+  List<String> _availableBreeds() =>
+      ListingFilters.catalogBreeds(_livestockTypes, _catalog.state.types);
 
   Future<void> _openBreedPicker() async {
     final List<String> available = _availableBreeds();

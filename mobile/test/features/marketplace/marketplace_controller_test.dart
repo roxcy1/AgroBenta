@@ -5,6 +5,7 @@ import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controll
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_state.dart';
 import 'package:agrobenta_mobile/core/realtime/realtime_event.dart';
 import 'package:agrobenta_mobile/models/listing.dart';
+import 'package:agrobenta_mobile/models/livestock_type.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -24,12 +25,14 @@ void main() {
   ({MarketplaceController controller, List<MarketplaceState> states}) build(
     Future<http.Response> Function(RecordedRequest request) handler, {
     Stream<RealtimeEvent>? realtimeEvents,
+    List<LivestockType>? catalog,
   }) {
     final MarketplaceController controller = buildMarketplaceController(
       tokenStore,
       handler,
       recorded: recorded,
       realtimeEvents: realtimeEvents,
+      livestockCatalog: catalog == null ? null : () => catalog,
     );
     addTearDown(controller.dispose);
 
@@ -444,7 +447,9 @@ void main() {
         (_) async => marketplaceListResponse(),
       );
 
-      const ListingFilters filters = ListingFilters(livestockTypes: <String>['cattle']);
+      const ListingFilters filters = ListingFilters(
+        livestockTypes: <String>['cattle'],
+      );
       await controller.applyFilters(filters);
       expect(recorded, hasLength(1));
 
@@ -466,10 +471,10 @@ void main() {
         const ListingFilters(livestockTypes: <String>['cattle', 'goat']),
       );
 
-      expect(
-        recorded.single.queryAll['livestock_type[]'],
-        <String>['cattle', 'goat'],
-      );
+      expect(recorded.single.queryAll['livestock_type[]'], <String>[
+        'cattle',
+        'goat',
+      ]);
       expect(recorded.single.query.containsKey('livestock_type'), isFalse);
     });
 
@@ -479,7 +484,10 @@ void main() {
       );
 
       await controller.applyFilters(
-        const ListingFilters(livestockTypes: <String>['cattle'], maxPrice: '50000'),
+        const ListingFilters(
+          livestockTypes: <String>['cattle'],
+          maxPrice: '50000',
+        ),
       );
       await controller.clearFilters();
 
@@ -530,6 +538,96 @@ void main() {
         expect(controller.state.errorMessage, isNotEmpty);
       },
     );
+
+    group('breed pruning', () {
+      const List<LivestockType> catalog = <LivestockType>[
+        LivestockType(
+          value: 'cattle',
+          label: 'Cattle',
+          breeds: <String>['Brahman'],
+        ),
+        LivestockType(value: 'goat', label: 'Goat', breeds: <String>['Boer']),
+      ];
+
+      test('keeps a breed the selected type offers', () async {
+        final (:controller, :states) = build(
+          (_) async => marketplaceListResponse(),
+          catalog: catalog,
+        );
+
+        await controller.applyFilters(
+          const ListingFilters(
+            livestockTypes: <String>['cattle'],
+            breeds: <String>['Brahman'],
+          ),
+        );
+
+        expect(controller.state.filters.breeds, <String>['Brahman']);
+        expect(recorded.single.query['breed'], 'Brahman');
+      });
+
+      test('drops a breed when the selected type changes', () async {
+        final (:controller, :states) = build(
+          (_) async => marketplaceListResponse(),
+          catalog: catalog,
+        );
+
+        await controller.applyFilters(
+          const ListingFilters(
+            livestockTypes: <String>['cattle'],
+            breeds: <String>['Brahman'],
+          ),
+        );
+        await controller.applyFilters(
+          const ListingFilters(
+            livestockTypes: <String>['goat'],
+            breeds: <String>['Brahman'],
+          ),
+        );
+
+        expect(controller.state.filters.livestockTypes, <String>['goat']);
+        expect(controller.state.filters.breeds, isEmpty);
+        expect(recorded.last.query.containsKey('breed'), isFalse);
+      });
+
+      test('clears stale breeds when every type is cleared', () async {
+        final (:controller, :states) = build(
+          (_) async => marketplaceListResponse(),
+          catalog: catalog,
+        );
+
+        await controller.applyFilters(
+          const ListingFilters(
+            livestockTypes: <String>['cattle'],
+            breeds: <String>['Brahman'],
+          ),
+        );
+        await controller.applyFilters(
+          const ListingFilters(breeds: <String>['Brahman']),
+        );
+
+        expect(controller.state.filters.breeds, isEmpty);
+        expect(recorded.last.query.containsKey('breed'), isFalse);
+      });
+
+      test('does not request when the pruned selection is unchanged', () async {
+        final (:controller, :states) = build(
+          (_) async => marketplaceListResponse(),
+          catalog: catalog,
+        );
+
+        const ListingFilters stale = ListingFilters(
+          livestockTypes: <String>['goat'],
+          breeds: <String>['Brahman'],
+        );
+
+        await controller.applyFilters(stale);
+        expect(recorded, hasLength(1));
+
+        await controller.applyFilters(stale);
+        expect(recorded, hasLength(1));
+      });
+    });
   });
 
   group('pagination', () {
@@ -683,33 +781,36 @@ void main() {
     });
   });
 
-  test('refreshes availability when a realtime inventory event arrives', () async {
-    final StreamController<RealtimeEvent> events =
-        StreamController<RealtimeEvent>.broadcast();
-    addTearDown(events.close);
+  test(
+    'refreshes availability when a realtime inventory event arrives',
+    () async {
+      final StreamController<RealtimeEvent> events =
+          StreamController<RealtimeEvent>.broadcast();
+      addTearDown(events.close);
 
-    final MarketplaceController controller = buildMarketplaceController(
-      tokenStore,
-      (_) async => marketplaceListResponse(),
-      recorded: recorded,
-      realtimeEvents: events.stream,
-    );
-    addTearDown(controller.dispose);
+      final MarketplaceController controller = buildMarketplaceController(
+        tokenStore,
+        (_) async => marketplaceListResponse(),
+        recorded: recorded,
+        realtimeEvents: events.stream,
+      );
+      addTearDown(controller.dispose);
 
-    await controller.loadInitial();
-    expect(recorded, hasLength(1));
+      await controller.loadInitial();
+      expect(recorded, hasLength(1));
 
-    events.add(
-      const RealtimeEvent(
-        name: 'listing.inventory.updated',
-        data: <String, dynamic>{'listing_id': 12},
-      ),
-    );
-    await pumpEventQueue();
+      events.add(
+        const RealtimeEvent(
+          name: 'listing.inventory.updated',
+          data: <String, dynamic>{'listing_id': 12},
+        ),
+      );
+      await pumpEventQueue();
 
-    expect(recorded, hasLength(2));
-    expect(controller.state.status, MarketplaceStatus.ready);
-  });
+      expect(recorded, hasLength(2));
+      expect(controller.state.status, MarketplaceStatus.ready);
+    },
+  );
 
   test(
     'dispose cancels inventory updates and ignores subsequent events',
@@ -863,7 +964,10 @@ void main() {
 
       await harness.controller.loadInitial();
       await harness.controller.applyFilters(
-        const ListingFilters(livestockTypes: <String>['cattle'], minPrice: '1000'),
+        const ListingFilters(
+          livestockTypes: <String>['cattle'],
+          minPrice: '1000',
+        ),
       );
       await harness.controller.submitSearch();
       expect(recorded, hasLength(3));

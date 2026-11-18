@@ -508,6 +508,73 @@ void main() {
       expect(all.selected, isTrue);
     });
 
+    testWidgets('a category chip prunes a breed whose type is removed', (
+      WidgetTester tester,
+    ) async {
+      final MarketplaceHarness harness = await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(),
+      );
+
+      await harness.controller.applyFilters(
+        const ListingFilters(
+          livestockTypes: <String>['cattle'],
+          breeds: <String>['Brahman'],
+        ),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      // Adding goat keeps Brahman: cattle is still selected, and the breed
+      // belongs to it.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-goat')),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      expect(harness.recorded.last.queryAll['livestock_type[]'], <String>[
+        'cattle',
+        'goat',
+      ]);
+      expect(harness.recorded.last.query['breed'], 'Brahman');
+
+      // Removing cattle leaves goat, which does not offer Brahman.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-cattle')),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      expect(harness.recorded.last.query['livestock_type'], 'goat');
+      expect(harness.recorded.last.query.containsKey('breed'), isFalse);
+    });
+
+    testWidgets('All clears stale breeds with the category selection', (
+      WidgetTester tester,
+    ) async {
+      final MarketplaceHarness harness = await MarketplaceHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async => marketplaceListResponse(),
+      );
+
+      await harness.controller.applyFilters(
+        const ListingFilters(
+          livestockTypes: <String>['cattle'],
+          breeds: <String>['Brahman'],
+        ),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('browse-category-all')),
+      );
+      await settleMarketplace(tester, frames: 12);
+
+      final Map<String, String> query = harness.recorded.last.query;
+      expect(query.containsKey('livestock_type'), isFalse);
+      expect(query.containsKey('breed'), isFalse);
+    });
+
     testWidgets('the search X clears the search and every active filter', (
       WidgetTester tester,
     ) async {

@@ -1,4 +1,5 @@
 import '../../../core/utils/app_formatters.dart';
+import '../../../models/livestock_type.dart';
 
 /// The buyer's filter selection, as a value.
 ///
@@ -242,27 +243,69 @@ class ListingFilters {
   /// Returns filters with every field cleared, for the "Clear" action.
   ListingFilters cleared() => ListingFilters.none;
 
+  /// The catalog breeds offered by [livestockTypes], in catalog order.
+  ///
+  /// This is the one place that knows how an animal type relates to its breeds:
+  /// the Breed selector draws its options from it, and pruning a selection
+  /// compares against it. A breed name shared by two categories appears once.
+  static List<String> catalogBreeds(
+    List<String> livestockTypes,
+    List<LivestockType> catalog,
+  ) {
+    final List<String> breeds = <String>[];
+
+    for (final String type in livestockTypes) {
+      for (final LivestockType entry in catalog) {
+        if (entry.value != type) {
+          continue;
+        }
+        for (final String breed in entry.breeds) {
+          if (!breeds.contains(breed)) {
+            breeds.add(breed);
+          }
+        }
+      }
+    }
+
+    return breeds;
+  }
+
   /// Prunes breeds that are incompatible with the given livestock types.
   ///
-  /// When animal types change (e.g., switching from Cattle to Goat via category
-  /// chips or Home shortcuts), previously selected breeds that are not compatible
-  /// with the new animal type are automatically removed.
+  /// Compatibility comes from the server-owned [catalog] — the same animal
+  /// type → breed relationship the Breed selector offers — never from matching
+  /// one string against another. A breed survives when at least one selected
+  /// type lists it; switching Cattle → Goat therefore drops Brahman while a
+  /// breed both categories share would stay.
   ///
-  /// [livestockTypes] are the currently selected animal types from the catalog.
-  /// If empty, all breeds are kept (no pruning needed).
-  ListingFilters pruneIncompatibleBreeds(List<String> livestockTypes) {
-    if (livestockTypes.isEmpty) return this;
+  /// Clearing every type clears the breeds too: "All" must not leave a stale
+  /// narrowing behind. An empty [catalog] means the catalog has not loaded or
+  /// failed, so the selection is returned unchanged — there is nothing to
+  /// compare against, and dropping breeds on missing data would destroy a
+  /// selection the buyer cannot currently see or fix.
+  ListingFilters pruneIncompatibleBreeds(
+    List<String> livestockTypes, {
+    required List<LivestockType> catalog,
+  }) {
+    if (breeds.isEmpty) {
+      return this;
+    }
+    if (livestockTypes.isEmpty) {
+      return copyWith(breeds: const <String>[]);
+    }
+    if (catalog.isEmpty) {
+      return this;
+    }
 
-    // Keep only breeds that are compatible with at least one current livestock type
-    final List<String> filteredBreeds = breeds.where((breed) {
-      final lowerBreed = breed.toLowerCase();
-      // Check if breed matches any of the current livestock types
-      return livestockTypes.any(
-        (type) => type.toLowerCase().contains(lowerBreed),
-      );
-    }).toList();
+    final Set<String> allowed = catalogBreeds(livestockTypes, catalog).toSet();
+    final List<String> kept = breeds
+        .where((String breed) => allowed.contains(breed))
+        .toList(growable: false);
 
-    return copyWith(breeds: filteredBreeds.isEmpty ? [] : filteredBreeds);
+    if (kept.length == breeds.length) {
+      return this;
+    }
+    return copyWith(breeds: kept);
   }
 
   @override

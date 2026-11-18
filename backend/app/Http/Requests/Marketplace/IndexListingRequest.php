@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Marketplace;
 
+use App\Enums\LivestockType;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -66,8 +67,25 @@ class IndexListingRequest extends FormRequest
             // is what enforces the per-entry type and length. It reports on the
             // base key rather than `livestock_type.*` so a client that sends an
             // oversized scalar sees the same error key it always has.
-            'livestock_type' => ['nullable', 'array', $this->stringListRule()],
-            'breed' => ['nullable', 'array', $this->stringListRule()],
+            //
+            // The `max` caps the number of selected values at the size of the
+            // server-owned catalog, so the bound cannot drift from the enum:
+            // a client cannot widen the request past what the UI can offer.
+            'livestock_type' => [
+                'nullable',
+                'array',
+                'max:'.count(LivestockType::cases()),
+                $this->stringListRule(),
+            ],
+            'breed' => [
+                'nullable',
+                'array',
+                'max:'.array_sum(array_map(
+                    static fn (LivestockType $type): int => count($type->breeds()),
+                    LivestockType::cases(),
+                )),
+                $this->stringListRule(),
+            ],
 
             'gender' => ['nullable', 'string', 'in:male,female'],
 
