@@ -22,9 +22,18 @@ class AdminUserService
         ?string $search = null,
         ?string $role = null,
         ?string $sellerCapability = null,
+        ?string $status = null,
         int $perPage = 15,
     ): LengthAwarePaginator {
-        return $this->users->list($search, $role, $sellerCapability, $perPage);
+        return $this->users->list($search, $role, $sellerCapability, $status, $perPage);
+    }
+
+    /**
+     * Load the admin detail projection for one user, including a trashed row.
+     */
+    public function showUser(User $user): User
+    {
+        return $this->users->loadMetrics($user);
     }
 
     /**
@@ -63,18 +72,25 @@ class AdminUserService
                 );
             }
 
-            return $updated;
+            return $this->users->loadMetrics($updated);
         });
     }
 
     /**
      * Deactivate an account without deleting its listings or business history.
      *
+     * The administrative reason is required, persisted on the account, and
+     * copied into the audit entry. The existing self/last-administrator guards
+     * remain the authority; no report may bypass them.
+     *
      * @throws HttpExceptionInterface
      */
-    public function deleteUser(User $user, User $actor): User
+    public function deleteUser(User $user, User $actor, string $reason): User
     {
-        return DB::transaction(function () use ($user, $actor): User {
+        $reason = trim($reason);
+        abort_if($reason === '', 422, 'An administrative reason is required.');
+
+        return DB::transaction(function () use ($user, $actor, $reason): User {
             // Lock administrators in a stable order before the target row.
             // Concurrent attempts to remove different admins therefore
             // serialize here instead of deadlocking while holding opposite
@@ -101,6 +117,7 @@ class AdminUserService
             $targetName = $target->name;
             $targetEmail = $target->email;
 
+            $this->users->markDeactivated($target, $actor, $reason);
             $this->users->revokeCredentials($target);
 
             // The audit record is written in the same transaction and before
@@ -115,13 +132,79 @@ class AdminUserService
                     'context' => [
                         'name' => $targetName,
                         'email' => $targetEmail,
+                        'reason' => $reason,
+                    ],
+                    'changes' => [
+                        'status' => ['from' => 'active', 'to' => 'deactivated'],
                     ],
                 ],
             );
 
             $this->users->softDelete($target);
 
-            return $target;
+            return $this->users->loadMetrics($target);
+        });
+    }
+
+    /**
+     * Restore a previously deactivated account.
+     *
+     * Credentials stay revoked: reactivation restores the account, not an old
+     * session. Listings are untouched, so eligible active listings reappear
+     * through the existing seller-visibility rule.
+     *
+     * @throws HttpExceptionInterface
+     */
+    public function reactivateUser(User $user, User $actor, string $reason): User
+    {
+        $reason = trim($reason);
+        abort_if($reason === '', 422, 'An administrative reason is required.');
+
+        return DB::transaction(function () use ($user, $actor, $reason): User {
+            // Reactivation is not a last-administrator operation: it only adds
+            // an active administrator back. Lock the target row for a stable
+            // read of its current state.
+            $target = $this->users->findTrashedForUpdate((int) $user->getKey());
+            abort_if($target === null, 404, 'User not found.');
+            abort_unless(
+                $target->trashed(),
+                409,
+                'This account is already active.',
+            );
+
+            $targetId = (int) $target->getKey();
+            $targetName = $target->name;
+            $targetEmail = $target->email;
+
+            $this->activity->log(
+                $actor,
+                ActivityAction::AdminUserReactivated,
+                sprintf('User account #%d reactivated.', $targetId),
+                [
+                    'target_type' => 'user',
+                    'target_id' => $targetId,
+                    'context' => [
+                        'name' => $targetName,
+                        'email' => $targetEmail,
+                        'reason' => $reason,
+                    ],
+                    'changes' => [
+                        'status' => ['from' => 'deactivated', 'to' => 'active'],
+                    ],
+                ],
+            );
+
+            $this->users->restore($target);
+            $target->forceFill([
+                'deactivation_reason' => null,
+                'deactivated_by' => null,
+            ])->save();
+
+            // Keep the previous session revoked even if a future change starts
+            // preserving tokens across soft deletes.
+            $this->users->revokeCredentials($target);
+
+            return $this->users->loadMetrics($target->refresh());
         });
     }
 }

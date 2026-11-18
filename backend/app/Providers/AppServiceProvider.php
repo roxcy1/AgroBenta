@@ -10,9 +10,12 @@ use App\Models\User;
 use App\Services\PriceSuggestion\FastApiPriceSuggestionProvider;
 use App\Services\Push\PushNotificationService;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -32,6 +35,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('user-reports', function (Request $request): Limit {
+            return Limit::perMinute(5)->by(
+                $request->user()?->getAuthIdentifier() ?: $request->ip(),
+            );
+        });
+
         // Replaces Laravel's default email, which links to a `password.reset`
         // web route this API does not have and would fail when sent.
         ResetPassword::toMailUsing(function ($notifiable, string $code): MailMessage {

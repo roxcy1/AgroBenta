@@ -444,7 +444,9 @@ class OfferTest extends TestCase
         $adminToken = $admin->createToken('admin_token', ['admin'])->plainTextToken;
 
         $this->withHeader('Authorization', "Bearer {$adminToken}")
-            ->deleteJson('/api/admin/users/'.$this->seller->id)
+            ->deleteJson('/api/admin/users/'.$this->seller->id, [
+                'reason' => 'Policy violation confirmed.',
+            ])
             ->assertOk();
 
         $this->postOfferAction('accept', $offerId, $this->buyer)->assertStatus(409);

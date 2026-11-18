@@ -1021,6 +1021,36 @@ exist. Nothing missing here has been worked around in the app.
 | GAP-19 | Buyer inquiry read; seller inquiry detail/response (mobile) | **PARTIALLY CLOSED.** `POST /api/inquiries` creates a buyer inquiry, and `GET /api/inquiries/listing/{listing}` pre-checks the buyer's existing inquiry for a listing. `GET /api/seller/inquiries` lists the approved seller's inquiries through `SellerInquiryResource`, which omits buyer email and inquiry status. Administrator inquiry endpoints have been removed; inquiries are handled between buyers and sellers only. The app directs buyers to Messages after submitting an inquiry or when an inquiry already exists. Buyer inquiry list/detail and dedicated seller inquiry detail/status actions remain unavailable. | Buyer inquiry list/detail, dedicated seller inquiry detail/status actions, any remaining server-driven status display |
 | GAP-20 | Real-time messaging / notifications | **CLOSED.** Laravel Reverb is installed (`laravel/reverb`), `BROADCAST_CONNECTION=reverb`, `QUEUE_CONNECTION=redis`, with `config/broadcasting.php`, `config/reverb.php` and `routes/channels.php`. The `reverb` service (internal `0.0.0.0:8080`, published `8083`) and a Redis `queue` worker run in `compose.yaml`; `/broadcasting/auth` uses `auth:sanctum`. Broadcast events (`MessageSent`, `InquiryCreated`, `OfferCreated`, `OfferUpdated`, `TransactionCreated`, `TransactionUpdated`, `NotificationCreated`, `ActivityRecorded`) are queued + after-commit and target `private-user.{id}` or the shared `private-admin`. The mobile app subscribes with `pusher_reverb_flutter` (`lib/core/realtime/`) and refreshes REST data on events and on reconnect; the Admin Web subscribes with `laravel-echo`/`pusher-js` and invalidates react-query caches. Reverb itself has no push/background delivery; phone push for stored notifications is FCM, separately (see "Resolved for push notifications" above). | — |
 
+**Resolved for user reporting.** One authenticated mobile write endpoint:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/reports` | File one report against another account. Multipart body: `reported_user_id`, `reason`, `description`, one optional `evidence` screenshot. |
+
+The reporter is the bearer token. `reporter_id`, `status`, `reviewed_by`,
+`reviewed_at`, `admin_note` and `evidence_path` are server-owned and refused
+with `422`. The six reasons are `scam_fraud`, `harassment`,
+`misleading_information`, `spam_suspicious_activity`, `inappropriate_content`
+and `other`; the description is required (10–2000 characters); evidence is one
+JPEG/PNG/WebP image up to 5 MB. The server refuses self-reporting, administrator
+targets, deactivated targets, and a second **pending** report for the same
+reporter/target pair (`409`), and rate-limits the route per authenticated
+account. The response is reporter-safe: `id`, `reason`, `reason_label`,
+`status`, `status_label`, `created_at`; no reporter identity, moderation field
+or evidence path is exposed. Evidence is stored on the private
+`user-report-evidence` disk and is never a public URL; there is no mobile
+evidence-read endpoint.
+
+The Flutter app uses one shared `ReportUserScreen` reached from three entry
+points: Seller Public Profile → **Report Seller**, Conversation Header →
+**Report User**, and Transaction Details → **Report User** for the other
+participant. It validates the required reason/description, enforces the
+self-report guard locally, reuses `image_picker`/`LocalImagePreview` for one
+screenshot, shows confirmation before submission, and maps `422`, `409`, `429`,
+`403`, `404`, network and server failures to clear messages. Reporting never
+changes account status or sessions. There are no mobile admin-report endpoints
+and no notification to the reported user.
+
 ### Gaps that are design questions, not missing code
 
 Report these; do not decide them unilaterally.

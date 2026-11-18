@@ -12,7 +12,10 @@ import 'package:agrobenta_mobile/features/marketplace/widgets/listing_card.dart'
 import 'package:agrobenta_mobile/features/seller_profile/state/seller_listing_filters.dart';
 import 'package:agrobenta_mobile/features/seller_profile/view/seller_profile_screen.dart';
 import 'package:agrobenta_mobile/features/seller_profile/widgets/seller_profile_tab_bar.dart';
+import 'package:agrobenta_mobile/features/user_reports/state/user_report_scope.dart';
+import 'package:agrobenta_mobile/features/user_reports/view/report_user_screen.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
+import 'package:agrobenta_mobile/repositories/user_report_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -21,6 +24,7 @@ import '../../support/auth_fakes.dart';
 import '../../support/livestock_type_fakes.dart';
 import '../../support/marketplace_fakes.dart';
 import '../../support/seller_profile_fakes.dart';
+import '../../support/user_report_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -83,17 +87,25 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      AuthScope(
-        controller: authController,
-        child: MarketplaceScope(
-          repository: repository,
-          controller: marketplaceController,
-          child: LivestockTypesScope(
-            repository: catalogRepository,
-            controller: catalogController,
-            child: MaterialApp(
-              theme: AppTheme.light(),
-              home: SellerProfileScreen(sellerId: sellerId),
+      UserReportScope(
+        repository: UserReportRepository(
+          buildUserReportService(
+            tokenStore,
+            (_) async => userReportCreatedResponse(),
+          ),
+        ),
+        child: AuthScope(
+          controller: authController,
+          child: MarketplaceScope(
+            repository: repository,
+            controller: marketplaceController,
+            child: LivestockTypesScope(
+              repository: catalogRepository,
+              controller: catalogController,
+              child: MaterialApp(
+                theme: AppTheme.light(),
+                home: SellerProfileScreen(sellerId: sellerId),
+              ),
             ),
           ),
         ),
@@ -509,5 +521,25 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(ListingCard), findsOneWidget);
+  });
+
+  testWidgets('the seller options menu opens the shared report form', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (RecordedRequest request) => profileHandler(request),
+    );
+
+    await tester.tap(find.byTooltip('Seller options'));
+    await settle(tester);
+    expect(find.text('Report Seller'), findsOneWidget);
+
+    await tester.tap(find.text('Report Seller'));
+    await settle(tester);
+
+    expect(find.byType(ReportUserScreen), findsOneWidget);
+    expect(find.text('Reported user'), findsOneWidget);
+    expect(find.text('Seller'), findsWidgets);
   });
 }

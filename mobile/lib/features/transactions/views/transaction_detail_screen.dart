@@ -9,6 +9,7 @@ import '../../auth/state/auth_scope.dart';
 import '../../marketplace/widgets/marketplace_state_views.dart';
 import '../../messaging/view/chat_screen.dart';
 import '../../receipts/view/transaction_receipt_screen.dart';
+import '../../user_reports/view/report_user_screen.dart';
 import '../state/transaction_detail_controller.dart';
 import '../state/transaction_detail_state.dart';
 import '../state/transaction_scope.dart';
@@ -119,6 +120,7 @@ class _DetailBodyState extends State<_DetailBody> {
           onDismissActionError: _controller.clearActionError,
           onAction: _confirmAction,
           onMessageCounterparty: () => _openThread(context, transaction),
+          onReportCounterparty: () => _openReport(context, transaction),
           onViewStatus: () => _openStatus(context, transaction),
           onViewReceipt: () => _openReceipt(context, transaction.id),
         );
@@ -180,6 +182,38 @@ class _DetailBodyState extends State<_DetailBody> {
           ),
           currentUserId: viewerId,
           listingId: transaction.listing.id,
+        ),
+      ),
+    );
+  }
+
+  /// Opens the shared report form for the other participant.
+  void _openReport(BuildContext context, Transaction transaction) {
+    final int? viewerId = AuthScope.maybeOf(context)?.state.user?.id;
+    if (viewerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in again to report this user.')),
+      );
+      return;
+    }
+    if (viewerId == transaction.counterparty.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot report your own account.')),
+      );
+      return;
+    }
+
+    final String role = transaction.role == TransactionRole.seller
+        ? 'Buyer'
+        : 'Seller';
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ReportUserScreen(
+          reportedUserId: transaction.counterparty.id,
+          reportedUserName: transaction.counterparty.name,
+          reportedUserRole: role,
+          currentUserId: viewerId,
         ),
       ),
     );

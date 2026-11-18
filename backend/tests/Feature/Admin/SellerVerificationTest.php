@@ -296,7 +296,9 @@ class SellerVerificationTest extends TestCase
         $token = $this->adminToken();
 
         $this->withHeader('Authorization', "Bearer {$token}")
-            ->deleteJson("/api/admin/users/{$verification->user_id}")
+            ->deleteJson("/api/admin/users/{$verification->user_id}", [
+                'reason' => 'Policy violation confirmed.',
+            ])
             ->assertOk();
 
         $this->withHeader('Authorization', "Bearer {$token}")

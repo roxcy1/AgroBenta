@@ -54,6 +54,9 @@ enum ActivityAction: string
     case SettingsUpdated = 'settings_updated';
     case AdminUserUpdated = 'admin_user_updated';
     case AdminUserDeleted = 'admin_user_deleted';
+    case AdminUserReactivated = 'admin_user_reactivated';
+    case UserReportDismissed = 'user_report_dismissed';
+    case UserReportActioned = 'user_report_actioned';
 
     public function label(): string
     {
@@ -91,6 +94,9 @@ enum ActivityAction: string
             self::SettingsUpdated => 'Settings updated',
             self::AdminUserUpdated => 'User account updated by an administrator',
             self::AdminUserDeleted => 'User account deactivated by an administrator',
+            self::AdminUserReactivated => 'User account reactivated by an administrator',
+            self::UserReportDismissed => 'User report dismissed by an administrator',
+            self::UserReportActioned => 'User report actioned by an administrator',
         };
     }
 }

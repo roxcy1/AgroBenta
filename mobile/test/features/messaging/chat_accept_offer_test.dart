@@ -9,11 +9,14 @@ import 'package:agrobenta_mobile/features/messaging/state/messaging_scope.dart';
 import 'package:agrobenta_mobile/features/messaging/view/chat_screen.dart';
 import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
+import 'package:agrobenta_mobile/features/user_reports/state/user_report_scope.dart';
+import 'package:agrobenta_mobile/features/user_reports/view/report_user_screen.dart';
 import 'package:agrobenta_mobile/models/message.dart';
 import 'package:agrobenta_mobile/repositories/inquiry_repository.dart';
 import 'package:agrobenta_mobile/repositories/messaging_repository.dart';
 import 'package:agrobenta_mobile/repositories/offer_repository.dart';
 import 'package:agrobenta_mobile/repositories/transaction_repository.dart';
+import 'package:agrobenta_mobile/repositories/user_report_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -23,6 +26,7 @@ import '../../support/inquiry_fakes.dart';
 import '../../support/messaging_fakes.dart';
 import '../../support/offer_fakes.dart';
 import '../../support/transaction_fakes.dart';
+import '../../support/user_report_fakes.dart';
 
 /// Accepting an offer creates a real pending transaction in one request, so the
 /// buyer is asked to confirm first, as they are for Decline and Withdraw. A
@@ -106,27 +110,35 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      MessagingScope(
-        repository: messaging,
-        conversationsController: conversations,
-        child: OfferScope(
-          repository: offers,
-          child: InquiryScope(
-            repository: inquiries,
-            child: TransactionScope(
-              repository: transactions,
-              child: AuthScope(
-                controller: auth,
-                child: MaterialApp(
-                  theme: AppTheme.light(),
-                  home: const ChatScreen(
-                    counterpart: ChatUser(
-                      id: 3,
-                      name: 'Rizal Farms',
-                      avatarUrl: null,
+      UserReportScope(
+        repository: UserReportRepository(
+          buildUserReportService(
+            tokenStore,
+            (_) async => userReportCreatedResponse(),
+          ),
+        ),
+        child: MessagingScope(
+          repository: messaging,
+          conversationsController: conversations,
+          child: OfferScope(
+            repository: offers,
+            child: InquiryScope(
+              repository: inquiries,
+              child: TransactionScope(
+                repository: transactions,
+                child: AuthScope(
+                  controller: auth,
+                  child: MaterialApp(
+                    theme: AppTheme.light(),
+                    home: const ChatScreen(
+                      counterpart: ChatUser(
+                        id: 3,
+                        name: 'Rizal Farms',
+                        avatarUrl: null,
+                      ),
+                      currentUserId: 7,
+                      counterpartRole: 'Seller',
                     ),
-                    currentUserId: 7,
-                    counterpartRole: 'Seller',
                   ),
                 ),
               ),
@@ -218,5 +230,22 @@ void main() {
     expect(acceptCalls(), 1);
     expect(find.text('Offer accepted'), findsOneWidget);
     expect(find.text('Accept this offer?'), findsNothing);
+  });
+
+  testWidgets('the conversation menu opens the shared report form', (
+    WidgetTester tester,
+  ) async {
+    await pumpBuyerChat(tester);
+
+    await tester.tap(find.byTooltip('Conversation options'));
+    await settle(tester);
+    expect(find.text('Report User'), findsOneWidget);
+
+    await tester.tap(find.text('Report User'));
+    await settle(tester);
+
+    expect(find.byType(ReportUserScreen), findsOneWidget);
+    expect(find.text('Reported user'), findsOneWidget);
+    expect(find.text('Rizal Farms'), findsWidgets);
   });
 }

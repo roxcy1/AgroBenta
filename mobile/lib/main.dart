@@ -42,6 +42,7 @@ import 'features/seller_verification/state/seller_verification_scope.dart';
 import 'features/transactions/state/transaction_scope.dart';
 import 'features/trinidad_location/state/trinidad_location_controller.dart';
 import 'features/trinidad_location/state/trinidad_location_scope.dart';
+import 'features/user_reports/state/user_report_scope.dart';
 import 'repositories/app_release_repository.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/inquiry_repository.dart';
@@ -56,6 +57,7 @@ import 'repositories/seller_listing_repository.dart';
 import 'repositories/seller_verification_repository.dart';
 import 'repositories/transaction_repository.dart';
 import 'repositories/trinidad_location_repository.dart';
+import 'repositories/user_report_repository.dart';
 import 'services/app_release_service.dart';
 import 'services/auth_service.dart';
 import 'services/inquiry_service.dart';
@@ -70,6 +72,7 @@ import 'services/seller_listing_service.dart';
 import 'services/seller_verification_service.dart';
 import 'services/transaction_service.dart';
 import 'services/trinidad_location_service.dart';
+import 'services/user_report_service.dart';
 import 'features/notifications/state/notifications_controller.dart';
 import 'features/notifications/state/notifications_scope.dart';
 import 'features/notifications/state/push_registration_controller.dart';
@@ -189,6 +192,8 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   late final TrinidadLocationService _trinidadLocationService;
   late final TrinidadLocationRepository _trinidadLocationRepository;
   late final TrinidadLocationController _trinidadLocationController;
+  late final UserReportService _userReportService;
+  late final UserReportRepository _userReportRepository;
   late final PusherReverbClient _realtimeClient;
   late final RealtimeController _realtimeController;
   StreamSubscription<bool>? _realtimeConnectionSubscription;
@@ -253,6 +258,12 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     _sellerActivityRepository = SellerActivityRepository(
       _sellerActivityService,
     );
+
+    // User reporting is shared by the seller profile, chat, and transaction
+    // details, so one repository sits above `MaterialApp`; each form owns its
+    // own short-lived controller.
+    _userReportService = UserReportService(_apiClient);
+    _userReportRepository = UserReportRepository(_userReportService);
 
     // App updates: the Profile screen's App Update tile compares this build
     // with the latest published one and opens the download in the browser.
@@ -580,20 +591,23 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
                                   repository: _sellerActivityRepository,
                                   child: AppUpdateScope(
                                     repository: _appReleaseRepository,
-                                    // Real-time sits closest to `MaterialApp` so
-                                    // every pushed route can subscribe to the
-                                    // session's events without constructor
-                                    // threading.
-                                    child: RealtimeScope(
-                                      controller: _realtimeController,
-                                      child: MaterialApp(
-                                        navigatorKey: _navigatorKey,
-                                        title: 'AgroBenta',
-                                        debugShowCheckedModeBanner: false,
-                                        theme: AppTheme.light(),
-                                        home: AuthGate(
-                                          authenticatedView:
-                                              _buildAccountModeShell,
+                                    child: UserReportScope(
+                                      repository: _userReportRepository,
+                                      // Real-time sits closest to `MaterialApp` so
+                                      // every pushed route can subscribe to the
+                                      // session's events without constructor
+                                      // threading.
+                                      child: RealtimeScope(
+                                        controller: _realtimeController,
+                                        child: MaterialApp(
+                                          navigatorKey: _navigatorKey,
+                                          title: 'AgroBenta',
+                                          debugShowCheckedModeBanner: false,
+                                          theme: AppTheme.light(),
+                                          home: AuthGate(
+                                            authenticatedView:
+                                                _buildAccountModeShell,
+                                          ),
                                         ),
                                       ),
                                     ),

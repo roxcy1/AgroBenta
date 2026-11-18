@@ -46,6 +46,7 @@ class TransactionDetailContent extends StatelessWidget {
     required this.onDismissActionError,
     required this.onAction,
     required this.onMessageCounterparty,
+    required this.onReportCounterparty,
     required this.onViewStatus,
     required this.onViewReceipt,
     super.key,
@@ -67,6 +68,9 @@ class TransactionDetailContent extends StatelessWidget {
   /// id comes from the payload, so this routes to a real, server-identifiable
   /// user and never to an invented one.
   final VoidCallback onMessageCounterparty;
+
+  /// Opens the shared report form for the other participant.
+  final VoidCallback onReportCounterparty;
 
   /// Opens the dedicated Transaction Status screen for this same record.
   final VoidCallback onViewStatus;
@@ -154,6 +158,15 @@ class TransactionDetailContent extends StatelessWidget {
                       onPressed: onMessageCounterparty,
                       icon: const Icon(Icons.chat_bubble_outline, size: 18),
                       label: Text(counterpartyAction),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      onPressed: onReportCounterparty,
+                      icon: const Icon(Icons.flag_outlined, size: 18),
+                      label: const Text('Report User'),
                     ),
                   ),
                 ],

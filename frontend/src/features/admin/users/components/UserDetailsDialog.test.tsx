@@ -12,6 +12,12 @@ const user: AdminUser = {
   role: 'user',
   seller_capability: 'buyer',
   email_verified_at: '2026-11-06T18:17:00.000000Z',
+  status: 'active',
+  deactivated_at: null,
+  deactivation_reason: null,
+  deactivated_by: null,
+  reports_count: 0,
+  pending_transactions_count: 0,
   created_at: '2026-11-05T18:17:00.000000Z',
   updated_at: '2026-11-07T23:39:00.000000Z',
 };
@@ -37,7 +43,7 @@ describe('UserDetailsDialog', () => {
     expect(screen.getByText('amina@example.test')).not.toBeNull();
     expect(screen.getByText(formatDateTime(user.created_at))).not.toBeNull();
     expect(screen.getByText(formatDateTime(user.updated_at))).not.toBeNull();
-    expect(screen.queryByText('Account Status')).toBeNull();
+    expect(screen.getByText('Account status')).not.toBeNull();
   });
 
   it('preserves unverified state and header, footer, Escape and backdrop close behavior', () => {
@@ -47,7 +53,7 @@ describe('UserDetailsDialog', () => {
     );
 
     expect(screen.getByText('Not verified')).not.toBeNull();
-    expect(screen.getByText('—')).not.toBeNull();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Close user details' }));
     fireEvent.click(screen.getByRole('button', { name: /^Close$/ }));

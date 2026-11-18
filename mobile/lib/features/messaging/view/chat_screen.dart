@@ -14,6 +14,7 @@ import '../../offers/state/offer_state.dart';
 import '../../offers/view/make_offer_screen.dart';
 import '../../offers/widgets/chat_offer_panel.dart';
 import '../../transactions/views/transaction_detail_screen.dart';
+import '../../user_reports/view/report_user_screen.dart';
 import '../state/chat_controller.dart';
 import '../state/messaging_scope.dart';
 import '../state/messaging_state.dart';
@@ -355,6 +356,32 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
+        actions: <Widget>[
+          PopupMenuButton<String>(
+            tooltip: 'Conversation options',
+            onSelected: (String value) {
+              if (value == 'report') {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (BuildContext context) => ReportUserScreen(
+                      reportedUserId: widget.counterpart.id,
+                      reportedUserName: widget.counterpart.name,
+                      reportedUserRole: role,
+                      currentUserId: widget.currentUserId,
+                    ),
+                  ),
+                );
+              }
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                value: 'report',
+                enabled: widget.currentUserId != widget.counterpart.id,
+                child: const Text('Report User'),
+              ),
+            ],
+          ),
+        ],
         title: InkWell(
           onTap: _showProfile,
           borderRadius: BorderRadius.circular(AppRadius.sm),

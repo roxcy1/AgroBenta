@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Admin\SellerVerificationController;
 use App\Http\Controllers\Api\Admin\SettingsController;
 use App\Http\Controllers\Api\Admin\TransactionController;
 use App\Http\Controllers\Api\Admin\UserController;
+use App\Http\Controllers\Api\Admin\UserReportController as AdminUserReportController;
 use App\Http\Controllers\Api\AppReleaseController;
 use App\Http\Controllers\Api\Auth\AuthController as MobileAuthController;
 use App\Http\Controllers\Api\CurrentUserController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
 use App\Http\Controllers\Api\Offer\OfferController;
 use App\Http\Controllers\Api\Profile\ProfileController;
+use App\Http\Controllers\Api\Report\UserReportController;
 use App\Http\Controllers\Api\SellerActivity\SellerActivityController;
 use App\Http\Controllers\Api\SellerDashboard\SellerDashboardController;
 use App\Http\Controllers\Api\SellerInquiry\SellerInquiryController;
@@ -284,6 +286,17 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('profile')->group(fu
     Route::post('/avatar', [ProfileController::class, 'uploadAvatar']);
 });
 
+// User reports - one mobile write path.
+//
+// The reporter is the token owner and the reported account is a body field.
+// Report creation never changes account status, sessions, listings,
+// transactions, or reservations. The service enforces the target and duplicate
+// rules; the route limit bounds abuse per authenticated account.
+Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    Route::post('/reports', [UserReportController::class, 'store'])
+        ->middleware('throttle:user-reports');
+});
+
 // Messaging — the caller's own conversations and messages.
 //
 // A "conversation" is derived, not stored: it is the pair
@@ -361,9 +374,21 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
-    Route::get('/users/{user}', [UserController::class, 'show']);
+    Route::get('/users/{user}', [UserController::class, 'show'])->withTrashed();
     Route::put('/users/{user}', [UserController::class, 'update']);
     Route::delete('/users/{user}', [UserController::class, 'destroy']);
+    Route::post('/users/{user}/reactivate', [UserController::class, 'reactivate'])
+        ->withTrashed();
+
+    Route::get('/user-reports', [AdminUserReportController::class, 'index']);
+    Route::get('/user-reports/{userReport}', [AdminUserReportController::class, 'show'])
+        ->whereNumber('userReport');
+    Route::get('/user-reports/{userReport}/evidence', [AdminUserReportController::class, 'evidence'])
+        ->whereNumber('userReport');
+    Route::post('/user-reports/{userReport}/dismiss', [AdminUserReportController::class, 'dismiss'])
+        ->whereNumber('userReport');
+    Route::post('/user-reports/{userReport}/deactivate', [AdminUserReportController::class, 'deactivate'])
+        ->whereNumber('userReport');
     Route::get('/listings', [ListingController::class, 'index']);
     // Listing moderation. [D-02 rule 8] makes administrator approval the only
     // route to `active`, and the transition table reserves `pending -> inactive`
