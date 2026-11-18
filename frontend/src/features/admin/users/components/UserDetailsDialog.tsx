@@ -56,6 +56,10 @@ export default function UserDetailsDialog({
       rows: [
         ['Account ID', `#${user.id}`],
         [
+          'Account status',
+          <StatusBadge key="account-status" status={user.status} />,
+        ],
+        [
           'Verification status',
           verificationStatus ? (
             <StatusBadge key="verification" status={verificationStatus} />
@@ -91,6 +95,12 @@ export default function UserDetailsDialog({
       rows: [
         ['Created', formatDateTime(user.created_at)],
         ['Updated', formatDateTime(user.updated_at)],
+        [
+          'Deactivated',
+          user.deactivated_at ? formatDateTime(user.deactivated_at) : '\u2014',
+        ],
+        ['Deactivated by', orDash(user.deactivated_by?.name)],
+        ['Deactivation reason', orDash(user.deactivation_reason)],
       ],
     },
   ];

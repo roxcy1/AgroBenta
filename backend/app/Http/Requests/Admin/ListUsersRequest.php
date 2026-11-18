@@ -17,6 +17,7 @@ class ListUsersRequest extends FormRequest
             'search' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'string', 'in:user,admin'],
             'seller_capability' => ['nullable', 'string', 'in:buyer,seller'],
+            'status' => ['nullable', 'string', 'in:active,deactivated,all'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],
         ];

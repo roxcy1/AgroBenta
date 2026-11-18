@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Ellipsis, Pencil, Trash2 } from 'lucide-react';
+import { Ellipsis, Pencil, UserCheck, UserX } from 'lucide-react';
 import type { AdminUser } from '../api/useUsers';
 
 interface UserActionsMenuProps {
@@ -9,7 +9,8 @@ interface UserActionsMenuProps {
   onToggle: () => void;
   onClose: () => void;
   onEdit: () => void;
-  onDelete: () => void;
+  onDeactivate: () => void;
+  onReactivate: () => void;
 }
 
 interface MenuPosition {
@@ -17,7 +18,7 @@ interface MenuPosition {
   left: number;
 }
 
-const MENU_WIDTH = 176;
+const MENU_WIDTH = 200;
 const MENU_HEIGHT = 88;
 const VIEWPORT_GUTTER = 8;
 
@@ -27,13 +28,15 @@ export default function UserActionsMenu({
   onToggle,
   onClose,
   onEdit,
-  onDelete,
+  onDeactivate,
+  onReactivate,
 }: UserActionsMenuProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const firstItemRef = useRef<HTMLButtonElement>(null);
   const [position, setPosition] = useState<MenuPosition>({ top: 0, left: 0 });
   const menuId = `user-actions-menu-${user.id}`;
+  const isDeactivated = user.status === 'deactivated';
 
   useLayoutEffect(() => {
     if (!isOpen) return;
@@ -102,10 +105,11 @@ export default function UserActionsMenu({
     };
   }, [isOpen, onClose]);
 
-  function chooseAction(action: 'edit' | 'delete') {
+  function chooseAction(action: 'edit' | 'status') {
     onClose();
     if (action === 'edit') onEdit();
-    else onDelete();
+    else if (isDeactivated) onReactivate();
+    else onDeactivate();
   }
 
   return (
@@ -146,12 +150,16 @@ export default function UserActionsMenu({
           </button>
           <button
             type="button"
-            className="users-actions-menu-item users-actions-menu-item--danger"
+            className={`users-actions-menu-item${isDeactivated ? '' : ' users-actions-menu-item--danger'}`}
             role="menuitem"
-            onClick={() => chooseAction('delete')}
+            onClick={() => chooseAction('status')}
           >
-            <Trash2 size={15} aria-hidden="true" />
-            <span>Delete User</span>
+            {isDeactivated ? (
+              <UserCheck size={15} aria-hidden="true" />
+            ) : (
+              <UserX size={15} aria-hidden="true" />
+            )}
+            <span>{isDeactivated ? 'Reactivate Account' : 'Deactivate Account'}</span>
           </button>
         </div>,
         document.body,

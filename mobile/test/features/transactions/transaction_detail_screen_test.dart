@@ -12,8 +12,11 @@ import 'package:agrobenta_mobile/features/offers/state/offer_scope.dart';
 import 'package:agrobenta_mobile/features/transactions/state/transaction_scope.dart';
 import 'package:agrobenta_mobile/features/transactions/views/transaction_detail_screen.dart';
 import 'package:agrobenta_mobile/features/transactions/views/transaction_status_screen.dart';
+import 'package:agrobenta_mobile/features/user_reports/state/user_report_scope.dart';
+import 'package:agrobenta_mobile/features/user_reports/view/report_user_screen.dart';
 import 'package:agrobenta_mobile/repositories/messaging_repository.dart';
 import 'package:agrobenta_mobile/repositories/transaction_repository.dart';
+import 'package:agrobenta_mobile/repositories/user_report_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -23,6 +26,7 @@ import '../../support/messaging_fakes.dart';
 import '../../support/livestock_type_fakes.dart';
 import '../../support/offer_fakes.dart';
 import '../../support/transaction_fakes.dart';
+import '../../support/user_report_fakes.dart';
 
 void main() {
   late FakeTokenStore tokenStore;
@@ -92,21 +96,29 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      AuthScope(
-        controller: authController,
-        child: MessagingScope(
-          repository: messaging.repository,
-          conversationsController: messaging.controller,
-          child: OfferScope(
-            repository: offerRepository,
-            child: TransactionScope(
-              repository: repository,
-              child: LivestockTypesScope(
-                repository: catalogRepository,
-                controller: catalogController,
-                child: MaterialApp(
-                  theme: AppTheme.light(),
-                  home: TransactionDetailScreen(transactionId: transactionId),
+      UserReportScope(
+        repository: UserReportRepository(
+          buildUserReportService(
+            tokenStore,
+            (_) async => userReportCreatedResponse(),
+          ),
+        ),
+        child: AuthScope(
+          controller: authController,
+          child: MessagingScope(
+            repository: messaging.repository,
+            conversationsController: messaging.controller,
+            child: OfferScope(
+              repository: offerRepository,
+              child: TransactionScope(
+                repository: repository,
+                child: LivestockTypesScope(
+                  repository: catalogRepository,
+                  controller: catalogController,
+                  child: MaterialApp(
+                    theme: AppTheme.light(),
+                    home: TransactionDetailScreen(transactionId: transactionId),
+                  ),
                 ),
               ),
             ),
@@ -751,6 +763,22 @@ void main() {
     // The ready screen is the settled state; the loading copy is not present.
     expect(find.text('Loading transaction'), findsNothing);
     expect(find.text('Transaction total'), findsOneWidget);
+  });
+
+  testWidgets('the counterparty report action opens the shared form', (
+    WidgetTester tester,
+  ) async {
+    await pumpDetail(
+      tester,
+      (_) async => transactionDetailResponse(),
+    );
+
+    await tester.tap(find.text('Report User'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ReportUserScreen), findsOneWidget);
+    expect(find.text('Reported user'), findsOneWidget);
+    expect(find.text('Rizal Farms'), findsWidgets);
   });
 }
 

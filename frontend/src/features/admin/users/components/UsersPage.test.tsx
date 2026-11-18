@@ -8,6 +8,7 @@ import api from '../../../../lib/api';
 import { ToastProvider } from '../../../../lib/toast/ToastProvider';
 import { AuthProvider } from '../../../auth/AuthProvider';
 import type { AdminUser } from '../api/useUsers';
+import type { AdminUserReport } from '../api/useUserReports';
 import { UsersPage } from './UsersPage';
 
 function makeUser(id: number, overrides: Partial<AdminUser> = {}): AdminUser {
@@ -18,6 +19,12 @@ function makeUser(id: number, overrides: Partial<AdminUser> = {}): AdminUser {
     role: 'user',
     seller_capability: 'buyer',
     email_verified_at: null,
+    status: 'active',
+    deactivated_at: null,
+    deactivation_reason: null,
+    deactivated_by: null,
+    reports_count: 0,
+    pending_transactions_count: 0,
     created_at: '2026-10-01T00:00:00.000000Z',
     updated_at: '2026-10-01T00:00:00.000000Z',
     ...overrides,
@@ -29,7 +36,26 @@ function axiosResponse(data: unknown): AxiosResponse {
 }
 
 let users: AdminUser[];
+let userReports: AdminUserReport[];
 let listRequests: string[];
+
+function makeReport(id: number): AdminUserReport {
+  return {
+    id,
+    reason: 'scam_fraud',
+    reason_label: 'Scam/Fraud',
+    description: 'Asked for payment outside the platform.',
+    status: 'pending',
+    status_label: 'Pending',
+    reporter: { id: 10 + id, name: `Reporter ${id}` },
+    reported_user: { id: 20 + id, name: `Reported ${id}`, status: 'active' },
+    has_evidence: false,
+    reviewer: null,
+    reviewed_at: null,
+    admin_note: null,
+    created_at: '2026-11-01T00:00:00.000000Z',
+  };
+}
 
 function responseFor(url: string) {
   const parsed = new URL(url, 'http://localhost');
@@ -41,6 +67,23 @@ function responseFor(url: string) {
       data: {
         verifications: [],
         pagination: { current_page: 1, last_page: 1, per_page: 100, total: 0 },
+      },
+    };
+  }
+
+  if (parsed.pathname === '/admin/user-reports') {
+    const perPage = Number(params.get('per_page') ?? 15);
+    const page = Number(params.get('page') ?? 1);
+    return {
+      success: true,
+      data: {
+        reports: userReports.slice((page - 1) * perPage, page * perPage),
+        pagination: {
+          current_page: page,
+          last_page: Math.max(1, Math.ceil(userReports.length / perPage)),
+          per_page: perPage,
+          total: userReports.length,
+        },
       },
     };
   }
@@ -133,6 +176,7 @@ describe('UsersPage user actions', () => {
   beforeEach(() => {
     localStorage.removeItem('admin_token');
     users = [makeUser(3, { name: 'Lea Mercado', email: 'lea@example.com' })];
+    userReports = [];
     listRequests = [];
     vi.spyOn(api, 'get').mockImplementation(async (url) =>
       axiosResponse(responseFor(String(url))) as never,
@@ -146,13 +190,13 @@ describe('UsersPage user actions', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps the user name details action and offers only Edit and Delete in the menu', async () => {
+  it('keeps the user name details action and offers Edit and Deactivate in the menu', async () => {
     renderUsersPage();
     const menu = await openActions(users[0]);
 
     expect(
       within(menu).getAllByRole('menuitem').map((item) => item.textContent?.trim()),
-    ).toEqual(['Edit User', 'Delete User']);
+    ).toEqual(['Edit User', 'Deactivate Account']);
 
     fireEvent.click(screen.getByRole('button', { name: `Actions for ${users[0].name}` }));
     fireEvent.click(screen.getByText('Lea Mercado'));
@@ -292,41 +336,46 @@ describe('UsersPage user actions', () => {
     expect(api.put).not.toHaveBeenCalled();
   });
 
-  it('confirms deletion with the user identity, preserves cancellation, and refreshes the table', async () => {
+  it('deactivates with a required reason and refreshes the table', async () => {
     renderUsersPage();
     await openActions(users[0]);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete User' }));
-    const dialog = await screen.findByRole('alertdialog', { name: 'Delete User' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Deactivate Account' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Deactivate Account' });
 
     expect(within(dialog).getByText('Lea Mercado')).not.toBeNull();
     expect(within(dialog).getByText('lea@example.com')).not.toBeNull();
-    expect(within(dialog).getByText(/transaction history will be retained/i)).not.toBeNull();
+    expect(within(dialog).getByText(/transaction history are retained/i)).not.toBeNull();
+    const confirm = within(dialog).getByRole('button', { name: 'Confirm Deactivation' });
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(api.delete).not.toHaveBeenCalled();
 
     await openActions(users[0]);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete User' }));
-    const confirmation = await screen.findByRole('alertdialog', { name: 'Delete User' });
-    vi.spyOn(api, 'delete').mockImplementation(async (url) => {
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Deactivate Account' }));
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Deactivate Account' });
+    fireEvent.change(within(confirmation).getByLabelText('Administrative reason'), {
+      target: { value: 'Confirmed policy violation.' },
+    });
+    vi.spyOn(api, 'delete').mockImplementation(async (url, config) => {
       expect(url).toBe('/admin/users/3');
-      const deletedUser = users[0];
-      users = [];
-      return axiosResponse({ success: true, message: 'User deleted.', data: deletedUser }) as never;
+      expect(config).toEqual({ data: { reason: 'Confirmed policy violation.' } });
+      const deactivatedUser = { ...users[0], status: 'deactivated' as const };
+      users = [deactivatedUser];
+      return axiosResponse({
+        success: true,
+        message: 'User deactivated.',
+        data: deactivatedUser,
+      }) as never;
     });
 
-    fireEvent.click(within(confirmation).getByRole('button', { name: 'Confirm Delete' }));
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Confirm Deactivation' }));
     await waitFor(() => expect(api.delete).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('No users available yet.')).not.toBeNull();
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(await screen.findByRole('status')).not.toBeNull();
-    const totalUsersCard = screen.getByText('Total Users').closest('.lv-stat-card');
-    await waitFor(() => {
-      expect(totalUsersCard?.querySelector('.lv-stat-value')?.textContent).toBe('0');
-    });
   });
 
-  it('shows a server conflict when deletion fails and keeps the confirmation open', async () => {
+  it('shows a server conflict when deactivation fails and keeps the confirmation open', async () => {
     vi.spyOn(api, 'delete').mockRejectedValueOnce(Object.assign(new Error('Conflict'), {
       response: {
         status: 409,
@@ -335,12 +384,15 @@ describe('UsersPage user actions', () => {
     }));
     renderUsersPage();
     await openActions(users[0]);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete User' }));
-    const dialog = await screen.findByRole('alertdialog', { name: 'Delete User' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm Delete' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Deactivate Account' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Deactivate Account' });
+    fireEvent.change(within(dialog).getByLabelText('Administrative reason'), {
+      target: { value: 'Confirmed policy violation.' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm Deactivation' }));
 
     expect(await screen.findByRole('alert')).not.toBeNull();
-    expect(screen.getByRole('alertdialog', { name: 'Delete User' })).not.toBeNull();
+    expect(screen.getByRole('alertdialog', { name: 'Deactivate Account' })).not.toBeNull();
   });
 
   it('keeps search and pagination behavior available after adding row actions', async () => {
@@ -350,6 +402,9 @@ describe('UsersPage user actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Go to next page' }));
     expect(await screen.findByText('User 16')).not.toBeNull();
+    const secondPageRow = screen.getByText('User 16').closest('tr');
+    expect(secondPageRow).not.toBeNull();
+    expect(within(secondPageRow as HTMLElement).getByText('16')).not.toBeNull();
     await waitFor(() => expect(listRequests.some((url) => url.includes('page=2'))).toBe(true));
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search users by name or email' }), {
@@ -392,12 +447,13 @@ describe('UsersPage user actions', () => {
     await screen.findByText('lea@example.com');
 
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
+      'No.',
       'Name',
       'Email',
       'Role',
       'Seller Capability',
       'Verification Status',
-      'Created At',
+      'Reports',
       'Actions',
     ]);
     expect(screen.getByText('Lea Mercado').closest('td')?.getAttribute('data-label')).toBe('Name');
@@ -429,5 +485,70 @@ describe('UsersPage user actions', () => {
       expect(listRequests.some((url) => url.includes('seller_capability=seller'))).toBe(true);
     });
     expect(screen.getByText('Lea Seller')).not.toBeNull();
+  });
+
+  it('shows the total reports badge and renders the User Reports tab', async () => {
+    userReports = [makeReport(1), makeReport(2)];
+    renderUsersPage();
+    await screen.findByText('Lea Mercado');
+
+    const reportsTab = screen.getByRole('tab', { name: /User Reports/ });
+    expect(reportsTab.textContent).toContain('2');
+
+    fireEvent.click(reportsTab);
+    expect(await screen.findByText('Reporter 1')).not.toBeNull();
+    expect(screen.getByText('Reported 2')).not.toBeNull();
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
+      'Reporter',
+      'Reported User',
+      'Reason',
+      'Date',
+      'Status',
+      'Action',
+    ]);
+    expect(screen.getByRole('button', { name: 'Review report 1' })).not.toBeNull();
+  });
+
+  it('offers Reactivate Account for a deactivated user', async () => {
+    users = [makeUser(4, {
+      name: 'Deactivated User',
+      status: 'deactivated',
+      deactivated_at: '2026-11-10T00:00:00.000000Z',
+      deactivation_reason: 'Temporary review.',
+    })];
+    renderUsersPage();
+    const menu = await openActions(users[0]);
+
+    expect(
+      within(menu).getAllByRole('menuitem').map((item) => item.textContent?.trim()),
+    ).toEqual(['Edit User', 'Reactivate Account']);
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Reactivate Account' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Reactivate Account' });
+    const confirm = within(dialog).getByRole('button', { name: 'Confirm Reactivation' });
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText('Administrative reason'), {
+      target: { value: 'Review completed.' },
+    });
+    expect((confirm as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('sends the active account status by default and changes it through the filter', async () => {
+    renderUsersPage();
+    await screen.findByText('Lea Mercado');
+
+    await waitFor(() => {
+      expect(listRequests.some((url) => url.includes('status=active'))).toBe(true);
+    });
+
+    fireEvent.change(screen.getByLabelText('Filter by account status'), {
+      target: { value: 'deactivated' },
+    });
+
+    await waitFor(() => {
+      expect(listRequests.some((url) => url.includes('status=deactivated'))).toBe(true);
+    });
   });
 });

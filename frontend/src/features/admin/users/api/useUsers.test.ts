@@ -11,6 +11,12 @@ function makeUser(id: number): AdminUser {
     role: 'user',
     seller_capability: 'buyer',
     email_verified_at: null,
+    status: 'active',
+    deactivated_at: null,
+    deactivation_reason: null,
+    deactivated_by: null,
+    reports_count: 0,
+    pending_transactions_count: 0,
     created_at: '2026-10-01T00:00:00.000000Z',
     updated_at: '2026-10-01T00:00:00.000000Z',
   };

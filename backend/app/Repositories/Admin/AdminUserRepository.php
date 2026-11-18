@@ -3,6 +3,7 @@
 namespace App\Repositories\Admin;
 
 use App\Enums\SellerCapability;
+use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -15,6 +16,14 @@ class AdminUserRepository
     public function findForUpdate(int $id): ?User
     {
         return User::query()->whereKey($id)->lockForUpdate()->first();
+    }
+
+    public function findTrashedForUpdate(int $id): ?User
+    {
+        return User::withTrashed()
+            ->whereKey($id)
+            ->lockForUpdate()
+            ->first();
     }
 
     /**
@@ -41,6 +50,14 @@ class AdminUserRepository
         return $user->refresh();
     }
 
+    /** Persist the administrative reason and actor before the soft delete. */
+    public function markDeactivated(User $user, User $actor, string $reason): void
+    {
+        $user->deactivation_reason = $reason;
+        $user->deactivated_by = $actor->getKey();
+        $user->save();
+    }
+
     /** Revoke all API and database-session credentials before deactivation. */
     public function revokeCredentials(User $user): void
     {
@@ -55,20 +72,59 @@ class AdminUserRepository
         $user->delete();
     }
 
+    public function restore(User $user): void
+    {
+        $user->restore();
+    }
+
+    /**
+     * Load the aggregate fields the admin user projection needs.
+     */
+    public function loadMetrics(User $user): User
+    {
+        return $user
+            ->loadCount($this->metricCounts())
+            ->loadMissing('deactivatedBy:id,name');
+    }
+
     public function list(
         ?string $search = null,
         ?string $role = null,
         ?string $sellerCapability = null,
+        ?string $status = null,
         int $perPage = 15,
     ): LengthAwarePaginator {
-        $query = User::query();
+        $query = match ($status) {
+            'deactivated' => User::onlyTrashed(),
+            'all' => User::withTrashed(),
+            default => User::query(),
+        };
+
+        $query
+            ->withCount($this->metricCounts())
+            ->with('deactivatedBy:id,name');
 
         $this->applySearch($query, $search);
         $this->applyFilters($query, $role, $sellerCapability);
 
         return $query
             ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate($perPage);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function metricCounts(): array
+    {
+        return [
+            'receivedReports as reports_count',
+            'transactionsAsBuyer as pending_buyer_transactions_count' => fn (Builder $query): Builder => $query
+                ->where('status', TransactionStatus::Pending),
+            'transactionsAsSeller as pending_seller_transactions_count' => fn (Builder $query): Builder => $query
+                ->where('status', TransactionStatus::Pending),
+        ];
     }
 
     private function applySearch(Builder $query, ?string $search): void

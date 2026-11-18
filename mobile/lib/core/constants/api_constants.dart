@@ -720,6 +720,22 @@ abstract final class SellerActivityEndpoints {
   static const int defaultPageSize = 15;
 }
 
+/// User-report endpoints, relative to the API root.
+///
+/// One authenticated mobile write path. The reporter is the token owner; the
+/// reported user, reason, description and optional evidence are the only body
+/// fields. Account status and moderation fields are server-owned.
+abstract final class UserReportEndpoints {
+  /// `POST` - file one report. 201, plain envelope.
+  static const String create = '/reports';
+
+  /// The multipart field name for the optional screenshot.
+  static const String evidenceField = 'evidence';
+
+  /// Largest evidence file the client accepts; the server enforces 5 MB too.
+  static const int maxEvidenceBytes = 5 * 1024 * 1024;
+}
+
 /// Purchase-offer endpoints, relative to the API root.
 ///
 /// These are the routes implemented in `backend/routes/api.php` under

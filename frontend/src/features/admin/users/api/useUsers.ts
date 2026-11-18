@@ -8,6 +8,12 @@ export interface AdminUser {
   role: 'user' | 'admin';
   seller_capability: 'buyer' | 'seller';
   email_verified_at: string | null;
+  status: 'active' | 'deactivated';
+  deactivated_at: string | null;
+  deactivation_reason: string | null;
+  deactivated_by: { id: number; name: string | null } | null;
+  reports_count: number;
+  pending_transactions_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +44,7 @@ export interface UsersParams {
   search?: string;
   role?: string;
   seller_capability?: string;
+  status?: 'active' | 'deactivated' | 'all';
   page?: number;
   per_page?: number;
 }
@@ -61,6 +68,7 @@ export async function fetchUsers(params: UsersParams): Promise<UsersData> {
   if (params.search) query.set('search', params.search);
   if (params.role) query.set('role', params.role);
   if (params.seller_capability) query.set('seller_capability', params.seller_capability);
+  if (params.status) query.set('status', params.status);
   if (params.page) query.set('page', String(params.page));
   if (params.per_page) query.set('per_page', String(params.per_page));
 
@@ -154,8 +162,18 @@ export async function updateAdminUser(input: UpdateAdminUserInput): Promise<Admi
   return response.data.data;
 }
 
-export async function deleteAdminUser(id: number): Promise<AdminUser> {
-  const response = await api.delete<UserMutationResponse>(`/admin/users/${id}`);
+export async function deleteAdminUser(id: number, reason: string): Promise<AdminUser> {
+  const response = await api.delete<UserMutationResponse>(`/admin/users/${id}`, {
+    data: { reason },
+  });
+
+  return response.data.data;
+}
+
+export async function reactivateAdminUser(id: number, reason: string): Promise<AdminUser> {
+  const response = await api.post<UserMutationResponse>(`/admin/users/${id}/reactivate`, {
+    reason,
+  });
 
   return response.data.data;
 }
@@ -181,7 +199,16 @@ export function useDeleteAdminUser() {
   const invalidateUsers = useInvalidateAdminUsers();
 
   return useMutation({
-    mutationFn: deleteAdminUser,
+    mutationFn: ({ id, reason }: { id: number; reason: string }) => deleteAdminUser(id, reason),
+    onSuccess: invalidateUsers,
+  });
+}
+
+export function useReactivateAdminUser() {
+  const invalidateUsers = useInvalidateAdminUsers();
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) => reactivateAdminUser(id, reason),
     onSuccess: invalidateUsers,
   });
 }

@@ -13,6 +13,8 @@ import '../../livestock_types/state/livestock_types_state.dart';
 import '../../marketplace/state/marketplace_scope.dart';
 import '../../marketplace/views/listing_detail_screen.dart';
 import '../../marketplace/widgets/marketplace_state_views.dart';
+import '../../auth/state/auth_scope.dart';
+import '../../user_reports/view/report_user_screen.dart';
 import '../state/seller_profile_controller.dart';
 import '../state/seller_profile_state.dart';
 import '../widgets/seller_listings_tab.dart';
@@ -97,10 +99,57 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     );
   }
 
+  /// Opens the shared report form for this public seller.
+  void _reportSeller() {
+    final int? viewerId = AuthScope.maybeOf(context)?.state.user?.id;
+    if (viewerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in again to report this seller.')),
+      );
+      return;
+    }
+    if (viewerId == widget.sellerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot report your own account.')),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ReportUserScreen(
+          reportedUserId: widget.sellerId,
+          reportedUserName: _controller.state.profile?.name ?? 'Seller',
+          reportedUserRole: 'Seller',
+          currentUserId: viewerId,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final int? viewerId = AuthScope.maybeOf(context)?.state.user?.id;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Seller Profile')),
+      appBar: AppBar(
+        title: const Text('Seller Profile'),
+        actions: <Widget>[
+          PopupMenuButton<String>(
+            tooltip: 'Seller options',
+            onSelected: (String value) {
+              if (value == 'report') _reportSeller();
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                value: 'report',
+                enabled: viewerId != null && viewerId != widget.sellerId,
+                child: const Text('Report Seller'),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: SafeArea(
         top: false,
         child: ListenableBuilder(

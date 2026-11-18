@@ -30,6 +30,9 @@ const STATUS_META: Record<string, StatusMeta> = {
   completed: { label: 'Completed', tone: 'success', chartColor: 'var(--color-success)' },
   cancelled: { label: 'Cancelled', tone: 'danger', chartColor: 'var(--color-danger)' },
   rejected: { label: 'Rejected', tone: 'danger', chartColor: 'var(--color-danger)' },
+  deactivated: { label: 'Deactivated', tone: 'danger', chartColor: 'var(--color-danger)' },
+  dismissed: { label: 'Dismissed', tone: 'neutral', chartColor: 'var(--color-text-secondary)' },
+  actioned: { label: 'Actioned', tone: 'success', chartColor: 'var(--color-success)' },
 };
 
 const UNKNOWN: Omit<StatusMeta, 'label'> = {

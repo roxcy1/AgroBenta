@@ -486,7 +486,7 @@ class UserManagementTest extends TestCase
             'name' => 'Changed',
             'email' => $user->email,
         ])->assertUnauthorized();
-        $this->deleteJson("/api/admin/users/{$user->id}")->assertUnauthorized();
+        $this->deleteJson("/api/admin/users/{$user->id}", ['reason' => 'Policy violation confirmed.'])->assertUnauthorized();
 
         $regular = User::factory()->create();
         $regularToken = $regular->createToken('mobile', ['mobile'])->plainTextToken;
@@ -496,13 +496,13 @@ class UserManagementTest extends TestCase
                 'email' => $user->email,
             ])->assertForbidden();
         $this->withHeader('Authorization', "Bearer {$regularToken}")
-            ->deleteJson("/api/admin/users/{$user->id}")->assertForbidden();
+            ->deleteJson("/api/admin/users/{$user->id}", ['reason' => 'Policy violation confirmed.'])->assertForbidden();
     }
 
     public function test_admin_cannot_delete_their_own_account(): void
     {
         $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
-            ->deleteJson("/api/admin/users/{$this->admin->id}")
+            ->deleteJson("/api/admin/users/{$this->admin->id}", ['reason' => 'Policy violation confirmed.'])
             ->assertStatus(409)
             ->assertJsonPath('message', 'Administrators cannot delete their own account.');
 
@@ -518,7 +518,7 @@ class UserManagementTest extends TestCase
         $otherAdminToken = $otherAdmin->createToken('admin_token', ['admin'])->plainTextToken;
 
         $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
-            ->deleteJson("/api/admin/users/{$otherAdmin->id}")
+            ->deleteJson("/api/admin/users/{$otherAdmin->id}", ['reason' => 'Policy violation confirmed.'])
             ->assertOk();
 
         $this->assertSoftDeleted('users', ['id' => $otherAdmin->id]);
@@ -534,7 +534,7 @@ class UserManagementTest extends TestCase
         $service = $this->app->make(AdminUserService::class);
 
         try {
-            $service->deleteUser($this->admin, $otherActor);
+            $service->deleteUser($this->admin, $otherActor, 'Policy violation confirmed.');
             $this->fail('The last active administrator should be protected.');
         } catch (HttpException $exception) {
             $this->assertSame(409, $exception->getStatusCode());
@@ -602,7 +602,7 @@ class UserManagementTest extends TestCase
         $adminToken = $this->adminToken();
 
         $this->withHeader('Authorization', "Bearer {$adminToken}")
-            ->deleteJson("/api/admin/users/{$user->id}")
+            ->deleteJson("/api/admin/users/{$user->id}", ['reason' => 'Policy violation confirmed.'])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.id', $user->id);
@@ -639,7 +639,7 @@ class UserManagementTest extends TestCase
             ->assertJsonPath('data.pagination.total', 2);
 
         $this->withHeader('Authorization', "Bearer {$adminToken}")
-            ->deleteJson("/api/admin/users/{$user->id}")
+            ->deleteJson("/api/admin/users/{$user->id}", ['reason' => 'Policy violation confirmed.'])
             ->assertNotFound();
     }
 
@@ -661,7 +661,7 @@ class UserManagementTest extends TestCase
         $buyerToken = $buyer->createToken('mobile', ['mobile'])->plainTextToken;
 
         $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
-            ->deleteJson("/api/admin/users/{$seller->id}")
+            ->deleteJson("/api/admin/users/{$seller->id}", ['reason' => 'Policy violation confirmed.'])
             ->assertOk();
 
         $this->withHeader('Authorization', "Bearer {$buyerToken}")
@@ -712,7 +712,7 @@ class UserManagementTest extends TestCase
         $buyerToken = $buyer->createToken('mobile', ['mobile'])->plainTextToken;
 
         $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
-            ->deleteJson("/api/admin/users/{$seller->id}")
+            ->deleteJson("/api/admin/users/{$seller->id}", ['reason' => 'Policy violation confirmed.'])
             ->assertOk();
 
         $this->withHeader('Authorization', "Bearer {$buyerToken}")
@@ -729,7 +729,7 @@ class UserManagementTest extends TestCase
         $replacement = User::factory()->create();
 
         $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
-            ->deleteJson("/api/admin/users/{$deleted->id}")
+            ->deleteJson("/api/admin/users/{$deleted->id}", ['reason' => 'Policy violation confirmed.'])
             ->assertOk();
 
         $this->withHeader('Authorization', "Bearer {$this->adminToken()}")

@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\DeactivateUserRequest;
 use App\Http\Requests\Admin\ListUsersRequest;
+use App\Http\Requests\Admin\ReactivateUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Http\Resources\AdminUserResource;
 use App\Models\User;
 use App\Services\Admin\AdminUserService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
@@ -27,6 +28,7 @@ class UserController extends Controller
             search: $request->validated('search'),
             role: $request->validated('role'),
             sellerCapability: $request->validated('seller_capability'),
+            status: $request->validated('status'),
             perPage: $request->validated('per_page', 15),
         );
 
@@ -49,13 +51,14 @@ class UserController extends Controller
      *
      * Deep-link support: the activity feed links to the acting user by id. The
      * users surface has no separate detail screen, so the list resolves this
-     * record to focus on it rather than presenting a dead link.
+     * record to focus on it rather than presenting a dead link. Deactivated
+     * accounts remain readable through the explicit trashed route binding.
      */
     public function show(User $user): JsonResponse
     {
         return response()->json([
             'success' => true,
-            'data' => new AdminUserResource($user),
+            'data' => new AdminUserResource($this->users->showUser($user)),
         ], 200);
     }
 
@@ -75,15 +78,35 @@ class UserController extends Controller
         ], 200);
     }
 
-    /** Soft-delete the account and revoke its active credentials. */
-    public function destroy(Request $request, User $user): JsonResponse
+    /** Deactivate the account with a required administrative reason. */
+    public function destroy(DeactivateUserRequest $request, User $user): JsonResponse
     {
-        $deleted = $this->users->deleteUser($user, $request->user());
+        $deactivated = $this->users->deleteUser(
+            $user,
+            $request->user(),
+            $request->validated('reason'),
+        );
 
         return response()->json([
             'success' => true,
-            'message' => 'User deleted.',
-            'data' => new AdminUserResource($deleted),
+            'message' => 'User deactivated.',
+            'data' => new AdminUserResource($deactivated),
+        ], 200);
+    }
+
+    /** Restore a deactivated account with a required administrative reason. */
+    public function reactivate(ReactivateUserRequest $request, User $user): JsonResponse
+    {
+        $reactivated = $this->users->reactivateUser(
+            $user,
+            $request->user(),
+            $request->validated('reason'),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User reactivated.',
+            'data' => new AdminUserResource($reactivated),
         ], 200);
     }
 }

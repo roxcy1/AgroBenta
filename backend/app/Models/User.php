@@ -9,6 +9,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -96,5 +97,29 @@ class User extends Authenticatable
     public function receivedMessages(): HasMany
     {
         return $this->hasMany(Message::class, 'receiver_id');
+    }
+
+    /**
+     * Reports this account filed against other users.
+     */
+    public function sentReports(): HasMany
+    {
+        return $this->hasMany(UserReport::class, 'reporter_id');
+    }
+
+    /**
+     * Reports other users filed against this account.
+     */
+    public function receivedReports(): HasMany
+    {
+        return $this->hasMany(UserReport::class, 'reported_user_id');
+    }
+
+    /**
+     * The administrator who last deactivated this account.
+     */
+    public function deactivatedBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'deactivated_by')->withTrashed();
     }
 }

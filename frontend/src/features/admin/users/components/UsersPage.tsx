@@ -5,6 +5,7 @@ import { UsersRound } from 'lucide-react';
 import { parsePositiveInt, resolveDeepLinkedRecord } from '../../../../lib/queryParams';
 import { useAdminUser, useUserCounts, useUsers } from '../api/useUsers';
 import type { AdminUser } from '../api/useUsers';
+import { useUserReportCount } from '../api/useUserReports';
 import { useUserVerificationsMap } from '../api/useUserVerifications';
 import { PAGE_ELLIPSIS, buildPageWindow } from '../pagination';
 import { Header } from '../../components/Header';
@@ -13,10 +14,11 @@ import type { UserCardKey } from './UserStatsCards';
 import UserDetailsDialog from './UserDetailsDialog';
 import EditUserDialog from './EditUserDialog';
 import DeleteUserDialog from './DeleteUserDialog';
+import ReactivateUserDialog from './ReactivateUserDialog';
 import UserActionsMenu from './UserActionsMenu';
+import UserReportsTab from './UserReportsTab';
 import VerificationDetailsDialog from '../../seller-verification/components/VerificationDetailsDialog';
 import { statusBadgeClass, statusLabel } from '../../../../lib/status';
-import { formatDate } from '../../../../lib/format';
 import { emptyListMessage } from '../../../../lib/emptyState';
 import './UsersPage.css';
 
@@ -34,10 +36,15 @@ const SELLER_OPTIONS = [
 
 const ROWS_PER_PAGE_OPTIONS = [10, 15, 25, 50, 100] as const;
 
+type AccountStatusFilter = 'active' | 'deactivated' | 'all';
+type UsersViewTab = 'users' | 'reports';
+
 export function UsersPage() {
+  const [activeTab, setActiveTab] = useState<UsersViewTab>('users');
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [sellerFilter, setSellerFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<AccountStatusFilter>('active');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(15);
   const [searchInput, setSearchInput] = useState('');
@@ -49,6 +56,7 @@ export function UsersPage() {
   const [actionsUserId, setActionsUserId] = useState<number | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
+  const [reactivatingUser, setReactivatingUser] = useState<AdminUser | null>(null);
   const [searchParams] = useSearchParams();
   const linkedUserId = parsePositiveInt(searchParams.get('user'));
   const [dismissedLinkId, setDismissedLinkId] = useState<number | null>(null);
@@ -71,6 +79,7 @@ export function UsersPage() {
     search: effectiveSearch || undefined,
     role: roleFilter || undefined,
     seller_capability: sellerFilter || undefined,
+    status: statusFilter,
     page,
     per_page: perPage,
   });
@@ -81,6 +90,7 @@ export function UsersPage() {
   });
 
   const { data: counts } = useUserCounts();
+  const { data: reportCount } = useUserReportCount();
   const pageHeader = (
     <Header
       title="Users"
@@ -89,6 +99,32 @@ export function UsersPage() {
       profileRole="Administrator"
       showProfileChevron
     />
+  );
+
+  const viewTabs = (
+    <div className="users-view-tabs" role="tablist" aria-label="User management views">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === 'users'}
+        className={`users-view-tab${activeTab === 'users' ? ' users-view-tab--active' : ''}`}
+        onClick={() => setActiveTab('users')}
+      >
+        Users
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === 'reports'}
+        className={`users-view-tab${activeTab === 'reports' ? ' users-view-tab--active' : ''}`}
+        onClick={() => setActiveTab('reports')}
+      >
+        User Reports
+        <span className="users-view-tab-badge" aria-label={`${reportCount ?? 0} total reports`}>
+          {reportCount ?? '\u2014'}
+        </span>
+      </button>
+    </div>
   );
 
   const handleSearch = () => {
@@ -109,6 +145,11 @@ export function UsersPage() {
 
   const handleSellerChange = (value: string) => {
     setSellerFilter(value);
+    setPage(1);
+  };
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value as AccountStatusFilter);
     setPage(1);
   };
 
@@ -144,6 +185,7 @@ export function UsersPage() {
       setRoleFilter('');
       setSellerFilter('');
     }
+    setStatusFilter('active');
     setPage(1);
   };
 
@@ -159,6 +201,7 @@ export function UsersPage() {
     setSearch('');
     setRoleFilter('');
     setSellerFilter('');
+    setStatusFilter('active');
     setVerificationFilter('');
     setPage(1);
     if (linkedUserId !== null) setDismissedLinkId(linkedUserId);
@@ -210,11 +253,12 @@ export function UsersPage() {
     }
   };
 
-  if (isLoading || verificationsLoading) {
+  if (activeTab === 'users' && (isLoading || verificationsLoading)) {
     return (
       <div className="users-page-shell">
         {pageHeader}
         <div className="users-content lv-content">
+          {viewTabs}
           <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
           <div className="users-loading">
             <div className="loading-spinner" />
@@ -225,11 +269,12 @@ export function UsersPage() {
     );
   }
 
-  if (error) {
+  if (activeTab === 'users' && error) {
     return (
       <div className="users-page-shell">
         {pageHeader}
         <div className="users-content lv-content">
+          {viewTabs}
           <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
           <div className="users-error">
             <p className="users-error-text">Failed to load users.</p>
@@ -263,7 +308,8 @@ export function UsersPage() {
   }
 
   const filtersActive = Boolean(
-    search || deepLinkedEmail || roleFilter || sellerFilter || verificationFilter,
+    search || deepLinkedEmail || roleFilter || sellerFilter || statusFilter !== 'active'
+      || verificationFilter,
   );
   return (
     <>
@@ -271,6 +317,9 @@ export function UsersPage() {
         {pageHeader}
 
         <div className="users-content lv-content">
+        {viewTabs}
+        {activeTab === 'users' ? (
+          <>
         <UserStatsCards counts={counts} activeKey={activeCardKey} onSelect={handleCardSelect} />
 
         <div className="users-controls lv-controls">
@@ -319,6 +368,17 @@ export function UsersPage() {
                     {opt.label}
                   </option>
                 ))}
+              </select>
+
+              <select
+                className="users-filter-select lv-filter-select"
+                aria-label="Filter by account status"
+                value={statusFilter}
+                onChange={(e) => handleStatusChange(e.target.value)}
+              >
+                <option value="active">Active Accounts</option>
+                <option value="deactivated">Deactivated Accounts</option>
+                <option value="all">All Accounts</option>
               </select>
 
               <select
@@ -396,20 +456,26 @@ export function UsersPage() {
                 <table className="users-table lv-table">
                   <thead>
                     <tr>
+                      <th>No.</th>
                       <th>Name</th>
                       <th>Email</th>
                       <th>Role</th>
                       <th>Seller Capability</th>
                       <th>Verification Status</th>
-                      <th>Created At</th>
+                      <th>Reports</th>
                       <th className="users-actions-heading">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {displayUsers.map((user) => {
+                    {displayUsers.map((user, index) => {
                       const v = verificationMap.get(user.id);
                       const vStatus = v?.status ?? null;
                       const vLabel = vStatus ? statusLabel(vStatus) : '—';
+                      const rowNumber =
+                        ((pagination?.current_page ?? 1) - 1)
+                        * (pagination?.per_page ?? perPage)
+                        + index
+                        + 1;
                       return (
                         <tr
                           key={user.id}
@@ -419,7 +485,13 @@ export function UsersPage() {
                           onClick={() => setDetailsUser(user)}
                           onKeyDown={(event) => handleRowKeyDown(event, user)}
                         >
-                          <td className="users-name-cell lv-name-cell" data-label="Name" title={user.name}>{user.name}</td>
+                          <td className="users-number-cell" data-label="No.">{rowNumber}</td>
+                          <td className="users-name-cell lv-name-cell" data-label="Name" title={user.name}>
+                            <span>{user.name}</span>
+                            {user.status === 'deactivated' && (
+                              <span className="users-badge users-badge--deactivated">Deactivated</span>
+                            )}
+                          </td>
                           <td className="users-email-cell" data-label="Email" title={user.email}>{user.email}</td>
                           <td data-label="Role">
                             <span className={`users-badge users-badge--${user.role === 'admin' ? 'admin' : 'user'}`}>
@@ -454,7 +526,9 @@ export function UsersPage() {
                               <span className="users-date-cell">—</span>
                             )}
                           </td>
-                          <td className="users-date-cell" data-label="Created At">{formatDate(user.created_at)}</td>
+                          <td className="users-report-count-cell" data-label="Reports">
+                            {user.reports_count}
+                          </td>
                           <td
                             className="users-actions-cell"
                             data-label="Actions"
@@ -468,7 +542,8 @@ export function UsersPage() {
                               }
                               onClose={() => setActionsUserId(null)}
                               onEdit={() => setEditingUser(user)}
-                              onDelete={() => setDeletingUser(user)}
+                              onDeactivate={() => setDeletingUser(user)}
+                              onReactivate={() => setReactivatingUser(user)}
                             />
                           </td>
                         </tr>
@@ -551,6 +626,10 @@ export function UsersPage() {
             )}
           </>
         )}
+          </>
+        ) : (
+          <UserReportsTab />
+        )}
         </div>
       </div>
 
@@ -582,9 +661,18 @@ export function UsersPage() {
           key={deletingUser.id}
           user={deletingUser}
           onClose={() => setDeletingUser(null)}
-          onDeleted={() => {
+          onDeactivated={() => {
             if (data?.users.length === 1 && page > 1) setPage(page - 1);
           }}
+        />
+      )}
+
+      {reactivatingUser !== null && (
+        <ReactivateUserDialog
+          key={reactivatingUser.id}
+          user={reactivatingUser}
+          onClose={() => setReactivatingUser(null)}
+          onReactivated={() => undefined}
         />
       )}
     </>
