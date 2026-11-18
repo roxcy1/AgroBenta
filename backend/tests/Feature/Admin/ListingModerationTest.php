@@ -4,8 +4,11 @@ namespace Tests\Feature\Admin;
 
 use App\Enums\ListingStatus;
 use App\Enums\SellerCapability;
+use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
+use App\Models\Activity;
 use App\Models\Listing;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\ListingApproved;
 use App\Notifications\ListingRejected;
@@ -146,6 +149,43 @@ class ListingModerationTest extends TestCase
         return $body === []
             ? $this->postJson($path)
             : $this->postJson($path, $body);
+    }
+
+    /**
+     * Assert a rejected reactivation leaves listing, transaction and audit
+     * rows exactly as they were before the attempt.
+     */
+    private function assertAdminRestoreRefusedWithoutMutation(Listing $listing): void
+    {
+        $before = $listing->fresh();
+        $activityIds = Activity::query()->pluck('id')->all();
+        $transactions = Transaction::query()
+            ->where('listing_id', $listing->getKey())
+            ->orderBy('id')
+            ->get()
+            ->map(static fn (Transaction $transaction): array => $transaction->getAttributes())
+            ->all();
+
+        $this->moderate("/api/admin/listings/{$listing->id}/reactivate")
+            ->assertStatus(409);
+
+        $after = $listing->fresh();
+        $this->assertSame($before->status, $after->status);
+        $this->assertSame($before->quantity, $after->quantity);
+        $this->assertSame($before->total_quantity, $after->total_quantity);
+        $this->assertSame($before->externally_sold_quantity, $after->externally_sold_quantity);
+        $this->assertSame($before->inventory_reconciliation_required, $after->inventory_reconciliation_required);
+        $this->assertSame($before->admin_note, $after->admin_note);
+        $this->assertSame($activityIds, Activity::query()->pluck('id')->all());
+        $this->assertSame(
+            $transactions,
+            Transaction::query()
+                ->where('listing_id', $listing->getKey())
+                ->orderBy('id')
+                ->get()
+                ->map(static fn (Transaction $transaction): array => $transaction->getAttributes())
+                ->all(),
+        );
     }
 
     /**
@@ -692,6 +732,159 @@ class ListingModerationTest extends TestCase
     }
 
     #[Test]
+    public function an_admin_can_restore_a_listing_previously_deactivated_by_an_admin(): void
+    {
+        $listing = $this->createListing([
+            'status' => ListingStatus::Active,
+            'admin_note' => 'Original moderation issue.',
+        ]);
+        $this->moderate("/api/admin/listings/{$listing->id}/deactivate")->assertOk();
+
+        $this->moderate("/api/admin/listings/{$listing->id}/reactivate")
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Active->value);
+
+        $this->assertSame(ListingStatus::Active, $listing->fresh()->status);
+        $this->assertNull($listing->fresh()->admin_note);
+    }
+
+    #[Test]
+    public function admin_reactivation_refuses_zero_available_inventory_without_side_effects(): void
+    {
+        $listing = $this->createListing([
+            'status' => ListingStatus::Active,
+            'quantity' => 0,
+            'total_quantity' => 0,
+        ]);
+        $this->moderate("/api/admin/listings/{$listing->id}/deactivate")->assertOk();
+
+        $this->assertAdminRestoreRefusedWithoutMutation($listing);
+    }
+
+    #[Test]
+    public function admin_reactivation_refuses_inventory_reconciliation_without_side_effects(): void
+    {
+        $listing = $this->createListing([
+            'status' => ListingStatus::Active,
+            'inventory_reconciliation_required' => true,
+        ]);
+        $this->moderate("/api/admin/listings/{$listing->id}/deactivate")->assertOk();
+
+        $this->assertAdminRestoreRefusedWithoutMutation($listing);
+    }
+
+    #[Test]
+    public function admin_reactivation_refuses_inconsistent_inventory_without_side_effects(): void
+    {
+        $listing = $this->createListing([
+            'status' => ListingStatus::Active,
+            'total_quantity' => 5,
+            'quantity' => 3,
+        ]);
+        $this->moderate("/api/admin/listings/{$listing->id}/deactivate")->assertOk();
+
+        $this->assertAdminRestoreRefusedWithoutMutation($listing);
+    }
+
+    #[Test]
+    public function admin_reactivation_refuses_unapproved_or_soft_deleted_sellers(): void
+    {
+        $unapprovedListing = $this->createListing(['status' => ListingStatus::Active]);
+        $this->moderate("/api/admin/listings/{$unapprovedListing->id}/deactivate")->assertOk();
+        $this->seller->seller_capability = SellerCapability::Buyer;
+        $this->seller->save();
+        $this->assertAdminRestoreRefusedWithoutMutation($unapprovedListing);
+
+        $this->seller->seller_capability = SellerCapability::Seller;
+        $this->seller->save();
+        $deletedSellerListing = $this->createListing(['status' => ListingStatus::Active]);
+        $this->moderate("/api/admin/listings/{$deletedSellerListing->id}/deactivate")->assertOk();
+        $this->seller->delete();
+        $this->assertAdminRestoreRefusedWithoutMutation($deletedSellerListing);
+    }
+
+    #[Test]
+    public function admin_reactivation_refuses_seller_deactivated_rejected_and_sold_listings(): void
+    {
+        $sellerDeactivated = $this->createListing(['status' => ListingStatus::Active]);
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$sellerDeactivated->id.'/deactivate')
+            ->assertOk();
+        $this->assertAdminRestoreRefusedWithoutMutation($sellerDeactivated);
+
+        $rejected = $this->createListing(['status' => ListingStatus::Pending]);
+        $this->moderate("/api/admin/listings/{$rejected->id}/reject")->assertOk();
+        $this->assertAdminRestoreRefusedWithoutMutation($rejected);
+
+        $sold = $this->createListing(['status' => ListingStatus::Active]);
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->seller))
+            ->postJson('/api/seller/listings/'.$sold->id.'/mark-sold')
+            ->assertOk();
+        $this->assertAdminRestoreRefusedWithoutMutation($sold);
+    }
+
+    #[Test]
+    public function admin_reactivation_preserves_reserved_and_sold_inventory_and_transactions(): void
+    {
+        $listing = $this->createListing([
+            'status' => ListingStatus::Active,
+            'total_quantity' => 5,
+            'quantity' => 1,
+            'externally_sold_quantity' => 1,
+        ]);
+        $pending = Transaction::query()->create([
+            'buyer_id' => User::factory()->create()->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 2,
+            'total_amount' => 100000,
+            'inventory_reserved' => true,
+            'inventory_accounted' => true,
+            'status' => TransactionStatus::Pending,
+        ]);
+        $completed = Transaction::query()->create([
+            'buyer_id' => User::factory()->create()->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 1,
+            'total_amount' => 50000,
+            'inventory_reserved' => false,
+            'inventory_accounted' => true,
+            'status' => TransactionStatus::Completed,
+        ]);
+        $this->moderate("/api/admin/listings/{$listing->id}/deactivate")->assertOk();
+
+        $this->moderate("/api/admin/listings/{$listing->id}/reactivate")
+            ->assertOk()
+            ->assertJsonPath('data.status', ListingStatus::Active->value);
+
+        $fresh = $listing->fresh();
+        $this->assertSame(5, (int) $fresh->total_quantity);
+        $this->assertSame(1, (int) $fresh->quantity);
+        $this->assertSame(1, (int) $fresh->externally_sold_quantity);
+        $this->assertTrue((bool) $pending->fresh()->inventory_reserved);
+        $this->assertSame(TransactionStatus::Pending, $pending->fresh()->status);
+        $this->assertSame(TransactionStatus::Completed, $completed->fresh()->status);
+        $this->assertSame(2, Transaction::query()->where('listing_id', $listing->id)->count());
+    }
+
+    #[Test]
+    public function only_an_admin_token_can_call_reactivation(): void
+    {
+        $listing = $this->createListing(['status' => ListingStatus::Active]);
+
+        $this->postAs("/api/admin/listings/{$listing->id}/reactivate")->assertUnauthorized();
+
+        $this->moderate("/api/admin/listings/{$listing->id}/deactivate")->assertOk();
+
+        $this->moderate(
+            "/api/admin/listings/{$listing->id}/reactivate",
+            $this->mobileToken($this->seller),
+        )->assertForbidden();
+        $this->assertSame(ListingStatus::Inactive, $listing->refresh()->status);
+    }
+
+    #[Test]
     public function a_deactivated_listing_stays_hidden_from_buyers(): void
     {
         $listing = $this->createListing(['status' => ListingStatus::Active]);
@@ -751,6 +944,11 @@ class ListingModerationTest extends TestCase
 
         $this->moderate("/api/admin/listings/{$listing->id}/approve", $this->mobileToken($this->admin))
             ->assertForbidden();
+
+        $active = $this->createListing(['status' => ListingStatus::Active]);
+        $this->moderate("/api/admin/listings/{$active->id}/deactivate")->assertOk();
+        $this->moderate("/api/admin/listings/{$active->id}/reactivate", $this->mobileToken($this->admin))
+            ->assertForbidden();
     }
 
     #[Test]
@@ -758,7 +956,7 @@ class ListingModerationTest extends TestCase
     {
         $listing = $this->createListing();
 
-        foreach (['approve', 'reject'] as $action) {
+        foreach (['approve', 'reject', 'reactivate'] as $action) {
             $this->postAs("/api/admin/listings/{$listing->id}/{$action}")
                 ->assertUnauthorized();
         }
@@ -773,7 +971,7 @@ class ListingModerationTest extends TestCase
         $listing = $this->createListing();
         $token = $this->mobileToken($this->seller);
 
-        foreach (['approve', 'reject', 'deactivate'] as $action) {
+        foreach (['approve', 'reject', 'deactivate', 'reactivate'] as $action) {
             $this->moderate("/api/admin/listings/{$listing->id}/{$action}", $token)
                 ->assertForbidden();
         }
@@ -833,11 +1031,11 @@ class ListingModerationTest extends TestCase
     #[Test]
     public function an_inactive_listing_cannot_be_reactivated(): void
     {
-        // [D-02]: `inactive -> active` is not a permitted transition and no
-        // reactivation route is specified (A-02 / OQ-16). Every action refuses.
+        // An inactive row with no administrator-deactivation audit provenance
+        // cannot be restored through admin moderation.
         $listing = $this->createListing(['status' => ListingStatus::Inactive]);
 
-        foreach (['approve', 'reject', 'deactivate'] as $action) {
+        foreach (['approve', 'reject', 'deactivate', 'reactivate'] as $action) {
             $this->moderate("/api/admin/listings/{$listing->id}/{$action}")->assertStatus(409);
         }
 

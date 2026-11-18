@@ -63,6 +63,12 @@ class SellerListingRepository {
   /// Marks an active listing as sold.
   Future<Listing> markSold(int id) => _service.markSold(id);
 
+  /// Voluntarily deactivates the caller's active listing.
+  Future<Listing> deactivate(int id) => _service.deactivate(id);
+
+  /// Reactivates an eligible listing the caller voluntarily deactivated.
+  Future<Listing> reactivate(int id) => _service.reactivate(id);
+
   /// Destroys a draft or withdrawn listing.
   Future<void> delete(int id) => _service.delete(id);
 

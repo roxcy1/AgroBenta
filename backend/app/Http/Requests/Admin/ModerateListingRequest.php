@@ -5,8 +5,7 @@ namespace App\Http\Requests\Admin;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Body for the two listing moderation actions that carry no input: approve and
- * deactivate.
+ * Body for listing moderation actions that carry no input.
  *
  * Deliberately empty, for the same reason `SellerListingActionRequest` is: the
  * path carries the listing, and the `admin` group middleware has already proved

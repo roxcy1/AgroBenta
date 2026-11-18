@@ -25,6 +25,9 @@ enum ActivityAction: string
     case ListingApproved = 'listing_approved';
     case ListingRejected = 'listing_rejected';
     case ListingDeactivated = 'listing_deactivated';
+    case ListingSellerDeactivated = 'listing_seller_deactivated';
+    case ListingSellerReactivated = 'listing_seller_reactivated';
+    case ListingAdminReactivated = 'listing_admin_reactivated';
     case ListingMarkedSold = 'listing_marked_sold';
     case ListingInventoryReconciled = 'listing_inventory_reconciled';
     case ListingPhotoAdded = 'listing_photo_added';
@@ -64,6 +67,9 @@ enum ActivityAction: string
             self::ListingApproved => 'Listing approved',
             self::ListingRejected => 'Listing rejected',
             self::ListingDeactivated => 'Listing deactivated',
+            self::ListingSellerDeactivated => 'Listing deactivated by seller',
+            self::ListingSellerReactivated => 'Listing reactivated by seller',
+            self::ListingAdminReactivated => 'Listing reactivated by administrator',
             self::ListingMarkedSold => 'Listing marked as sold',
             self::ListingInventoryReconciled => 'Listing inventory reconciled',
             self::ListingPhotoAdded => 'Listing photo added',

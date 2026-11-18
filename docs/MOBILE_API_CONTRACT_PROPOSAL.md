@@ -610,7 +610,7 @@ Should it also expose full history? A read-only
 
 ### 5.4 Own listings (approved sellers)
 
-All four require `seller_capability = seller` — `User::isApprovedSeller()`.
+All seller listing management routes require `seller_capability = seller` — `User::isApprovedSeller()`.
 A buyer receives `403`.
 
 ---
@@ -716,9 +716,49 @@ has no route to revise and resubmit the same record. Recorded, not invented.
 | **Authorization** | `seller_capability = seller` |
 | **Ownership** | `listing.seller_id === $me->id`, else `404` |
 
-**This transition is one-way and terminal:** once `sold`, no new transaction can be created against the listing (`TransactionService::create()` answers `409` for any non-`active` listing), and no reactivation path exists (MS-02 unresolved).
+**This transition is one-way and terminal:** once `sold`, no new transaction can be created against the listing (`TransactionService::create()` answers `409` for any non-`active` listing). A seller who has further livestock creates a new listing (DEC-12).
 
 The status check and status update run inside a single `DB::transaction()` with `lockForUpdate()` on the listing row, so a concurrent transaction creation cannot race the status flip. `TransactionService::create()` takes the same listing-row lock, so both operations serialize consistently with no deadlock risk.
+
+---
+
+#### `POST /seller/listings/{listing}/deactivate`
+
+| Dimension | Specification |
+|---|---|
+| **Endpoint** | `/api/seller/listings/{listing}/deactivate` |
+| **Method** | `POST` |
+| **Authentication / Ability** | Required / `mobile` |
+| **Request fields** | None; supplied body/query fields are rejected with `422`. |
+| **Validation** | The owned listing must be `active`. It becomes `inactive`; inventory and existing reservations remain unchanged. |
+| **Response** | `200`, listing with `status: "inactive"` |
+| **Errors** | `401`, `403` not an approved seller, `404` not yours / missing, `409` not active, `422` any supplied field |
+| **Ownership** | `listing.seller_id === $me->id`, else `404` |
+
+The listing row is locked during the transition so a concurrent reservation
+serializes before or after deactivation. Marketplace visibility updates through
+the existing inventory event after commit.
+
+---
+
+#### `POST /seller/listings/{listing}/reactivate`
+
+| Dimension | Specification |
+|---|---|
+| **Endpoint** | `/api/seller/listings/{listing}/reactivate` |
+| **Method** | `POST` |
+| **Authentication / Ability** | Required / `mobile` |
+| **Request fields** | None; supplied body/query fields are rejected with `422`. |
+| **Validation** | Inactive only; audit provenance must show the caller voluntarily deactivated it. Inventory must be reconciled with positive available stock and no administrator restriction. |
+| **Response** | `200`, listing with `status: "active"` |
+| **Errors** | `401`, `403` not an approved seller, `404` not yours / missing, `409` invalid source/status/inventory, `422` any supplied field |
+| **Ownership** | `listing.seller_id === $me->id`, else `404` |
+
+Sold and rejected listings cannot be seller-reactivated. Admin-deactivated
+listings require administrator restoration. The seller listing projection
+includes `seller_can_reactivate` and `seller_can_delete` hints; the app must not
+infer these actions from status alone. See DEC-12 in the functional
+documentation.
 
 ---
 
@@ -758,19 +798,18 @@ restrict updates to `draft` and `active`.
 | **Request fields** | None |
 | **Validation** | N/A |
 | **Response** | `200`, §3.1 with `message: "Listing deleted successfully."`, no `data` |
-| **Errors** | `401`, `403`, `404`<br>`409` referenced by a transaction (D-12) |
+| **Errors** | `401`, `403`, `404`<br>`409` if any transaction history, active reservation, unreconciled inventory or ineligible status exists (DEC-12) |
 | **Authorization** | `seller_capability = seller` |
 | **Ownership** | `listing.seller_id === $me->id`, else `404` |
 
-**Prefer a soft delete.** A `sold` listing is part of a completed transaction
-record; hard-deleting it breaks referential and audit history. No `deleted_at`
-column exists — **D-12**.
+Permanent deletion is retained only for eligible `draft`/`inactive` listings
+without any transaction history (pending, completed or cancelled), active
+reservations or inventory-reconciliation requirement (DEC-12). `transactions`
+has a cascading foreign key, so the service checks for any history before the
+delete while holding the listing lock. No archive status or migration is added.
 
-**[D-02] interaction — deletion must not become self-deactivation.** The
-transition `active → inactive` is reserved to **admin** ([D-02] transition
-table). A seller who can `DELETE` an `active` listing has self-deactivated it
-and bypassed that rule. Restrict deletion to `draft` and `inactive` until the
-interaction is settled — recorded as **D-25**, not invented.
+Active listings use the explicit `deactivate` action; deletion is not
+self-deactivation. There is no seller deletion-request workflow.
 
 ---
 
@@ -827,13 +866,10 @@ would be a trap.
 
 ---
 
-### 5.4b Required admin listing moderation — NOT mobile scope
+### 5.4b Admin listing moderation — NOT mobile scope
 
-**[D-02] rule 8 makes administrator approval a precondition for `active`,** so
-the Admin Web needs endpoints that **do not exist today**. `routes/api.php:27`
-exposes `GET /api/admin/listings` and nothing else — admin can currently only
-*read* listings. This is a required capability with no implementation
-(functional doc OQ-14, F-10).
+**[D-02] rule 8 makes administrator approval a precondition for `active`.** These
+moderation endpoints are implemented; the mobile app must never call them.
 
 Specified here because D-02 makes it mandatory, but it is **admin surface, not
 mobile surface**. The mobile app must never call it.
@@ -842,6 +878,7 @@ mobile surface**. The mobile app must never call it.
 POST /api/admin/listings/{listing}/approve     auth:sanctum + admin
 POST /api/admin/listings/{listing}/reject      auth:sanctum + admin
 POST /api/admin/listings/{listing}/deactivate  auth:sanctum + admin
+POST /api/admin/listings/{listing}/reactivate  auth:sanctum + admin
 ```
 
 | Transition | Endpoint | Guard |
@@ -849,14 +886,16 @@ POST /api/admin/listings/{listing}/deactivate  auth:sanctum + admin
 | `pending → active` | `approve` | must be `pending` |
 | `pending → inactive` | `reject` | must be `pending`; takes an `admin_note` |
 | `active → inactive` | `deactivate` | must be `active` |
+| `inactive → active` | `reactivate` | latest lifecycle audit must show prior admin deactivation; rejected/seller-deactivated listings are refused |
 
 Each must validate the current status server-side and return `409` on an illegal
 transition, so a double-approve or a late rejection cannot silently corrupt the
 lifecycle. These use the admin `admin`-ability context (§4.1), **not** the
 mobile one.
 
-**No reactivation endpoint is specified**, because [D-02] defines no path back
-to `active` from `inactive` (functional doc A-02 / OQ-16). Do not add one.
+Administrator restoration is an explicit approval after the moderation issue is
+resolved (DEC-12). A seller has no path to restore an administrator-deactivated
+or rejected listing.
 
 ---
 
@@ -1296,8 +1335,10 @@ cannot be verified at all — see F-04.
 | `POST` | `/seller/listings` | yes | `mobile` | `isApprovedSeller`; **no `status`** |
 | `POST` | `/seller/listings/{listing}/submit` | yes | `mobile` | seller + owner; `draft` only |
 | `POST` | `/seller/listings/{listing}/mark-sold` | yes | `mobile` | seller + owner; `active` only |
+| `POST` | `/seller/listings/{listing}/deactivate` | yes | `mobile` | seller + owner; `active` only |
+| `POST` | `/seller/listings/{listing}/reactivate` | yes | `mobile` | seller + owner; seller-deactivated inactive + eligible inventory |
 | `PATCH` | `/seller/listings/{listing}` | yes | `mobile` | seller + owner; **no `status`** |
-| `DELETE` | `/seller/listings/{listing}` | yes | `mobile` | seller + owner; `draft`/`inactive` only |
+| `DELETE` | `/seller/listings/{listing}` | yes | `mobile` | seller + owner; eligible `draft`/`inactive`, no transaction history |
 | `POST` | `/seller/listings/{listing}/price-suggestion` | yes | `mobile` | seller + owner; **estimator blocked** |
 | `GET` | `/transactions` | yes | `mobile` | buyer or seller |
 | `POST` | `/transactions` | yes | `mobile` | buyer; seller derived |
@@ -1517,14 +1558,14 @@ serialise `total_amount` as a string.
 |---|---|---|
 | **OQ-15** (D-15) | **Who performs transaction completion confirmation, and what constitutes it** — seller, buyer, or mutual agreement? [D-15] rule 4 says "the appropriate transaction confirmation" without naming it. | `POST /transactions/{id}/complete` **only.** Everything else in §5.6 is buildable. |
 | **OQ-03** (D-03) | **The estimation method.** [D-03] mandates a dedicated service and forbids inventing an algorithm, but no algorithm, model, or integration exists. Must be documented before the production estimator. | The **interior** of the price-suggestion service. The endpoint contract in §5.5 is buildable. |
-| **OQ-14** | **Admin listing moderation endpoints.** [D-02] makes admin approval mandatory, but admin can only read listings today. Specified in §5.4b; needs building. | The `active` half of the lifecycle. Not mobile surface. |
+| ~~**OQ-14**~~ | Admin listing moderation endpoints | Implemented in `/api/admin/listings` routes, including admin-only restoration of admin-deactivated listings (§5.4b). |
 | **D-11** | **Token lifetime.** `config/sanctum.php` has `expiration => null` (F-12). | Shipping to production, not first implementation. |
 | **D-17** | **Messaging eligibility.** Verified seller, existing transaction, or listing context? | §5.8 |
 | **D-16** | **Which notification types exist, and what triggers them?** | §5.7 payloads |
-| **D-12** | **Soft or hard delete for listings?** No `deleted_at` exists, and a `sold` listing is part of a completed transaction record. | `DELETE /seller/listings/{id}` |
-| **OQ-16** (D-02) | **`inactive → active` reactivation.** [D-02] defines no path back to `active`. Does a rejected listing need a fresh `draft → pending` cycle, or is it dead? | Post-rejection seller flow |
-| **OQ-17** (D-02) | **Quantity exhaustion.** What happens to an `active` listing when its `quantity` is fully transacted? Auto-`sold`? Left `active`? | Transaction quantity handling |
-| **D-25** | **`DELETE` vs `active → inactive`.** Deleting an `active` listing is functionally self-deactivation, which [D-02] reserves to admin. | `DELETE /seller/listings/{id}` |
+| ~~**D-12**~~ | Soft or hard delete for listings | DEC-12: permanent deletion only for eligible records without any transaction history, active reservations or reconciliation hold; no archive or deletion-request flow. |
+| ~~**OQ-16**~~ (D-02) | `inactive → active` reactivation | DEC-12: seller restoration only for own voluntary deactivation; administrator restoration only for admin deactivation; sold/rejected listings cannot be seller-restored. |
+| ~~**OQ-17**~~ (D-02) | Quantity exhaustion | Resolved by DEC-10: exhausted stock is excluded from Marketplace and becomes sold when accounting is complete. |
+| ~~**D-25**~~ | `DELETE` vs `active → inactive` | DEC-12: active listings use the explicit seller deactivate action; DELETE is never self-deactivation. |
 | **D-24** | **Editing a non-`draft`, non-`active` listing.** Is a `pending` listing editable while awaiting review? A `sold` or `inactive` one? | `PATCH /seller/listings/{id}` |
 | **D-23** | **Direct access to a `sold` listing.** Not in the marketplace list ([D-02] rule 9), but still viewable by URL? | `GET /listings/{listing}` |
 | **D-13** | **May a buyer see the price-suggestion range** on a listing? | §5.5, §8.2 |
