@@ -107,7 +107,7 @@ async function fetchListings(params: ListingsParams): Promise<ListingsData> {
 }
 
 /**
- * Call one of the three named moderation actions.
+ * Call one of the named moderation actions.
  *
  * These are actions, not a status setter: the endpoint decides the resulting
  * status and the body never carries one, so there is no request this function
@@ -124,6 +124,10 @@ async function moderate(
 
   const response = await api.post<ModerationResponse>(`/admin/listings/${id}/${action}`, body);
   return response.data;
+}
+
+export async function reactivateListing(id: number): Promise<ModerationResponse> {
+  return moderate('reactivate', id);
 }
 
 /**
@@ -197,6 +201,15 @@ export function useDeactivateListing() {
 
   return useMutation({
     mutationFn: (id: number) => moderate('deactivate', id),
+    onSuccess: invalidateListings,
+  });
+}
+
+export function useReactivateListing() {
+  const invalidateListings = useInvalidateListings();
+
+  return useMutation({
+    mutationFn: reactivateListing,
     onSuccess: invalidateListings,
   });
 }

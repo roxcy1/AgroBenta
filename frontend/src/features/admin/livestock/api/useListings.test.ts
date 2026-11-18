@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AxiosResponse } from 'axios';
 import api from '../../../../lib/api';
-import { fetchListing, reconcileListingInventory, type Listing } from './useListings';
+import {
+  fetchListing,
+  reactivateListing,
+  reconcileListingInventory,
+  type Listing,
+} from './useListings';
 
 function makeListing(id: number): Listing {
   return {
@@ -92,5 +97,26 @@ describe('reconcileListingInventory', () => {
     await expect(reconcileListingInventory(5, input)).resolves.toEqual(response);
     expect(spy.mock.calls[0][0]).toBe('/admin/listings/5/inventory/reconcile');
     expect(spy.mock.calls[0][1]).toEqual(input);
+  });
+});
+
+describe('reactivateListing', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('posts to the existing admin reactivation route without client-supplied state', async () => {
+    const reactivated = { ...makeListing(5), status: 'active' as const };
+    const spy = vi.spyOn(api, 'post').mockResolvedValueOnce({
+      data: { success: true, message: 'Listing reactivated successfully.', data: reactivated },
+    } as unknown as AxiosResponse);
+
+    await expect(reactivateListing(5)).resolves.toEqual({
+      success: true,
+      message: 'Listing reactivated successfully.',
+      data: reactivated,
+    });
+    expect(spy.mock.calls[0][0]).toBe('/admin/listings/5/reactivate');
+    expect(spy.mock.calls[0][1]).toEqual({});
   });
 });
