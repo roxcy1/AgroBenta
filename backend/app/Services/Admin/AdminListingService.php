@@ -11,6 +11,7 @@ use App\Notifications\ListingApproved;
 use App\Notifications\ListingRejected;
 use App\Repositories\Admin\AdminListingRepository;
 use App\Services\ActivityLogger;
+use App\Services\Listing\ListingReactivationEligibility;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +21,7 @@ class AdminListingService
     public function __construct(
         private readonly AdminListingRepository $listings,
         private readonly ActivityLogger $activity,
+        private readonly ListingReactivationEligibility $reactivationEligibility,
     ) {
         //
     }
@@ -36,10 +38,10 @@ class AdminListingService
     /**
      * Approve a listing: `pending → active`.
      *
-     * This is the only route by which a listing becomes visible to buyers.
-     * [D-02 rule 8] makes administrator approval a precondition for `active`,
-     * and a seller has no path to it at all — `SellerListingService` stops at
-     * `pending` and does not contain an equivalent method.
+     * This is the only route from `pending` review to publication.
+     * [D-02 rule 8] makes administrator approval a precondition for a submitted
+     * listing to become `active`; seller reactivation is a separate restoration
+     * path for an eligible listing previously deactivated by that seller.
      *
      * A `pending` listing with no stored photo is refused [DEC-03]. That is a
      * legacy guard for rows queued before the submission rule existed; for new
@@ -87,9 +89,8 @@ class AdminListingService
      *
      * The contract's [D-02 transition table] gives this one destination and one
      * only. It is not a new status: `inactive` is the existing state for a
-     * listing that is not publicly available, and [D-02] defines no path back
-     * from it to `active` (A-02 / OQ-16), so a rejection is final for this
-     * record. No `rejected`, `declined` or `needs_revision` state is created
+     * listing that is not publicly available. Rejected listings are not restored
+     * by seller or admin reactivation (DEC-12). No `rejected`, `declined` or `needs_revision` state is created
      * here, because the enum has exactly five cases and that is the complete set.
      *
      * `$adminNote` is the administrator's reason. It is optional and stored on
@@ -113,10 +114,8 @@ class AdminListingService
     /**
      * Withdraw a listing: `active → inactive`.
      *
-     * Reserved to an administrator for the same reason rejection is
-     * [D-02 rule 4]: taking a live listing out of the marketplace is a
-     * moderation decision, which is why `SellerListingService` cannot delete an
-     * `active` listing [D-25].
+     * Administrator moderation deactivation. Sellers have a separate voluntary
+     * deactivation action with distinct audit provenance (DEC-12).
      */
     public function deactivate(Listing $listing, User $actor): Listing
     {
@@ -131,13 +130,70 @@ class AdminListingService
     }
 
     /**
+     * Administrator-only restoration of a listing that an administrator
+     * previously deactivated. Rejection and seller withdrawal are not restored
+     * through this moderation decision.
+     */
+    public function reactivate(Listing $listing, User $actor): Listing
+    {
+        return DB::transaction(function () use ($listing, $actor): Listing {
+            // Lock first, then validate both status and provenance against the
+            // row that will be changed. A stale audit check before the lock could
+            // otherwise race a seller/admin lifecycle action.
+            $locked = $this->listings->lockForReactivation((int) $listing->getKey());
+
+            if ($locked === null) {
+                abort(404, 'Listing not found.');
+            }
+            if ($locked->status !== ListingStatus::Inactive) {
+                abort(409, 'Only an inactive listing can be reactivated.');
+            }
+            if (! $this->listings->wasMostRecentlyDeactivatedByAdmin((int) $locked->getKey())) {
+                abort(409, 'Only an administrator-deactivated listing can be restored by an administrator.');
+            }
+
+            $seller = $locked->seller;
+            if ($seller === null || $seller->trashed() || ! $seller->isApprovedSeller()) {
+                abort(409, 'The listing owner must be an active, approved seller before reactivation.');
+            }
+
+            $inventoryFailure = $this->reactivationEligibility->failureMessage($locked);
+            if ($inventoryFailure !== null) {
+                abort(409, $inventoryFailure);
+            }
+
+            $reactivated = $this->listings->restoreAdminDeactivated($locked);
+
+            ListingInventoryUpdated::dispatch((int) $reactivated->getKey());
+            $this->activity->log(
+                $actor,
+                ActivityAction::ListingAdminReactivated,
+                sprintf('Listing #%d reactivated by an administrator.', $reactivated->getKey()),
+                [
+                    'target_type' => 'listing',
+                    'target_id' => $reactivated->getKey(),
+                    'context' => ['seller_id' => $reactivated->seller_id],
+                    'changes' => [
+                        'status' => [
+                            'from' => ListingStatus::Inactive->value,
+                            'to' => ListingStatus::Active->value,
+                        ],
+                    ],
+                ],
+            );
+
+            return $reactivated;
+        });
+    }
+
+    /**
      * Apply one documented transition, or refuse it.
      *
      * The allowed source status is a private detail of each method above, so a
      * caller cannot ask for a transition that [D-02] does not permit: there is
-     * no `$to` parameter on the public surface, and `draft → active`,
-     * `sold → active` and `inactive → active` have no method that could express
-     * them.
+     * no `$to` parameter on the public surface, and `draft → active` or
+     * `sold → active` have no method that could express them. Restoration uses
+     * its own provenance- and inventory-checked method above.
      *
      * A refusal is a 409, not a 404 and not a 422. The listing exists and the
      * request is well-formed; the listing is simply in a state where this

@@ -20,19 +20,16 @@ import 'seller_listing_state.dart';
 ///
 /// ## The rule this class exists to enforce
 ///
-/// **A seller moves a listing forward, never sideways or back.** Creation makes
-/// a `draft`. Submission makes it `pending`. There is no method that sets
-/// `active`, `sold` or `inactive`, and no path by which calling one of these
-/// could send such a value: the repository's bodies are filtered by
-/// [SellerListingService.writableBody], which contains no status field. The
-/// client's idea of the lifecycle is a strict subset of the server's, which is
-/// what stops the two from disagreeing about what a seller is allowed to do.
+/// Listing content requests never send `status`. Named action endpoints own
+/// submit, mark-sold, deactivation and reactivation transitions; the server stays
+/// authoritative about provenance, inventory eligibility and ownership.
 ///
 /// Availability is decided by the **server's** rules and mirrored in
 /// [SellerListingState] so the UI never offers an action that would answer `409`:
-/// a `draft` can be edited, submitted and deleted; an `active` listing can be
-/// edited but not deleted; `pending` can do neither; an `inactive` listing can
-/// only be deleted. The mirror is a convenience, never the enforcement — every
+/// a `draft` can be edited and submitted; an `active` listing can be edited,
+/// marked sold or deactivated; `pending` can do neither; an `inactive` listing
+/// may be reactivated or deleted only when the server marks it eligible. The
+/// mirror is a convenience, never the enforcement — every
 /// transition below is checked again server-side.
 ///
 /// ## Errors
@@ -475,7 +472,7 @@ class SellerListingController extends ChangeNotifier {
   /// answers `409` for anything else, which lands in
   /// [SellerListingState.conflictMessage] with the list re-read behind it.
   Future<Listing?> markSold(int listingId) async {
-    if (_state.isActioning) {
+    if (_state.isActioning || !canMarkSold(_state.findListing(listingId))) {
       return null;
     }
 
@@ -512,11 +509,74 @@ class SellerListingController extends ChangeNotifier {
     }
   }
 
+  /// Voluntarily hides an active listing from buyers without changing its stock.
+  Future<Listing?> deactivate(int listingId) async {
+    if (_state.isActioning || !canDeactivate(_state.findListing(listingId))) {
+      return null;
+    }
+
+    _beginAction(SellerListingAction.deactivating, listingId: listingId);
+    try {
+      final Listing deactivated = await _repository.deactivate(listingId);
+      if (_disposed) return null;
+      _endAction(
+        message: 'Listing deactivated. Existing reservations remain unchanged.',
+      );
+      _replaceListing(deactivated);
+      unawaited(refresh());
+      return deactivated;
+    } on ApiException catch (error) {
+      if (_disposed) return null;
+      _failAction(error, reloadAfterConflict: true);
+      return null;
+    } on Object {
+      if (_disposed) return null;
+      _set(
+        _state.copyWith(
+          action: SellerListingAction.none,
+          clearActionListingId: true,
+          actionErrorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
+      return null;
+    }
+  }
+
+  /// Restores only an inactive listing the server says this seller may restore.
+  Future<Listing?> reactivate(int listingId) async {
+    if (_state.isActioning || !canReactivate(_state.findListing(listingId))) {
+      return null;
+    }
+
+    _beginAction(SellerListingAction.reactivating, listingId: listingId);
+    try {
+      final Listing reactivated = await _repository.reactivate(listingId);
+      if (_disposed) return null;
+      _endAction(message: 'Listing reactivated.');
+      _replaceListing(reactivated);
+      unawaited(refresh());
+      return reactivated;
+    } on ApiException catch (error) {
+      if (_disposed) return null;
+      _failAction(error, reloadAfterConflict: true);
+      return null;
+    } on Object {
+      if (_disposed) return null;
+      _set(
+        _state.copyWith(
+          action: SellerListingAction.none,
+          clearActionListingId: true,
+          actionErrorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
+      return null;
+    }
+  }
+
   /// Destroys [listingId]. Returns `true` when the server confirmed it.
   ///
-  /// A draft or withdrawn listing only. This is a deletion and **not** a
-  /// deactivation: taking a live listing out of sale is an administrator's
-  /// decision, and no seller route exists for it.
+  /// Only an eligible draft or inactive listing. The server refuses deletion
+  /// when transaction history, a reservation, or unreconciled inventory exists.
   ///
   /// The row is removed from the list on success rather than by reloading, so the
   /// list does not jump. A delete genuinely changes the `total` and the page
@@ -838,8 +898,21 @@ class SellerListingController extends ChangeNotifier {
   ///
   /// Only an `active` listing. The transition is one-way and terminal: no new
   /// transactions can be created against a sold listing.
-  static bool canMarkSold(Listing listing) =>
-      listing.status == ListingStatus.active;
+  static bool canMarkSold(Listing? listing) =>
+      listing?.status == ListingStatus.active &&
+      !listing!.inventoryReconciliationRequired;
+
+  /// Only an active listing may be voluntarily hidden by its seller.
+  static bool canDeactivate(Listing? listing) =>
+      listing?.status == ListingStatus.active;
+
+  /// The backend-provided eligibility flag distinguishes a seller's own
+  /// withdrawal from rejection/admin moderation and validates current stock.
+  static bool canReactivate(Listing? listing) =>
+      listing?.status == ListingStatus.inactive &&
+      listing!.sellerCanReactivate &&
+      !listing.inventoryReconciliationRequired &&
+      (listing.availableQuantity ?? listing.quantity) > 0;
 
   /// Whether the listing has the photo DEC-03 requires before submission.
   ///
@@ -850,12 +923,12 @@ class SellerListingController extends ChangeNotifier {
 
   /// Whether a listing can be deleted right now.
   ///
-  /// A `draft` or a withdrawn `inactive` listing ([D-25]). Not a `pending`
-  /// listing, which is in an administrator's queue, and emphatically not an
-  /// `active` one.
+  /// A draft or inactive listing the server marks as having no transaction
+  /// history, active reservation, or inventory-reconciliation hold.
   static bool canDelete(Listing listing) =>
-      listing.status == ListingStatus.draft ||
-      listing.status == ListingStatus.inactive;
+      (listing.status == ListingStatus.draft ||
+          listing.status == ListingStatus.inactive) &&
+      listing.sellerCanDelete != false;
 
   void _scheduleSearch() {
     _searchDebounce?.cancel();

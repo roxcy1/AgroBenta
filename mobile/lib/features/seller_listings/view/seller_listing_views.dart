@@ -32,8 +32,8 @@ String listingStatusLabel(ListingStatus status) => switch (status) {
 /// to take.
 String listingStatusExplanation(ListingStatus status) => switch (status) {
   ListingStatus.draft =>
-    'Only you can see this listing. Edit it, submit it for review, or delete '
-        'it.',
+    'Only you can see this listing. Edit it or submit it for review. Deletion '
+        'is available only when it has no transaction history.',
   ListingStatus.pending =>
     'An administrator is reviewing this listing. It is not visible in the '
         'marketplace yet, and it cannot be changed while it is being reviewed.',
@@ -43,8 +43,8 @@ String listingStatusExplanation(ListingStatus status) => switch (status) {
     'This listing was sold. It stays here as a record and can no longer be '
         'changed.',
   ListingStatus.inactive =>
-    'This listing is no longer in the marketplace. It is kept here as a '
-        'record and can be deleted.',
+    'This listing is no longer in the marketplace. Reactivation or deletion is '
+        'shown only when it remains eligible.',
 };
 
 /// The accent that supports a status without carrying it.

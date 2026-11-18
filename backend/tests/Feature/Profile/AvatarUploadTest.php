@@ -3,6 +3,8 @@
 namespace Tests\Feature\Profile;
 
 use App\Models\User;
+use App\Services\Profile\AvatarService;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -207,5 +209,62 @@ class AvatarUploadTest extends TestCase
 
         $this->assertNull($user->fresh()->avatar_url);
         $this->assertSame([], Storage::disk('public')->allFiles());
+    }
+
+    #[Test]
+    public function a_failed_storage_write_leaves_the_profile_and_previous_avatar_untouched(): void
+    {
+        $user = User::factory()->create();
+        $oldPath = "avatars/{$user->id}/old.jpg";
+
+        $realDisk = Storage::disk('public');
+        $realDisk->put($oldPath, 'old avatar');
+        $user->avatar_url = $realDisk->url($oldPath);
+        $user->save();
+
+        // The disk reports a failed write, which is exactly what `store()`
+        // returns `false` for. Nothing may be persisted, and the previous file
+        // must survive.
+        $disk = \Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->once()->andReturn(false);
+        Storage::shouldReceive('disk')
+            ->with(AvatarService::DISK)
+            ->andReturn($disk);
+
+        $this->upload($user, $this->tinyJpeg('new.jpg'))->assertStatus(500);
+
+        $user->refresh();
+
+        $this->assertSame($realDisk->url($oldPath), $user->avatar_url);
+        $realDisk->assertExists($oldPath);
+        $this->assertSame([$oldPath], $realDisk->allFiles("avatars/{$user->id}"));
+    }
+
+    #[Test]
+    public function overlapping_uploads_with_stale_models_leave_no_orphaned_file(): void
+    {
+        $user = User::factory()->create();
+        $oldPath = "avatars/{$user->id}/old.jpg";
+
+        Storage::disk('public')->put($oldPath, 'old avatar');
+        $user->avatar_url = Storage::disk('public')->url($oldPath);
+        $user->save();
+
+        // Two request-scoped copies, as two simultaneous requests hold. Both
+        // read the same previous URL before either upload commits, so a service
+        // that trusted the passed model would leave the first new file behind.
+        $first = User::query()->findOrFail($user->getKey());
+        $second = User::query()->findOrFail($user->getKey());
+
+        $service = app(AvatarService::class);
+        $service->upload($first, $this->tinyJpeg('first.jpg'));
+        $service->upload($second, $this->tinyJpeg('second.jpg'));
+
+        $user->refresh();
+        $files = Storage::disk('public')->allFiles("avatars/{$user->id}");
+
+        $this->assertCount(1, $files);
+        $this->assertSame($this->storedPath($user->avatar_url), $files[0]);
+        Storage::disk('public')->assertMissing($oldPath);
     }
 }

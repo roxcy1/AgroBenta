@@ -178,4 +178,16 @@ class ListingController extends Controller
             'data' => new ListingResource($deactivated),
         ], 200);
     }
+
+    /** Administrator approval after resolving the reason for moderation. */
+    public function reactivate(ModerateListingRequest $request, Listing $listing): JsonResponse
+    {
+        $reactivated = $this->listings->reactivate($listing, $request->user());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Listing reactivated successfully.',
+            'data' => new ListingResource($reactivated),
+        ], 200);
+    }
 }

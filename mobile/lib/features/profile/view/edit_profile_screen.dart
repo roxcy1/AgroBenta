@@ -23,11 +23,11 @@ import '../state/profile_state.dart';
 ///
 /// ## Avatar upload
 ///
-/// The avatar is chosen from the gallery or the camera and uploaded immediately
-/// via `POST /profile/avatar`, rather than being typed in as a URL. This is
-/// the "select from gallery" flow the task calls for; a URL field would
-/// require users to host the image elsewhere first, which is not a viable
-/// mobile flow.
+/// The avatar is chosen from the gallery or the camera and shown as a local
+/// preview. Nothing is uploaded while the user is still editing: the pending
+/// image is sent by [Save] only, so leaving the form with Back or Cancel
+/// discards it with the rest of the unsaved changes. If the upload fails, the
+/// preview is kept so the user can retry without picking the image again.
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({this.imagePicker, super.key});
 
@@ -148,17 +148,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    setState(() {
-      _selectedImage = picked;
-      _uploadingAvatar = true;
-    });
+    // Selecting is local until Save. Uploading here would persist the change
+    // even if the user then leaves the form without saving anything.
+    setState(() => _selectedImage = picked);
+  }
+
+  /// Uploads the pending avatar, if the user picked one.
+  ///
+  /// Returns `true` when there is nothing to upload or the upload succeeded.
+  /// On failure the preview is deliberately kept so [Save] can be retried
+  /// without losing the user's choice.
+  Future<bool> _uploadPendingAvatar() async {
+    final XFile? pending = _selectedImage;
+    if (pending == null) {
+      return true;
+    }
+    if (!mounted) {
+      return false;
+    }
+
+    setState(() => _uploadingAvatar = true);
 
     try {
-      final User updated = await ProfileScope.readOf(
-        context,
-      ).uploadAvatar(picked);
+      final User updated = await _controller.uploadAvatar(pending);
       if (!mounted) {
-        return;
+        return false;
       }
       setState(() {
         _currentAvatarUrl = updated.avatarUrl;
@@ -167,13 +181,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Profile picture updated.')));
+      return true;
     } on Object catch (error) {
       if (!mounted) {
-        return;
+        return false;
       }
-      setState(() {
-        _selectedImage = null;
-      });
       // A server rejection carries the clearest wording available (for example
       // a 422 naming the size or type restriction); anything else keeps the
       // generic retry copy.
@@ -183,6 +195,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+      return false;
     } finally {
       if (mounted) {
         setState(() => _uploadingAvatar = false);
@@ -191,6 +204,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _save() async {
+    if (_uploadingAvatar || _controller.state.isBusy) {
+      return;
+    }
+
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -214,25 +231,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
     }
 
-    if (!emailChanged) {
-      final bool saved = await doSave();
-      if (saved && mounted) {
-        Navigator.of(context).pop(true);
+    // Ask for the password before doing anything irreversible, so cancelling
+    // the prompt leaves both the form and the server untouched.
+    String? currentPassword;
+    if (emailChanged) {
+      currentPassword = await _promptCurrentPassword();
+      if (currentPassword == null || currentPassword.isEmpty) {
+        return;
       }
+      if (!mounted) {
+        return;
+      }
+    }
+
+    // The avatar goes first so an upload failure aborts the whole save and
+    // leaves every pending change on the form. A later field failure keeps the
+    // avatar saved and the screen open, as before.
+    if (!await _uploadPendingAvatar()) {
+      return;
+    }
+    if (!mounted) {
       return;
     }
 
-    String? currentPassword;
     while (true) {
-      final String? password = await _promptCurrentPassword(
-        error: currentPassword == null
-            ? null
-            : _controller.state.errorFor('current_password'),
-      );
-      if (password == null || password.isEmpty) {
-        return;
-      }
-      currentPassword = password;
       final bool saved = await doSave(currentPassword: currentPassword);
       if (saved && mounted) {
         Navigator.of(context).pop(true);
@@ -241,10 +263,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) {
         return;
       }
+
+      if (!emailChanged) {
+        return;
+      }
+
       final String? error = _controller.state.errorFor('current_password');
       if (error == null) {
         return;
       }
+
+      final String? nextPassword = await _promptCurrentPassword(error: error);
+      if (nextPassword == null || nextPassword.isEmpty) {
+        return;
+      }
+      currentPassword = nextPassword;
     }
   }
 
@@ -381,7 +414,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         const SizedBox(height: AppSpacing.lg),
                         FilledButton(
                           onPressed: isBusy ? null : _save,
-                          child: isSaving
+                          child: isBusy
                               ? const SizedBox.square(
                                   dimension: 18,
                                   child: CircularProgressIndicator(

@@ -435,8 +435,11 @@ decision and never sets it. **[MS Limitation 4]**
 
 ```text
   DRAFT ──submit──> PENDING ──admin approve──> ACTIVE ──seller marks sold──> SOLD
-                      │                          │
-                      └──admin reject──> INACTIVE<┘ admin deactivates
+                       │                          │
+                       └──admin reject──> INACTIVE<┘ admin or seller deactivates
+                                                     │
+                               seller-deactivated only └──seller reactivates──> ACTIVE
+                               admin-deactivated only  └──admin reactivates──> ACTIVE
 ```
 
 | From | To | Who |
@@ -445,6 +448,9 @@ decision and never sets it. **[MS Limitation 4]**
 | `pending` | `active` | Admin approves |
 | `pending` | `inactive` | Admin rejects |
 | `active` | `inactive` | Admin deactivates |
+| `active` | `inactive` | Seller voluntarily deactivates their own listing **[DEC-12]** |
+| `inactive` | `active` | Seller restores only their own seller-deactivated listing, subject to eligibility **[DEC-12]** |
+| `inactive` | `active` | Admin restores only an admin-deactivated listing after resolving the moderation issue **[DEC-12]** |
 | `active` | `sold` | **Seller marks as sold** **[MS-P Figure 23]** |
 
 Rules:
@@ -464,8 +470,21 @@ Rules:
    may decrease as accepted transactions reserve animals. Fully reserved or
    sold-out listings are not offered in the buyer marketplace; the seller marks
    the listing sold when all remaining available animals are sold externally.
-   Multi-quantity inventory and its legacy reconciliation rules are recorded in
-   DEC-10 (§6.4, §13.8).
+    Multi-quantity inventory and its legacy reconciliation rules are recorded in
+    DEC-10 (§6.4, §13.8).
+10. A seller may deactivate their own active listing. This hides it from the
+    Marketplace but does not cancel reservations or alter inventory or
+    transaction history. A seller may reactivate only an inactive listing whose
+    latest lifecycle decision records that seller's voluntary deactivation, with
+    reconciled inventory and available quantity greater than zero. Sellers cannot
+    restore administrator-deactivated or rejected listings. Administrators may
+    restore only administrator-deactivated listings after resolving the
+    moderation issue. A sold listing is terminal; further livestock requires a
+    new listing. **[DEC-12]**
+11. Hard deletion remains limited to eligible `draft` or `inactive` listings and
+    is refused if any transaction history exists (pending, completed or
+    cancelled), if a reservation exists, or if inventory requires reconciliation.
+    There is no deletion-request workflow or archive status. **[DEC-12]**
 
 > **[OPEN] MS-01 — direct publish vs admin approval.** The Add New Listing
 > prototype (Figure 22) has a seller-chosen "Status: Active" and a "Publish
@@ -474,9 +493,10 @@ Rules:
 > `rejectListing`. Until the author decides, the admin-approval lifecycle above
 > stays in force.
 
-> **[OPEN] MS-02 — reactivation.** The prototype shows "Reactivate Listing" on
-> a sold listing (Figure 23). No transition back to `active` is defined above
-> until this is decided.
+> **MS-02 — reactivation (resolved by DEC-12, 2026-11-17).** The prototype's
+> sold-listing reactivation is not adopted: sold listings are terminal. Seller
+> and administrator restoration are limited to their distinct deactivation
+> sources and the eligibility rules above.
 
 **Do not invent additional listing states.** The five above are the complete
 set and match the ERD.
@@ -1006,7 +1026,7 @@ for the manuscript's author.
 | ID | Question |
 |---|---|
 | **MS-01** | **Listing publication:** may a seller publish directly (prototype Figure 22, "Status: Active" / "Publish Listing"), or must an administrator approve first (class diagram p.88)? |
-| **MS-02** | **Reactivation:** may a sold or inactive listing be put back on sale ("Reactivate Listing", Figure 23)? |
+| ~~**MS-02**~~ | **Reactivation:** resolved by DEC-12 (2026-11-17). Sold listings are terminal; seller/admin restoration is limited to the distinct deactivation source and eligibility rules in §4.4. |
 | **MS-04** | **Diagrams:** will the class diagrams (Payment, Conversation, JWT, `role: seller`, `archived`) be redrawn to match the ERD and the text? |
 | **MS-05** | **Verification documents:** Should the selfie the current app asks for be removed? ~~Confirm Valid ID + Proof of Address + Farm Photos (optional).~~ Implemented as in Figure 19. ~~Is the farm/business name optional?~~ Yes (project decision, 2026-11-03; see §3.3). |
 | **MS-06** | **Editing an application:** may a pending application be edited ("Edit Application", Figure 19), given that resubmission creates a new record? |
@@ -1097,6 +1117,12 @@ inventory is never inferred from ambiguous unreserved transaction rows.
 |---|---|---|
 | **DEC-11** | Submitted vs Pending Review | Submitted is the cumulative log of every submission; Pending Review is every open submission and empties as submissions are decided; Approved and Rejected count every submission with that outcome, so Submitted = Approved + Rejected + Pending Review (§3.5). Requested by the client and confirmed by the developer (Trello "Kompanya": "clarify the difference between Submitted and Pending Review"). |
 
+### 13.10 Closed by project-owner decision (2026-11-17)
+
+| ID | Decision | Resolution |
+|---|---|---|
+| **DEC-12 / MS-02** | Seller listing actions and history retention | Sellers may voluntarily deactivate their own active listings without cancelling reservations or changing inventory. They may reactivate only their own eligible seller-deactivated inactive listings with reconciled, available inventory and no moderation restriction. Admin-deactivated listings can be restored only by an administrator after resolving the issue; rejected listings cannot be seller-restored. Sold listings are terminal. Permanent deletion is limited to eligible listings without any transaction history or active reservations and without reconciliation requirements. No deletion-request workflow, archive status or migration is introduced. (§4.4) |
+
 ---
 
 ## 14. Change control
@@ -1138,4 +1164,5 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-14 | **[DEC-10]** Project manager approved multi-quantity listings, partial offers no greater than buyer-requested quantity, atomic quantity reservation, per-head listing price, total offer amount, sold-out Marketplace exclusion and seller external Mark Sold accounting. DEC-09's one-head offer limit and OQ-17 are superseded/resolved. Added conservative, auditable legacy inventory reconciliation (§4.4, §6.1, §6.4, §13.7–§13.8); update the capstone manuscript to match. |
 | 2026-11-15 | **[DEC-11]** Defined the Admin Web seller verification views (§3.5, §13.9): Submitted is every submission, Pending Review is every open submission, Approved and Rejected count submissions with that outcome, and Submitted = Approved + Rejected + Pending Review across the tabs, dashboard, sidebar and Reports. The four stored states (§3.1) and the resubmission rule (§3.2) are unchanged. |
 | 2026-11-17 | Implemented a buyer-visible public seller profile reached from the Listing Details seller card (two tabs: Profile and Listings). The manuscript does not define this screen or its disclosure set; recorded as open item **OQ-18** (§13.3) for confirmation. The profile reuses the marketplace listing visibility, discloses only barangay-level location and never private contact or verification documents. |
+| 2026-11-17 | **[DEC-12]** Recorded Ma'am Rox's approved seller deactivation/reactivation, administrator-only restoration of admin-deactivated listings, terminal sold status, and transaction-history deletion safeguards (§4.4, §13.2, §13.10). No deletion-request workflow, archive status or database migration is introduced. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

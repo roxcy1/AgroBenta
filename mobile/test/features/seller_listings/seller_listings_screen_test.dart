@@ -115,35 +115,38 @@ void main() {
     expect(find.byType(SellerListingFormScreen), findsOneWidget);
   });
 
-  testWidgets('offers All, Drafts, Pending, Active, Sold and Inactive filters', (
-    WidgetTester tester,
-  ) async {
-    final harness = await SellerListingsHarness.pump(
-      tester,
-      handler: (_) async => sellerListingListResponse(
-        listings: <Map<String, dynamic>>[listingJson(id: 1, status: 'active')],
-      ),
-    );
+  testWidgets(
+    'offers All, Drafts, Pending, Active, Sold and Inactive filters',
+    (WidgetTester tester) async {
+      final harness = await SellerListingsHarness.pump(
+        tester,
+        handler: (_) async => sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listingJson(id: 1, status: 'active'),
+          ],
+        ),
+      );
 
-    for (final String label in <String>[
-      'All',
-      'Drafts',
-      'Pending review',
-      'Active',
-      'Sold',
-      'Inactive',
-    ]) {
-      expect(find.text(label), findsWidgets, reason: 'missing $label chip');
-    }
+      for (final String label in <String>[
+        'All',
+        'Drafts',
+        'Pending review',
+        'Active',
+        'Sold',
+        'Inactive',
+      ]) {
+        expect(find.text(label), findsWidgets, reason: 'missing $label chip');
+      }
 
-    await tester.tap(find.text('Inactive'));
-    await tester.pumpAndSettle();
-    expect(harness.recorded.last.query['status'], 'inactive');
+      await tester.tap(find.text('Inactive'));
+      await tester.pumpAndSettle();
+      expect(harness.recorded.last.query['status'], 'inactive');
 
-    await tester.tap(find.text('All'));
-    await tester.pumpAndSettle();
-    expect(harness.recorded.last.query.containsKey('status'), isFalse);
-  });
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
+      expect(harness.recorded.last.query.containsKey('status'), isFalse);
+    },
+  );
 
   testWidgets('compact actions fit a narrow screen without overflow', (
     WidgetTester tester,
@@ -393,6 +396,27 @@ void main() {
     expect(find.text('Mark sold'), findsOneWidget);
   });
 
+  testWidgets(
+    'unreconciled active inventory hides Mark sold but permits deactivation',
+    (WidgetTester tester) async {
+      final Map<String, dynamic> listing = listingJson(
+        id: 1,
+        livestockType: 'Cattle',
+        status: 'active',
+      )..['inventory_reconciliation_required'] = true;
+      await SellerListingsHarness.pump(
+        tester,
+        handler: (RecordedRequest request) async => sellerListingListResponse(
+          listings: <Map<String, dynamic>>[listing],
+          total: 1,
+        ),
+      );
+
+      expect(find.text('Mark sold'), findsNothing);
+      expect(find.text('Deactivate'), findsOneWidget);
+    },
+  );
+
   testWidgets('a pending listing does not offer Mark as sold', (
     WidgetTester tester,
   ) async {
@@ -442,6 +466,114 @@ void main() {
     // The sold listing is reflected in the list.
     expect(find.text('Sold'), findsWidgets);
   });
+
+  testWidgets('deactivation requires confirmation and refreshes the listing', (
+    WidgetTester tester,
+  ) async {
+    int listRequests = 0;
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath.endsWith('/deactivate')) {
+          return sellerListingResponse(
+            listing: listingJson(id: 1, status: 'inactive'),
+          );
+        }
+        final Map<String, dynamic> inactive = listingJson(
+          id: 1,
+          livestockType: 'Cattle',
+          status: 'inactive',
+        )..['seller_can_reactivate'] = true;
+        listRequests++;
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[
+            listRequests == 1
+                ? listingJson(id: 1, livestockType: 'Cattle', status: 'active')
+                : inactive,
+          ],
+          total: 1,
+        );
+      },
+    );
+
+    await tester.tap(find.text('Deactivate'));
+    await sellerListingsSettle(tester);
+    expect(find.text('Deactivate this listing?'), findsOneWidget);
+    expect(find.textContaining('Existing reservations'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Deactivate'));
+    await sellerListingsSettle(tester);
+
+    expect(find.text('Inactive'), findsWidgets);
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'a successful status change refreshes the existing list screen',
+    );
+  });
+
+  testWidgets('only an eligible inactive listing offers Reactivate', (
+    WidgetTester tester,
+  ) async {
+    await SellerListingsHarness.pump(
+      tester,
+      handler: (RecordedRequest request) async {
+        if (request.apiPath.endsWith('/reactivate')) {
+          return sellerListingResponse(
+            listing: listingJson(
+              id: 1,
+              livestockType: 'Cattle',
+              status: 'active',
+            ),
+          );
+        }
+        final Map<String, dynamic> inactive =
+            listingJson(id: 1, livestockType: 'Cattle', status: 'inactive')
+              ..['seller_can_reactivate'] = true
+              ..['seller_can_delete'] = false;
+        return sellerListingListResponse(
+          listings: <Map<String, dynamic>>[inactive],
+          total: 1,
+        );
+      },
+    );
+
+    expect(find.text('Reactivate'), findsOneWidget);
+    await tester.tap(find.text('Reactivate'));
+    await sellerListingsSettle(tester);
+    expect(find.text('Reactivate this listing?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Reactivate'));
+    await sellerListingsSettle(tester);
+
+    expect(find.text('Active'), findsWidgets);
+    expect(
+      find.text('Delete'),
+      findsNothing,
+      reason:
+          'the server explicitly reports that transaction history blocks deletion',
+    );
+  });
+
+  testWidgets(
+    'inactive actions hidden when the server says neither is allowed',
+    (WidgetTester tester) async {
+      final Map<String, dynamic> restricted =
+          listingJson(id: 1, livestockType: 'Cattle', status: 'inactive')
+            ..['seller_can_reactivate'] = false
+            ..['seller_can_delete'] = false;
+      await SellerListingsHarness.pump(
+        tester,
+        handler: (RecordedRequest request) async => sellerListingListResponse(
+          listings: <Map<String, dynamic>>[restricted],
+          total: 1,
+        ),
+      );
+
+      expect(find.text('Reactivate'), findsNothing);
+      expect(find.text('Delete'), findsNothing);
+    },
+  );
 }
 
 Future<void> sellerListingsSettle(

@@ -165,15 +165,38 @@ class SellerListingService {
     );
   }
 
+  /// `POST /seller/listings/{id}/deactivate` — hide an active listing while
+  /// preserving inventory and any existing reservations.
+  Future<Listing> deactivate(int id) {
+    return _apiClient.post<Listing>(
+      SellerListingEndpoints.deactivate(id),
+      parse: (Object? data) => Listing.fromJson(
+        _asObject(data, 'POST /seller/listings/$id/deactivate'),
+      ),
+    );
+  }
+
+  /// `POST /seller/listings/{id}/reactivate` — restore an eligible listing
+  /// voluntarily deactivated by this seller.
+  Future<Listing> reactivate(int id) {
+    return _apiClient.post<Listing>(
+      SellerListingEndpoints.reactivate(id),
+      parse: (Object? data) => Listing.fromJson(
+        _asObject(data, 'POST /seller/listings/$id/reactivate'),
+      ),
+    );
+  }
+
   /// `DELETE /seller/listings/{id}` — destroy a draft or withdrawn listing.
   ///
-  /// A real deletion, and the server restricts it to a `draft` or `inactive`
-  /// listing. It is **not** a deactivation: there is no seller route that takes a
-  /// live listing out of sale, because `active → inactive` is an administrator
-  /// decision ([D-02] rule 4).
+  /// A real deletion, and the server restricts it to an eligible `draft` or
+  /// `inactive` listing without transaction history, active reservations, or
+  /// unresolved inventory reconciliation. Active listings use the explicit
+  /// deactivation action instead.
   ///
   /// Throws [ApiException]:
-  ///  * `conflict` on a `409` — the listing is live, pending or sold.
+  ///  * `conflict` on a `409` — the listing is not deletable or history/inventory
+  ///    safeguards prevent deletion.
   ///  * `notFound` on a `404` — not the caller's listing, or already deleted.
   Future<void> delete(int id) {
     return _apiClient.delete<void>(

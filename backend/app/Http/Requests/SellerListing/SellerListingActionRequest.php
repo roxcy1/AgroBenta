@@ -5,16 +5,16 @@ namespace App\Http\Requests\SellerListing;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Body for the two actions that take no input: submit and destroy.
+ * Empty body for named seller listing actions: submit, mark-sold, deactivate,
+ * reactivate and destroy.
  *
  * A dedicated class rather than reusing `UpdateSellerListingRequest`, so that
- * `PATCH /seller/listings/{id}` and `POST /seller/listings/{id}/submit` cannot
- * accidentally acquire each other's rules. A submit carrying a body is almost
- * certainly a client that meant to send an edit, and keeping the two endpoints'
- * rule sets genuinely different is worth a small extra class.
+ * content updates cannot accidentally acquire action rules or vice versa. An
+ * action carrying a body is almost certainly a client that meant to send an
+ * edit, and keeping endpoint rule sets genuinely different is worth this class.
  *
- * The contract's allow-list for these two routes is empty: §5.4 records
- * "Request fields: None" for both, and the §6.2 security matrix gives `submit`
+ * The allow-list for these action routes is empty: §5.4 records
+ * "Request fields: None", and the §6.2 security matrix gives `submit`
  * "Fields the client may set: none — fields rejected if present: all". Laravel
  * ignores a key that appears in no rule, so a literally empty `rules()` would
  * *silently drop* every field instead of rejecting it — and a silently dropped
@@ -43,7 +43,7 @@ class SellerListingActionRequest extends FormRequest
      * accepted, and the client gets the standard `422` envelope keyed to the
      * field it should not have sent. Query-string parameters are included, so
      * `?status=active` on `submit` is refused too — the contract deliberately
-     * specifies no `?status=` variant of the action.
+     * specifies no `?status=` variant of any action.
      *
      * @return array<string, list<string>>
      */

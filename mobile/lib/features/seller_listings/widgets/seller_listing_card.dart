@@ -32,6 +32,8 @@ class SellerListingCard extends StatelessWidget {
     required this.onTap,
     required this.onSubmit,
     required this.onMarkSold,
+    required this.onDeactivate,
+    required this.onReactivate,
     required this.onEdit,
     required this.onDelete,
     this.busy = false,
@@ -46,6 +48,10 @@ class SellerListingCard extends StatelessWidget {
 
   /// Marks the listing as sold.
   final VoidCallback onMarkSold;
+
+  final VoidCallback onDeactivate;
+
+  final VoidCallback onReactivate;
 
   /// Edits the listing.
   final VoidCallback onEdit;
@@ -154,6 +160,8 @@ class SellerListingCard extends StatelessWidget {
             onView: onTap,
             onSubmit: onSubmit,
             onMarkSold: onMarkSold,
+            onDeactivate: onDeactivate,
+            onReactivate: onReactivate,
             onEdit: onEdit,
             onDelete: onDelete,
           ),
@@ -194,6 +202,8 @@ class _ActionBar extends StatelessWidget {
     required this.onView,
     required this.onSubmit,
     required this.onMarkSold,
+    required this.onDeactivate,
+    required this.onReactivate,
     required this.onEdit,
     required this.onDelete,
   });
@@ -203,6 +213,8 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback onView;
   final VoidCallback onSubmit;
   final VoidCallback onMarkSold;
+  final VoidCallback onDeactivate;
+  final VoidCallback onReactivate;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -239,12 +251,21 @@ class _ActionBar extends StatelessWidget {
             onPressed: onEdit,
           ),
         );
+        if (canMarkSold) {
+          actions.add(
+            _compactAction(
+              icon: Icons.done_outline,
+              label: 'Mark sold',
+              onPressed: onMarkSold,
+              color: AppColors.sold,
+            ),
+          );
+        }
         actions.add(
           _compactAction(
-            icon: Icons.done_outline,
-            label: 'Mark sold',
-            onPressed: canMarkSold ? onMarkSold : null,
-            color: AppColors.sold,
+            icon: Icons.visibility_off_outlined,
+            label: 'Deactivate',
+            onPressed: onDeactivate,
           ),
         );
         break;
@@ -259,14 +280,25 @@ class _ActionBar extends StatelessWidget {
         );
         break;
       case ListingStatus.inactive:
-        actions.add(
-          _compactAction(
-            icon: Icons.delete_outline,
-            label: 'Delete',
-            onPressed: onDelete,
-            color: AppColors.error,
-          ),
-        );
+        if (SellerListingController.canReactivate(listing)) {
+          actions.add(
+            _compactAction(
+              icon: Icons.visibility_outlined,
+              label: 'Reactivate',
+              onPressed: onReactivate,
+            ),
+          );
+        }
+        if (SellerListingController.canDelete(listing)) {
+          actions.add(
+            _compactAction(
+              icon: Icons.delete_outline,
+              label: 'Delete',
+              onPressed: onDelete,
+              color: AppColors.error,
+            ),
+          );
+        }
         break;
     }
 

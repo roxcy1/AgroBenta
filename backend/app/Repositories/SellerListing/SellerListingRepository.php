@@ -2,7 +2,9 @@
 
 namespace App\Repositories\SellerListing;
 
+use App\Enums\ActivityAction;
 use App\Enums\ListingStatus;
+use App\Models\Activity;
 use App\Models\Listing;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -25,6 +27,38 @@ use Illuminate\Database\Eloquent\Builder;
 class SellerListingRepository
 {
     /**
+     * Latest status-changing lifecycle activity for each requested listing.
+     * Missing audit history is absent from the map and therefore fails closed.
+     *
+     * @param  list<int>  $listingIds
+     * @return array<int, Activity>
+     */
+    public function latestLifecycleActivitiesForListings(array $listingIds): array
+    {
+        if ($listingIds === []) {
+            return [];
+        }
+
+        return Activity::query()
+            ->where('metadata->target_type', 'listing')
+            ->whereIn('metadata->target_id', $listingIds)
+            ->whereIn('action', [
+                ActivityAction::ListingApproved->value,
+                ActivityAction::ListingRejected->value,
+                ActivityAction::ListingDeactivated->value,
+                ActivityAction::ListingSellerDeactivated->value,
+                ActivityAction::ListingSellerReactivated->value,
+                ActivityAction::ListingAdminReactivated->value,
+                ActivityAction::ListingMarkedSold->value,
+            ])
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy(static fn (Activity $activity): string => (string) ($activity->metadata['target_id'] ?? ''))
+            ->mapWithKeys(static fn ($activities, string $id): array => [(int) $id => $activities->first()])
+            ->all();
+    }
+
+    /**
      * Paginate one seller's listings, optionally narrowed to one status.
      */
     public function paginateForSeller(
@@ -44,12 +78,14 @@ class SellerListingRepository
 
         $this->applySearch($query, $search);
 
-        return $query
+        $paginator = $query
             // A total order, so two listings written in the same second cannot
             // appear on two pages at once.
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($perPage);
+
+        return $paginator;
     }
 
     /**
@@ -91,12 +127,14 @@ class SellerListingRepository
      */
     public function findOwned(int $listingId, User $seller): ?Listing
     {
-        return Listing::query()
+        $listing = Listing::query()
             ->withInventoryTotals()
             ->with('seller:id,name')
             ->where('id', $listingId)
             ->where('seller_id', $seller->getKey())
             ->first();
+
+        return $listing;
     }
 
     /**
@@ -128,11 +166,8 @@ class SellerListingRepository
         $listing->fill($attributes);
         $listing->save();
 
-        return Listing::query()
-            ->withInventoryTotals()
-            ->with('seller:id,name')
-            ->whereKey($listing->getKey())
-            ->firstOrFail();
+        return $this->findOwned((int) $listing->getKey(), $listing->seller)
+            ?? throw new \RuntimeException('Updated listing could not be reloaded.');
     }
 
     /**
@@ -140,11 +175,9 @@ class SellerListingRepository
      *
      * Hard delete, not a soft one: the `listings` table has no `deleted_at`
      * column, and adding one is a schema change this phase does not authorise.
-     * The service restricts the call to the states the contract allows to be
-     * destroyed, so a removed draft or withdrawn listing leaves nothing behind
-     * for moderation to review. An `active` listing is never reachable here.
-     *
-     * @see \App\Services\SellerListing\SellerListingService::delete()
+     * The service restricts the call to eligible states and confirms that no
+     * transaction history will be removed. An `active` listing is never
+     * reachable here.
      */
     public function delete(Listing $listing): void
     {

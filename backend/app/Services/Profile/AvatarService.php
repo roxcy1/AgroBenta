@@ -5,8 +5,11 @@ namespace App\Services\Profile;
 use App\Models\User;
 use App\Repositories\UserRepository;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -40,20 +43,46 @@ class AvatarService
      * Store [file] as [user]'s new avatar and remove the previous one.
      *
      * The new file is written first, then persisted, and only then is the old
-     * file deleted. A failed database write removes the orphaned new file and
-     * rethrows, so the account keeps its previous avatar and no unreferenced
-     * file is left behind.
+     * file deleted. A failed write or database update removes the orphaned new
+     * file and rethrows, so the account keeps its previous avatar and no
+     * unreferenced file is left behind.
+     *
+     * The previous URL is read from the row under a lock, inside the same
+     * transaction as the update. Two overlapping uploads therefore serialize:
+     * the second request replaces the first request's URL and deletes the file
+     * the first request actually stored, instead of both seeing the same stale
+     * URL and leaving one new file orphaned.
      */
     public function upload(User $user, UploadedFile $file): User
     {
-        $previousUrl = $user->avatar_url;
         $path = $file->store($this->directory($user), self::DISK);
 
+        // `store()` returns `string|false`. A failed write has nothing to
+        // clean up and must not reach the database: there is no URL to persist.
+        if ($path === false) {
+            throw new RuntimeException('Failed to store the avatar.');
+        }
+
+        $previousUrl = null;
+
         try {
-            $updated = $this->users->updateAvatarUrl(
-                $user,
-                $this->disk()->url($path),
-            );
+            $updated = DB::transaction(function () use ($user, $path, &$previousUrl): User {
+                $locked = $this->users->findForUpdate((int) $user->getKey());
+
+                if ($locked === null) {
+                    throw (new ModelNotFoundException)->setModel(
+                        User::class,
+                        [$user->getKey()],
+                    );
+                }
+
+                $previousUrl = $locked->avatar_url;
+
+                return $this->users->updateAvatarUrl(
+                    $locked,
+                    $this->disk()->url($path),
+                );
+            });
         } catch (Throwable $exception) {
             $this->disk()->delete($path);
 
