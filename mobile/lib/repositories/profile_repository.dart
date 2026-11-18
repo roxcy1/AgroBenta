@@ -1,3 +1,5 @@
+import 'package:image_picker/image_picker.dart';
+
 import '../models/user.dart';
 import '../services/profile_service.dart';
 
@@ -46,4 +48,8 @@ class ProfileRepository {
       newPassword: newPassword,
     );
   }
+
+  /// Uploads a new avatar image.
+  Future<User> uploadAvatar(XFile imageFile) =>
+      _service.uploadAvatar(imageFile);
 }

@@ -1,3 +1,8 @@
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../models/user.dart';
@@ -74,6 +79,31 @@ class ProfileService {
         'password_confirmation': newPassword,
       },
       parse: (_) {},
+    );
+  }
+
+  /// `POST /profile/avatar` — uploads a new avatar.
+  ///
+  /// Reads the picked file into memory and sends it with
+  /// `MultipartFile.fromBytes` rather than `fromPath`: an `XFile.path` is not
+  /// a filesystem path on Flutter Web, so `fromPath` would throw there.
+  ///
+  /// Uses the shared `postMultipart` on [ApiClient] so the token, timeout,
+  /// envelope unmarshaling and [ApiException] translation are all identical
+  /// to a JSON request. Rolling a raw `http.MultipartRequest` here would
+  /// duplicate that logic and drift.
+  Future<User> uploadAvatar(XFile imageFile) async {
+    final Uint8List bytes = await imageFile.readAsBytes();
+    final http.MultipartFile file = http.MultipartFile.fromBytes(
+      'avatar',
+      bytes,
+      filename: imageFile.name,
+    );
+
+    return _client.postMultipart<User>(
+      path: ProfileEndpoints.uploadAvatar,
+      files: <http.MultipartFile>[file],
+      parse: (Object? data) => User.fromJson(_asMap(data)),
     );
   }
 

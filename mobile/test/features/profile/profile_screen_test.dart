@@ -10,6 +10,7 @@ import 'package:agrobenta_mobile/features/profile/state/profile_controller.dart'
 import 'package:agrobenta_mobile/features/profile/state/profile_scope.dart';
 import 'package:agrobenta_mobile/features/profile/view/change_password_screen.dart';
 import 'package:agrobenta_mobile/features/profile/view/edit_profile_screen.dart';
+import 'package:agrobenta_mobile/features/profile/view/personal_information_screen.dart';
 import 'package:agrobenta_mobile/features/profile/view/profile_screen.dart';
 import 'package:agrobenta_mobile/features/help_center/view/help_center_screen.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_screen.dart';
@@ -359,7 +360,7 @@ void main() {
     expect(find.text('Edit address'), findsOneWidget);
   });
 
-  testWidgets('rapid Personal Information taps push only one edit form', (
+  testWidgets('rapid Personal Information taps push only one details screen', (
     WidgetTester tester,
   ) async {
     await pumpProfile(
@@ -376,7 +377,7 @@ void main() {
     onTap();
     await settleAuth(tester, frames: 12);
 
-    expect(find.byType(EditProfileScreen), findsOneWidget);
+    expect(find.byType(PersonalInformationScreen), findsOneWidget);
   });
 
   testWidgets('rapid Change Password taps push only one password form', (
@@ -623,7 +624,7 @@ void main() {
     expect(find.text('Browse and purchase livestock.'), findsOneWidget);
   });
 
-  testWidgets('Personal Information opens the existing edit form', (
+  testWidgets('Edit and Personal Information open details before the form', (
     WidgetTester tester,
   ) async {
     await pumpProfile(
@@ -634,13 +635,27 @@ void main() {
 
     await tester.tap(find.widgetWithText(TextButton, 'Edit'));
     await settleAuth(tester, frames: 12);
+    expect(find.byType(PersonalInformationScreen), findsOneWidget);
+    expect(find.byType(EditProfileScreen), findsNothing);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+    await settleAuth(tester, frames: 12);
     expect(find.byType(EditProfileScreen), findsOneWidget);
     expect(find.byType(TrinidadLocationSelector), findsNothing);
 
     Navigator.of(tester.element(find.byType(EditProfileScreen))).pop();
     await settleAuth(tester, frames: 12);
+    expect(find.byType(PersonalInformationScreen), findsOneWidget);
+
+    Navigator.of(tester.element(find.byType(PersonalInformationScreen))).pop();
+    await settleAuth(tester, frames: 12);
 
     await tapAction(tester, 'Personal Information');
+    expect(find.byType(PersonalInformationScreen), findsOneWidget);
+    expect(find.byType(EditProfileScreen), findsNothing);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+    await settleAuth(tester, frames: 12);
     expect(find.byType(EditProfileScreen), findsOneWidget);
     expect(find.byType(TrinidadLocationSelector), findsNothing);
   });

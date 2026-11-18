@@ -43,4 +43,32 @@ class UserRepository
 
         return $user;
     }
+
+    /**
+     * Read [id] under a row lock for an avatar replacement.
+     *
+     * Used inside the avatar upload transaction so the previous URL is read
+     * from the committed row rather than from the request-scoped model. Two
+     * overlapping uploads therefore serialize, and the second one replaces the
+     * first one's URL instead of a stale one.
+     */
+    public function findForUpdate(int $id): ?User
+    {
+        return User::query()->whereKey($id)->lockForUpdate()->first();
+    }
+
+    /**
+     * Persist a new avatar URL for [user].
+     *
+     * Only `avatar_url` is written. The caller has already decided which file
+     * the URL points at; ownership of that file is enforced by the avatar
+     * service before this runs.
+     */
+    public function updateAvatarUrl(User $user, string $url): User
+    {
+        $user->avatar_url = $url;
+        $user->save();
+
+        return $user;
+    }
 }

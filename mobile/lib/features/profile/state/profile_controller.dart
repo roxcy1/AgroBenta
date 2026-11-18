@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../models/user.dart';
@@ -99,6 +100,12 @@ class ProfileController extends ChangeNotifier {
     }
   }
 
+  /// Re-fetches the profile while keeping what is on screen.
+  ///
+  /// On failure the previous profile stays in place — a refresh that loses
+  /// data because the network blinked is worse than a stale screen.
+  Future<void> refresh() => load();
+
   /// Saves the given fields. Returns `true` when the server accepted the update.
   ///
   /// Only the fields the caller passes are sent; a `null` argument means
@@ -178,6 +185,13 @@ class ProfileController extends ChangeNotifier {
       );
       return false;
     }
+  }
+
+  /// Uploads a new avatar and merges the server's response into [state].
+  Future<User> uploadAvatar(XFile imageFile) async {
+    final User updated = await _repository.uploadAvatar(imageFile);
+    _set(_state.copyWith(user: updated));
+    return updated;
   }
 
   /// Changes the caller's password. Returns `true` on success.
