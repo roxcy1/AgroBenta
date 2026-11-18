@@ -22,12 +22,24 @@ describe('moderationOptionsFor', () => {
     expect(moderationOptionsFor('active').map((o) => o.action)).toEqual(['deactivate']);
   });
 
-  it('offers nothing to a listing that has already been decided', () => {
-    // `inactive` is both the rejection destination and the deactivation
-    // destination. Offering either action again would be a button whose only
-    // possible outcome is a 409, because the lifecycle defines no path out of
-    // `inactive` and no path back into `active`.
+  it('offers nothing to an inactive listing when inventory data is not available', () => {
+    // Without inventory data the preliminary check cannot establish that a
+    // restoration attempt is worth offering.
     expect(moderationOptionsFor('inactive')).toEqual([]);
+  });
+
+  it('offers Reactivate for an inactive listing with consistent positive inventory', () => {
+    expect(moderationOptionsFor('inactive', eligibleInventory).map((option) => option.action))
+      .toEqual(['reactivate']);
+  });
+
+  it.each([
+    ['reconciliation required', { ...eligibleInventory, inventory_reconciliation_required: true }],
+    ['no available stock', { ...eligibleInventory, quantity: 0, available_quantity: 0 }],
+    ['unknown inventory totals', { ...eligibleInventory, total_quantity: null }],
+    ['inconsistent inventory totals', { ...eligibleInventory, total_quantity: 5 }],
+  ])('hides Reactivate when inventory has a known blocker: %s', (_case, inventory) => {
+    expect(moderationOptionsFor('inactive', inventory)).toEqual([]);
   });
 
   it('offers nothing to a draft, which has never been reviewed', () => {
@@ -47,13 +59,12 @@ describe('moderationOptionsFor', () => {
   });
 
   it('never offers an action that the server has no endpoint for', () => {
-    // Guards against a fourth action being added to the client while the backend
-    // still has only three routes.
+    // Every client action must correspond to one of the backend's named routes.
     const offered = LISTING_STATUSES.flatMap((status) =>
-      moderationOptionsFor(status).map((o) => o.action),
+      moderationOptionsFor(status, eligibleInventory).map((o) => o.action),
     );
 
-    expect(new Set(offered)).toEqual(new Set(['approve', 'reject', 'deactivate']));
+    expect(new Set(offered)).toEqual(new Set(['approve', 'reject', 'deactivate', 'reactivate']));
   });
 
   it('never offers the same action twice for one listing', () => {
@@ -74,13 +85,12 @@ describe('the destinations each action expects', () => {
     expect(result('active', 'deactivate')).toBe('inactive');
   });
 
-  it('does not claim any action returns a listing to active from inactive', () => {
-    // A-02 / OQ-16: there is no reactivation. Asserted directly because
-    // reactivation is the one feature most likely to be reintroduced by a
-    // future change to this table.
-    const actions = moderationOptionsFor('inactive').map((o) => o.resultStatus);
+  it('reactivates an inventory-eligible inactive listing to active', () => {
+    const option = moderationOptionsFor('inactive', eligibleInventory)[0];
 
-    expect(actions).not.toContain('active');
+    expect(option.resultStatus).toBe('active');
+    expect(option.label).toBe('Reactivate');
+    expect(option.confirmMessage).toContain('visible in the Marketplace again');
   });
 
   it('gives every action copy that names its own confirmation', () => {
@@ -95,6 +105,16 @@ describe('the destinations each action expects', () => {
     }
   });
 });
+
+const eligibleInventory = {
+  quantity: 4,
+  total_quantity: 6,
+  reserved_quantity: 1,
+  platform_sold_quantity: 1,
+  externally_sold_quantity: 0,
+  available_quantity: 4,
+  inventory_reconciliation_required: false,
+};
 
 describe('isPendingReview', () => {
   it('is true for exactly one status', () => {

@@ -4,6 +4,7 @@ import type { Listing } from '../api/useListings';
 import {
   useApproveListing,
   useDeactivateListing,
+  useReactivateListing,
   useRejectListing,
 } from '../api/useListings';
 import ListingPhotos from './ListingPhotos';
@@ -42,9 +43,16 @@ export default function ListingReviewDialog({
   const approve = useApproveListing();
   const reject = useRejectListing();
   const deactivate = useDeactivateListing();
+  const reactivate = useReactivateListing();
 
   const mutation =
-    option.action === 'approve' ? approve : option.action === 'reject' ? reject : deactivate;
+    option.action === 'approve'
+      ? approve
+      : option.action === 'reject'
+        ? reject
+        : option.action === 'deactivate'
+          ? deactivate
+          : reactivate;
   const isPending = mutation.isPending;
 
   useEffect(() => {
@@ -69,8 +77,10 @@ export default function ListingReviewDialog({
       approve.mutate(listing.id, { onSuccess, onError });
     } else if (option.action === 'reject') {
       reject.mutate({ id: listing.id, adminNote: adminNote.trim() || undefined }, { onSuccess, onError });
-    } else {
+    } else if (option.action === 'deactivate') {
       deactivate.mutate(listing.id, { onSuccess, onError });
+    } else {
+      reactivate.mutate(listing.id, { onSuccess, onError });
     }
   }
 
@@ -188,14 +198,14 @@ export default function ListingReviewDialog({
 /**
  * A moderation failure the moderator can act on.
  *
- * A 409 is the interesting one and gets its own message: the listing was not in
- * a state where this decision applied, which is almost always because another
- * administrator acted on it first. The list query is invalidated by the mutation
- * hook either way, so the row behind the dialog is already being re-read — the
- * message says so rather than leaving the moderator to wonder whether to retry.
+ * A 409 returns the backend's eligibility explanation where available. This
+ * keeps provenance and seller restrictions clear without duplicating those
+ * authoritative checks in the client.
  */
 function moderationErrorMessage(error: unknown): string {
-  const status = (error as AxiosError<{ message?: string }>)?.response?.status;
+  const axiosError = error as AxiosError<{ message?: string; errors?: Record<string, string[] | string> }>;
+  const status = axiosError?.response?.status;
+  const serverMessage = axiosError?.response?.data?.message;
 
   switch (status) {
     case 403:
@@ -203,9 +213,12 @@ function moderationErrorMessage(error: unknown): string {
     case 404:
       return 'This listing no longer exists.';
     case 409:
-      return 'This listing has already been decided. The list has been refreshed with its current state.';
-    case 422:
-      return 'The action was rejected as invalid. Check the details and try again.';
+      return serverMessage ?? 'The listing is not eligible for this action. Its status has not changed.';
+    case 422: {
+      const validationMessages = Object.values(axiosError.response?.data?.errors ?? {})
+        .flatMap((messages) => Array.isArray(messages) ? messages : [messages]);
+      return validationMessages.join(' ') || serverMessage || 'The action was rejected as invalid. Check the details and try again.';
+    }
     case 500:
       return 'The server could not complete the action. Please try again.';
     default:

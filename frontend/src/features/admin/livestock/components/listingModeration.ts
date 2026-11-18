@@ -14,7 +14,17 @@
 
 export type ListingStatus = 'draft' | 'pending' | 'active' | 'sold' | 'inactive';
 
-export type ModerationAction = 'approve' | 'reject' | 'deactivate';
+export type ModerationAction = 'approve' | 'reject' | 'deactivate' | 'reactivate';
+
+export interface ReactivationInventory {
+  quantity: number;
+  total_quantity: number | null;
+  reserved_quantity: number | null;
+  platform_sold_quantity: number | null;
+  externally_sold_quantity: number | null;
+  available_quantity: number | null;
+  inventory_reconciliation_required: boolean;
+}
 
 export interface ModerationOption {
   action: ModerationAction;
@@ -77,26 +87,66 @@ const ACTIVE_ACTIONS: readonly ModerationOption[] = [
   },
 ];
 
+const REACTIVATE_ACTION: ModerationOption = {
+  action: 'reactivate',
+  label: 'Reactivate',
+  variant: 'approve',
+  confirmTitle: 'Reactivate Listing',
+  confirmMessage: 'Reactivate this listing? It will become active and visible in the Marketplace again.',
+  confirmLabel: 'Reactivate',
+  resultStatus: 'active',
+};
+
 /**
  * The actions available for a listing in `status`.
  *
- * `pending` yields approve and reject; `active` yields deactivate only, because
- * taking a live listing out of the marketplace is a different decision from
- * deciding whether to publish it. `draft` has never been reviewed, `sold` is
- * terminal, and `inactive` has already been through a decision — none of them
- * has anything to moderate, and none offers an action. In particular there is no
- * reactivation: the backend defines no path from `inactive` back to `active`,
- * so offering one would be a button that can only ever fail.
+ * `pending` yields approve and reject; `active` yields deactivate. An inactive
+ * listing may offer reactivation only when the response contains reconciled,
+ * internally consistent, positive inventory. Source of deactivation and seller
+ * eligibility are not in this API projection, so the backend remains authoritative
+ * for those checks and may refuse an otherwise inventory-eligible attempt.
  */
-export function moderationOptionsFor(status: string): readonly ModerationOption[] {
+export function moderationOptionsFor(
+  status: string,
+  inventory?: ReactivationInventory,
+): readonly ModerationOption[] {
   switch (status) {
     case 'pending':
       return PENDING_ACTIONS;
     case 'active':
       return ACTIVE_ACTIONS;
+    case 'inactive':
+      return canPreliminarilyReactivate(inventory) ? [REACTIVATE_ACTION] : [];
     default:
       return [];
   }
+}
+
+/** Preliminary inventory screening only; the backend performs authoritative checks. */
+export function canPreliminarilyReactivate(
+  inventory: ReactivationInventory | undefined,
+): boolean {
+  if (
+    inventory === undefined ||
+    inventory.inventory_reconciliation_required ||
+    inventory.total_quantity === null ||
+    inventory.reserved_quantity === null ||
+    inventory.platform_sold_quantity === null ||
+    inventory.externally_sold_quantity === null ||
+    inventory.available_quantity === null ||
+    inventory.available_quantity < 1
+  ) {
+    return false;
+  }
+
+  const calculatedAvailable =
+    inventory.total_quantity -
+    inventory.reserved_quantity -
+    inventory.platform_sold_quantity -
+    inventory.externally_sold_quantity;
+
+  return calculatedAvailable === inventory.quantity &&
+    inventory.available_quantity === inventory.quantity;
 }
 
 /** Whether a listing in `status` is waiting on an administrator. */

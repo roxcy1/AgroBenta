@@ -304,7 +304,7 @@ export function ListingsTab() {
                               className="lv-action-buttons"
                               onClick={(event) => event.stopPropagation()}
                             >
-                              {moderationOptionsFor(listing.status).map((option) => (
+                              {moderationOptionsFor(listing.status, listing).map((option) => (
                                 <button
                                   key={option.action}
                                   type="button"
