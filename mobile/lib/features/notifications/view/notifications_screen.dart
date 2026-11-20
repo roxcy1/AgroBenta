@@ -8,6 +8,7 @@ import '../../../models/conversation.dart';
 import '../../../models/listing.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../messaging/state/messaging_scope.dart';
+import '../../messaging/state/messaging_state.dart';
 import '../../messaging/view/chat_screen.dart';
 import '../../seller_listings/state/seller_listing_scope.dart';
 import '../../seller_listings/view/seller_listing_detail_screen.dart';
@@ -69,12 +70,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  /// Whether a tap is already opening a target, from the first tap until the
+  /// opened screen is popped.
+  bool _opening = false;
+
   /// Taps a notification: mark it read optimistically, then open what it is
   /// about. A notification with no target, or one this client does not know,
   /// is only marked read and the screen stays put.
   Future<void> _onTap(AppNotification notification) async {
     unawaited(_controller.markRead(notification.id));
+    await _openOnce(() => _openTarget(notification));
+  }
 
+  /// Runs [open] unless a target is already opening; a second tap is ignored
+  /// until the first destination has been popped. The same guard as the
+  /// Profile screen's, but one for the whole list: a tap on another
+  /// notification during a slow chat lookup must not stack a second screen
+  /// either.
+  Future<void> _openOnce(Future<void> Function() open) async {
+    if (_opening) {
+      return;
+    }
+    _opening = true;
+    try {
+      await open();
+    } finally {
+      _opening = false;
+    }
+  }
+
+  Future<void> _openTarget(AppNotification notification) async {
     final int? targetId = notification.actionId;
     switch (notification.action) {
       case NotificationAction.inquiry:
@@ -83,14 +108,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         }
       case NotificationAction.transaction:
         if (targetId != null) {
-          _push(TransactionDetailScreen(transactionId: targetId));
+          await _push(TransactionDetailScreen(transactionId: targetId));
         }
       case NotificationAction.listing:
         if (targetId != null) {
-          _openListing(targetId);
+          await _openListing(targetId);
         }
       case NotificationAction.verification:
-        _push(
+        await _push(
           SellerVerificationScreen(
             accountName: AuthScope.maybeOf(context)?.state.user?.name,
           ),
@@ -100,8 +125,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  void _push(Widget screen) {
-    Navigator.of(
+  /// Pushes [screen] and completes when it is popped.
+  Future<void> _push(Widget screen) {
+    return Navigator.of(
       context,
     ).push<void>(MaterialPageRoute<void>(builder: (BuildContext _) => screen));
   }
@@ -111,7 +137,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// The chat needs the counterpart's name and the thread's listing, which the
   /// inbox already serves, so the inbox is re-read first: a notification can
   /// be newer than the copy in memory. The thread about [listingId] is
-  /// preferred; any thread with the counterpart is the fallback.
+  /// preferred; any thread with the counterpart is the fallback, which is also
+  /// what an older notification without a `listing_id` opens. When the re-read
+  /// fails, a thread already in memory still opens; otherwise the message says
+  /// the inbox could not be loaded rather than that the thread is gone.
   Future<void> _openConversation(int counterpartId, int? listingId) async {
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final int? currentUserId = AuthScope.maybeOf(context)?.state.user?.id;
@@ -125,12 +154,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return;
     }
 
+    final ConversationsState state = conversations.state;
     Conversation? match;
-    for (final Conversation conversation in conversations.state.conversations) {
+    for (final Conversation conversation in state.conversations) {
       if (conversation.counterpart.id != counterpartId) {
         continue;
       }
-      if (conversation.listingId == listingId) {
+      if (listingId != null && conversation.listingId == listingId) {
         match = conversation;
         break;
       }
@@ -138,16 +168,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     if (match == null) {
+      final bool refreshFailed =
+          state.status == ConversationsStatus.failed ||
+          state.refreshErrorMessage != null;
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('This conversation is no longer available.'),
+        SnackBar(
+          content: Text(
+            refreshFailed
+                ? 'Could not load your conversations. Check your connection '
+                      'and try again.'
+                : 'This conversation is no longer available.',
+          ),
         ),
       );
       return;
     }
 
     final Conversation conversation = match;
-    _push(
+    await _push(
       ChatScreen(
         counterpart: conversation.counterpart,
         currentUserId: currentUserId,
@@ -166,7 +204,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// Opens the seller's own listing. There is no seller-facing detail
   /// endpoint, so the detail screen needs the listing from My Listings; when it
   /// is not in the loaded page, My Listings itself opens instead.
-  void _openListing(int listingId) {
+  Future<void> _openListing(int listingId) {
     Listing? listing;
     for (final Listing candidate in SellerListingScope.readOf(
       context,
@@ -176,7 +214,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         break;
       }
     }
-    _push(
+    return _push(
       listing == null
           ? const SellerListingsScreen()
           : SellerListingDetailScreen(listing: listing),
