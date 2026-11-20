@@ -734,6 +734,24 @@ class MarketplaceListingTest extends TestCase
     }
 
     #[Test]
+    public function a_listing_without_a_weight_is_excluded_only_by_a_weight_bound(): void
+    {
+        // `weight_unit` is NOT NULL (default kg), so the open case is a listing
+        // whose weight is unknown: it cannot satisfy a weight bound, even 0.
+        $this->createListing($this->seller, ['weight_value' => null, 'weight_information' => 'unknown']);
+        $this->createListing($this->seller, ['weight_value' => 300, 'weight_unit' => 'kg']);
+
+        $this->browse()->assertOk()
+            ->assertJsonPath('data.pagination.total', 2);
+
+        $this->browse(['min_weight' => 0])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+
+        $this->browse(['max_weight' => 1000])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
     public function combined_filters_narrow_the_whole_result_set_before_pagination(): void
     {
         for ($i = 0; $i < 20; $i++) {
