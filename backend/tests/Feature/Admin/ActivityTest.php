@@ -421,12 +421,13 @@ class ActivityTest extends TestCase
         Activity::factory()->create(['user_id' => $user->id, 'action' => 'listing_deactivated', 'created_at' => now()->subHours(1)]);
         Activity::factory()->create(['user_id' => $user->id, 'action' => 'seller_verification_approved', 'created_at' => now()->subHours(1)]);
         Activity::factory()->create(['user_id' => $user->id, 'action' => 'seller_verification_rejected', 'created_at' => now()->subHours(1)]);
+        Activity::factory()->create(['user_id' => $user->id, 'action' => 'seller_verification_revoked', 'created_at' => now()->subHours(1)]);
 
         $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
             ->getJson('/api/admin/activities/summary');
 
         $response->assertStatus(200);
-        $this->assertEquals(5, $response->json('data.moderation_actions'));
+        $this->assertEquals(6, $response->json('data.moderation_actions'));
     }
 
     public function test_activity_summary_active_actors_distinct(): void

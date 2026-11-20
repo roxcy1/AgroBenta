@@ -36,6 +36,7 @@ enum ActivityAction: string
     case SellerVerificationSubmitted = 'seller_verification_submitted';
     case SellerVerificationApproved = 'seller_verification_approved';
     case SellerVerificationRejected = 'seller_verification_rejected';
+    case SellerVerificationRevoked = 'seller_verification_revoked';
 
     case TransactionCreated = 'transaction_created';
     case TransactionCancelled = 'transaction_cancelled';
@@ -80,6 +81,7 @@ enum ActivityAction: string
             self::SellerVerificationSubmitted => 'Seller verification submitted',
             self::SellerVerificationApproved => 'Seller verification approved',
             self::SellerVerificationRejected => 'Seller verification rejected',
+            self::SellerVerificationRevoked => 'Seller verification revoked',
             self::TransactionCreated => 'Transaction created',
             self::TransactionCancelled => 'Transaction cancelled',
             self::TransactionFulfillmentUpdated => 'Transaction fulfillment updated',

@@ -101,15 +101,16 @@ export function isOpenStatus(status: string): boolean {
 }
 
 /**
- * The two review actions, and the confirmation each one shows.
+ * The review actions, and the confirmation each one shows.
  *
  * Mirrors the livestock `moderationOptionsFor()` shape, and is the *narrowing*
- * half of the contract in the same way: it only decides which actions an open
- * record offers. An approved or rejected record is terminal and offers none —
- * the server answers 409 rather than let it be re-reviewed, so offering a
- * button there would only ever fail.
+ * half of the contract in the same way: it only decides which actions a record
+ * in a given state offers. An open record is approved or rejected; an approved
+ * record can have its grant revoked; a rejected record is terminal. The server
+ * answers 409 for any transition it does not allow, so offering a button the
+ * server would refuse is never an option.
  */
-export type VerificationAction = 'approve' | 'reject';
+export type VerificationAction = 'approve' | 'reject' | 'revoke';
 
 export interface VerificationActionConfig {
   action: VerificationAction;
@@ -118,7 +119,7 @@ export interface VerificationActionConfig {
   confirmTitle: string;
   confirmMessage: string;
   confirmLabel: string;
-  /** Rejection must carry a note; approval may. Enforced server-side. */
+  /** Rejection and revocation must carry a note; approval may. Enforced server-side. */
   noteRequired: boolean;
 }
 
@@ -143,16 +144,34 @@ const ACTION_CONFIGS: Record<VerificationAction, VerificationActionConfig> = {
     confirmLabel: 'Reject',
     noteRequired: true,
   },
+  revoke: {
+    action: 'revoke',
+    label: 'Revoke',
+    variant: 'reject',
+    confirmTitle: 'Revoke Seller Verification',
+    confirmMessage:
+      'This will revoke the approved verification, return the seller to a buyer, and withdraw every active and pending listing. Existing transactions and their reservations are left untouched.',
+    confirmLabel: 'Revoke',
+    noteRequired: true,
+  },
 };
 
 /**
  * The actions available for a verification in `status`.
  *
- * `submitted` and `pending_review` yield approve and reject; a decided record
- * yields nothing, because both outcomes are terminal.
+ * `submitted` and `pending_review` yield approve and reject; `approved` yields
+ * revoke; `rejected` yields nothing, because that decision is terminal.
  */
 export function verificationActionsFor(status: string): readonly VerificationActionConfig[] {
-  return isOpenStatus(status) ? [ACTION_CONFIGS.approve, ACTION_CONFIGS.reject] : [];
+  if (isOpenStatus(status)) {
+    return [ACTION_CONFIGS.approve, ACTION_CONFIGS.reject];
+  }
+
+  if (status === 'approved') {
+    return [ACTION_CONFIGS.revoke];
+  }
+
+  return [];
 }
 
 

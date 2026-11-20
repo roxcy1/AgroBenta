@@ -2,12 +2,19 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Enums\ListingStatus;
 use App\Enums\SellerCapability;
 use App\Enums\SellerVerificationStatus;
+use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
+use App\Models\Activity;
+use App\Models\Listing;
 use App\Models\SellerVerification;
+use App\Models\Transaction;
 use App\Models\User;
+use App\Notifications\SellerVerificationRevoked;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class SellerVerificationTest extends TestCase
@@ -70,6 +77,30 @@ class SellerVerificationTest extends TestCase
         return User::factory()->create([
             'role' => UserRole::User,
             'seller_capability' => SellerCapability::Buyer,
+        ]);
+    }
+
+    private function listingFor(User $seller, ListingStatus $status): Listing
+    {
+        return Listing::create([
+            'seller_id' => $seller->id,
+            'livestock_type' => 'cattle',
+            'breed' => 'Angus',
+            'age_value' => 2,
+            'age_unit' => 'year',
+            'gender' => 'male',
+            'weight_value' => 500,
+            'weight_unit' => 'kg',
+            'quantity' => 3,
+            'asking_price' => 50000.00,
+            'location' => 'Bukidnon',
+            'health_status' => 'healthy',
+            'vaccination' => 'up_to_date',
+            'short_description' => 'Healthy Angus bull',
+            'additional_notes' => null,
+            'photos' => [],
+            'status' => $status,
+            'admin_note' => null,
         ]);
     }
 
@@ -834,5 +865,228 @@ class SellerVerificationTest extends TestCase
             ->assertStatus(200)
             ->assertJsonPath('data.status', SellerVerificationStatus::Rejected->value)
             ->assertJsonPath('data.admin_note', 'The ID reference could not be verified.');
+    }
+
+    public function test_admin_can_revoke_an_approved_verification(): void
+    {
+        $seller = User::factory()->seller()->create(['role' => UserRole::User]);
+        $verification = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDays(2),
+            'reviewed_at' => now()->subDay(),
+            'admin_note' => 'Approved originally.',
+            'id_document_front_path' => 'verifications/front.jpg',
+            'selfie_path' => 'verifications/selfie.jpg',
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/revoke", [
+                'admin_note' => 'Fraudulent documents were discovered after approval.',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', SellerVerificationStatus::Rejected->value)
+            ->assertJsonPath('data.admin_note', 'Fraudulent documents were discovered after approval.');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $seller->id,
+            'seller_capability' => SellerCapability::Buyer->value,
+        ]);
+
+        $this->assertDatabaseHas('seller_verifications', [
+            'id' => $verification->id,
+            'status' => SellerVerificationStatus::Rejected->value,
+            'reviewed_by' => $this->admin->id,
+        ]);
+
+        $revoked = $verification->fresh();
+        $this->assertNotNull($revoked->reviewed_at);
+        $this->assertSame('verifications/front.jpg', $revoked->id_document_front_path);
+        $this->assertSame('verifications/selfie.jpg', $revoked->selfie_path);
+    }
+
+    public function test_revocation_requires_an_admin_note(): void
+    {
+        $seller = User::factory()->seller()->create(['role' => UserRole::User]);
+        $verification = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDays(2),
+            'reviewed_at' => now()->subDay(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/revoke");
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('admin_note');
+
+        $this->assertSame(
+            SellerVerificationStatus::Approved,
+            $verification->fresh()->status,
+        );
+        $this->assertSame(SellerCapability::Seller, $seller->fresh()->seller_capability);
+    }
+
+    public function test_only_an_approved_verification_can_be_revoked(): void
+    {
+        foreach ([
+            SellerVerificationStatus::Submitted,
+            SellerVerificationStatus::PendingReview,
+            SellerVerificationStatus::Rejected,
+        ] as $status) {
+            $seller = User::factory()->seller()->create(['role' => UserRole::User]);
+            $verification = $this->verificationFor($seller, ['status' => $status]);
+
+            $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+                ->postJson("/api/admin/seller-verifications/{$verification->id}/revoke", [
+                    'admin_note' => 'Attempted revocation.',
+                ])
+                ->assertStatus(409);
+
+            $this->assertSame($status, $verification->fresh()->status);
+            $this->assertSame(SellerCapability::Seller, $seller->fresh()->seller_capability);
+        }
+    }
+
+    public function test_stale_approved_record_cannot_be_revoked(): void
+    {
+        $seller = User::factory()->seller()->create(['role' => UserRole::User]);
+
+        $stale = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDays(10),
+            'reviewed_at' => now()->subDays(9),
+        ]);
+        $latest = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Submitted,
+            'submitted_at' => now(),
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$stale->id}/revoke", [
+                'admin_note' => 'Attempted revocation of an older record.',
+            ])
+            ->assertStatus(409);
+
+        $this->assertSame(SellerVerificationStatus::Approved, $stale->fresh()->status);
+        $this->assertSame(SellerVerificationStatus::Submitted, $latest->fresh()->status);
+        $this->assertSame(SellerCapability::Seller, $seller->fresh()->seller_capability);
+    }
+
+    public function test_revocation_withdraws_live_and_pending_listings_and_preserves_history(): void
+    {
+        $seller = User::factory()->seller()->create(['role' => UserRole::User]);
+        $verification = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDays(2),
+            'reviewed_at' => now()->subDay(),
+        ]);
+
+        $active = $this->listingFor($seller, ListingStatus::Active);
+        $pending = $this->listingFor($seller, ListingStatus::Pending);
+        $draft = $this->listingFor($seller, ListingStatus::Draft);
+        $sold = $this->listingFor($seller, ListingStatus::Sold);
+        $inactive = $this->listingFor($seller, ListingStatus::Inactive);
+
+        $buyer = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+
+        $transaction = Transaction::create([
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'listing_id' => $active->id,
+            'quantity' => 1,
+            'total_amount' => 50000.00,
+            'status' => TransactionStatus::Pending,
+            'inventory_reserved' => true,
+        ]);
+
+        $note = 'Fraudulent documents were discovered after approval.';
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/revoke", [
+                'admin_note' => $note,
+            ])
+            ->assertOk();
+
+        $this->assertSame(ListingStatus::Inactive, $active->fresh()->status);
+        $this->assertSame(ListingStatus::Inactive, $pending->fresh()->status);
+        $this->assertSame(ListingStatus::Draft, $draft->fresh()->status);
+        $this->assertSame(ListingStatus::Sold, $sold->fresh()->status);
+        $this->assertSame(ListingStatus::Inactive, $inactive->fresh()->status);
+
+        $this->assertSame($note, $pending->fresh()->admin_note);
+        $this->assertSame(3, $active->fresh()->quantity);
+
+        $this->assertDatabaseHas('transactions', [
+            'id' => $transaction->id,
+            'status' => TransactionStatus::Pending->value,
+            'inventory_reserved' => true,
+        ]);
+
+        $this->assertDatabaseHas('activities', [
+            'action' => 'seller_verification_revoked',
+            'user_id' => $this->admin->id,
+        ]);
+        $this->assertDatabaseHas('activities', ['action' => 'listing_deactivated']);
+        $this->assertDatabaseHas('activities', ['action' => 'listing_rejected']);
+
+        $activity = Activity::query()
+            ->where('action', 'seller_verification_revoked')
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('approved', $activity->metadata['changes']['status']['from']);
+        $this->assertSame('rejected', $activity->metadata['changes']['status']['to']);
+        $this->assertSame('seller', $activity->metadata['changes']['seller_capability']['from']);
+        $this->assertSame('buyer', $activity->metadata['changes']['seller_capability']['to']);
+        $this->assertContains($active->id, $activity->metadata['context']['deactivated_listing_ids']);
+        $this->assertContains($pending->id, $activity->metadata['context']['rejected_listing_ids']);
+    }
+
+    public function test_revocation_notifies_the_applicant(): void
+    {
+        Notification::fake();
+
+        $seller = User::factory()->seller()->create(['role' => UserRole::User]);
+        $verification = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDays(2),
+            'reviewed_at' => now()->subDay(),
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/revoke", [
+                'admin_note' => 'Seller capability revoked.',
+            ])
+            ->assertOk();
+
+        Notification::assertSentTo($seller, SellerVerificationRevoked::class);
+    }
+
+    public function test_revocation_requires_the_admin_ability(): void
+    {
+        $seller = User::factory()->seller()->create(['role' => UserRole::User]);
+        $verification = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDays(2),
+            'reviewed_at' => now()->subDay(),
+        ]);
+
+        $token = $this->admin->createToken('mobile', ['mobile'])->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/revoke", [
+                'admin_note' => 'Attempted with the wrong token ability.',
+            ])
+            ->assertStatus(403);
+
+        $this->assertSame(
+            SellerVerificationStatus::Approved,
+            $verification->fresh()->status,
+        );
     }
 }
