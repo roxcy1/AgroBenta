@@ -1,5 +1,6 @@
 import '../core/constants/api_constants.dart';
 import '../models/app_notification.dart';
+import '../models/notification_preferences.dart';
 import '../services/notification_service.dart';
 
 /// Orchestration for notifications.
@@ -37,6 +38,15 @@ class NotificationRepository {
 
   /// Marks every unread notification as read.
   Future<void> markAllRead() => _service.markAllRead();
+
+  /// The caller's push switches.
+  Future<NotificationPreferences> preferences() => _service.preferences();
+
+  /// Switches one category's phone push on or off.
+  Future<NotificationPreferences> updatePreference(
+    NotificationCategory category, {
+    required bool enabled,
+  }) => _service.updatePreference(category, enabled: enabled);
 
   static int _clampPerPage(int? perPage) {
     final int requested = perPage ?? NotificationEndpoints.defaultPerPage;

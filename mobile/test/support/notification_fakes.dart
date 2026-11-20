@@ -100,3 +100,32 @@ NotificationRepository buildNotificationRepository(
   );
   return NotificationRepository(NotificationService(client));
 }
+
+/// The `data` of `GET`/`PUT /notification-preferences`: all four switches.
+Map<String, dynamic> notificationPreferencesJson({
+  bool transactions = true,
+  bool messages = true,
+  bool listings = true,
+  bool verification = true,
+}) {
+  return <String, dynamic>{
+    'transactions': transactions,
+    'messages': messages,
+    'listings': listings,
+    'verification': verification,
+  };
+}
+
+/// A successful `GET`/`PUT /notification-preferences` response.
+http.Response notificationPreferencesResponse({
+  Map<String, dynamic>? preferences,
+  int statusCode = 200,
+}) {
+  return http.Response(
+    jsonEncode(
+      successEnvelope(data: preferences ?? notificationPreferencesJson()),
+    ),
+    statusCode,
+    headers: _jsonHeaders,
+  );
+}

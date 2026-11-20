@@ -510,6 +510,11 @@ abstract final class NotificationEndpoints {
   /// constant group.
   static String destroy(String id) => '/notifications/$id';
 
+  /// `GET` / `PUT` — the caller's push switches (Notification Settings).
+  /// `PUT` takes any of `transactions`, `messages`, `listings`,
+  /// `verification` (booleans, at least one); both return all four.
+  static const String preferences = '/notification-preferences';
+
   /// Page size used when the caller does not ask for a specific one.
   ///
   /// Matches the server default (`IndexNotificationRequest` validates

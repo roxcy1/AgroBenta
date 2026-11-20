@@ -15,6 +15,7 @@ import '../../account_mode/state/account_mode_scope.dart';
 import '../../app_update/view/app_update_tile.dart';
 import '../../auth/state/auth_scope.dart';
 import '../../help_center/view/help_center_screen.dart';
+import '../../notification_settings/view/notification_settings_screen.dart';
 import '../../seller_verification/state/seller_verification_controller.dart';
 import '../../seller_verification/state/seller_verification_scope.dart';
 import '../../seller_verification/state/seller_verification_state.dart';
@@ -113,6 +114,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _openNotificationSettings() async {
+    await _openOnce<void>(
+      'notification-settings',
+      () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const NotificationSettingsScreen(),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openHelpCenter() async {
     await _openOnce<void>(
       'help',
@@ -189,6 +201,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onEdit: _openEdit,
               onEditAddress: () => _openAddressEditor(state.user!),
               onChangePassword: _openChangePassword,
+              onNotificationSettings: _openNotificationSettings,
               onHelpAndSupport: _openHelpCenter,
               onTermsAndPolicies: _openTermsAndPolicies,
             ),
@@ -205,6 +218,7 @@ class _ProfileBody extends StatelessWidget {
     required this.onEdit,
     required this.onEditAddress,
     required this.onChangePassword,
+    required this.onNotificationSettings,
     required this.onHelpAndSupport,
     required this.onTermsAndPolicies,
   });
@@ -213,6 +227,7 @@ class _ProfileBody extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onEditAddress;
   final VoidCallback onChangePassword;
+  final VoidCallback onNotificationSettings;
   final VoidCallback onHelpAndSupport;
   final VoidCallback onTermsAndPolicies;
 
@@ -270,6 +285,7 @@ class _ProfileBody extends StatelessWidget {
                     onEdit: onEdit,
                     onEditAddress: onEditAddress,
                     onChangePassword: onChangePassword,
+                    onNotificationSettings: onNotificationSettings,
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   _OtherSection(
@@ -807,12 +823,14 @@ class _AccountSettingsSection extends StatelessWidget {
     required this.onEdit,
     required this.onEditAddress,
     required this.onChangePassword,
+    required this.onNotificationSettings,
   });
 
   final String? location;
   final VoidCallback onEdit;
   final VoidCallback onEditAddress;
   final VoidCallback onChangePassword;
+  final VoidCallback onNotificationSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -844,9 +862,8 @@ class _AccountSettingsSection extends StatelessWidget {
               _SettingsTile(
                 icon: Icons.notifications_outlined,
                 title: 'Notification Settings',
-                subtitle: 'Manage your notification preferences',
-                enabled: false,
-                onTap: () {},
+                subtitle: 'Choose which updates reach your phone',
+                onTap: onNotificationSettings,
               ),
             ],
           ),
@@ -976,14 +993,12 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.enabled = true,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1005,8 +1020,7 @@ class _SettingsTile extends StatelessWidget {
         size: 20,
         color: AppColors.textSecondary,
       ),
-      enabled: enabled,
-      onTap: enabled ? onTap : null,
+      onTap: onTap,
     );
   }
 }

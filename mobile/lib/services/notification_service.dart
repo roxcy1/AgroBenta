@@ -1,6 +1,7 @@
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../models/app_notification.dart';
+import '../models/notification_preferences.dart';
 
 /// A page of notifications, as the backend returns it.
 ///
@@ -102,6 +103,28 @@ class NotificationService {
   /// the caller only needs to know the request succeeded.
   Future<void> markAllRead() {
     return _client.post<void>(NotificationEndpoints.readAll, parse: (_) {});
+  }
+
+  /// `GET /notification-preferences` — the caller's push switches.
+  Future<NotificationPreferences> preferences() {
+    return _client.get<NotificationPreferences>(
+      NotificationEndpoints.preferences,
+      parse: (Object? data) => NotificationPreferences.fromJson(_asMap(data)),
+    );
+  }
+
+  /// `PUT /notification-preferences` — switches one category's push.
+  ///
+  /// Sends only that category; the server answers with all four.
+  Future<NotificationPreferences> updatePreference(
+    NotificationCategory category, {
+    required bool enabled,
+  }) {
+    return _client.put<NotificationPreferences>(
+      NotificationEndpoints.preferences,
+      body: <String, dynamic>{category.value: enabled},
+      parse: (Object? data) => NotificationPreferences.fromJson(_asMap(data)),
+    );
   }
 
   static Map<String, dynamic> _asMap(Object? data) {

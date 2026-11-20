@@ -13,9 +13,13 @@ import 'package:agrobenta_mobile/features/profile/view/edit_profile_screen.dart'
 import 'package:agrobenta_mobile/features/profile/view/personal_information_screen.dart';
 import 'package:agrobenta_mobile/features/profile/view/profile_screen.dart';
 import 'package:agrobenta_mobile/features/help_center/view/help_center_screen.dart';
+import 'package:agrobenta_mobile/features/notification_settings/view/notification_settings_screen.dart';
+import 'package:agrobenta_mobile/features/notifications/state/notifications_controller.dart';
+import 'package:agrobenta_mobile/features/notifications/state/notifications_scope.dart';
 import 'package:agrobenta_mobile/features/seller_verification/view/seller_verification_screen.dart';
 import 'package:agrobenta_mobile/features/terms_and_policies/view/terms_and_policies_screen.dart';
 import 'package:agrobenta_mobile/widgets/trinidad_location_selector.dart';
+import 'package:agrobenta_mobile/repositories/notification_repository.dart';
 import 'package:agrobenta_mobile/repositories/profile_repository.dart';
 import 'package:agrobenta_mobile/services/profile_service.dart';
 import 'package:flutter/material.dart';
@@ -25,6 +29,7 @@ import 'package:http/testing.dart';
 
 import '../../support/auth_app_harness.dart';
 import '../../support/auth_fakes.dart';
+import '../../support/notification_fakes.dart';
 import '../../support/seller_verification_app_harness.dart';
 import '../../support/trinidad_location_fakes.dart';
 import '../../support/app_update_fakes.dart';
@@ -96,6 +101,17 @@ void main() {
     );
     addTearDown(profileController.dispose);
 
+    // Notification Settings reads its repository from this scope, as in
+    // `main.dart`; its server answers "everything on".
+    final NotificationRepository notificationRepository =
+        buildNotificationRepository(
+          tokenStore,
+          (_) async => notificationPreferencesResponse(),
+        );
+    final NotificationsController notificationsController =
+        NotificationsController(notificationRepository);
+    addTearDown(notificationsController.dispose);
+
     tokenStore.token = 'stored-token';
     await authController.restoreSession();
     await profileController.load();
@@ -113,7 +129,11 @@ void main() {
                 child: ProfileScope(
                   repository: profileRepository,
                   controller: profileController,
-                  child: const MaterialApp(home: ProfileScreen()),
+                  child: NotificationsScope(
+                    repository: notificationRepository,
+                    controller: notificationsController,
+                    child: const MaterialApp(home: ProfileScreen()),
+                  ),
                 ),
               ),
             ),
@@ -183,12 +203,11 @@ void main() {
     expect(segmented.selected, <AccountMode>{AccountMode.buyer});
     expect(segmented.segments.last.enabled, isFalse);
 
-    // Supported rows are tappable; the unimplemented ones are inert.
+    // Every account row has a destination.
     expect(isDisabled(tester, 'Personal Information'), isFalse);
     expect(isDisabled(tester, 'Change Password'), isFalse);
-    expect(isDisabled(tester, 'Notification Settings'), isTrue);
+    expect(isDisabled(tester, 'Notification Settings'), isFalse);
 
-    // Help and Terms have destinations; notification preferences remain inert.
     expect(isDisabled(tester, 'Help and Support'), isFalse);
     expect(isDisabled(tester, 'Terms and Policies'), isFalse);
     expect(isDisabled(tester, 'Log Out'), isFalse);
@@ -398,6 +417,52 @@ void main() {
     await settleAuth(tester, frames: 12);
 
     expect(find.byType(ChangePasswordScreen), findsOneWidget);
+  });
+
+  testWidgets('rapid Notification Settings taps push only one screen', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    final VoidCallback? onTap = tester
+        .widget<ListTile>(
+          find.widgetWithText(ListTile, 'Notification Settings'),
+        )
+        .onTap;
+    expect(onTap, isNotNull);
+    onTap!();
+    onTap();
+    await settleAuth(tester, frames: 12);
+
+    expect(
+      find.byType(NotificationSettingsScreen, skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.text('Phone notifications'), findsOneWidget);
+  });
+
+  testWidgets('the Notification Settings guard releases after it closes', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
+
+    await tapAction(tester, 'Notification Settings');
+    expect(find.byType(NotificationSettingsScreen), findsOneWidget);
+
+    await tester.pageBack();
+    await settleAuth(tester, frames: 12);
+    expect(find.byType(NotificationSettingsScreen), findsNothing);
+
+    await tapAction(tester, 'Notification Settings');
+    expect(find.byType(NotificationSettingsScreen), findsOneWidget);
   });
 
   testWidgets('rapid Start Seller Verification taps push only one flow', (

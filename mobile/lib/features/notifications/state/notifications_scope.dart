@@ -37,6 +37,15 @@ class NotificationsScope extends InheritedWidget {
     return scope!.controller;
   }
 
+  /// The repository, **without** registering a dependency. For screens that
+  /// build their own controller, such as Notification Settings.
+  static NotificationRepository repositoryOf(BuildContext context) {
+    final NotificationsScope? scope = context
+        .getInheritedWidgetOfExactType<NotificationsScope>();
+    assert(scope != null, 'No NotificationsScope found in context.');
+    return scope!.repository;
+  }
+
   @override
   bool updateShouldNotify(NotificationsScope oldWidget) =>
       repository != oldWidget.repository || controller != oldWidget.controller;

@@ -559,6 +559,15 @@ refreshed token, deletes the FCM token on sign-out, and opens
 launched the app. Only `main()` builds `FirebasePushMessaging`; tests and
 non-Android platforms use `NoopPushMessaging`.
 
+**Resolved for Notification Settings (phone push switches).** Two routes behind `auth:sanctum` + `ability:mobile`, resolved from the token:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/notification-preferences` | The caller's switches: `transactions`, `messages`, `listings`, `verification`, each a boolean. All `true` until changed. |
+| `PUT /api/notification-preferences` | Changes any of those four (booleans, at least one); returns all four. `user_id` is `422`. |
+
+Profile → **Notification Settings** (`lib/features/notification_settings/`) shows one switch per category and saves each change straight away, putting the switch back with a message if the save fails. The tile opens the screen once (`_openOnce`). The server maps each stored notification `type` to a category (`transactions` → transactions, `inquiry` → messages, `listing` → listings, `seller_verification` → verification) and skips only the **FCM push** for a switched-off category; the notification is still stored and listed in the app. The switches follow the account to every phone. The screen's contents are not defined by the manuscript (functional documentation OQ-19).
+
 **Resolved for app updates (Android).** One public route, outside the
 `ability:*` groups because the public home page and a signed-out phone read it:
 
