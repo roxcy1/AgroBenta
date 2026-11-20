@@ -28,7 +28,13 @@ class MarketplaceListingService
      */
     public function browseMarketplace(
         ?string $search = null,
-        ?string $livestockType = null,
+        ?array $livestockTypes = null,
+        ?array $breeds = null,
+        ?string $gender = null,
+        ?float $minAge = null,
+        ?float $maxAge = null,
+        ?float $minWeight = null,
+        ?float $maxWeight = null,
         ?string $location = null,
         ?float $minPrice = null,
         ?float $maxPrice = null,
@@ -36,7 +42,13 @@ class MarketplaceListingService
     ): LengthAwarePaginator {
         return $this->listings->paginateActive(
             search: $search,
-            livestockType: $livestockType,
+            livestockTypes: $livestockTypes,
+            breeds: $breeds,
+            gender: $gender,
+            minAge: $minAge,
+            maxAge: $maxAge,
+            minWeight: $minWeight,
+            maxWeight: $maxWeight,
             location: $location,
             minPrice: $minPrice,
             maxPrice: $maxPrice,

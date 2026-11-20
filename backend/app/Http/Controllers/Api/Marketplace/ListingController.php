@@ -35,14 +35,29 @@ class ListingController extends Controller
     {
         $minPrice = $request->validated('min_price');
         $maxPrice = $request->validated('max_price');
+        $minAge = $request->validated('min_age');
+        $maxAge = $request->validated('max_age');
+        $minWeight = $request->validated('min_weight');
+        $maxWeight = $request->validated('max_weight');
+
+        $livestockTypes = $request->validated('livestock_type');
+        $breeds = $request->validated('breed');
 
         $paginator = $this->listings->browseMarketplace(
             search: $request->validated('search'),
-            livestockType: $request->validated('livestock_type'),
-            location: $request->validated('location'),
+            // Multi-select filters are normalised to arrays by the request, so
+            // the service only ever receives one shape.
+            livestockTypes: is_array($livestockTypes) ? $livestockTypes : null,
+            breeds: is_array($breeds) ? $breeds : null,
+            gender: $request->validated('gender'),
             // Query-string values arrive as strings. Validation has already
             // proved they are numeric, so they are narrowed to the type the
             // service declares rather than left to implicit coercion.
+            minAge: $minAge === null ? null : (float) $minAge,
+            maxAge: $maxAge === null ? null : (float) $maxAge,
+            minWeight: $minWeight === null ? null : (float) $minWeight,
+            maxWeight: $maxWeight === null ? null : (float) $maxWeight,
+            location: $request->validated('location'),
             minPrice: $minPrice === null ? null : (float) $minPrice,
             maxPrice: $maxPrice === null ? null : (float) $maxPrice,
             perPage: (int) $request->validated('per_page', 15),

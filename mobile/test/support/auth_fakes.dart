@@ -124,6 +124,12 @@ class RecordedRequest {
   /// The decoded query string, for asserting on filters and pagination.
   Map<String, String> get query => request.url.queryParameters;
 
+  /// The decoded query string with every value, for multi-value filters.
+  ///
+  /// [query] keeps only the last value for a repeated key, which is exactly
+  /// what a scalar filter wants and exactly what hides an array filter.
+  Map<String, List<String>> get queryAll => request.url.queryParametersAll;
+
   Map<String, dynamic> get body =>
       jsonDecode(request.body) as Map<String, dynamic>;
 

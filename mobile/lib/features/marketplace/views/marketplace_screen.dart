@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_input_border.dart';
@@ -154,17 +155,26 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   /// Applies one Browse category to the shared marketplace filter.
   ///
-  /// A tap is a filter change like any other: the controller resets pagination
-  /// and issues one request. Re-tapping the selected chip is a no-op.
+  /// A tap toggles the category: the chips are multi-select, matching the
+  /// Filter dialog, so a buyer can narrow to cattle *and* goat. "All" clears
+  /// every selected type. Re-tapping to reach the same selection is a no-op.
   Future<void> _selectCategory(String? value) async {
-    final String next = (value ?? '').trim();
-    if (next == _controller.state.filters.livestockType) {
+    final ListingFilters current = _controller.state.filters;
+    final List<String> next;
+
+    if (value == null) {
+      next = <String>[];
+    } else if (current.livestockTypes.contains(value)) {
+      next = <String>[...current.livestockTypes]..remove(value);
+    } else {
+      next = <String>[...current.livestockTypes, value];
+    }
+
+    if (listEquals(next, current.livestockTypes)) {
       return;
     }
 
-    await _controller.applyFilters(
-      _controller.state.filters.copyWith(livestockType: next),
-    );
+    await _controller.applyFilters(current.copyWith(livestockTypes: next));
     if (mounted) {
       _scrollToTop();
     }
@@ -361,6 +371,12 @@ class _SearchAndFilters extends StatelessWidget {
   final ValueChanged<String?> onSelectCategory;
   final VoidCallback onClearCategory;
 
+  /// A multi-value label for the active-category chip, e.g. `Cattle +1`.
+  String _categoryLabel(List<String> values, List<LivestockType> types) {
+    final String first = _BrowseCategory.labelFor(values.first, types);
+    return values.length == 1 ? first : '$first +${values.length - 1}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -418,17 +434,15 @@ class _SearchAndFilters extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   _BrowseCategoryChips(
-                    selected: state.filters.livestockType.trim(),
+                    selectedTypes: state.filters.livestockTypes,
                     types: types,
                     onSelect: onSelectCategory,
                   ),
-                  if (state.filters.livestockType
-                      .trim()
-                      .isNotEmpty) ...<Widget>[
+                  if (state.filters.livestockTypes.isNotEmpty) ...<Widget>[
                     const SizedBox(height: AppSpacing.xs),
                     _ActiveCategoryIndicator(
-                      label: _BrowseCategory.labelFor(
-                        state.filters.livestockType.trim(),
+                      label: _categoryLabel(
+                        state.filters.livestockTypes,
                         types,
                       ),
                       onClear: onClearCategory,
@@ -464,18 +478,19 @@ class _BrowseCategory {
   }
 }
 
-/// A horizontally scrollable chip row. Selecting a chip applies its
-/// `livestock_type`; "All" clears it. The selected chip is derived from the
-/// shared filter state, so a selection made on Home or in the Filter screen is
-/// reflected here without any extra request.
+/// A horizontally scrollable chip row. Tapping a chip toggles its
+/// `livestock_type` in the shared multi-select filter; "All" clears every
+/// selected type. The selected chips are derived from the shared filter state,
+/// so a selection made on Home or in the Filter dialog is reflected here
+/// without any extra request.
 class _BrowseCategoryChips extends StatelessWidget {
   const _BrowseCategoryChips({
-    required this.selected,
+    required this.selectedTypes,
     required this.types,
     required this.onSelect,
   });
 
-  final String selected;
+  final List<String> selectedTypes;
   final List<LivestockType> types;
   final ValueChanged<String?> onSelect;
 
@@ -493,8 +508,8 @@ class _BrowseCategoryChips extends StatelessWidget {
               ? const _BrowseCategory('All', null)
               : _BrowseCategory(types[index - 1].label, types[index - 1].value);
           final bool isSelected = category.value == null
-              ? selected.isEmpty
-              : selected.toLowerCase() == category.value!.toLowerCase();
+              ? selectedTypes.isEmpty
+              : selectedTypes.contains(category.value);
 
           return ChoiceChip(
             key: ValueKey<String>(

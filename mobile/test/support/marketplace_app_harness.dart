@@ -42,8 +42,6 @@ class MarketplaceHarness {
       handler,
       recorded: recorded,
     );
-    final MarketplaceController controller = MarketplaceController(repository);
-    addTearDown(controller.dispose);
 
     final catalogRepository = buildLivestockTypeRepository(tokenStore);
     final LivestockTypesController catalogController = LivestockTypesController(
@@ -51,6 +49,12 @@ class MarketplaceHarness {
     );
     addTearDown(catalogController.dispose);
     await catalogController.ensureLoaded();
+
+    final MarketplaceController controller = MarketplaceController(
+      repository,
+      livestockCatalog: () => catalogController.state.types,
+    );
+    addTearDown(controller.dispose);
 
     // The listing detail screen reads the signed-in viewer from `AuthScope`
     // (the Buy / Inquire action needs to know who is buying), and `main.dart`

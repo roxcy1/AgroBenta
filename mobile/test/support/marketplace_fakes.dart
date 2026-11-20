@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:agrobenta_mobile/core/network/api_client.dart';
 import 'package:agrobenta_mobile/core/realtime/realtime_event.dart';
 import 'package:agrobenta_mobile/features/marketplace/state/marketplace_controller.dart';
+import 'package:agrobenta_mobile/models/livestock_type.dart';
 import 'package:agrobenta_mobile/repositories/marketplace_repository.dart';
 import 'package:agrobenta_mobile/services/marketplace_service.dart';
 import 'package:http/http.dart' as http;
@@ -236,10 +237,12 @@ MarketplaceController buildMarketplaceController(
   Future<http.Response> Function(RecordedRequest request) handler, {
   List<RecordedRequest>? recorded,
   Stream<RealtimeEvent>? realtimeEvents,
+  List<LivestockType> Function()? livestockCatalog,
 }) {
   return MarketplaceController(
     buildMarketplaceRepository(tokenStore, handler, recorded: recorded),
     realtimeEvents: realtimeEvents,
+    livestockCatalog: livestockCatalog,
   );
 }
 

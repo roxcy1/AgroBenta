@@ -87,7 +87,11 @@ void main() {
         (_) async => marketplaceListResponse(),
       );
 
-      await service.browse(search: '   ', livestockType: '', minPrice: '  ');
+      await service.browse(
+        search: '   ',
+        livestockTypes: <String>[''],
+        minPrice: '  ',
+      );
 
       expect(recorded.single.query.containsKey('search'), isFalse);
       expect(recorded.single.query.containsKey('livestock_type'), isFalse);
@@ -102,8 +106,13 @@ void main() {
 
       await service.browse(
         search: 'holstein',
-        livestockType: 'cattle',
-        location: 'Pampanga',
+        livestockTypes: <String>['cattle'],
+        breeds: <String>['Angus'],
+        gender: 'female',
+        minAge: '12',
+        maxAge: '24',
+        minWeight: '200',
+        maxWeight: '500',
         minPrice: '10000',
         maxPrice: '50000',
         page: 3,
@@ -113,11 +122,44 @@ void main() {
       final Map<String, String> query = recorded.single.query;
       expect(query['search'], 'holstein');
       expect(query['livestock_type'], 'cattle');
-      expect(query['location'], 'Pampanga');
+      expect(query['breed'], 'Angus');
+      expect(query['gender'], 'female');
+      expect(query['min_age'], '12');
+      expect(query['max_age'], '24');
+      expect(query['min_weight'], '200');
+      expect(query['max_weight'], '500');
       expect(query['min_price'], '10000');
       expect(query['max_price'], '50000');
       expect(query['page'], '3');
       expect(query['per_page'], '20');
+    });
+
+    test('sends one type as a scalar and several as an array', () async {
+      final MarketplaceService service = buildService(
+        (_) async => marketplaceListResponse(),
+      );
+
+      await service.browse(livestockTypes: <String>['cattle']);
+      expect(recorded.single.query['livestock_type'], 'cattle');
+      expect(recorded.single.queryAll.containsKey('livestock_type[]'), isFalse);
+
+      recorded.clear();
+      await service.browse(livestockTypes: <String>['cattle', 'goat']);
+      expect(recorded.single.queryAll['livestock_type[]'], <String>[
+        'cattle',
+        'goat',
+      ]);
+      expect(recorded.single.query.containsKey('livestock_type'), isFalse);
+    });
+
+    test('sends several breeds as breed[]', () async {
+      final MarketplaceService service = buildService(
+        (_) async => marketplaceListResponse(),
+      );
+
+      await service.browse(breeds: <String>['Angus', 'Boer']);
+
+      expect(recorded.single.queryAll['breed[]'], <String>['Angus', 'Boer']);
     });
 
     test('trims filter whitespace before sending it', () async {
@@ -125,7 +167,7 @@ void main() {
         (_) async => marketplaceListResponse(),
       );
 
-      await service.browse(livestockType: '  cattle  ');
+      await service.browse(livestockTypes: <String>['  cattle  ']);
 
       expect(recorded.single.query['livestock_type'], 'cattle');
     });

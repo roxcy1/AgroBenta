@@ -275,6 +275,32 @@ void main() {
       );
     });
 
+    test('repeats an iterable query value under the same key', () {
+      // PHP only parses repeated keys into an array; stringifying the list
+      // would send `livestock_type[]=cattle,goat`, which the API reads as one
+      // value.
+      expect(
+        AppConfig.resolve(
+          '/listings',
+          query: <String, dynamic>{
+            'livestock_type[]': <String>['cattle', 'goat'],
+          },
+        ),
+        '${'http://localhost:8001/api'}/'
+        'listings?livestock_type%5B%5D=cattle&livestock_type%5B%5D=goat',
+      );
+    });
+
+    test('keeps a scalar query value as a scalar', () {
+      expect(
+        AppConfig.resolve(
+          '/listings',
+          query: <String, dynamic>{'livestock_type': 'cattle'},
+        ),
+        '${'http://localhost:8001/api'}/listings?livestock_type=cattle',
+      );
+    });
+
     test('omits null query values, matching the web client behaviour', () {
       final String url = AppConfig.resolve(
         '/listings',

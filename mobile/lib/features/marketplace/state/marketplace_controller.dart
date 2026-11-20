@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
 import '../../../models/listing.dart';
+import '../../../models/livestock_type.dart';
 import '../../../models/marketplace_page.dart';
 import '../../../repositories/marketplace_repository.dart';
 import 'listing_filters.dart';
@@ -48,9 +49,17 @@ class MarketplaceController extends ChangeNotifier {
   MarketplaceController(
     this._repository, {
     Stream<RealtimeEvent>? realtimeEvents,
+    this.livestockCatalog,
   }) {
     _realtimeSubscription = realtimeEvents?.listen(_handleRealtimeEvent);
   }
+
+  /// Supplies the current server-owned livestock catalog, or `null` when the
+  /// caller has none wired.
+  ///
+  /// It is a getter rather than a snapshot because the catalog loads after the
+  /// controller is built; every filter change reads the latest list.
+  final List<LivestockType> Function()? livestockCatalog;
 
   /// How long typing must pause before the list is re-queried.
   ///
@@ -172,12 +181,37 @@ class MarketplaceController extends ChangeNotifier {
   /// showing filters for a different query would be meaningless.
   ///
   /// Re-applying an identical selection is a no-op rather than a request.
+  ///
+  /// The selection is pruned *before* the comparison so the comparison is
+  /// between what would actually be sent. Without that, re-applying a stale
+  /// form (a breed whose type is no longer selected) would look different from
+  /// the stored filters and fire a request for a query that is already active.
   Future<void> applyFilters(ListingFilters next) async {
-    if (next == _state.filters) {
+    final ListingFilters effective = _pruneBreeds(next);
+    if (effective == _state.filters) {
       return;
     }
-    _set(_state.copyWith(filters: next));
+    _set(_state.copyWith(filters: effective));
     await _loadFirstPage();
+  }
+
+  /// Drops breeds the catalog does not offer for the selected animal types.
+  ///
+  /// Every path that changes [ListingFilters.livestockTypes] — the filter
+  /// dialog, the Browse category chips and the Home shortcuts — goes through
+  /// [applyFilters], so the rule lives here as well as on [ListingFilters] and
+  /// cannot be forgotten by one surface. A caller with no catalog wired (a
+  /// unit test, or a controller built before the catalog scope existed) keeps
+  /// the selection as given.
+  ListingFilters _pruneBreeds(ListingFilters filters) {
+    final List<LivestockType>? catalog = livestockCatalog?.call();
+    if (catalog == null) {
+      return filters;
+    }
+    return filters.pruneIncompatibleBreeds(
+      filters.livestockTypes,
+      catalog: catalog,
+    );
   }
 
   /// Clears all filters and reloads from page 1.
@@ -226,8 +260,13 @@ class MarketplaceController extends ChangeNotifier {
     try {
       final MarketplacePage page = await _repository.browse(
         search: _state.searchText,
-        livestockType: _state.filters.livestockType,
-        location: _state.filters.location,
+        livestockTypes: _state.filters.livestockTypes,
+        breeds: _state.filters.breeds,
+        gender: _state.filters.gender,
+        minAge: _state.filters.minAge,
+        maxAge: _state.filters.maxAge,
+        minWeight: _state.filters.minWeight,
+        maxWeight: _state.filters.maxWeight,
         minPrice: _state.filters.minPrice,
         maxPrice: _state.filters.maxPrice,
         page: _state.currentPage + 1,
@@ -289,11 +328,20 @@ class MarketplaceController extends ChangeNotifier {
   /// A stable string for the query a first-page request would send.
   ///
   /// Used only to recognise a duplicate request, so it has to capture everything
-  /// that changes the response and nothing that does not.
-  String get _firstPageQuery =>
-      '${_state.searchText}|${_state.filters.livestockType}|'
-      '${_state.filters.location}|${_state.filters.minPrice}|'
-      '${_state.filters.maxPrice}|1';
+  /// that changes the response and nothing that does not. The multi-select
+  /// lists are sorted first: selection order is a UI detail, and two requests
+  /// that differ only in the order of the same species are the same query.
+  String get _firstPageQuery {
+    final ListingFilters filters = _state.filters;
+    final List<String> sortedTypes = <String>[...filters.livestockTypes]
+      ..sort();
+    final List<String> sortedBreeds = <String>[...filters.breeds]..sort();
+
+    return '${_state.searchText}|${sortedTypes.join(',')}|'
+        '${sortedBreeds.join(',')}|${filters.gender}|'
+        '${filters.minAge}|${filters.maxAge}|${filters.minWeight}|'
+        '${filters.maxWeight}|${filters.minPrice}|${filters.maxPrice}|1';
+  }
 
   /// Requests page 1 and replaces everything on screen with the result.
   ///
@@ -327,8 +375,13 @@ class MarketplaceController extends ChangeNotifier {
     try {
       final MarketplacePage page = await _repository.browse(
         search: _state.searchText,
-        livestockType: _state.filters.livestockType,
-        location: _state.filters.location,
+        livestockTypes: _state.filters.livestockTypes,
+        breeds: _state.filters.breeds,
+        gender: _state.filters.gender,
+        minAge: _state.filters.minAge,
+        maxAge: _state.filters.maxAge,
+        minWeight: _state.filters.minWeight,
+        maxWeight: _state.filters.maxWeight,
         minPrice: _state.filters.minPrice,
         maxPrice: _state.filters.maxPrice,
         page: 1,

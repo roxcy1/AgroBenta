@@ -107,7 +107,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
   /// Keeps the field in step when the search text changes somewhere other than
   /// the field itself — the marketplace tab's own field, or this screen's
-  /// filter sheet changing the query.
+  /// filter dialog changing the query.
   ///
   /// A listener rather than a call from `build`: writing to a
   /// `TextEditingController` during build notifies the field, which marks it
@@ -175,13 +175,17 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
   /// Applies a canonical category from the Popular Livestock section and
   /// follows the buyer to Browse, exactly like a Home category tile.
+  ///
+  /// A Home shortcut replaces the selection with one value rather than adding
+  /// to it: the tile is a direct "show me this species" action, and a buyer
+  /// who wants several opens the Filter dialog.
   void _applyCategory(String livestockType) {
     // The ranking labels categories for display ("Cattle"); the filter uses
     // the catalog value ("cattle").
     unawaited(
       _marketplace.applyFilters(
         _marketplace.state.filters.copyWith(
-          livestockType: livestockType.toLowerCase(),
+          livestockTypes: <String>[livestockType.toLowerCase()],
         ),
       ),
     );

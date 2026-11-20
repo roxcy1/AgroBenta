@@ -27,8 +27,9 @@ class MarketplaceService {
   ///
   /// [search] is matched server-side against `livestock_type`, `breed` and
   /// `location`, so it narrows the whole result set rather than the page
-  /// already loaded. [livestockType] and [location] are exact-match filters on
-  /// free-text columns. [minPrice] and [maxPrice] bound `asking_price`.
+  /// already loaded. [livestockTypes] and [breeds] are exact-match filters on
+  /// free-text columns; [gender], the age bounds (months) and the weight bounds
+  /// (kilograms) are converted server-side. Prices bound `asking_price`.
   ///
   /// Every parameter is optional and blank strings are treated as absent, so
   /// the default request is a bare `GET /listings` rather than a request
@@ -44,8 +45,13 @@ class MarketplaceService {
   ///    of the result set, so it never appears and never 404s the list.
   Future<MarketplacePage> browse({
     String? search,
-    String? livestockType,
-    String? location,
+    List<String>? livestockTypes,
+    List<String>? breeds,
+    String? gender,
+    String? minAge,
+    String? maxAge,
+    String? minWeight,
+    String? maxWeight,
     String? minPrice,
     String? maxPrice,
     int page = 1,
@@ -57,8 +63,13 @@ class MarketplaceService {
         // Explicit allow-list. Anything not named here has no path to the
         // request, so a field added to the model can never become a filter.
         if (_present(search)) 'search': search!.trim(),
-        if (_present(livestockType)) 'livestock_type': livestockType!.trim(),
-        if (_present(location)) 'location': location!.trim(),
+        ...?_stringListParam('livestock_type', livestockTypes),
+        ...?_stringListParam('breed', breeds),
+        if (_present(gender)) 'gender': gender!.trim(),
+        if (_present(minAge)) 'min_age': minAge!.trim(),
+        if (_present(maxAge)) 'max_age': maxAge!.trim(),
+        if (_present(minWeight)) 'min_weight': minWeight!.trim(),
+        if (_present(maxWeight)) 'max_weight': maxWeight!.trim(),
         if (_present(minPrice)) 'min_price': minPrice!.trim(),
         if (_present(maxPrice)) 'max_price': maxPrice!.trim(),
         'page': page,
@@ -155,6 +166,29 @@ class MarketplaceService {
 
   static bool _present(String? value) =>
       value != null && value.trim().isNotEmpty;
+
+  /// Encodes a multi-select filter.
+  ///
+  /// One value is sent under the plain key, exactly as the legacy single-select
+  /// client did; several are sent under `key[]`, the only spelling PHP parses
+  /// into an array. A blank list sends nothing at all.
+  static Map<String, Object>? _stringListParam(
+    String key,
+    List<String>? values,
+  ) {
+    final List<String> present = (values ?? const <String>[])
+        .where(_present)
+        .map((String value) => value.trim())
+        .toList(growable: false);
+
+    if (present.isEmpty) {
+      return null;
+    }
+
+    return <String, Object>{
+      if (present.length == 1) key: present.first else '$key[]': present,
+    };
+  }
 
   /// Casts an unwrapped `data` payload to a JSON object with a message that
   /// names the endpoint, instead of a bare cast error. A `FormatException` here

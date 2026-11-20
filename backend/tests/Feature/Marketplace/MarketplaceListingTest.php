@@ -3,6 +3,7 @@
 namespace Tests\Feature\Marketplace;
 
 use App\Enums\ListingStatus;
+use App\Enums\LivestockType;
 use App\Enums\UserRole;
 use App\Models\Listing;
 use App\Models\Transaction;
@@ -638,6 +639,208 @@ class MarketplaceListingTest extends TestCase
         $this->browse(['livestock_type' => str_repeat('a', 256)])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['livestock_type']);
+    }
+
+    #[Test]
+    public function a_multi_type_filter_returns_every_matching_species(): void
+    {
+        $this->createListing($this->seller, ['livestock_type' => 'cattle']);
+        $this->createListing($this->seller, ['livestock_type' => 'goat']);
+        $this->createListing($this->seller, ['livestock_type' => 'swine']);
+
+        $this->browse(['livestock_type' => ['cattle', 'goat']])->assertOk()
+            ->assertJsonPath('data.pagination.total', 2);
+    }
+
+    #[Test]
+    public function a_single_element_type_array_behaves_like_the_legacy_scalar(): void
+    {
+        $this->createListing($this->seller, ['livestock_type' => 'cattle']);
+        $this->createListing($this->seller, ['livestock_type' => 'goat']);
+
+        $this->browse(['livestock_type' => ['cattle']])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
+    public function a_scalar_breed_filter_still_works(): void
+    {
+        $this->createListing($this->seller, ['breed' => 'Angus']);
+        $this->createListing($this->seller, ['breed' => 'Boer']);
+
+        $this->browse(['breed' => 'Angus'])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
+    public function a_multi_breed_filter_returns_every_matching_breed(): void
+    {
+        $this->createListing($this->seller, ['breed' => 'Angus']);
+        $this->createListing($this->seller, ['breed' => 'Brahman']);
+        $this->createListing($this->seller, ['breed' => 'Boer', 'livestock_type' => 'goat']);
+
+        $this->browse(['breed' => ['Angus', 'Boer']])->assertOk()
+            ->assertJsonPath('data.pagination.total', 2);
+    }
+
+    #[Test]
+    public function a_gender_filter_returns_only_that_sex(): void
+    {
+        $this->createListing($this->seller, ['gender' => 'male']);
+        $this->createListing($this->seller, ['gender' => 'female']);
+        $this->createListing($this->seller, ['gender' => null]);
+
+        $this->browse(['gender' => 'female'])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
+    public function age_bounds_convert_every_unit_to_months(): void
+    {
+        $this->createListing($this->seller, ['age_value' => 1, 'age_unit' => 'year']);
+        $this->createListing($this->seller, ['age_value' => 2, 'age_unit' => 'year']);
+        $this->createListing($this->seller, ['age_value' => 30, 'age_unit' => 'month']);
+        $this->createListing($this->seller, ['age_value' => 9125, 'age_unit' => 'day']);
+
+        $this->browse(['min_age' => 24])->assertOk()
+            ->assertJsonPath('data.pagination.total', 3);
+
+        $this->browse(['max_age' => 24])->assertOk()
+            ->assertJsonPath('data.pagination.total', 2);
+    }
+
+    #[Test]
+    public function an_age_filter_excludes_rows_without_an_age_unit(): void
+    {
+        $this->createListing($this->seller, ['age_value' => 10, 'age_unit' => null]);
+        $this->createListing($this->seller, ['age_value' => 10, 'age_unit' => 'month']);
+
+        $this->browse(['min_age' => 1])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
+    public function weight_bounds_convert_pounds_to_kilograms(): void
+    {
+        $this->createListing($this->seller, ['weight_value' => 500, 'weight_unit' => 'kg']);
+        $this->createListing($this->seller, ['weight_value' => 1000, 'weight_unit' => 'lb']);
+        $this->createListing($this->seller, ['weight_value' => 200, 'weight_unit' => 'kg']);
+
+        $this->browse(['min_weight' => 400])->assertOk()
+            ->assertJsonPath('data.pagination.total', 2);
+
+        $this->browse(['max_weight' => 400])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
+    public function a_listing_without_a_weight_is_excluded_only_by_a_weight_bound(): void
+    {
+        // `weight_unit` is NOT NULL (default kg), so the open case is a listing
+        // whose weight is unknown: it cannot satisfy a weight bound, even 0.
+        $this->createListing($this->seller, ['weight_value' => null, 'weight_information' => 'unknown']);
+        $this->createListing($this->seller, ['weight_value' => 300, 'weight_unit' => 'kg']);
+
+        $this->browse()->assertOk()
+            ->assertJsonPath('data.pagination.total', 2);
+
+        $this->browse(['min_weight' => 0])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+
+        $this->browse(['max_weight' => 1000])->assertOk()
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
+    public function combined_filters_narrow_the_whole_result_set_before_pagination(): void
+    {
+        for ($i = 0; $i < 20; $i++) {
+            $this->createListing($this->seller, ['livestock_type' => 'cattle']);
+        }
+        for ($i = 0; $i < 5; $i++) {
+            $this->createListing($this->seller, ['livestock_type' => 'goat']);
+        }
+
+        $this->browse([
+            'livestock_type' => ['cattle'],
+            'min_price' => 1,
+            'page' => 1,
+            'per_page' => 5,
+        ])->assertOk()
+            ->assertJsonPath('data.pagination.total', 20)
+            ->assertJsonPath('data.pagination.last_page', 4);
+    }
+
+    #[Test]
+    public function an_invalid_gender_is_refused(): void
+    {
+        $this->browse(['gender' => 'unknown'])->assertUnprocessable()
+            ->assertJsonValidationErrors(['gender']);
+    }
+
+    #[Test]
+    public function an_age_bound_above_the_documented_maximum_is_refused(): void
+    {
+        $this->browse(['min_age' => 301])->assertUnprocessable()
+            ->assertJsonValidationErrors(['min_age']);
+    }
+
+    #[Test]
+    public function a_negative_weight_bound_is_refused(): void
+    {
+        $this->browse(['min_weight' => -1])->assertUnprocessable()
+            ->assertJsonValidationErrors(['min_weight']);
+    }
+
+    #[Test]
+    public function an_oversized_entry_in_a_type_array_is_refused(): void
+    {
+        $this->browse(['livestock_type' => [str_repeat('a', 256)]])->assertUnprocessable()
+            ->assertJsonValidationErrors(['livestock_type']);
+    }
+
+    #[Test]
+    public function an_oversized_entry_in_a_breed_array_is_refused(): void
+    {
+        $this->browse(['breed' => [str_repeat('b', 256)]])->assertUnprocessable()
+            ->assertJsonValidationErrors(['breed']);
+    }
+
+    #[Test]
+    public function the_full_catalog_selection_is_accepted(): void
+    {
+        $breeds = [];
+        foreach (LivestockType::cases() as $type) {
+            $breeds = array_merge($breeds, $type->breeds());
+        }
+
+        $this->browse([
+            'livestock_type' => array_column(LivestockType::options(), 'value'),
+            'breed' => $breeds,
+        ])->assertOk();
+    }
+
+    #[Test]
+    public function a_livestock_type_selection_larger_than_the_catalog_is_refused(): void
+    {
+        $types = array_column(LivestockType::options(), 'value');
+        $types[] = 'horse';
+
+        $this->browse(['livestock_type' => $types])->assertUnprocessable()
+            ->assertJsonValidationErrors(['livestock_type']);
+    }
+
+    #[Test]
+    public function a_breed_selection_larger_than_the_catalog_is_refused(): void
+    {
+        $breeds = [];
+        foreach (LivestockType::cases() as $type) {
+            $breeds = array_merge($breeds, $type->breeds());
+        }
+        $breeds[] = 'Uncatalogued Breed';
+
+        $this->browse(['breed' => $breeds])->assertUnprocessable()
+            ->assertJsonValidationErrors(['breed']);
     }
 
     /*

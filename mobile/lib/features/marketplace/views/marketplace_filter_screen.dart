@@ -4,14 +4,12 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/livestock_type.dart';
-import '../../../widgets/field_label.dart';
-import '../../../widgets/livestock_type_icon.dart';
 import '../../livestock_types/state/livestock_types_controller.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
 import '../../livestock_types/state/livestock_types_state.dart';
 import '../state/listing_filters.dart';
 
-/// Opens the Filter Livestock screen and resolves to the applied filters, or
+/// Opens the Filter Livestock dialog and resolves to the applied filters, or
 /// `null` when the buyer cancelled or backed out.
 ///
 /// Returning `null` rather than the unchanged filters is what lets the caller
@@ -22,22 +20,15 @@ Future<ListingFilters?> showMarketplaceFilterScreen({
   required BuildContext context,
   required ListingFilters filters,
 }) {
-  return Navigator.of(context).push<ListingFilters>(
-    MaterialPageRoute<ListingFilters>(
-      fullscreenDialog: true,
-      builder: (BuildContext context) =>
-          MarketplaceFilterScreen(initial: filters),
-    ),
+  return showDialog<ListingFilters>(
+    context: context,
+    barrierColor: Colors.black,
+    builder: (BuildContext context) =>
+        MarketplaceFilterDialog(initial: filters),
   );
 }
 
 /// One Animal Type shortcut.
-///
-/// **[value] is a plain string, not an enum.** `listings.livestock_type` is
-/// matched exactly by the marketplace API. The tiles are built from the
-/// backend-owned catalog, so adding an approved category automatically adds
-/// its shortcut without a second client-side vocabulary. The "exact wording"
-/// field below the tiles keeps any historical seller wording reachable.
 class _AnimalType {
   const _AnimalType({required this.label, required this.value});
 
@@ -48,54 +39,48 @@ class _AnimalType {
       _AnimalType(label: type.label, value: type.value);
 }
 
-/// The Filter Livestock screen, over the existing marketplace filter state.
+/// The Filter Livestock dialog, over the existing marketplace filter state.
 ///
-/// A full route rather than the bottom sheet it replaces: the reference is a
-/// header-and-sections page, and a sheet cannot carry a dark header with its own
-/// title, reset and back affordances. The screen is **presentation only** — it
-/// edits a copy of the form locally and hands the finished [ListingFilters] back
-/// to the caller, which applies them through [MarketplaceController]. It makes
-/// no request of its own.
+/// Presentation only — it edits a copy of the form locally and hands the
+/// finished [ListingFilters] back to the caller, which applies them through
+/// `MarketplaceController`. It makes no request of its own.
 ///
-/// ## Only supported filters are live
-///
-/// `GET /api/listings` accepts `search`, `livestock_type`, `location`,
-/// `min_price`, `max_price`, `page` and `per_page` (`IndexListingRequest`). There
-/// is **no** `condition`, `health_status` or `sort` parameter, and the endpoint
-/// is always ordered `created_at DESC, id DESC`. So Condition, Health Status and
-/// Sort By are rendered as visibly unavailable rather than as controls that
-/// pretend to filter — the design's own rule ("report the gap instead of
-/// inventing parameters"). See the section doc comments for the specifics.
-class MarketplaceFilterScreen extends StatefulWidget {
-  const MarketplaceFilterScreen({required this.initial, super.key});
+/// The dialog is the one dark surface in the app.
+/// Its colours live in [AppColors] beside the light palette rather
+/// than in a second `ThemeData`; see the note there. Whether that dark surface
+/// is an approved exception to the app's light-only rule is an open question on
+/// PR #84.
+class MarketplaceFilterDialog extends StatefulWidget {
+  const MarketplaceFilterDialog({required this.initial, super.key});
 
   /// The filters currently applied, used to pre-fill the form.
   ///
-  /// Reopening preserves what is applied, per the design; Reset clears the form
-  /// without applying, and Cancel discards everything.
+  /// Reopening preserves what is applied, per the design; Reset clears the
+  /// form without applying, and Cancel discards everything.
   final ListingFilters initial;
 
   @override
-  State<MarketplaceFilterScreen> createState() =>
-      _MarketplaceFilterScreenState();
+  State<MarketplaceFilterDialog> createState() =>
+      _MarketplaceFilterDialogState();
 }
 
-class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
+class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
   late final LivestockTypesController _catalog;
-  late String _livestockType;
-  late final TextEditingController _location = TextEditingController(
-    text: widget.initial.location,
-  );
-  late final TextEditingController _minPrice = TextEditingController(
-    text: widget.initial.minPrice,
-  );
-  late final TextEditingController _maxPrice = TextEditingController(
-    text: widget.initial.maxPrice,
-  );
+  late List<String> _livestockTypes;
+  late List<String> _breeds;
+  late String _gender;
+  late final TextEditingController _minPrice = TextEditingController();
+  late final TextEditingController _maxPrice = TextEditingController();
+  late final TextEditingController _minAge = TextEditingController();
+  late final TextEditingController _maxAge = TextEditingController();
+  late final TextEditingController _minWeight = TextEditingController();
+  late final TextEditingController _maxWeight = TextEditingController();
 
-  /// Set when the range is the wrong way round, to explain the problem inline
+  /// Set when a range is the wrong way round, to explain the problem inline
   /// rather than only refusing to apply.
-  bool _showRangeError = false;
+  bool _showPriceError = false;
+  bool _showAgeError = false;
+  bool _showWeightError = false;
 
   /// Guards against a second Apply while the first is still resolving.
   bool _submitting = false;
@@ -104,7 +89,15 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
   void initState() {
     super.initState();
     _catalog = LivestockTypesScope.readOf(context);
-    _livestockType = widget.initial.livestockType;
+    _livestockTypes = List<String>.of(widget.initial.livestockTypes);
+    _breeds = List<String>.of(widget.initial.breeds);
+    _gender = widget.initial.gender;
+    _minPrice.text = widget.initial.minPrice;
+    _maxPrice.text = widget.initial.maxPrice;
+    _minAge.text = widget.initial.minAge;
+    _maxAge.text = widget.initial.maxAge;
+    _minWeight.text = widget.initial.minWeight;
+    _maxWeight.text = widget.initial.maxWeight;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _catalog.ensureLoaded();
     });
@@ -112,36 +105,45 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
 
   @override
   void dispose() {
-    _location.dispose();
     _minPrice.dispose();
     _maxPrice.dispose();
+    _minAge.dispose();
+    _maxAge.dispose();
+    _minWeight.dispose();
+    _maxWeight.dispose();
     super.dispose();
   }
 
   /// The filters represented by the current field contents.
-  ///
-  /// Read from the controllers rather than held in state, so the applied value
-  /// and the displayed value cannot disagree after an edit.
   ListingFilters get _current => ListingFilters(
-    livestockType: _livestockType.trim(),
-    location: _location.text.trim(),
+    livestockTypes: _livestockTypes,
+    breeds: _breeds,
+    gender: _gender,
+    minAge: _minAge.text.trim(),
+    maxAge: _maxAge.text.trim(),
+    minWeight: _minWeight.text.trim(),
+    maxWeight: _maxWeight.text.trim(),
     minPrice: _minPrice.text.trim(),
     maxPrice: _maxPrice.text.trim(),
   );
 
-  /// Validates, then returns the filters to the caller.
-  ///
-  /// Validation without clearing input: an impossible range is explained and the
-  /// form is left exactly as the user typed it, so they can correct one field
-  /// rather than start over.
   void _apply() {
     if (_submitting) {
       return;
     }
 
-    final ListingFilters next = _current;
-    if (next.hasInvertedPriceRange) {
-      setState(() => _showRangeError = true);
+    final ListingFilters next = _current.pruneIncompatibleBreeds(
+      _livestockTypes,
+      catalog: _catalog.state.types,
+    );
+    if (next.hasInvertedPriceRange ||
+        next.hasInvertedAgeRange ||
+        next.hasInvertedWeightRange) {
+      setState(() {
+        _showPriceError = next.hasInvertedPriceRange;
+        _showAgeError = next.hasInvertedAgeRange;
+        _showWeightError = next.hasInvertedWeightRange;
+      });
       return;
     }
 
@@ -156,283 +158,509 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
   /// by Reset followed by Apply.
   void _reset() {
     setState(() {
-      _livestockType = '';
-      _location.clear();
+      _livestockTypes = <String>[];
+      _breeds = <String>[];
+      _gender = '';
       _minPrice.clear();
       _maxPrice.clear();
-      _showRangeError = false;
+      _minAge.clear();
+      _maxAge.clear();
+      _minWeight.clear();
+      _maxWeight.clear();
+      _showPriceError = false;
+      _showAgeError = false;
+      _showWeightError = false;
     });
   }
 
   /// Discards the form and returns to the caller.
   void _cancel() => Navigator.of(context).pop();
 
-  /// Whether the Animal Type tile for [value] is the current selection.
-  ///
-  /// The text field is the single source of truth, so a tile is selected only
-  /// while the field holds exactly its value — which keeps tiles and free text
-  /// from disagreeing.
-  bool _isAnimalSelected(String value) => _livestockType.trim() == value;
+  bool _isAnimalSelected(String value) => _livestockTypes.contains(value);
 
-  void _selectAnimal(_AnimalType animal) {
+  void _toggleAnimal(_AnimalType animal) {
     setState(() {
       if (_isAnimalSelected(animal.value)) {
-        // Tapping the selected tile clears it: the backend is a single
-        // exact-match value, so "none" is expressed by an empty field.
-        _livestockType = '';
+        _livestockTypes = <String>[..._livestockTypes]..remove(animal.value);
       } else {
-        _livestockType = animal.value;
+        _livestockTypes = <String>[..._livestockTypes, animal.value];
       }
+      _pruneBreeds();
     });
+  }
+
+  /// Drops breeds whose animal type was just deselected.
+  ///
+  /// A breed is only meaningful with its species, and leaving a stale breed in
+  /// the selection would send a filter that can never match a visible listing.
+  void _pruneBreeds() {
+    final Set<String> available = ListingFilters.catalogBreeds(
+      _livestockTypes,
+      _catalog.state.types,
+    ).toSet();
+    _breeds = _breeds
+        .where((String breed) => available.contains(breed))
+        .toList(growable: false);
+  }
+
+  /// The union of the selected types' catalog breeds, in catalog order.
+  List<String> _availableBreeds() =>
+      ListingFilters.catalogBreeds(_livestockTypes, _catalog.state.types);
+
+  Future<void> _openBreedPicker() async {
+    final List<String> available = _availableBreeds();
+    final List<String> selected = List<String>.of(_breeds);
+
+    final List<String>? result = await showModalBottomSheet<List<String>>(
+      context: context,
+      backgroundColor: AppColors.filterDarkSurface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (BuildContext context) => StatefulBuilder(
+        builder:
+            (
+              BuildContext context,
+              void Function(void Function()) setSheetState,
+            ) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      AppSpacing.md,
+                      AppSpacing.md,
+                      AppSpacing.xs,
+                    ),
+                    child: Text(
+                      'Select breeds',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.filterDarkText,
+                      ),
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: <Widget>[
+                        for (final String breed in available)
+                          CheckboxListTile(
+                            value: selected.contains(breed),
+                            onChanged: (bool? value) {
+                              setSheetState(() {
+                                if (value == true) {
+                                  selected.add(breed);
+                                } else {
+                                  selected.remove(breed);
+                                }
+                              });
+                            },
+                            title: Text(
+                              breed,
+                              style: const TextStyle(
+                                color: AppColors.filterDarkText,
+                              ),
+                            ),
+                            activeColor: AppColors.filterDarkAccent,
+                            checkColor: Colors.black,
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(selected),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.filterDarkAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Done'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() => _breeds = result);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: const Text('Filter Livestock'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: _reset,
-            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-            child: const Text('Reset'),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-        ],
+    return Dialog(
+      backgroundColor: AppColors.filterDarkSurface,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xl,
       ),
-      body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.screenGutter,
-            AppSpacing.md,
-            AppSpacing.screenGutter,
-            AppSpacing.lg,
-          ),
-          children: <Widget>[
-            _FilterSection(
-              title: 'Animal Type',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  ListenableBuilder(
-                    listenable: _catalog,
-                    builder: (BuildContext context, Widget? child) =>
-                        _buildAnimalTypes(context, _catalog.state),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _FilterSection(
-              title: 'Price Range',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(
-                        child: TextField(
-                          controller: _minPrice,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          inputFormatters: <TextInputFormatter>[
-                            _priceInputFormatter,
-                          ],
-                          textInputAction: TextInputAction.next,
-                          onChanged: (String _) {
-                            if (_showRangeError) {
-                              setState(() => _showRangeError = false);
-                            }
-                          },
-                          decoration: const InputDecoration(
-                            label: FieldLabel('Min price'),
-                            hintText: '0',
-                            prefixText: '₱ ',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: TextField(
-                          controller: _maxPrice,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          inputFormatters: <TextInputFormatter>[
-                            _priceInputFormatter,
-                          ],
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (String _) => _apply(),
-                          onChanged: (String _) {
-                            if (_showRangeError) {
-                              setState(() => _showRangeError = false);
-                            }
-                          },
-                          decoration: const InputDecoration(
-                            label: FieldLabel('Max price'),
-                            hintText: 'No limit',
-                            prefixText: '₱ ',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_showRangeError) ...<Widget>[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'The minimum price is higher than the maximum price.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.error,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _FilterSection(
-              title: 'Location',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  TextField(
-                    controller: _location,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      label: FieldLabel('Location', hasPrefixIcon: true),
-                      hintText: 'e.g. Nueva Ecija',
-                      prefixIcon: FieldIcon(Icon(Icons.place_outlined)),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'An exact match on the seller’s location. There is no list '
-                    'of locations to pick from, and Location permission is not '
-                    'requested.',
-                    style: theme.textTheme.labelSmall,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const _UnavailableSection(
-              title: 'Condition',
-              options: <String>['All', 'Young', 'Adult', 'Pregnant'],
-              note:
-                  'Not available yet. The marketplace API cannot filter by '
-                  'condition, and this app will not invent one.',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const _UnavailableSection(
-              title: 'Health Status',
-              options: <String>['All', 'Healthy', 'Needs Care'],
-              note:
-                  'Not available yet. The marketplace API cannot filter by '
-                  'health status, and health is never inferred from a photo.',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const _SortSection(),
-          ],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 480,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.screenGutter,
-            AppSpacing.sm,
-            AppSpacing.screenGutter,
-            AppSpacing.sm,
-          ),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _cancel,
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _apply,
-                  child: const Text('Apply Filters'),
-                ),
-              ),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _buildHeader(),
+            Flexible(child: _buildBody()),
+            _buildBottomBar(),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildAnimalTypes(
-    BuildContext context,
-    LivestockTypesState catalogState,
-  ) {
-    final ThemeData theme = Theme.of(context);
+  Widget _buildHeader() {
+    return SizedBox(
+      height: 56,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          Positioned(
+            left: 0,
+            child: IconButton(
+              onPressed: _cancel,
+              icon: const Icon(Icons.close, size: 20),
+              color: AppColors.filterDarkText,
+              tooltip: 'Close',
+            ),
+          ),
+          Text(
+            'Filter Livestock',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.filterDarkText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Positioned(
+            right: 0,
+            child: TextButton(
+              onPressed: _reset,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.filterDarkAccent,
+              ),
+              child: const Text('Reset'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return ListenableBuilder(
+      listenable: _catalog,
+      builder: (BuildContext context, Widget? child) {
+        final LivestockTypesState catalogState = _catalog.state;
+
+        return ListView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          children: <Widget>[
+            _FilterSection(
+              icon: Icons.pets,
+              title: 'Animal Type',
+              helper: 'Select one or more animal types.',
+              child: _buildAnimalTypes(catalogState),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _FilterSection(
+              icon: Icons.style_outlined,
+              title: 'Breed',
+              helper: 'Choose breed(s) for the selected animal types.',
+              child: _buildBreedSelector(),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _FilterSection(
+              icon: Icons.sell_outlined,
+              title: 'Price Range',
+              child: _buildPriceFields(),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _FilterSection(
+              icon: Icons.tune,
+              title: 'Additional Filters',
+              child: _buildAdditionalFilters(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomBar() {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.sm,
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _cancel,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(AppSizes.controlHeight),
+                  foregroundColor: AppColors.filterDarkText,
+                  side: const BorderSide(color: AppColors.filterDarkBorder),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _apply,
+                icon: const Icon(Icons.filter_alt_outlined, size: 18),
+                label: const Text('Apply Filters'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(AppSizes.controlHeight),
+                  backgroundColor: AppColors.filterDarkAccent,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnimalTypes(LivestockTypesState catalogState) {
     if (catalogState.hasFailed) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             catalogState.errorMessage ?? 'Could not load livestock types.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.error,
-            ),
+            style: const TextStyle(color: AppColors.filterDarkTextSecondary),
           ),
-          TextButton(onPressed: _catalog.retry, child: const Text('Retry')),
+          TextButton(
+            onPressed: _catalog.retry,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.filterDarkAccent,
+            ),
+            child: const Text('Retry'),
+          ),
         ],
       );
     }
     if (!catalogState.isReady) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.filterDarkAccent),
+      );
     }
 
     final List<_AnimalType> animals = catalogState.types
         .map(_AnimalType.fromCatalog)
         .toList(growable: false);
-    final bool selectedIsLegacy =
-        _livestockType.isNotEmpty && !catalogState.isSupported(_livestockType);
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        const double spacing = AppSpacing.sm;
+        final int columns = (constraints.maxWidth / 108).floor().clamp(2, 4);
+        final double tileWidth =
+            (constraints.maxWidth - (columns - 1) * spacing) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: <Widget>[
+            for (final _AnimalType animal in animals)
+              _DarkAnimalTile(
+                key: ValueKey<String>('animal-type-${animal.value}'),
+                animal: animal,
+                width: tileWidth,
+                selected: _isAnimalSelected(animal.value),
+                onTap: () => _toggleAnimal(animal),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBreedSelector() {
+    final bool enabled = _livestockTypes.isNotEmpty;
+    final String text = _breeds.isEmpty
+        ? (enabled ? 'Select breed(s)' : 'Select an animal type first')
+        : _breeds.join(', ');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            const double spacing = AppSpacing.sm;
-            final int columns = (constraints.maxWidth / 108).floor().clamp(
-              2,
-              4,
-            );
-            final double tileWidth =
-                (constraints.maxWidth - (columns - 1) * spacing) / columns;
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
+        InkWell(
+          onTap: enabled ? _openBreedPicker : null,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Container(
+            height: AppSizes.controlHeight,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.filterDarkField,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.filterDarkFieldBorder),
+            ),
+            child: Row(
               children: <Widget>[
-                for (final _AnimalType animal in animals)
-                  _AnimalTile(
-                    key: ValueKey<String>('animal-type-${animal.value}'),
-                    animal: animal,
-                    width: tileWidth,
-                    selected: _isAnimalSelected(animal.value),
-                    onTap: () => _selectAnimal(animal),
+                Expanded(
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _breeds.isEmpty
+                          ? AppColors.filterDarkTextSecondary
+                          : AppColors.filterDarkText,
+                    ),
                   ),
+                ),
+                const Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 20,
+                  color: AppColors.filterDarkTextSecondary,
+                ),
               ],
-            );
-          },
+            ),
+          ),
         ),
-        if (selectedIsLegacy) ...<Widget>[
+        if (!enabled) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            'The current category is a legacy value. Select a supported type or reset it.',
-            style: theme.textTheme.labelSmall,
+          const Text(
+            'Choose at least one animal type to see breeds.',
+            style: TextStyle(
+              color: AppColors.filterDarkTextSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPriceFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _DarkTextField(
+                controller: _minPrice,
+                label: 'Minimum price',
+                hint: '0',
+                prefixText: '₱ ',
+                onChanged: (String _) =>
+                    setState(() => _showPriceError = false),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _DarkTextField(
+                controller: _maxPrice,
+                label: 'Maximum price',
+                hint: 'No limit',
+                prefixText: '₱ ',
+                onChanged: (String _) =>
+                    setState(() => _showPriceError = false),
+              ),
+            ),
+          ],
+        ),
+        if (_showPriceError) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'The minimum price is higher than the maximum price.',
+            style: TextStyle(color: AppColors.filterDarkAccent, fontSize: 12),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAdditionalFilters() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const _SubLabel('Sex'),
+        _SegmentedControl(
+          value: _gender,
+          onChanged: (String value) => setState(() => _gender = value),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const _SubLabel('Age (months)', icon: Icons.cake_outlined),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _DarkTextField(
+                controller: _minAge,
+                label: 'Min',
+                onChanged: (String _) => setState(() => _showAgeError = false),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _DarkTextField(
+                controller: _maxAge,
+                label: 'Max',
+                onChanged: (String _) => setState(() => _showAgeError = false),
+              ),
+            ),
+          ],
+        ),
+        if (_showAgeError) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'The minimum age is higher than the maximum age.',
+            style: TextStyle(color: AppColors.filterDarkAccent, fontSize: 12),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        const _SubLabel('Weight (kg)', icon: Icons.monitor_weight_outlined),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _DarkTextField(
+                controller: _minWeight,
+                label: 'Min',
+                onChanged: (String _) =>
+                    setState(() => _showWeightError = false),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _DarkTextField(
+                controller: _maxWeight,
+                label: 'Max',
+                onChanged: (String _) =>
+                    setState(() => _showWeightError = false),
+              ),
+            ),
+          ],
+        ),
+        if (_showWeightError) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'The minimum weight is higher than the maximum weight.',
+            style: TextStyle(color: AppColors.filterDarkAccent, fontSize: 12),
           ),
         ],
       ],
@@ -440,28 +668,62 @@ class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
   }
 }
 
-/// A titled white panel holding one group of controls.
+/// A titled dark panel holding one group of controls.
 class _FilterSection extends StatelessWidget {
-  const _FilterSection({required this.title, required this.child});
+  const _FilterSection({
+    required this.icon,
+    required this.title,
+    required this.child,
+    this.helper,
+  });
 
+  final IconData icon;
   final String title;
+  final String? helper;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.filterDarkCard,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.filterDarkBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(title, style: theme.textTheme.titleMedium),
+          Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.xxs),
+                decoration: BoxDecoration(
+                  color: AppColors.filterDarkAccent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Icon(icon, size: 18, color: AppColors.filterDarkAccent),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.filterDarkText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          if (helper != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              helper!,
+              style: const TextStyle(
+                color: AppColors.filterDarkTextSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           child,
         ],
@@ -470,13 +732,41 @@ class _FilterSection extends StatelessWidget {
   }
 }
 
-/// One Animal Type tile: a livestock glyph above its label.
+/// A bold label for a sub-filter inside the Additional Filters section.
+class _SubLabel extends StatelessWidget {
+  const _SubLabel(this.text, {this.icon});
+
+  final String text;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(
+        children: <Widget>[
+          if (icon != null) ...<Widget>[
+            Icon(icon, size: 16, color: AppColors.filterDarkAccent),
+            const SizedBox(width: AppSpacing.xs),
+          ],
+          Text(
+            text,
+            style: const TextStyle(
+              color: AppColors.filterDarkText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One Animal Type tile: plain text on a dark rounded button.
 ///
-/// The whole tile is the tap target, well past the 48dp minimum. The selected
-/// treatment (green border, pale-green surface, green icon and text) and the
-/// unselected treatment (light-gray surface, dark text) follow the reference.
-class _AnimalTile extends StatelessWidget {
-  const _AnimalTile({
+/// The whole tile is the tap target, well past the 48dp minimum.
+class _DarkAnimalTile extends StatelessWidget {
+  const _DarkAnimalTile({
     required this.animal,
     required this.width,
     required this.selected,
@@ -491,48 +781,42 @@ class _AnimalTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final Color foreground = selected ? AppColors.primary : AppColors.text;
-
     return Semantics(
       button: true,
       selected: selected,
       label: animal.label,
       child: Material(
-        color: selected ? AppColors.primarySurface : AppColors.background,
+        color: selected
+            ? AppColors.filterDarkAccent.withValues(alpha: 0.18)
+            : AppColors.filterDarkTile,
         borderRadius: BorderRadius.circular(AppRadius.md),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: Container(
             width: width,
-            height: 84,
+            height: 56,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
-                color: selected ? AppColors.primary : AppColors.border,
+                color: selected
+                    ? AppColors.filterDarkAccent
+                    : AppColors.filterDarkBorder,
                 width: selected ? 2 : 1,
               ),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                LivestockTypeIcon(
-                  type: animal.value,
-                  size: 30,
-                  color: foreground,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  animal.label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: foreground,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            alignment: Alignment.center,
+            child: Text(
+              animal.label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected
+                    ? AppColors.filterDarkAccent
+                    : AppColors.filterDarkText,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ),
@@ -541,152 +825,113 @@ class _AnimalTile extends StatelessWidget {
   }
 }
 
-/// A section whose options the API cannot back, rendered as clearly disabled.
-///
-/// The design lists these options; the server has no query parameter for either
-/// (`IndexListingRequest`), so the control is not made interactive. Showing them
-/// disabled with an explanation is honest — a buyer sees the option exists in
-/// the product and learns it is not available yet, rather than either a control
-/// that silently does nothing or a fabricated filter.
-class _UnavailableSection extends StatelessWidget {
-  const _UnavailableSection({
-    required this.title,
-    required this.options,
-    required this.note,
-  });
+/// The Any / Male / Female choice, rendered as one segmented control.
+class _SegmentedControl extends StatelessWidget {
+  const _SegmentedControl({required this.value, required this.onChanged});
 
-  final String title;
-  final List<String> options;
-  final String note;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return _FilterSection(
-      title: title,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: <Widget>[
-              for (final String option in options) _DisabledPill(label: option),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              const Icon(
-                Icons.lock_outline,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(child: Text(note, style: theme.textTheme.labelSmall)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A non-interactive chip, visually distinct from a live control.
-class _DisabledPill extends StatelessWidget {
-  const _DisabledPill({required this.label});
-
-  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: AppColors.filterDarkCard,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.filterDarkBorder),
       ),
-      child: Text(
-        label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
-      ),
-    );
-  }
-}
-
-/// The Sort By section, showing the only order the endpoint provides.
-///
-/// `MarketplaceListingRepository` always orders `created_at DESC, id DESC` and
-/// the request accepts no `sort` parameter, so "Newest First" is the whole
-/// vocabulary. It is displayed as a fixed value rather than a one-item dropdown,
-/// which would invite a tap that cannot change anything.
-class _SortSection extends StatelessWidget {
-  const _SortSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return _FilterSection(
-      title: 'Sort By',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
         children: <Widget>[
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.md,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: <Widget>[
-                const Icon(
-                  Icons.sort,
-                  size: 20,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Newest First',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-                const Icon(
-                  Icons.lock_outline,
-                  size: 16,
-                  color: AppColors.textSecondary,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Newest first is the only order the marketplace provides.',
-            style: theme.textTheme.labelSmall,
-          ),
+          _segment('Any', ''),
+          _segment('Male', 'male'),
+          _segment('Female', 'female'),
         ],
       ),
     );
   }
+
+  Widget _segment(String label, String segmentValue) {
+    final bool selected = value == segmentValue;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () => onChanged(segmentValue),
+        child: Container(
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.filterDarkTile : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected
+                  ? AppColors.filterDarkText
+                  : AppColors.filterDarkTextSecondary,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-/// Allows digits and at most one decimal point.
-///
-/// A convenience, not validation: the server's `numeric,min:0` rule is the
-/// authority. It cannot express a negative number, which matches `min:0`, and it
-/// keeps the keyboard from being unable to type a value the app will accept.
-final TextInputFormatter _priceInputFormatter =
-    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'));
+/// A text field on the dark dialog surface.
+class _DarkTextField extends StatelessWidget {
+  const _DarkTextField({
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.prefixText,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final String? prefixText;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: <TextInputFormatter>[
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+      ],
+      style: const TextStyle(color: AppColors.filterDarkText),
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixText: prefixText,
+        labelStyle: const TextStyle(
+          color: AppColors.filterDarkTextSecondary,
+          fontSize: 12,
+        ),
+        hintStyle: const TextStyle(
+          color: AppColors.filterDarkTextSecondary,
+          fontSize: 14,
+        ),
+        prefixStyle: const TextStyle(color: AppColors.filterDarkText),
+        filled: true,
+        fillColor: AppColors.filterDarkField,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.sm,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.filterDarkFieldBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.filterDarkAccent),
+        ),
+      ),
+    );
+  }
+}
