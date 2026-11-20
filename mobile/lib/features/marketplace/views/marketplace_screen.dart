@@ -157,7 +157,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   ///
   /// A tap toggles the category: the chips are multi-select, matching the
   /// Filter dialog, so a buyer can narrow to cattle *and* goat. "All" clears
-   /// every selected type. Re-tapping to reach the same selection is a no-op.
+  /// every selected type. Re-tapping to reach the same selection is a no-op.
   Future<void> _selectCategory(String? value) async {
     final ListingFilters current = _controller.state.filters;
     final List<String> next;

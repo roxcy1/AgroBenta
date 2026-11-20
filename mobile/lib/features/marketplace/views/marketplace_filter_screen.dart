@@ -45,9 +45,11 @@ class _AnimalType {
 /// finished [ListingFilters] back to the caller, which applies them through
 /// `MarketplaceController`. It makes no request of its own.
 ///
-/// The dialog is the one dark surface in the app, matching the approved
-/// reference. Its colours live in [AppColors] beside the light palette rather
-/// than in a second `ThemeData`; see the note there.
+/// The dialog is the one dark surface in the app.
+/// Its colours live in [AppColors] beside the light palette rather
+/// than in a second `ThemeData`; see the note there. Whether that dark surface
+/// is an approved exception to the app's light-only rule is an open question on
+/// PR #84.
 class MarketplaceFilterDialog extends StatefulWidget {
   const MarketplaceFilterDialog({required this.initial, super.key});
 

@@ -87,7 +87,11 @@ void main() {
         (_) async => marketplaceListResponse(),
       );
 
-      await service.browse(search: '   ', livestockTypes: <String>[''], minPrice: '  ');
+      await service.browse(
+        search: '   ',
+        livestockTypes: <String>[''],
+        minPrice: '  ',
+      );
 
       expect(recorded.single.query.containsKey('search'), isFalse);
       expect(recorded.single.query.containsKey('livestock_type'), isFalse);
@@ -141,10 +145,10 @@ void main() {
 
       recorded.clear();
       await service.browse(livestockTypes: <String>['cattle', 'goat']);
-      expect(
-        recorded.single.queryAll['livestock_type[]'],
-        <String>['cattle', 'goat'],
-      );
+      expect(recorded.single.queryAll['livestock_type[]'], <String>[
+        'cattle',
+        'goat',
+      ]);
       expect(recorded.single.query.containsKey('livestock_type'), isFalse);
     });
 

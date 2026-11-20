@@ -590,14 +590,73 @@ buyer marketplace behind the same `auth:sanctum` + `ability:mobile` guard:
 | `GET /api/listings` | One page of `active` listings, with search, filters and pagination. |
 | `GET /api/listings/{listing}` | One listing's detail. Answers `404` for anything not visible to the caller. |
 
-Both accept only the query keys `search`, `livestock_type`, `location`,
-`min_price`, `max_price`, `page` and `per_page`; `per_page` is capped at 50. The
-list is `active`-only and ordered `created_at DESC, id DESC`. A non-active
-listing, one owned by another seller, and one that never existed are all `404`
-by design, so listing existence is not disclosed — the app renders a single
-"no longer available" state for all three. `GET /admin/listings` is **not** used
-by the app; it is admin-only and returns seller fields the marketplace must not
-expose.
+Both accept only the query keys `search`, `livestock_type`, `breed`, `gender`,
+`min_age`, `max_age`, `min_weight`, `max_weight`, `location`, `min_price`,
+`max_price`, `page` and `per_page`; `per_page` is capped at 50. `status` and
+`seller_id` are **prohibited** (`422`), not silently dropped. The list is
+`active`-only and ordered `created_at DESC, id DESC`. A non-active listing, one
+owned by another seller, and one that never existed are all `404` by design, so
+listing existence is not disclosed — the app renders a single "no longer
+available" state for all three. `GET /admin/listings` is **not** used by the
+app; it is admin-only and returns seller fields the marketplace must not expose.
+
+#### Marketplace filters and the multi-select query format
+
+The buyer filter is a single `ListingFilters` value held by
+`MarketplaceController` and shared by the Marketplace screen, the Home category
+shortcuts and the Filter Livestock dialog, so the three can never disagree. It
+is built from an explicit allow-list in `MarketplaceService.browse`; nothing
+outside that map reaches the request.
+
+`livestock_type` and `breed` are **multi-select**. One selected value is sent
+under the plain key, exactly as the older single-select client did; several are
+sent under `key[]`, the only spelling PHP parses into an array
+(`IndexListingRequest::prepareForValidation` also wraps a scalar into a
+one-element array, so both shapes are accepted and a pre-multi-select client
+keeps working):
+
+```text
+livestock_type=cattle
+livestock_type[]=cattle&livestock_type[]=goat
+breed[]=Angus&breed[]=Boer
+```
+
+The server normalises both to a list, drops empty entries, and caps the array at
+the size of its own catalog — so a client cannot widen the request past what the
+UI offers. `breed` must be a breed the selected `livestock_type` actually lists;
+the client does not decide that, `GET /livestock-types` does. `ListingFilters`
+holds the server's exact catalog values, never a client-side label, and
+`ListingFilters.pruneIncompatibleBreeds` is the single place that drops a breed
+when its animal type is removed; `MarketplaceController.applyFilters` calls it,
+so every surface that changes the types (the dialog, the Browse chips, the Home
+shortcuts) is covered by one rule. Clearing every type clears the breeds too. A
+breed name shared by two types survives a switch between them. With an empty
+catalog the selection is left alone, because there is nothing to compare against.
+
+`gender` is `male`/`female`; anything else is `422`. Age bounds are **months**
+and weight bounds are **kilograms**, whatever unit the seller stored — the
+repository converts in SQL (`year * 12`, `day * 300 / 9125`, `lb * 0.45359237`;
+a null `weight_unit` is treated as kg). The server's ceilings are `300` months
+and `99999999.99` kg. `location`, `min_price` and `max_price` are the remaining
+filters; `location` is not offered by the app's filter UI.
+
+Values are sent exactly as the buyer typed them and the server is the authority
+on whether one is acceptable. The client parses a range only to answer one
+question for itself — whether it is inverted — and explains that inline rather
+than applying it.
+
+Every query key except `location` is offered by the Filter dialog; `location`
+is accepted by the endpoint but has no control in the app (the marketplace lists
+by category, not by place). Adding a control means adding it to `ListingFilters`,
+to `MarketplaceService.browse`'s allow-list and to the dialog together; a key
+the service does not name has no path to the request.
+
+The **Filter Livestock** dialog (`marketplace_filter_screen.dart`) is the one
+dark surface in the app, with its own palette in `AppColors`; every other screen
+stays light. See `mobile/DESIGN.md` §16. Reset clears the form without
+applying; Apply prunes incompatible breeds, refuses an inverted range and pops
+the selection back to the caller, which applies it through the controller.
+
 
 **Resolved for the public seller profile (clickable seller card).** The seller
 card at the bottom of Listing Details is tappable and opens a public seller

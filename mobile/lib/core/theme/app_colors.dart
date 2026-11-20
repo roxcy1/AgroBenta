@@ -102,11 +102,14 @@ abstract final class AppColors {
 
   // --- Filter dialog (dark) ------------------------------------------------
   //
-  // The Filter Livestock dialog is the one dark surface in the app, approved
-  // against the supplied reference. It is a self-contained palette rather than
-  // a second ThemeData: the rest of the app is light-only (see AppTheme), and a
-  // full dark theme would imply a system-wide mode the product does not have.
-  // Do not reuse these for any other screen.
+  // The Filter Livestock dialog is the one dark surface in the app. It is a
+  // self-contained palette rather than a second ThemeData: the rest of the app
+  // is light-only (see AppTheme), and a full dark theme would imply a
+  // system-wide mode the product does not have. Do not reuse these for any other
+  // screen.
+  //
+  // Whether this dark surface is an approved exception to the light-only rule
+  // is recorded as an open question on PR #84; see mobile/DESIGN.md §16.
 
   /// The dialog's outer surface. (`#1B1C1E`)
   static const Color filterDarkSurface = Color(0xFF1B1C1E);
