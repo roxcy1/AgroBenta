@@ -36,16 +36,23 @@ bool isAllowedVerificationDocument(XFile file) {
 /// Picks one image for a document card using the platform picker.
 ///
 /// The default picker for production. The form accepts a function of this shape
-/// so a test can supply an in-memory file instead of opening a real picker. The
-/// source differs per document — a selfie is naturally a camera shot, while an
-/// ID is often already saved as an image — but both open the same picker UI and
-/// both return a single [XFile].
-Future<XFile?> pickVerificationImage(VerificationDocumentType type) async {
+/// so a test can supply an in-memory file instead of opening a real picker.
+///
+/// [source] is the seller's own choice where the form offers one (Proof of
+/// Address: a bill is as easily photographed now as picked from the gallery).
+/// Without it the source follows the document: a selfie is a camera shot, an
+/// ID is often already saved as an image.
+Future<XFile?> pickVerificationImage(
+  VerificationDocumentType type, {
+  ImageSource? source,
+}) async {
   final ImagePicker picker = ImagePicker();
   return picker.pickImage(
-    source: type == VerificationDocumentType.selfie
-        ? ImageSource.camera
-        : ImageSource.gallery,
+    source:
+        source ??
+        (type == VerificationDocumentType.selfie
+            ? ImageSource.camera
+            : ImageSource.gallery),
     maxWidth: 2000,
     maxHeight: 2000,
     imageQuality: 90,

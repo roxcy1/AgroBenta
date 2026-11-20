@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -327,13 +328,60 @@ class _SellerVerificationFormScreenState
   }
 
   Future<void> _pick(VerificationDocumentType type) async {
-    final Future<XFile?> Function(VerificationDocumentType) picker =
-        widget.pickImage ?? pickVerificationImage;
-    final XFile? file = await picker(type);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    ImageSource? source;
+    if (type == VerificationDocumentType.proofOfAddress) {
+      source = await _chooseImageSource();
+      if (source == null || !mounted) {
+        return;
+      }
+    }
+
+    final XFile? file;
+    try {
+      final Future<XFile?> Function(VerificationDocumentType)? override =
+          widget.pickImage;
+      file = override != null
+          ? await override(type)
+          : await pickVerificationImage(type, source: source);
+    } on PlatformException {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the camera or photo library. '
+            'Check the app permissions and try again.',
+          ),
+        ),
+      );
+      return;
+    }
     if (file == null || !mounted) {
       return;
     }
     await _documents.pickAndUpload(type: type, file: file);
+  }
+
+  /// Asks whether the photo comes from the camera or the gallery, the same
+  /// choice the listing photo picker offers. Dismissing it picks nothing.
+  Future<ImageSource?> _chooseImageSource() {
+    return showDialog<ImageSource>(
+      context: context,
+      builder: (BuildContext dialogContext) => SimpleDialog(
+        title: const Text('Add photo from'),
+        children: <Widget>[
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(ImageSource.gallery),
+            child: const Text('Gallery'),
+          ),
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(ImageSource.camera),
+            child: const Text('Camera'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickFarmPhoto() async {
@@ -783,7 +831,7 @@ class _SellerVerificationFormScreenState
             'Your name and address must be readable, with no blur, glare or '
             'cropped edges.',
         document: documents.proofOfAddress,
-        pickLabel: 'Take Photo',
+        pickLabel: 'Upload Photo',
         changeLabel: 'Change',
         onPick: () => _pick(VerificationDocumentType.proofOfAddress),
         onRemove: () =>

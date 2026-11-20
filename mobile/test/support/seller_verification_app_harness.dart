@@ -357,6 +357,8 @@ Future<void> tapDocumentPick(WidgetTester tester, String cardTitle) async {
           ? 'Upload Front ID Image'
           : cardTitle == 'Government ID — Back'
           ? 'Upload Back ID Image'
+          : cardTitle == 'Proof of Address'
+          ? 'Upload Photo'
           : 'Take Photo',
     ),
   );
@@ -364,6 +366,11 @@ Future<void> tapDocumentPick(WidgetTester tester, String cardTitle) async {
   await tester.pumpAndSettle();
   await tester.tap(button);
   await settleSellerVerification(tester);
+  // Proof of Address first asks for the source; any choice reaches the picker.
+  if (cardTitle == 'Proof of Address') {
+    await tester.tap(find.text('Gallery'));
+    await settleSellerVerification(tester);
+  }
 }
 
 /// Advances through the Documents step by uploading the required images.
