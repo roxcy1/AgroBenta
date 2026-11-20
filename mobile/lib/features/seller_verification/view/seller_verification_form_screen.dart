@@ -631,6 +631,9 @@ class _SellerVerificationFormScreenState
   ) {
     final ThemeData theme = Theme.of(context);
     final bool allRequiredUploaded = documents.allRequiredUploaded;
+    // The ID images are uploaded for a declared ID type, so the front and
+    // back stay locked until one is chosen.
+    final bool idTypeChosen = _governmentIdType != null;
 
     return <Widget>[
       Text('Government ID Verification', style: theme.textTheme.titleLarge),
@@ -700,6 +703,15 @@ class _SellerVerificationFormScreenState
           ],
         ),
       ),
+      if (!idTypeChosen) ...<Widget>[
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Select your Government ID type first to upload your ID.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
       const SizedBox(height: AppSpacing.md),
       SellerVerificationDocumentCard(
         title: 'Government ID — Front',
@@ -712,7 +724,9 @@ class _SellerVerificationFormScreenState
         document: documents.idDocument,
         pickLabel: 'Upload Front ID Image',
         changeLabel: 'Change',
-        onPick: () => _pick(VerificationDocumentType.idDocumentFront),
+        onPick: idTypeChosen
+            ? () => _pick(VerificationDocumentType.idDocumentFront)
+            : null,
         onRemove: () =>
             _documents.remove(VerificationDocumentType.idDocumentFront),
         onRetry: () =>
@@ -729,7 +743,9 @@ class _SellerVerificationFormScreenState
           runSpacing: AppSpacing.sm,
           children: <Widget>[
             OutlinedButton(
-              onPressed: documents.isBusy ? null : _chooseAndPickBackImage,
+              onPressed: documents.isBusy || !idTypeChosen
+                  ? null
+                  : _chooseAndPickBackImage,
               child: const Text('Upload Back ID Image'),
             ),
             OutlinedButton(
@@ -756,7 +772,9 @@ class _SellerVerificationFormScreenState
             document: documents.idDocumentBack,
             pickLabel: 'Upload Back ID Image',
             changeLabel: 'Replace',
-            onPick: () => _pick(VerificationDocumentType.idDocumentBack),
+            onPick: idTypeChosen
+                ? () => _pick(VerificationDocumentType.idDocumentBack)
+                : null,
             onRemove: () =>
                 _documents.remove(VerificationDocumentType.idDocumentBack),
             onRetry: () =>
