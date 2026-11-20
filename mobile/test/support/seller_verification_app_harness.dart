@@ -343,8 +343,33 @@ Future<XFile?> cancelledVerificationPicker(
   VerificationDocumentType type,
 ) async => null;
 
+/// Chooses a Government ID type when none is selected yet. The ID image
+/// uploads stay locked until one is.
+Future<void> selectGovernmentIdTypeIfEmpty(WidgetTester tester) async {
+  final Finder idType = find.byType(DropdownButtonFormField<GovernmentIdType>);
+  if (idType.evaluate().isEmpty ||
+      tester
+              .widget<DropdownButtonFormField<GovernmentIdType>>(idType)
+              .initialValue !=
+          null) {
+    return;
+  }
+  await tester.ensureVisible(idType);
+  await tester.pumpAndSettle();
+  await tester.tap(idType);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(GovernmentIdType.philippineNationalId.label).last);
+  await tester.pumpAndSettle();
+}
+
 /// Taps the first pick action on a document card, identified by its card title.
+///
+/// For the front ID a Government ID type is chosen first if none is, as a
+/// seller must.
 Future<void> tapDocumentPick(WidgetTester tester, String cardTitle) async {
+  if (cardTitle == 'Government ID — Front') {
+    await selectGovernmentIdTypeIfEmpty(tester);
+  }
   final Finder card = find.ancestor(
     of: find.text(cardTitle),
     matching: find.byType(Card),

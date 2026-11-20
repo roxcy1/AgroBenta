@@ -40,8 +40,10 @@ class SellerVerificationDocumentCard extends StatelessWidget {
   /// The slot this card renders.
   final VerificationDocument document;
 
-  /// Opens the picker (camera or gallery).
-  final VoidCallback onPick;
+  /// Opens the picker (camera or gallery). `null` locks picking: the pick and
+  /// change buttons show disabled, e.g. until a step this one depends on is
+  /// done.
+  final VoidCallback? onPick;
 
   /// Removes the current selection, locally and — if staged — on the server.
   final VoidCallback onRemove;
@@ -407,7 +409,7 @@ class _Actions extends StatelessWidget {
   final VerificationDocument document;
   final String pickLabel;
   final String changeLabel;
-  final VoidCallback onPick;
+  final VoidCallback? onPick;
   final VoidCallback onRemove;
   final VoidCallback onRetry;
 

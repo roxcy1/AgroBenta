@@ -305,30 +305,65 @@ void main() {
       expect(find.textContaining('cannot be reused'), findsOneWidget);
     });
 
-    testWidgets('requires a Government ID type before leaving Documents', (
+    testWidgets('locks the ID upload until a Government ID type is chosen', (
       WidgetTester tester,
     ) async {
-      await SellerVerificationHarness.pump(
-        tester,
-        tokenStore: tokenStore,
-        pickImage: fakeVerificationPicker,
-        handler: (RecordedRequest request) async =>
-            request.method == 'POST' &&
-                request.apiPath == '/seller-verification/documents'
-            ? sellerVerificationDocumentUploadedResponse()
-            : sellerVerificationNotFoundResponse(),
-      );
+      final List<VerificationDocumentType> picked =
+          <VerificationDocumentType>[];
+      final SellerVerificationHarness harness =
+          await SellerVerificationHarness.pump(
+            tester,
+            tokenStore: tokenStore,
+            pickImage: (VerificationDocumentType type) async {
+              picked.add(type);
+              return fakeVerificationPicker(type);
+            },
+            handler: (RecordedRequest request) async =>
+                request.method == 'POST' &&
+                    request.apiPath == '/seller-verification/documents'
+                ? sellerVerificationDocumentUploadedResponse()
+                : sellerVerificationNotFoundResponse(),
+          );
       await openSellerVerificationForm(tester, resubmission: false);
       await tapNext(tester);
-      await uploadBothDocuments(tester);
 
-      final Finder next = find.widgetWithText(FilledButton, 'Next');
-      await scrollSellerVerificationIntoView(tester, next);
-      await tester.tap(next);
+      final Finder upload = find.widgetWithText(
+        FilledButton,
+        'Upload Front ID Image',
+      );
+      await scrollSellerVerificationIntoView(tester, upload);
+      expect(tester.widget<FilledButton>(upload).onPressed, isNull);
+      expect(
+        find.text('Select your Government ID type first to upload your ID.'),
+        findsOneWidget,
+      );
+
+      // A tap on the locked button opens no picker and uploads nothing.
+      await tester.tap(upload, warnIfMissed: false);
       await settleSellerVerification(tester);
+      expect(picked, isEmpty);
+      expect(
+        harness.recorded.where(
+          (RecordedRequest r) => r.apiPath == '/seller-verification/documents',
+        ),
+        isEmpty,
+      );
 
-      expect(find.text('Select a Government ID type.'), findsOneWidget);
-      expect(find.text('Government ID — Front'), findsOneWidget);
+      // Next stays disabled too: nothing has been uploaded.
+      final Finder next = find.widgetWithText(FilledButton, 'Next');
+      expect(tester.widget<FilledButton>(next).onPressed, isNull);
+
+      await selectGovernmentIdTypeIfEmpty(tester);
+      expect(tester.widget<FilledButton>(upload).onPressed, isNotNull);
+      expect(
+        find.text('Select your Government ID type first to upload your ID.'),
+        findsNothing,
+      );
+
+      await tapDocumentPick(tester, 'Government ID — Front');
+      expect(picked, <VerificationDocumentType>[
+        VerificationDocumentType.idDocumentFront,
+      ]);
     });
 
     testWidgets('Others reveals a required Specify Government ID field', (
