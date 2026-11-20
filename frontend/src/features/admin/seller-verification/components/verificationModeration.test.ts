@@ -136,24 +136,31 @@ describe('verificationActionsFor', () => {
     ]);
   });
 
-  it('offers nothing for a decided record or an unknown value', () => {
-    expect(verificationActionsFor('approved')).toEqual([]);
+  it('offers revoke for an approved record', () => {
+    expect(verificationActionsFor('approved').map((a) => a.action)).toEqual(['revoke']);
+  });
+
+  it('offers nothing for a rejected record or an unknown value', () => {
     expect(verificationActionsFor('rejected')).toEqual([]);
     expect(verificationActionsFor('archived')).toEqual([]);
   });
 
-  it('marks the note as required only for rejection', () => {
+  it('marks the note as required for rejection and revocation', () => {
     const [approve, reject] = verificationActionsFor('submitted');
+    const [revoke] = verificationActionsFor('approved');
 
     expect(approve.noteRequired).toBe(false);
     expect(reject.noteRequired).toBe(true);
+    expect(revoke.noteRequired).toBe(true);
   });
 
   it('matches each action variant to the action', () => {
     const [approve, reject] = verificationActionsFor('submitted');
+    const [revoke] = verificationActionsFor('approved');
 
     expect(approve.variant).toBe('approve');
     expect(reject.variant).toBe('reject');
+    expect(revoke.variant).toBe('reject');
   });
 });
 
@@ -170,6 +177,14 @@ describe('review safeguards copy', () => {
 
     expect(reject.confirmMessage).toMatch(/revoke/i);
     expect(reject.confirmMessage).toMatch(/already an approved seller/i);
+  });
+
+  it('warns that revocation withdraws active and pending listings', () => {
+    const [revoke] = verificationActionsFor('approved');
+
+    expect(revoke.confirmMessage).toMatch(/revoke/i);
+    expect(revoke.confirmMessage).toMatch(/active and pending listing/i);
+    expect(revoke.confirmMessage).toMatch(/transactions/i);
   });
 });
 
