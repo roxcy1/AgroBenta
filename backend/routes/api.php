@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Marketplace\SellerProfileController;
 use App\Http\Controllers\Api\Messaging\ConversationController;
 use App\Http\Controllers\Api\Messaging\MessageController;
 use App\Http\Controllers\Api\Notification\NotificationController;
+use App\Http\Controllers\Api\Notification\NotificationPreferenceController;
 use App\Http\Controllers\Api\Offer\OfferController;
 use App\Http\Controllers\Api\Profile\ProfileController;
 use App\Http\Controllers\Api\Report\UserReportController;
@@ -360,6 +361,14 @@ Route::middleware('auth:sanctum', 'ability:mobile')->prefix('notifications')->gr
     Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::delete('/{id}', [NotificationController::class, 'destroy']);
+});
+
+// Notification Settings — which kinds of phone push the caller receives.
+// Resolved from the token. Every notification is still stored and listed;
+// only its push is skipped for a category that is switched off.
+Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
+    Route::get('/notification-preferences', [NotificationPreferenceController::class, 'show']);
+    Route::put('/notification-preferences', [NotificationPreferenceController::class, 'update']);
 });
 
 // Push notifications — the calling phone's FCM registration token. The row is

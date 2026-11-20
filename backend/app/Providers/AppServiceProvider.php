@@ -7,6 +7,7 @@ use App\Contracts\PriceSuggestionProvider;
 use App\Events\NotificationCreated;
 use App\Jobs\SendPushNotification;
 use App\Models\User;
+use App\Services\Notification\NotificationPreferenceService;
 use App\Services\PriceSuggestion\FastApiPriceSuggestionProvider;
 use App\Services\Push\PushNotificationService;
 use Illuminate\Auth\Notifications\ResetPassword;
@@ -68,9 +69,15 @@ class AppServiceProvider extends ServiceProvider
                 NotificationCreated::dispatch($event->notifiable, $event->notification);
 
                 // Phone push (FCM) for the same notification, queued after
-                // commit. Off when no Firebase key is configured.
-                if (app(PushNotificationService::class)->isEnabled()) {
-                    $payload = $event->notification->toArray($event->notifiable);
+                // commit. Off when no Firebase key is configured, and skipped
+                // for a category the user switched off in Notification
+                // Settings (the stored notification above is kept either way).
+                $payload = $event->notification->toArray($event->notifiable);
+                if (app(PushNotificationService::class)->isEnabled()
+                    && app(NotificationPreferenceService::class)->allowsPush(
+                        $event->notifiable,
+                        isset($payload['type']) ? (string) $payload['type'] : null,
+                    )) {
 
                     SendPushNotification::dispatch(
                         (int) $event->notifiable->getKey(),
