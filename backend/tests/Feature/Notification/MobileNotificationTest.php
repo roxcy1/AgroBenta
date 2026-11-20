@@ -282,6 +282,42 @@ class MobileNotificationTest extends TestCase
     // Transaction notifications (firing)
     // ---------------------------------------------------------------------
 
+    public function test_first_message_notifies_the_receiver_with_the_thread_keys(): void
+    {
+        $seller = User::factory()->create(['seller_capability' => 'seller']);
+        $buyer = User::factory()->create();
+        $listing = Listing::create([
+            'seller_id' => $seller->getKey(),
+            'livestock_type' => 'cattle',
+            'breed' => 'Brahman',
+            'quantity' => 10,
+            'asking_price' => 1000,
+            'location' => 'Trinidad, Bohol',
+            'short_description' => 'Test listing',
+            'status' => 'active',
+            'photos' => [],
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$buyer->createToken('test', ['mobile'])->plainTextToken)
+            ->postJson('/api/messages', [
+                'receiver_id' => $seller->getKey(),
+                'listing_id' => $listing->getKey(),
+                'body' => 'Is this still available?',
+            ])
+            ->assertCreated();
+
+        // A new request, so the seller's token is the one resolved.
+        $this->app['auth']->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer '.$seller->createToken('test', ['mobile'])->plainTextToken)
+            ->getJson('/api/notifications')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.notifications')
+            ->assertJsonPath('data.notifications.0.type', 'inquiry')
+            ->assertJsonPath('data.notifications.0.action', 'inquiry')
+            ->assertJsonPath('data.notifications.0.action_id', $buyer->getKey())
+            ->assertJsonPath('data.notifications.0.listing_id', $listing->getKey());
+    }
+
        public function test_creating_a_transaction_notifies_the_seller(): void
     {
         Notification::fake();

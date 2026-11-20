@@ -25,7 +25,9 @@ use Illuminate\Notifications\Notification;
  *     notification only needs to be a *pointer* — tap → open this thread.
  *
  * The `action` is `inquiry` and `action_id` is the counterpart's user id, so
- * the client knows which thread to open when the notification is tapped.
+ * the client knows which thread to open when the notification is tapped. A
+ * thread is keyed by counterpart and listing, so `listing_id` (null for a
+ * message not about a listing) is sent too.
  */
 class NewInquiry extends Notification
 {
@@ -63,6 +65,7 @@ class NewInquiry extends Notification
             'body' => $body,
             'action' => 'inquiry',
             'action_id' => $this->sender->id,
+            'listing_id' => $this->listingId,
         ];
     }
 }

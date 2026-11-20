@@ -11,7 +11,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * The resource does not expose Laravel's internal `type` (the FQCN of the
  * notification class), `notifiable_type` or `notifiable_id` — the client has no
  * use for any of them. The payload's `data` blob (which carries `title`, `body`,
- * `type`, `action` and `action_id`) is flattened into the resource's top level
+ * `type`, `action`, `action_id` and, for an inquiry, `listing_id`) is flattened into the resource's top level
  * so the mobile model can read them as plain fields, not as a nested object
  * it has to dig through.
  */
@@ -32,6 +32,8 @@ class NotificationResource extends JsonResource
             'type' => $data['type'] ?? 'system',
             'action' => $data['action'] ?? null,
             'action_id' => $data['action_id'] ?? null,
+            // Only inquiry notifications carry it: the thread's listing.
+            'listing_id' => $data['listing_id'] ?? null,
             'read' => $this->read_at !== null,
             'read_at' => $this->read_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
