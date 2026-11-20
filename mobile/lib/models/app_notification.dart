@@ -88,7 +88,8 @@ enum NotificationAction {
 ///
 /// Mirrors `App\Http\Resources\NotificationResource` on the backend field for
 /// field. The `data` blob the server stores is already flattened by the
-/// resource into `title`, `body`, `type`, `action`, `action_id`, so this
+/// resource into `title`, `body`, `type`, `action`, `action_id` (and, for an
+/// inquiry, `listing_id`), so this
 /// model does not need to parse a nested payload.
 class AppNotification {
   const AppNotification({
@@ -101,6 +102,7 @@ class AppNotification {
     required this.read,
     required this.readAt,
     required this.createdAt,
+    this.listingId,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
@@ -111,6 +113,7 @@ class AppNotification {
       type: NotificationType.fromValue(readNullableString(json, 'type')),
       action: NotificationAction.fromValue(readNullableString(json, 'action')),
       actionId: readNullableInt(json, 'action_id'),
+      listingId: readNullableInt(json, 'listing_id'),
       read: json['read'] == true,
       readAt: readNullableDateTime(json, 'read_at'),
       createdAt: readNullableDateTime(json, 'created_at'),
@@ -134,6 +137,10 @@ class AppNotification {
   /// The id the [action] refers to (listing id, counterpart id, ...).
   final int? actionId;
 
+  /// The thread's listing, sent only with an [NotificationAction.inquiry]: a
+  /// conversation is keyed by counterpart and listing.
+  final int? listingId;
+
   final bool read;
   final DateTime? readAt;
   final DateTime? createdAt;
@@ -148,6 +155,7 @@ class AppNotification {
       type: type,
       action: action,
       actionId: actionId,
+      listingId: listingId,
       read: true,
       readAt: DateTime.now(),
       createdAt: createdAt,
