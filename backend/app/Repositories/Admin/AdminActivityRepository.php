@@ -106,6 +106,7 @@ class AdminActivityRepository
                 'listing_deactivated',
                 'seller_verification_approved',
                 'seller_verification_rejected',
+                'seller_verification_revoked',
             ])
             ->count();
 

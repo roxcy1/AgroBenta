@@ -1008,6 +1008,76 @@ void main() {
       expect(find.text('Not selected'), findsNWidgets(3));
     });
 
+    testWidgets('Proof of Address offers Camera or Gallery', (
+      WidgetTester tester,
+    ) async {
+      final List<VerificationDocumentType> picked =
+          <VerificationDocumentType>[];
+      final SellerVerificationHarness harness =
+          await SellerVerificationHarness.pump(
+            tester,
+            tokenStore: tokenStore,
+            pickImage: (VerificationDocumentType type) async {
+              picked.add(type);
+              return fakeVerificationPicker(type);
+            },
+            handler: (RecordedRequest request) async =>
+                request.apiPath == '/seller-verification/documents'
+                ? sellerVerificationDocumentUploadedResponse(
+                    type: 'proof_of_address',
+                  )
+                : sellerVerificationNotFoundResponse(),
+          );
+      await openSellerVerificationForm(tester, resubmission: false);
+      await tapNext(tester);
+
+      final Finder addPhoto = find.widgetWithText(FilledButton, 'Upload Photo');
+      await tester.ensureVisible(addPhoto);
+      await tester.pumpAndSettle();
+      await tester.tap(addPhoto);
+      await tester.pumpAndSettle();
+      expect(find.text('Add photo from'), findsOneWidget);
+      expect(find.text('Camera'), findsOneWidget);
+      expect(find.text('Gallery'), findsOneWidget);
+
+      // Dismissing the choice opens no picker and uploads nothing.
+      await tester.tapAt(const Offset(8, 8));
+      await tester.pumpAndSettle();
+      expect(find.text('Add photo from'), findsNothing);
+      expect(picked, isEmpty);
+
+      await tester.tap(addPhoto);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Camera'));
+      await settleSellerVerification(tester);
+
+      expect(picked, <VerificationDocumentType>[
+        VerificationDocumentType.proofOfAddress,
+      ]);
+      expect(
+        harness.recorded.where(
+          (RecordedRequest r) => r.apiPath == '/seller-verification/documents',
+        ),
+        hasLength(1),
+      );
+    });
+
+    testWidgets('the ID card opens its picker without asking for a source', (
+      WidgetTester tester,
+    ) async {
+      await SellerVerificationHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        pickImage: cancelledVerificationPicker,
+        handler: (_) async => sellerVerificationNotFoundResponse(),
+      );
+      await openSellerVerificationForm(tester, resubmission: false);
+      await tapNext(tester);
+
+      await tapDocumentPick(tester, 'Government ID — Front');
+      expect(find.text('Add photo from'), findsNothing);
+    });
+
     testWidgets('farm photos are optional, several, and removable', (
       WidgetTester tester,
     ) async {

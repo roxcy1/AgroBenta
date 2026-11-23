@@ -187,6 +187,45 @@ class AdminListingService
     }
 
     /**
+     * Withdraw a seller's marketplace presence when their verification is
+     * revoked.
+     *
+     * Active listings are administrator-deactivated and pending listings are
+     * administrator-rejected. Draft, sold and already-inactive listings are
+     * left alone: a draft was never public, sold is terminal, and inactive is
+     * already hidden. The existing transitions preserve reservations and
+     * transaction history (DEC-12), so this method never cancels or rewrites
+     * either.
+     *
+     * The caller is expected to run this inside the verification-revocation
+     * transaction. A transition conflict propagates as a 409 and rolls the
+     * whole revocation back.
+     *
+     * @return array{deactivated: list<int>, rejected: list<int>}
+     */
+    public function revokeSellerListings(User $seller, User $actor, ?string $reason = null): array
+    {
+        $deactivated = [];
+        $rejected = [];
+
+        foreach ($this->listings->lockForSellerRevocation((int) $seller->getKey()) as $listing) {
+            if ($listing->status === ListingStatus::Active) {
+                $this->deactivate($listing, $actor);
+                $deactivated[] = (int) $listing->getKey();
+
+                continue;
+            }
+
+            if ($listing->status === ListingStatus::Pending) {
+                $this->reject($listing, $actor, $reason);
+                $rejected[] = (int) $listing->getKey();
+            }
+        }
+
+        return ['deactivated' => $deactivated, 'rejected' => $rejected];
+    }
+
+    /**
      * Apply one documented transition, or refuse it.
      *
      * The allowed source status is a private detail of each method above, so a

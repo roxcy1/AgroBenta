@@ -254,8 +254,8 @@ Exactly four. These match the manuscript ERD. **[MS p.94]**
 |---|---|
 | `submitted` | Submitted by the user. Not yet picked up by an administrator. |
 | `pending_review` | Under administrator review. |
-| `approved` | Approved. `seller_capability` becomes `seller`. |
-| `rejected` | Rejected. `admin_note` explains why. |
+| `approved` | Approved. `seller_capability` becomes `seller`. An administrator may later revoke the approval (§3.6). |
+| `rejected` | Rejected, or an approval that was revoked. `admin_note` explains why. |
 
 `submitted` and `pending_review` are **open** states: a review is in flight.
 
@@ -272,6 +272,8 @@ Exactly four. These match the manuscript ERD. **[MS p.94]**
   again.
 * The user's current verification state is their **most recent** record.
 * `seller_capability` is derived from the most recent record.
+* An approval that was revoked becomes `rejected`, so the applicant may resubmit
+  under this rule (§3.6). **[DEC-13]**
 
 > The prototype's "Edit Application" button on a pending application
 > (Figure 19, last screen) is **[OPEN]** — see §13, MS-06.
@@ -367,6 +369,33 @@ record, so one person can appear more than once.
 API (`GET /admin/seller-verifications`): `status=pending` returns open
 submissions; `all_submissions=1` returns every submission instead of only each
 applicant's most recent one. Without these parameters the list is unchanged.
+
+### 3.6 Revoking an approval **[DEC-13, client request 2026-11-21]**
+
+An administrator may revoke an **approved** verification — for example when
+fraud is discovered after approval. Revocation is a review action on the
+existing record; it does **not** add a fifth state.
+
+* Only the applicant's **latest** record may be revoked, and only while it is
+  `approved`. A revoked record becomes `rejected`, keeping the four states in
+  §3.1. An open, already-rejected, or stale record is refused.
+* The action **requires an administrator note**. The note, the reviewer and the
+  review time replace the original approval metadata on the record; the earlier
+  approval remains in the activity log.
+* `seller_capability` returns to `buyer`.
+* The seller's **active** listings are deactivated and their **pending** listings
+  are rejected, using the existing listing moderation transitions (§4.4).
+  `draft`, `sold` and already-`inactive` listings are unchanged. Reservations and
+  transaction history are never cancelled or deleted.
+* The seller's **pending** transactions remain but can no longer be fulfilled,
+  because fulfillment updates require seller capability. Either party may cancel
+  them, which releases the reservation; until then the reserved livestock stays
+  held.
+* Verification documents and the record history are preserved. The applicant may
+  submit a new verification under the ordinary resubmission rule (§3.2), and its
+  outcome is reviewed afresh.
+* The applicant receives a notification stating that the approval was revoked and
+  that active and pending listings were withdrawn.
 
 ---
 
@@ -485,6 +514,11 @@ Rules:
     is refused if any transaction history exists (pending, completed or
     cancelled), if a reservation exists, or if inventory requires reconciliation.
     There is no deletion-request workflow or archive status. **[DEC-12]**
+12. Revoking an approved seller verification (§3.6) deactivates that seller's
+    `active` listings and rejects their `pending` listings through the existing
+    transitions above. `draft`, `sold` and already-`inactive` listings are
+    unchanged, and reservations or transaction history are not modified.
+    **[DEC-13]**
 
 > **[OPEN] MS-01 — direct publish vs admin approval.** The Add New Listing
 > prototype (Figure 22) has a seller-chosen "Status: Active" and a "Publish
@@ -728,7 +762,7 @@ requires a new approved decision.
 
 Events that notify (from the manuscript):
 
-* Seller verification updates (approved / rejected).
+* Seller verification updates (approved / rejected / approval revoked).
 * Transaction-related status changes.
 
 Notifications for new inquiries, new messages and listing approval/rejection
@@ -838,7 +872,7 @@ Whether messaging requires a listing context, and who may message whom, is
 
 | Concern | Owner |
 |---|---|
-| Seller verification **review** (approve / reject) | Admin Web |
+| Seller verification **review** (approve / reject / revoke an approval) | Admin Web |
 | Seller verification **submission** | Mobile |
 | User management | Admin Web |
 | Listing monitoring (and moderation, §4.4) | Admin Web |
@@ -1124,6 +1158,12 @@ inventory is never inferred from ambiguous unreserved transaction rows.
 |---|---|---|
 | **DEC-12 / MS-02** | Seller listing actions and history retention | Sellers may voluntarily deactivate their own active listings without cancelling reservations or changing inventory. They may reactivate only their own eligible seller-deactivated inactive listings with reconciled, available inventory and no moderation restriction. Admin-deactivated listings can be restored only by an administrator after resolving the issue; rejected listings cannot be seller-restored. Sold listings are terminal. Permanent deletion is limited to eligible listings without any transaction history or active reservations and without reconciliation requirements. No deletion-request workflow, archive status or migration is introduced. (§4.4) |
 
+### 13.11 Closed by project-owner decision (2026-11-21)
+
+| ID | Decision | Resolution |
+|---|---|---|
+| **DEC-13** | Revoking an approved seller verification | Administrators may revoke the latest `approved` verification with a required note. It becomes `rejected`, `seller_capability` returns to `buyer`, and the seller's `active` listings are deactivated and `pending` listings rejected. Draft, sold and already-inactive listings, reservations and transaction history are preserved. The seller's pending transactions remain but can no longer be fulfilled; either party may cancel them, which releases the reservation. Documents and record history remain, and the applicant may resubmit. No fifth verification state or listing status is added. (§3.1, §3.6, §4.4) |
+
 ---
 
 ## 14. Change control
@@ -1167,4 +1207,5 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-17 | Implemented a buyer-visible public seller profile reached from the Listing Details seller card (two tabs: Profile and Listings). The manuscript does not define this screen or its disclosure set; recorded as open item **OQ-18** (§13.3) for confirmation. The profile reuses the marketplace listing visibility, discloses only barangay-level location and never private contact or verification documents. |
 | 2026-11-17 | **[DEC-12]** Recorded Ma'am Rox's approved seller deactivation/reactivation, administrator-only restoration of admin-deactivated listings, terminal sold status, and transaction-history deletion safeguards (§4.4, §13.2, §13.10). No deletion-request workflow, archive status or database migration is introduced. |
 | 2026-11-20 | Implemented Profile → Notification Settings (MS-P Figure 20) as per-category phone-push switches saved on the server. The manuscript does not define the screen's contents; recorded as open item **OQ-19** (§13.3) for confirmation. Every notification is still stored and shown in the app. |
+| 2026-11-21 | **[DEC-13]** Approved revoking an approved seller verification with a required note (§3.1, §3.6, §4.4, §13.11). Revocation returns the seller to a buyer and withdraws active and pending listings while preserving drafts, sold/inactive listings, documents, reservations and transaction history. Pending transactions can no longer be fulfilled and may only be cancelled. The record becomes `rejected`, so the existing resubmission rule applies; no new verification or listing state is introduced. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |
