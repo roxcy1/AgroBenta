@@ -423,6 +423,7 @@ Route::prefix('admin')->middleware('auth:sanctum', 'admin', 'ability:admin')->gr
     Route::get('/seller-verifications/{sellerVerification}/documents/farm_photo/{photo}', [SellerVerificationController::class, 'farmPhoto']);
     Route::post('/seller-verifications/{sellerVerification}/approve', [SellerVerificationController::class, 'approve']);
     Route::post('/seller-verifications/{sellerVerification}/reject', [SellerVerificationController::class, 'reject']);
+    Route::post('/seller-verifications/{sellerVerification}/revoke', [SellerVerificationController::class, 'revoke']);
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::get('/transactions/{transaction}', [TransactionController::class, 'show']);
     Route::get('/activities', [ActivityController::class, 'index']);

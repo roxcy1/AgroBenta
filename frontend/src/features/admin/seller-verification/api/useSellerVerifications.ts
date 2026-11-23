@@ -140,6 +140,14 @@ async function rejectVerification(id: number, adminNote?: string): Promise<Revie
   return response.data;
 }
 
+async function revokeVerification(id: number, adminNote: string): Promise<ReviewResponse> {
+  const response = await api.post<ReviewResponse>(
+    `/admin/seller-verifications/${id}/revoke`,
+    { admin_note: adminNote },
+  );
+  return response.data;
+}
+
 /**
  * `GET /admin/seller-verifications/{id}/documents/{type}` returns the file
  * bytes themselves — not a JSON envelope — from the private disk.
@@ -265,6 +273,18 @@ export function useRejectVerification() {
   return useMutation({
     mutationFn: ({ id, adminNote }: { id: number; adminNote?: string }) =>
       rejectVerification(id, adminNote),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'seller-verifications'] });
+    },
+  });
+}
+
+export function useRevokeVerification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, adminNote }: { id: number; adminNote: string }) =>
+      revokeVerification(id, adminNote),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'seller-verifications'] });
     },

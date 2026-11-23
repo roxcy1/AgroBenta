@@ -3,6 +3,7 @@ import type { SellerVerification } from '../api/useSellerVerifications';
 import {
   useApproveVerification,
   useRejectVerification,
+  useRevokeVerification,
 } from '../api/useSellerVerifications';
 import type { VerificationActionConfig } from './verificationModeration';
 import { verificationDisplayStatus, verificationErrorMessage } from './verificationModeration';
@@ -38,8 +39,9 @@ export default function VerificationReviewDialog({
 
   const approve = useApproveVerification();
   const reject = useRejectVerification();
+  const revoke = useRevokeVerification();
 
-  const isPending = approve.isPending || reject.isPending;
+  const isPending = approve.isPending || reject.isPending || revoke.isPending;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -58,8 +60,11 @@ export default function VerificationReviewDialog({
 
     if (action.action === 'approve') {
       approve.mutate({ id: verification.id, adminNote: adminNoteValue }, { onSuccess, onError });
-    } else {
+    } else if (action.action === 'reject') {
       reject.mutate({ id: verification.id, adminNote: adminNoteValue }, { onSuccess, onError });
+    } else {
+      // Revocation requires a note, so `canConfirm` guarantees a non-empty one.
+      revoke.mutate({ id: verification.id, adminNote: adminNote.trim() }, { onSuccess, onError });
     }
   }
 
