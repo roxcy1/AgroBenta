@@ -9,6 +9,7 @@ use App\Models\SellerVerification;
 use App\Models\User;
 use App\Notifications\SellerVerificationApproved;
 use App\Notifications\SellerVerificationRejected;
+use App\Notifications\SellerVerificationRevoked;
 use App\Repositories\Admin\AdminSellerVerificationRepository;
 use App\Services\ActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -17,8 +18,19 @@ use Illuminate\Support\Facades\DB;
 
 class AdminSellerVerificationService
 {
+    /**
+     * The statuses an application holds while no decision has been made.
+     *
+     * @var list<SellerVerificationStatus>
+     */
+    private const OPEN_STATUSES = [
+        SellerVerificationStatus::Submitted,
+        SellerVerificationStatus::PendingReview,
+    ];
+
     public function __construct(
         private readonly AdminSellerVerificationRepository $verifications,
+        private readonly AdminListingService $listings,
         private readonly ActivityLogger $activity,
     ) {
         //
@@ -48,6 +60,9 @@ class AdminSellerVerificationService
             SellerVerificationStatus::Approved,
             $reviewer,
             $adminNote,
+            self::OPEN_STATUSES,
+            ActivityAction::SellerVerificationApproved,
+            'This verification request has already been reviewed.',
         );
     }
 
@@ -58,21 +73,64 @@ class AdminSellerVerificationService
             SellerVerificationStatus::Rejected,
             $reviewer,
             $adminNote,
+            self::OPEN_STATUSES,
+            ActivityAction::SellerVerificationRejected,
+            'This verification request has already been reviewed.',
         );
     }
 
     /**
-     * Apply a review decision (approve or reject) to the applicant's most
-     * recent submission. Older records are stale and must never be reviewed,
-     * which keeps the applicant's current state authoritative.
+     * Revoke an approved verification.
+     *
+     * The record becomes `rejected`, which is the only decision state available
+     * for a revoked application; no fifth status is introduced. Seller
+     * capability is removed and the seller's live and pending listings are
+     * withdrawn in the same transaction, so a revocation cannot leave a buyer
+     * with listings still open for sale.
+     */
+    public function revoke(SellerVerification $verification, User $reviewer, string $adminNote): SellerVerification
+    {
+        return $this->moderate(
+            $verification,
+            SellerVerificationStatus::Rejected,
+            $reviewer,
+            $adminNote,
+            [SellerVerificationStatus::Approved],
+            ActivityAction::SellerVerificationRevoked,
+            'Only an approved verification can be revoked.',
+        );
+    }
+
+    /**
+     * Apply a review decision to the applicant's most recent submission.
+     * Older records are stale and must never be reviewed, which keeps the
+     * applicant's current state authoritative.
+     *
+     * `$allowedFrom` is action-specific rather than a single open-state check:
+     * approval and rejection only accept open applications, while revocation
+     * only accepts an approved one. Narrowing it here means approving an
+     * already-decided record remains impossible.
+     *
+     * @param  list<SellerVerificationStatus>  $allowedFrom
      */
     private function moderate(
         SellerVerification $verification,
         SellerVerificationStatus $to,
         User $reviewer,
         ?string $adminNote,
+        array $allowedFrom,
+        ActivityAction $action,
+        string $conflictMessage,
     ): SellerVerification {
-        return DB::transaction(function () use ($verification, $to, $reviewer, $adminNote): SellerVerification {
+        return DB::transaction(function () use (
+            $verification,
+            $to,
+            $reviewer,
+            $adminNote,
+            $allowedFrom,
+            $action,
+            $conflictMessage,
+        ): SellerVerification {
             // Lock the applicant so concurrent review decisions serialise per
             // applicant and a resubmission cannot race the decision.
             $applicant = User::withTrashed()
@@ -85,8 +143,8 @@ class AdminSellerVerificationService
                 abort(409, 'This verification record is not the applicant\'s most recent submission.');
             }
 
-            if (! $latest->status->isOpen()) {
-                abort(409, 'This verification request has already been reviewed.');
+            if (! in_array($latest->status, $allowedFrom, true)) {
+                abort(409, $conflictMessage);
             }
 
             // Observed before the write, so the audit records the transition the
@@ -107,11 +165,17 @@ class AdminSellerVerificationService
 
             // Authority field: server-derived, so it bypasses mass assignment
             // guards on purpose. It is only ever set from this trusted path.
-            // Approval grants selling; rejection revokes it, so a previously
-            // approved applicant who is later rejected is no longer a seller.
+            // Approval grants selling; rejection and revocation remove it.
             $applicant->forceFill([
                 'seller_capability' => $newCapability,
             ])->save();
+
+            // Revocation must leave no live or pending listing behind. The
+            // transition services leave reservations and transaction history
+            // untouched, and a conflict here rolls the whole revocation back.
+            $withdrawn = $action === ActivityAction::SellerVerificationRevoked
+                ? $this->listings->revokeSellerListings($applicant, $reviewer, $adminNote)
+                : null;
 
             // Fire the applicant's notification. Inside the transaction, on
             // purpose: if the notification write fails, the whole decision
@@ -122,15 +186,24 @@ class AdminSellerVerificationService
             // Laravel's `database` channel is what `via()` returns, so the write
             // is a plain INSERT into `notifications` — no queue worker, no
             // external service, nothing that could be unavailable.
-            $notification = $to === SellerVerificationStatus::Approved
-                ? new SellerVerificationApproved($latest->fresh())
-                : new SellerVerificationRejected($latest->fresh());
+            $notification = match ($action) {
+                ActivityAction::SellerVerificationApproved => new SellerVerificationApproved($latest->fresh()),
+                ActivityAction::SellerVerificationRejected => new SellerVerificationRejected($latest->fresh()),
+                ActivityAction::SellerVerificationRevoked => new SellerVerificationRevoked($latest->fresh()),
+                default => throw new \LogicException('Unexpected seller-verification activity action.'),
+            };
 
             $applicant->notify($notification);
 
-            $action = $to === SellerVerificationStatus::Approved
-                ? ActivityAction::SellerVerificationApproved
-                : ActivityAction::SellerVerificationRejected;
+            $context = [
+                'applicant_id' => $applicant->getKey(),
+                'business_name' => $latest->business_name,
+            ];
+
+            if ($withdrawn !== null) {
+                $context['deactivated_listing_ids'] = $withdrawn['deactivated'];
+                $context['rejected_listing_ids'] = $withdrawn['rejected'];
+            }
 
             $this->activity->log(
                 $reviewer,
@@ -139,10 +212,7 @@ class AdminSellerVerificationService
                 [
                     'target_type' => 'seller_verification',
                     'target_id' => $latest->getKey(),
-                    'context' => [
-                        'applicant_id' => $applicant->getKey(),
-                        'business_name' => $latest->business_name,
-                    ],
+                    'context' => $context,
                     'changes' => [
                         'status' => ['from' => $previousStatus, 'to' => $to->value],
                         'seller_capability' => [

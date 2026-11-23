@@ -8,6 +8,7 @@ use App\Models\Activity;
 use App\Models\Listing;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class AdminListingRepository
@@ -63,6 +64,25 @@ class AdminListingRepository
         $listing->save();
 
         return $listing;
+    }
+
+    /**
+     * Lock every listing a verification revocation must withdraw: active
+     * listings and listings still awaiting review.
+     *
+     * Rows are locked here, before any transition, so a concurrent approval or
+     * seller action cannot change a row between the selection and the decision.
+     *
+     * @return Collection<int, Listing>
+     */
+    public function lockForSellerRevocation(int $sellerId): Collection
+    {
+        return Listing::query()
+            ->where('seller_id', $sellerId)
+            ->whereIn('status', [ListingStatus::Active, ListingStatus::Pending])
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
     }
 
     public function list(

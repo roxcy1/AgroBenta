@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListSellerVerificationsRequest;
 use App\Http\Requests\Admin\RejectSellerVerificationRequest;
 use App\Http\Requests\Admin\ReviewSellerVerificationRequest;
+use App\Http\Requests\Admin\RevokeSellerVerificationRequest;
 use App\Http\Resources\SellerVerificationResource;
 use App\Models\SellerVerification;
 use App\Services\Admin\AdminSellerVerificationService;
@@ -127,6 +128,24 @@ class SellerVerificationController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Seller verification rejected.',
+            'data' => new SellerVerificationResource($result),
+        ], 200);
+    }
+
+    /**
+     * Revoke an approved seller verification.
+     */
+    public function revoke(SellerVerification $sellerVerification, RevokeSellerVerificationRequest $request): JsonResponse
+    {
+        $result = $this->verifications->revoke(
+            $sellerVerification,
+            $request->user(),
+            $request->validated('admin_note'),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Seller verification revoked.',
             'data' => new SellerVerificationResource($result),
         ], 200);
     }
