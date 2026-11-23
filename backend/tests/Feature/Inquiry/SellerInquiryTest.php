@@ -228,7 +228,11 @@ class SellerInquiryTest extends TestCase
             ->json('data.inquiries.0');
 
         $this->assertSame($inquiry->id, $data['id']);
-        $this->assertSame(['id' => $this->buyer->id, 'name' => 'Pedro Reyes'], $data['buyer']);
+        $this->assertSame([
+            'id' => $this->buyer->id,
+            'name' => 'Pedro Reyes',
+            'is_verified' => false,
+        ], $data['buyer']);
         $this->assertSame([
             'id' => $listing->id,
             'livestock_type' => 'goat',

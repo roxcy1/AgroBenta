@@ -35,6 +35,7 @@ void main() {
       expect(inquiry.id, 42);
       expect(inquiry.buyer!.id, 9);
       expect(inquiry.buyer!.name, 'Maria Santos');
+      expect(inquiry.buyer!.isVerified, isFalse);
       expect(inquiry.listing!.id, 12);
       expect(inquiry.listing!.title, 'Boer');
       expect(inquiry.subject, 'General Inquiry');
@@ -58,6 +59,28 @@ void main() {
         InquiryCollectionMethod.discussWithSeller,
       );
       expect(inquiry.createdAt, isNotNull);
+    });
+
+    test('missing or null buyer verification defaults to unverified', () {
+      final Map<String, dynamic> missing = sellerInquiryJson(
+        buyer: <String, dynamic>{'id': 9, 'name': 'Maria Santos'},
+      );
+      final Map<String, dynamic> nullFlag = sellerInquiryJson(
+        buyer: <String, dynamic>{
+          'id': 9,
+          'name': 'Maria Santos',
+          'is_verified': null,
+        },
+      );
+
+      expect(ReceivedInquiry.fromJson(missing).buyer?.isVerified, isFalse);
+      expect(ReceivedInquiry.fromJson(nullFlag).buyer?.isVerified, isFalse);
+      expect(
+        ReceivedInquiry.fromJson(
+          sellerInquiryJson(buyerIsVerified: true),
+        ).buyer?.isVerified,
+        isTrue,
+      );
     });
 
     test(

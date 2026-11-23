@@ -58,6 +58,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether this account is currently eligible to be presented as a verified
+     * seller in a public mobile projection.
+     */
+    public function isVerifiedSeller(): bool
+    {
+        return $this->isApprovedSeller() && ! $this->trashed();
+    }
+
+    /**
      * The phones registered for push notifications.
      */
     public function deviceTokens(): HasMany

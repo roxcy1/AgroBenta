@@ -309,7 +309,8 @@ class _InquireScreenState extends State<InquireScreen> {
             Expanded(
               child: Semantics(
                 liveRegion: true,
-                label: '$_requestedQuantity ${_requestedQuantity == 1 ? 'animal' : 'animals'} requested',
+                label:
+                    '$_requestedQuantity ${_requestedQuantity == 1 ? 'animal' : 'animals'} requested',
                 child: Text(
                   '$_requestedQuantity ${_requestedQuantity == 1 ? 'animal' : 'animals'}',
                   textAlign: TextAlign.center,
@@ -396,6 +397,7 @@ class _InquireScreenState extends State<InquireScreen> {
                     id: widget.listing.seller.id,
                     name: widget.listing.seller.name,
                     avatarUrl: null,
+                    isVerified: widget.listing.seller.isVerified,
                   ),
                 ),
                 onBackToBrowse: _backToBrowse,
@@ -414,6 +416,7 @@ class _InquireScreenState extends State<InquireScreen> {
                     id: widget.listing.seller.id,
                     name: widget.listing.seller.name,
                     avatarUrl: null,
+                    isVerified: widget.listing.seller.isVerified,
                   ),
                 ),
                 onBackToBrowse: _backToBrowse,
@@ -456,7 +459,8 @@ class _InquireScreenState extends State<InquireScreen> {
                           const NoticeBanner(
                             accent: AppColors.warning,
                             icon: Icons.inventory_2_outlined,
-                            message: 'No animals are currently available for a new inquiry.',
+                            message:
+                                'No animals are currently available for a new inquiry.',
                           ),
                           const SizedBox(height: AppSpacing.md),
                         ] else if (availableQuantity == 1 &&
@@ -506,11 +510,12 @@ class _InquireScreenState extends State<InquireScreen> {
                                 // also refuses a second call in flight: the
                                 // button stops the tap, the guard stops the
                                 // request already on its way.
-                                 onPressed: isSubmitting ||
-                                         availableQuantity <= 0 ||
-                                         _requestedQuantity > availableQuantity
-                                     ? null
-                                     : _submit,
+                                onPressed:
+                                    isSubmitting ||
+                                        availableQuantity <= 0 ||
+                                        _requestedQuantity > availableQuantity
+                                    ? null
+                                    : _submit,
                                 child: isSubmitting
                                     ? const SizedBox.square(
                                         dimension: 18,

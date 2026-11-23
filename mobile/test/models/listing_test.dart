@@ -26,11 +26,7 @@ void main() {
 
     test('accepts null price and location on an incomplete draft', () {
       final Listing listing = Listing.fromJson(
-        listingJson(
-          askingPrice: null,
-          location: null,
-          status: 'draft',
-        ),
+        listingJson(askingPrice: null, location: null, status: 'draft'),
       );
 
       expect(listing.askingPrice, isNull);
@@ -44,6 +40,34 @@ void main() {
 
       expect(listing.seller.id, 3);
       expect(listing.seller.name, 'Rizal Farms');
+      expect(listing.seller.isVerified, isTrue);
+    });
+
+    test(
+      'missing and null seller verification flags default to unverified',
+      () {
+        final Map<String, dynamic> missing = listingJson(
+          seller: <String, dynamic>{'id': 3, 'name': 'Rizal Farms'},
+        );
+        final Map<String, dynamic> nullFlag = listingJson(
+          seller: <String, dynamic>{
+            'id': 3,
+            'name': 'Rizal Farms',
+            'is_verified': null,
+          },
+        );
+
+        expect(Listing.fromJson(missing).seller.isVerified, isFalse);
+        expect(Listing.fromJson(nullFlag).seller.isVerified, isFalse);
+      },
+    );
+
+    test('an unapproved seller stays unverified', () {
+      final Listing listing = Listing.fromJson(
+        listingJson(seller: sellerJson(isVerified: false)),
+      );
+
+      expect(listing.seller.isVerified, isFalse);
     });
 
     test('never exposes a seller email, even if the server sends one', () {

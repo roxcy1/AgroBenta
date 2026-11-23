@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/listing.dart';
+import '../../../widgets/verified_seller_badge.dart';
 import 'listing_photo.dart';
 
 /// One listing in the marketplace list.
@@ -50,9 +51,9 @@ class ListingCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.sm,
+                AppSpacing.xxxs,
+                AppSpacing.sm,
                 AppSpacing.xs,
-                AppSpacing.sm,
-                AppSpacing.sm,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,14 +64,30 @@ class ListingCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          listing.seller.name,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (listing.seller.isVerified) ...<Widget>[
+                        const SizedBox(width: AppSpacing.xxs),
+                        const VerifiedSellerBadge(compact: true),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: AppSpacing.xxxs),
-                  _MetaRow(icon: Icons.place_outlined, text: _place()),
-                  const SizedBox(height: AppSpacing.xxs),
                   _MetaRow(
                     icon: Icons.inventory_2_outlined,
-                    text: _availableLabel,
+                    text: '${_place()} · $_availableLabel',
                   ),
-                  const SizedBox(height: AppSpacing.xs),
+                  const SizedBox(height: AppSpacing.xxs),
                   // Price, left-aligned and outside a pill, per the type
                   // rules. Never the only thing carrying the value: the peso
                   // symbol is part of the formatted string, so it reads

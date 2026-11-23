@@ -51,8 +51,9 @@ enum ListingStatus {
 
 /// The marketplace-safe seller projection.
 ///
-/// Mirrors `backend/app/Http/Resources/MobileSellerResource.php` exactly: `id`
-/// and `name`, nothing else.
+/// Mirrors `backend/app/Http/Resources/MobileSellerResource.php` exactly: `id`,
+/// `name` and the server-derived `is_verified` flag. The client never infers
+/// approval from account or conversation roles.
 ///
 /// There is deliberately **no `email`**. Marketplace browsing must not harvest
 /// seller contact details (functional documentation §10.4, contract §8.1), and
@@ -61,12 +62,17 @@ enum ListingStatus {
 /// contacted does so through a future feature; until then, this is all the
 /// marketplace discloses.
 class ListingSeller {
-  const ListingSeller({required this.id, required this.name});
+  const ListingSeller({
+    required this.id,
+    required this.name,
+    this.isVerified = false,
+  });
 
   factory ListingSeller.fromJson(Map<String, dynamic> json) {
     return ListingSeller(
       id: readInt(json, 'id'),
       name: readString(json, 'name'),
+      isVerified: readNullableBool(json, 'is_verified') ?? false,
     );
   }
 
@@ -75,6 +81,9 @@ class ListingSeller {
 
   /// The seller's display name.
   final String name;
+
+  /// Server-derived administrator approval. Missing legacy values are unverified.
+  final bool isVerified;
 
   @override
   String toString() => 'ListingSeller($id, $name)';
@@ -187,7 +196,8 @@ class Listing {
   /// `listings.id`.
   final int id;
 
-  /// The seller, reduced to id and display name. Never carries an email.
+  /// The seller, reduced to public identity, display name and approval status.
+  /// Never carries an email or client-controlled verification data.
   final ListingSeller seller;
 
   /// Species, as the seller typed it.

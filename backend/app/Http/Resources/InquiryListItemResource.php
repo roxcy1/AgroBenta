@@ -49,6 +49,7 @@ class InquiryListItemResource extends JsonResource
             'counterpart' => $counterpart === null ? null : [
                 'id' => $counterpart->id,
                 'name' => $counterpart->name,
+                'is_verified' => $counterpart->isVerifiedSeller(),
             ],
             'payment_method' => $this->payment_method?->value,
             'collection_method' => $this->collection_method?->value,

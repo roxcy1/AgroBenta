@@ -12,7 +12,6 @@ use App\Models\Offer;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -54,7 +53,10 @@ class MessageRepository
                 $listingId !== null,
                 fn ($q) => $q->where('listing_id', $listingId),
             )
-            ->with(['sender:id,name,avatar_url', 'receiver:id,name,avatar_url'])
+            ->with([
+                'sender:id,name,avatar_url,seller_capability,deleted_at',
+                'receiver:id,name,avatar_url,seller_capability,deleted_at',
+            ])
             ->orderByDesc('created_at')
             ->paginate($perPage);
     }
@@ -135,8 +137,8 @@ class MessageRepository
                 $q->where('sender_id', $userId)->orWhere('receiver_id', $userId);
             })
             ->with([
-                'sender:id,name,avatar_url',
-                'receiver:id,name,avatar_url',
+                'sender:id,name,avatar_url,seller_capability,deleted_at',
+                'receiver:id,name,avatar_url,seller_capability,deleted_at',
                 'listing:id,livestock_type,breed,seller_id',
             ])
             ->orderByDesc('created_at')
@@ -205,7 +207,7 @@ class MessageRepository
         // gets no row.
         $counterparts = User::query()
             ->whereIn('id', $missing)
-            ->get(['id', 'name', 'avatar_url'])
+            ->get(['id', 'name', 'avatar_url', 'seller_capability', 'deleted_at'])
             ->keyBy('id');
 
         return collect($missing)
@@ -705,8 +707,7 @@ class MessageRepository
             'listing_available_quantity' => $inquiry->listing?->quantity === null
                 ? null
                 : (int) $inquiry->listing->quantity,
-            'listing_inventory_reconciliation_required' =>
-                (bool) $inquiry->listing?->inventory_reconciliation_required,
+            'listing_inventory_reconciliation_required' => (bool) $inquiry->listing?->inventory_reconciliation_required,
             'requested_quantity' => (int) $inquiry->requested_quantity,
             'listing_photo_url' => is_array($photos) && $photos !== []
                 ? (string) reset($photos)

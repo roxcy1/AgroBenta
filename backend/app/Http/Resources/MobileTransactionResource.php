@@ -45,6 +45,7 @@ class MobileTransactionResource extends JsonResource
                 'id' => $counterparty->id,
                 'name' => $counterparty->name,
                 'email' => $counterparty->email,
+                'is_verified' => $counterparty->isVerifiedSeller(),
             ],
             'quantity' => $this->quantity,
             'total_amount' => $this->total_amount,

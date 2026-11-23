@@ -33,6 +33,7 @@ class UpdateProfileRequest extends FormRequest
         $rules = [
             'role' => ['prohibited'],
             'seller_capability' => ['prohibited'],
+            'is_verified' => ['prohibited'],
             'id' => ['prohibited'],
             'password' => ['prohibited'],
             'name' => ['sometimes', 'string', 'min:2', 'max:120'],

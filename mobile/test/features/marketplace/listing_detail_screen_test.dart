@@ -52,6 +52,7 @@ void main() {
     WidgetTester tester, {
     required int sellerId,
     required int viewerId,
+    bool sellerIsVerified = true,
     List<Object?>? photos,
     int completedSales = 0,
     String? ageInformation = 'known',
@@ -63,7 +64,7 @@ void main() {
       if (path == '/listings/12') {
         return listingDetailResponse(
           listing: listingJson(
-            seller: sellerJson(id: sellerId),
+            seller: sellerJson(id: sellerId, isVerified: sellerIsVerified),
             photos: photos,
             completedSales: completedSales,
             ageInformation: ageInformation,
@@ -252,16 +253,30 @@ void main() {
       expect(find.byType(Image), findsNothing);
     });
 
-    testWidgets('does not invent a favorite, badge or seller avatar', (
+    testWidgets('does not invent a favorite or seller avatar', (
+      WidgetTester tester,
+    ) async {
+      await pumpDetail(
+        tester,
+        sellerId: 3,
+        viewerId: 7,
+        sellerIsVerified: false,
+      );
+
+      // No favorites feature and no seller avatar are fabricated.
+      expect(find.byIcon(Icons.favorite_border), findsNothing);
+      expect(find.byIcon(Icons.favorite), findsNothing);
+      expect(find.textContaining('Verified'), findsNothing);
+    });
+
+    testWidgets('shows the approved seller badge beside the seller name', (
       WidgetTester tester,
     ) async {
       await pumpDetail(tester, sellerId: 3, viewerId: 7);
 
-      // No favorites feature and no verification flag in the API — neither is
-      // faked.
-      expect(find.byIcon(Icons.favorite_border), findsNothing);
-      expect(find.byIcon(Icons.favorite), findsNothing);
-      expect(find.textContaining('Verified'), findsNothing);
+      await tester.ensureVisible(find.byKey(listingSellerCardKey));
+      expect(find.text('Rizal Farms'), findsOneWidget);
+      expect(find.text('Verified'), findsOneWidget);
     });
 
     testWidgets('shows page indicators only when there are several photos', (
@@ -324,6 +339,7 @@ void main() {
       await settle(tester);
 
       expect(find.byType(ChatScreen), findsOneWidget);
+      expect(find.text('Verified'), findsOneWidget);
       expect(find.byType(InquireScreen), findsNothing);
       expect(
         recorded.where(

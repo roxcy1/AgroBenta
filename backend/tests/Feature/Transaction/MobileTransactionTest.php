@@ -229,6 +229,7 @@ class MobileTransactionTest extends TestCase
         $this->assertSame('buyer', $buyerView['role']);
         $this->assertSame($this->seller->id, $buyerView['counterparty']['id']);
         $this->assertSame($this->seller->email, $buyerView['counterparty']['email']);
+        $this->assertTrue($buyerView['counterparty']['is_verified']);
         $this->assertArrayNotHasKey('buyer', $buyerView);
         $this->assertArrayNotHasKey('seller', $buyerView);
 
@@ -246,6 +247,7 @@ class MobileTransactionTest extends TestCase
 
         $this->assertSame('seller', $sellerView['role']);
         $this->assertSame($this->buyer->id, $sellerView['counterparty']['id']);
+        $this->assertFalse($sellerView['counterparty']['is_verified']);
     }
 
     #[Test]

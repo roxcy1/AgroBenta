@@ -4,6 +4,7 @@ namespace Tests\Feature\Messaging;
 
 use App\Enums\ListingStatus;
 use App\Enums\OfferStatus;
+use App\Enums\SellerCapability;
 use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
 use App\Models\Inquiry;
@@ -206,6 +207,48 @@ class ConversationClassificationTest extends TestCase
         $this->assertSame($this->buyer->id, $conversations[0]['counterpart']['id']);
         $this->assertTrue($conversations[0]['has_inquiry']);
         $this->assertFalse($conversations[0]['has_transaction']);
+    }
+
+    #[Test]
+    public function conversation_and_message_summaries_report_server_approved_sellers(): void
+    {
+        $listing = $this->createListing($this->seller);
+        $message = $this->sendMessage($this->buyer, $this->seller, $listing->id);
+
+        $conversation = $this->conversations($this->buyer)[0];
+        $this->assertSame($this->seller->id, $conversation['counterpart']['id']);
+        $this->assertTrue($conversation['counterpart']['is_verified']);
+
+        $messageData = $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->getJson("/api/conversations/{$this->seller->id}/messages")
+            ->assertOk()
+            ->json('data.messages.0');
+
+        $this->assertSame($message->id, $messageData['id']);
+        $this->assertFalse($messageData['sender']['is_verified']);
+        $this->assertTrue($messageData['receiver']['is_verified']);
+    }
+
+    #[Test]
+    public function unapproved_and_deactivated_accounts_are_not_verified_in_chat_summaries(): void
+    {
+        $unapproved = User::factory()->create([
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+        $listing = $this->createListing($unapproved);
+        $this->sendMessage($this->buyer, $unapproved, $listing->id);
+
+        $unapprovedConversation = collect($this->conversations($this->buyer))
+            ->firstWhere('counterpart.id', $unapproved->id);
+        $this->assertFalse($unapprovedConversation['counterpart']['is_verified']);
+
+        $deactivatedListing = $this->createListing($this->seller);
+        $this->sendMessage($this->buyer, $this->seller, $deactivatedListing->id);
+        $this->seller->delete();
+
+        $deactivatedConversation = collect($this->conversations($this->buyer))
+            ->firstWhere('counterpart.id', $this->seller->id);
+        $this->assertFalse($deactivatedConversation['counterpart']['is_verified']);
     }
 
     #[Test]

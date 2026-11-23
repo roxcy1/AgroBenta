@@ -61,7 +61,9 @@ Map<String, dynamic> transactionJson({
     'id': id,
     'role': role,
     'listing': listing ?? transactionListingJson(),
-    'counterparty': counterparty ?? transactionCounterpartyJson(),
+    'counterparty':
+        counterparty ??
+        transactionCounterpartyJson(isVerified: role == 'buyer'),
     'quantity': quantity,
     'total_amount': totalAmount,
     'status': status,
@@ -93,13 +95,20 @@ Map<String, dynamic> transactionListingJson({
   };
 }
 
-/// The counterparty projection: `{ id, name, email }`, never both parties.
+/// The counterparty projection: `{ id, name, email, is_verified }`, never both
+/// parties. Verification is a server-derived display value.
 Map<String, dynamic> transactionCounterpartyJson({
   Object? id = 3,
   String name = 'Rizal Farms',
   String email = 'rizal@example.test',
+  bool isVerified = false,
 }) {
-  return <String, dynamic>{'id': id, 'name': name, 'email': email};
+  return <String, dynamic>{
+    'id': id,
+    'name': name,
+    'email': email,
+    'is_verified': isVerified,
+  };
 }
 
 /// The `data` payload of `GET /api/transactions` — the endpoint-specific

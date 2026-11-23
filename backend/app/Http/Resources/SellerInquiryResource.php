@@ -41,6 +41,7 @@ class SellerInquiryResource extends JsonResource
             'buyer' => $this->buyer ? [
                 'id' => $this->buyer->id,
                 'name' => $this->buyer->name,
+                'is_verified' => $this->buyer->isVerifiedSeller(),
             ] : null,
             'listing' => $listing ? [
                 'id' => $listing->id,

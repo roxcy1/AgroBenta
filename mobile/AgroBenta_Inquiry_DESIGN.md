@@ -29,7 +29,7 @@ Show the selected listing's real data:
 - Listing photo, only if a valid supported image URL or local asset is available.
 - Livestock/listing title.
 - Asking price in Philippine pesos (₱).
-- Seller name, from the listing's existing `seller` projection (`MobileSellerResource`: `id` and `name` only).
+- Seller name and the server-derived verification flag, from the listing's existing `seller` projection (`MobileSellerResource`: `id`, `name`, `is_verified`).
 - Location.
 - Category and other attributes only when supplied by the real listing data.
 

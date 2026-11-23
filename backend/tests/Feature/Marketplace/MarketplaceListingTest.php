@@ -4,6 +4,7 @@ namespace Tests\Feature\Marketplace;
 
 use App\Enums\ListingStatus;
 use App\Enums\LivestockType;
+use App\Enums\SellerCapability;
 use App\Enums\UserRole;
 use App\Models\Listing;
 use App\Models\Transaction;
@@ -1012,6 +1013,7 @@ class MarketplaceListingTest extends TestCase
 
         $response->assertJsonPath('data.listings.0.seller.id', $this->seller->id)
             ->assertJsonPath('data.listings.0.seller.name', 'Juan Dela Cruz')
+            ->assertJsonPath('data.listings.0.seller.is_verified', true)
             ->assertJsonMissingPath('data.listings.0.seller.email')
             ->assertJsonMissingPath('data.listings.0.email');
 
@@ -1029,20 +1031,37 @@ class MarketplaceListingTest extends TestCase
             ->getJson("/api/listings/{$listing->id}")
             ->assertOk();
 
-        $response->assertJsonStructure(['success', 'data' => ['id', 'seller' => ['id', 'name']]])
+        $response->assertJsonStructure(['success', 'data' => ['id', 'seller' => ['id', 'name', 'is_verified']]])
+            ->assertJsonPath('data.seller.is_verified', true)
             ->assertJsonMissingPath('data.seller.email');
 
         $this->assertStringNotContainsString('juan@agrobenta.test', $response->getContent());
     }
 
     #[Test]
-    public function the_seller_projection_exposes_only_identity_and_name(): void
+    public function the_seller_projection_exposes_only_public_identity_and_verification(): void
     {
         $this->createListing($this->seller);
 
         $seller = $this->browse()->assertOk()->json('data.listings.0.seller');
 
-        $this->assertSame(['id', 'name'], array_keys($seller));
+        $this->assertSame(['id', 'name', 'is_verified'], array_keys($seller));
+        $this->assertTrue($seller['is_verified']);
+    }
+
+    #[Test]
+    public function an_unapproved_seller_is_not_marked_verified_in_listing_resources(): void
+    {
+        $unapprovedSeller = User::factory()->create([
+            'seller_capability' => SellerCapability::Buyer,
+            'name' => 'Pending Seller',
+        ]);
+        $listing = $this->createListing($unapprovedSeller);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken(User::factory()->create()))
+            ->getJson("/api/listings/{$listing->id}")
+            ->assertOk()
+            ->assertJsonPath('data.seller.is_verified', false);
     }
 
     #[Test]

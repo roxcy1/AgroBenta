@@ -70,13 +70,19 @@ Map<String, dynamic> inquiryCardJson({
   };
 }
 
-/// The embedded chat-user projection: `{ id, name, avatar_url }`.
+/// The embedded chat-user projection: `{ id, name, avatar_url, is_verified }`.
 Map<String, dynamic> chatUserJson({
   Object? id = 3,
   String name = 'Rizal Farms',
   Object? avatarUrl,
+  bool isVerified = false,
 }) {
-  return <String, dynamic>{'id': id, 'name': name, 'avatar_url': avatarUrl};
+  return <String, dynamic>{
+    'id': id,
+    'name': name,
+    'avatar_url': avatarUrl,
+    'is_verified': isVerified,
+  };
 }
 
 /// A `ConversationResource` payload exactly as the backend serialises one.
@@ -155,7 +161,8 @@ Map<String, dynamic> eligibleInquiryJson({
     'listing_title': listingTitle,
     'asking_price': askingPrice,
     'listing_available_quantity': listingAvailableQuantity,
-    'listing_inventory_reconciliation_required': listingInventoryReconciliationRequired,
+    'listing_inventory_reconciliation_required':
+        listingInventoryReconciliationRequired,
     'listing_photo_url': listingPhotoUrl,
     'payment_method': paymentMethod,
     'collection_method': collectionMethod,

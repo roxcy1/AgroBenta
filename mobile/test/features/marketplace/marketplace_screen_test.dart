@@ -64,7 +64,10 @@ void main() {
       expect(find.text('Angus'), findsOneWidget);
       expect(find.text('₱42,500'), findsOneWidget);
       expect(find.text('₱78,000'), findsOneWidget);
-      expect(find.text('Cattle · Mabalacat, Pampanga'), findsNWidgets(2));
+      expect(
+        find.textContaining('Cattle · Mabalacat, Pampanga · 4 available'),
+        findsNWidgets(2),
+      );
     });
 
     testWidgets('a card shows no placeholder rating or sales line', (

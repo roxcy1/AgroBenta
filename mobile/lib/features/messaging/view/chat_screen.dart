@@ -4,6 +4,7 @@ import '../../../core/realtime/realtime_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../widgets/initials_avatar.dart';
+import '../../../widgets/verified_seller_badge.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../models/conversation.dart';
 import '../../../models/message.dart';
@@ -60,6 +61,7 @@ class ChatScreen extends StatefulWidget {
   /// livestock the conversation is about.
   final String? listingTitle;
   final String? listingPrice;
+
   /// The listing to tag new messages with when opened from a listing's detail
   /// screen. The thread itself still shows the whole buyer–seller history.
   final int? messageListingId;
@@ -318,7 +320,22 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(user.name, style: theme.textTheme.titleLarge),
+                          Row(
+                            children: <Widget>[
+                              Flexible(
+                                child: Text(
+                                  user.name,
+                                  style: theme.textTheme.titleLarge,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (user.isVerified) ...<Widget>[
+                                const SizedBox(width: AppSpacing.xs),
+                                const VerifiedSellerBadge(compact: true),
+                              ],
+                            ],
+                          ),
                           if (role != null) ...<Widget>[
                             const SizedBox(height: 2),
                             Text(
@@ -399,10 +416,20 @@ class _ChatScreenState extends State<ChatScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      Text(
-                        widget.counterpart.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: <Widget>[
+                          Flexible(
+                            child: Text(
+                              widget.counterpart.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (widget.counterpart.isVerified) ...<Widget>[
+                            const SizedBox(width: AppSpacing.xxs),
+                            const VerifiedSellerBadge(compact: true),
+                          ],
+                        ],
                       ),
                       if (role != null)
                         Text(

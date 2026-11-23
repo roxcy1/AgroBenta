@@ -289,7 +289,7 @@ class MarketplaceListingRepository
     {
         return Listing::query()
             ->withInventoryTotals()
-            ->with('seller:id,name')
+            ->with('seller:id,name,seller_capability,deleted_at')
             // Same completed-sale aggregate as the list, so the card and the
             // detail screen can never disagree.
             ->withCount([
@@ -317,7 +317,7 @@ class MarketplaceListingRepository
     {
         return Listing::query()
             ->withInventoryTotals()
-            ->with('seller:id,name')
+            ->with('seller:id,name,seller_capability,deleted_at')
             ->where('status', ListingStatus::Active)
             ->where('inventory_reconciliation_required', false)
             ->where('quantity', '>', 0)
