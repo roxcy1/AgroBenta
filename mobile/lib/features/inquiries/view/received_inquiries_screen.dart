@@ -121,6 +121,7 @@ class _ReceivedInquiriesScreenState extends State<ReceivedInquiriesScreen> {
             id: buyer.id,
             name: buyer.name,
             avatarUrl: null,
+            isVerified: buyer.isVerified,
           ),
           currentUserId: currentUserId,
           counterpartRole: 'Buyer',

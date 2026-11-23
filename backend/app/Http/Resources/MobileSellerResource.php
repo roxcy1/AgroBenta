@@ -13,9 +13,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * seller's email address to every marketplace reader, which the approved
  * security requirements forbid (functional documentation §10.4, contract §8.1).
  *
- * Identity and display name are the only seller fields a marketplace reader
- * needs. Contact details are deliberately absent rather than hidden, and this
- * resource is not a base for the admin resource to trim.
+ * Identity, display name and the server-derived verification decision are the
+ * only seller fields a marketplace reader needs. Contact details are
+ * deliberately absent rather than hidden, and this resource is not a base for
+ * the admin resource to trim.
  */
 class MobileSellerResource extends JsonResource
 {
@@ -29,6 +30,7 @@ class MobileSellerResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'is_verified' => $this->isVerifiedSeller(),
         ];
     }
 }

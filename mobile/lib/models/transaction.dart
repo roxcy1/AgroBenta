@@ -138,12 +138,14 @@ enum TransactionRole {
 /// The counterparty's contact, as the transaction detail exposes it.
 ///
 /// Only the *other* party is ever present: a buyer sees the seller, a seller
-/// sees the buyer. Never both sides at once (F-08).
+/// sees the buyer. The server also supplies that account's seller-verification
+/// status for the chat header. Never both sides at once (F-08).
 class TransactionCounterparty {
   const TransactionCounterparty({
     required this.id,
     required this.name,
     required this.email,
+    this.isVerified = false,
   });
 
   factory TransactionCounterparty.fromJson(Map<String, dynamic> json) {
@@ -151,6 +153,7 @@ class TransactionCounterparty {
       id: readInt(json, 'id'),
       name: readString(json, 'name'),
       email: readString(json, 'email'),
+      isVerified: readNullableBool(json, 'is_verified') ?? false,
     );
   }
 
@@ -160,6 +163,9 @@ class TransactionCounterparty {
   final String name;
 
   final String email;
+
+  /// Server-derived seller approval; missing data is never treated as verified.
+  final bool isVerified;
 }
 
 /// The listing snapshot embedded in a transaction.

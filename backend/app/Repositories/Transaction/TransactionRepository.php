@@ -295,8 +295,8 @@ class TransactionRepository
     {
         $query = Transaction::query()
             ->with([
-                'buyer:id,name,email',
-                'seller:id,name,email',
+                'buyer:id,name,email,seller_capability,deleted_at',
+                'seller:id,name,email,seller_capability,deleted_at',
                 'listing:id,livestock_type,breed,photos,seller_id',
             ]);
 

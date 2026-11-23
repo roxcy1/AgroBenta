@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/seller_profile.dart';
 import '../../../widgets/initials_avatar.dart';
+import '../../../widgets/verified_seller_badge.dart';
 
 /// The public profile header: avatar, name, conditional verification badge and
 /// the barangay-level location.
@@ -65,7 +66,7 @@ class SellerProfileHeader extends StatelessWidget {
                       ),
                       if (profile.isVerified) ...<Widget>[
                         const SizedBox(height: AppSpacing.xs),
-                        const _VerifiedSellerBadge(),
+                        const VerifiedSellerBadge(),
                       ],
                       if (profile.hasPublicLocation) ...<Widget>[
                         const SizedBox(height: AppSpacing.xs),
@@ -78,42 +79,6 @@ class SellerProfileHeader extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// The approved-seller mark. Only shown when `is_verified` is true.
-class _VerifiedSellerBadge extends StatelessWidget {
-  const _VerifiedSellerBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.xxxs,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.success),
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(Icons.verified, size: 14, color: AppColors.success),
-          const SizedBox(width: AppSpacing.xxxs),
-          Text(
-            'Verified Seller',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: AppColors.success,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:agrobenta_mobile/models/conversation.dart';
+import 'package:agrobenta_mobile/models/message.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/messaging_fakes.dart';
@@ -55,6 +56,37 @@ void main() {
       expect(conversation.latestOffer, isNull);
       // The rest of the conversation still loads.
       expect(conversation.counterpart.name, isNotNull);
+    });
+  });
+
+  group('ChatUser verification compatibility', () {
+    test('parses the server verification flag', () {
+      expect(
+        ChatUser.fromJson(chatUserJson(isVerified: true)).isVerified,
+        isTrue,
+      );
+      expect(
+        ChatUser.fromJson(chatUserJson(isVerified: false)).isVerified,
+        isFalse,
+      );
+    });
+
+    test('missing or null verification flags default to false', () {
+      expect(
+        ChatUser.fromJson(<String, dynamic>{
+          'id': 3,
+          'name': 'Seller',
+        }).isVerified,
+        isFalse,
+      );
+      expect(
+        ChatUser.fromJson(<String, dynamic>{
+          'id': 3,
+          'name': 'Seller',
+          'is_verified': null,
+        }).isVerified,
+        isFalse,
+      );
     });
   });
 

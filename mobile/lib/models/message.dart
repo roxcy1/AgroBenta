@@ -11,6 +11,7 @@ class ChatUser {
     required this.id,
     required this.name,
     required this.avatarUrl,
+    this.isVerified = false,
   });
 
   factory ChatUser.fromJson(Map<String, dynamic> json) {
@@ -18,12 +19,16 @@ class ChatUser {
       id: readInt(json, 'id'),
       name: readString(json, 'name'),
       avatarUrl: readNullableString(json, 'avatar_url'),
+      isVerified: readNullableBool(json, 'is_verified') ?? false,
     );
   }
 
   final int id;
   final String name;
   final String? avatarUrl;
+
+  /// Server-derived seller approval; missing data is never treated as verified.
+  final bool isVerified;
 
   /// The initial letter for the fallback avatar.
   String get initial => name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();

@@ -48,7 +48,11 @@ void main() {
 
   /// The buyer (user 7) in a thread with the seller (user 3) who has a pending
   /// offer for them.
-  Future<void> pumpBuyerChat(WidgetTester tester) async {
+  Future<void> pumpBuyerChat(
+    WidgetTester tester, {
+    bool counterpartVerified = false,
+    Size surface = const Size(800, 1600),
+  }) async {
     Future<http.Response> handler(RecordedRequest request) async {
       if (request.apiPath == '/offers' && request.method == 'GET') {
         return offersResponse(
@@ -105,7 +109,7 @@ void main() {
     tokenStore.token = 'stored-token';
     await auth.restoreSession();
 
-    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.physicalSize = surface;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
@@ -130,11 +134,12 @@ void main() {
                   controller: auth,
                   child: MaterialApp(
                     theme: AppTheme.light(),
-                    home: const ChatScreen(
+                    home: ChatScreen(
                       counterpart: ChatUser(
                         id: 3,
                         name: 'Rizal Farms',
                         avatarUrl: null,
+                        isVerified: counterpartVerified,
                       ),
                       currentUserId: 7,
                       counterpartRole: 'Seller',
@@ -162,6 +167,29 @@ void main() {
   final Finder dialogAccept = find.descendant(
     of: find.byType(AlertDialog),
     matching: find.text('Accept offer'),
+  );
+
+  testWidgets('chat header shows only the server-provided seller badge', (
+    WidgetTester tester,
+  ) async {
+    await pumpBuyerChat(tester, counterpartVerified: true);
+
+    expect(find.text('Rizal Farms'), findsOneWidget);
+    expect(find.text('Verified'), findsOneWidget);
+  });
+
+  testWidgets(
+    'chat header badge fits a narrow screen and stays hidden for buyers',
+    (WidgetTester tester) async {
+      await pumpBuyerChat(
+        tester,
+        counterpartVerified: false,
+        surface: const Size(320, 800),
+      );
+
+      expect(find.text('Verified'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
   );
 
   testWidgets('tapping Accept offer asks first and creates nothing yet', (

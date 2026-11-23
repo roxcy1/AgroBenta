@@ -7,18 +7,25 @@ import 'inquiry.dart';
 /// the buyer's email and every other contact detail (functional documentation
 /// section 10.4), so there is no field here to render one.
 class InquiryBuyer {
-  const InquiryBuyer({required this.id, required this.name});
+  const InquiryBuyer({
+    required this.id,
+    required this.name,
+    this.isVerified = false,
+  });
 
   factory InquiryBuyer.fromJson(Map<String, dynamic> json) {
     return InquiryBuyer(
       id: readInt(json, 'id'),
       name: readString(json, 'name'),
+      isVerified: readNullableBool(json, 'is_verified') ?? false,
     );
   }
 
   final int id;
 
   final String name;
+
+  final bool isVerified;
 }
 
 /// One inquiry as the seller receives it.

@@ -44,7 +44,7 @@ class InquiryRepository
     {
         return Inquiry::query()
             ->with([
-                'buyer:id,name',
+                'buyer:id,name,seller_capability,deleted_at',
                 'listing' => static fn ($query) => $query
                     ->select([
                         'id', 'livestock_type', 'breed', 'asking_price', 'photos',
@@ -83,8 +83,8 @@ class InquiryRepository
                         'inventory_reconciliation_required', 'status',
                     ])
                     ->withInventoryTotals(),
-                'buyer:id,name',
-                'seller:id,name',
+                'buyer:id,name,seller_capability,deleted_at',
+                'seller:id,name,seller_capability,deleted_at',
                 'offers:id,inquiry_id,status,proposed_amount,created_at',
             ])
             ->where('status', InquiryStatus::Open)

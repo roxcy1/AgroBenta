@@ -139,6 +139,18 @@ class ProfileTest extends TestCase
     }
 
     #[Test]
+    public function updating_profile_with_is_verified_is_rejected_without_changing_server_approval(): void
+    {
+        $user = User::factory()->create(['seller_capability' => SellerCapability::Buyer]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($user))
+            ->putJson('/api/profile', ['is_verified' => true])
+            ->assertUnprocessable();
+
+        $this->assertSame(SellerCapability::Buyer, $user->fresh()->seller_capability);
+    }
+
+    #[Test]
     public function updating_profile_with_id_returns_422_and_does_not_change_id(): void
     {
         $user = User::factory()->create();

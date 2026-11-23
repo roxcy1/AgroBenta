@@ -207,7 +207,10 @@ class MessagingService
         // and a rolled-back transaction cannot broadcast a phantom message.
         MessageSent::dispatch($message);
 
-        return $message->fresh(['sender:id,name,avatar_url', 'receiver:id,name,avatar_url']);
+        return $message->fresh([
+            'sender:id,name,avatar_url,seller_capability,deleted_at',
+            'receiver:id,name,avatar_url,seller_capability,deleted_at',
+        ]);
     }
 
     /**

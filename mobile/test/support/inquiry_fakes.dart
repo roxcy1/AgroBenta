@@ -78,11 +78,12 @@ Map<String, dynamic> sellerInquiryJson({
   Object? collectionMethod = 'farm_pickup',
   Object? createdAt = '2026-10-19T08:15:00.000000Z',
   bool? canMakeOffer = true,
+  bool buyerIsVerified = false,
 }) {
   return <String, dynamic>{
     'id': id,
     'requested_quantity': requestedQuantity,
-    'buyer': buyer ?? inquiryBuyerJson(),
+    'buyer': buyer ?? inquiryBuyerJson(isVerified: buyerIsVerified),
     'listing': listing ?? inquiryListingJson(),
     'subject': subject,
     'message': message,
@@ -100,12 +101,13 @@ Map<String, dynamic> sellerInquiryJson({
   };
 }
 
-/// The buyer projection: identity and display name only, never an email.
+/// The buyer projection: public identity and approval flag, never an email.
 Map<String, dynamic> inquiryBuyerJson({
   Object? id = 9,
   String name = 'Maria Santos',
+  bool isVerified = false,
 }) {
-  return <String, dynamic>{'id': id, 'name': name};
+  return <String, dynamic>{'id': id, 'name': name, 'is_verified': isVerified};
 }
 
 /// The embedded listing snapshot: `id`, `livestock_type`, `breed` — the same
@@ -145,6 +147,7 @@ Map<String, dynamic> inquiryListItemJson({
   bool inventoryReconciliationRequired = false,
   String? photoUrl,
   String counterpartName = 'Juan Dela Cruz',
+  bool? counterpartIsVerified,
   String? paymentMethod = 'gcash',
   String? collectionMethod = 'farm_pickup',
   Object? preferredSchedule = '2026-11-10',
@@ -165,7 +168,11 @@ Map<String, dynamic> inquiryListItemJson({
       'inventory_reconciliation_required': inventoryReconciliationRequired,
       'photo_url': photoUrl,
     },
-    'counterpart': <String, dynamic>{'id': 3, 'name': counterpartName},
+    'counterpart': <String, dynamic>{
+      'id': 3,
+      'name': counterpartName,
+      'is_verified': counterpartIsVerified ?? role == 'buyer',
+    },
     'payment_method': paymentMethod,
     'collection_method': collectionMethod,
     'preferred_schedule': preferredSchedule,

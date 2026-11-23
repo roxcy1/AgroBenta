@@ -105,6 +105,7 @@ class InquiryListItem {
           : InquiryCounterpart(
               id: readInt(counterpart, 'id'),
               name: readString(counterpart, 'name'),
+              isVerified: readNullableBool(counterpart, 'is_verified') ?? false,
             ),
       paymentMethod: readNullableEnum(
         json,
@@ -152,8 +153,13 @@ class InquiryListItem {
 
 /// Identity and name only, matching `UserSummaryResource`.
 class InquiryCounterpart {
-  const InquiryCounterpart({required this.id, required this.name});
+  const InquiryCounterpart({
+    required this.id,
+    required this.name,
+    this.isVerified = false,
+  });
 
   final int id;
   final String name;
+  final bool isVerified;
 }

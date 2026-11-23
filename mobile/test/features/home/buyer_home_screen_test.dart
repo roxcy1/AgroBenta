@@ -188,11 +188,15 @@ void main() {
 
       expect(find.text('Recent Listings'), findsOneWidget);
       // Every field comes from the `GET /listings` fixture: species, breed,
-      // the compact peso price and the location, on the shared ListingCard.
+      // seller identity/verification, compact price and location.
       expect(find.text('Holstein'), findsOneWidget);
       expect(find.text('₱42,500'), findsOneWidget);
-      expect(find.text('Cattle · Mabalacat, Pampanga'), findsOneWidget);
-      expect(find.text('Cattle'), findsWidgets);
+      expect(find.text('Rizal Farms'), findsOneWidget);
+      expect(
+        find.textContaining('Cattle · Mabalacat, Pampanga · 4 available'),
+        findsOneWidget,
+      );
+      expect(find.text('Verified'), findsOneWidget);
 
       // The design forbids a "featured" claim the backend cannot back, and the
       // screen must carry no placeholder copy of its own.

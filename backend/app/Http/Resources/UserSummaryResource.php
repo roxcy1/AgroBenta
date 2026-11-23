@@ -8,10 +8,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * A minimal user summary, for embedding inside a message or a conversation.
  *
- * Only the fields a chat UI needs — id, name, avatar. Not the full
- * `UserResource`: phone, email, bio, and role have no place in a chat list and
- * shipping them on every message would leak contact details between users who
- * have not agreed to share them.
+ * Only the fields a chat UI needs — id, name, avatar and the server-derived
+ * seller verification decision. Not the full `UserResource`: phone, email,
+ * bio, and role have no place in a chat list and shipping them on every message
+ * would leak contact details between users who have not agreed to share them.
  */
 class UserSummaryResource extends JsonResource
 {
@@ -24,6 +24,7 @@ class UserSummaryResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'avatar_url' => $this->avatar_url,
+            'is_verified' => $this->isVerifiedSeller(),
         ];
     }
 }

@@ -32,6 +32,7 @@ class MarketplaceSellerRepository
                 'location',
                 'created_at',
                 'seller_capability',
+                'deleted_at',
             ])
             ->whereKey($sellerId)
             ->first();

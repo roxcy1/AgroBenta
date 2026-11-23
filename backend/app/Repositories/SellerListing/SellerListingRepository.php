@@ -69,7 +69,7 @@ class SellerListingRepository
     ): LengthAwarePaginator {
         $query = Listing::query()
             ->withInventoryTotals()
-            ->with('seller:id,name')
+            ->with('seller:id,name,seller_capability,deleted_at')
             ->where('seller_id', $seller->getKey());
 
         if ($status !== null) {
@@ -129,7 +129,7 @@ class SellerListingRepository
     {
         $listing = Listing::query()
             ->withInventoryTotals()
-            ->with('seller:id,name')
+            ->with('seller:id,name,seller_capability,deleted_at')
             ->where('id', $listingId)
             ->where('seller_id', $seller->getKey())
             ->first();

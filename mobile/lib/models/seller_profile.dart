@@ -29,7 +29,7 @@ class SellerProfile {
       name: readString(json, 'name'),
       avatarUrl: readNullableString(json, 'avatar_url'),
       bio: readNullableString(json, 'bio'),
-      isVerified: readBool(json, 'is_verified'),
+      isVerified: readNullableBool(json, 'is_verified') ?? false,
       publicLocation: readNullableString(json, 'public_location'),
       memberSince: readNullableDateTime(json, 'member_since'),
       activeListingsCount: readInt(json, 'active_listings_count'),

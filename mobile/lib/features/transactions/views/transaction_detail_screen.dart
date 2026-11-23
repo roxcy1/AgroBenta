@@ -179,6 +179,7 @@ class _DetailBodyState extends State<_DetailBody> {
             id: transaction.counterparty.id,
             name: transaction.counterparty.name,
             avatarUrl: null,
+            isVerified: transaction.counterparty.isVerified,
           ),
           currentUserId: viewerId,
           listingId: transaction.listing.id,

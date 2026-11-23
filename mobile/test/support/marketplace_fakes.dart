@@ -120,11 +120,13 @@ Map<String, dynamic> listingJson({
   };
 }
 
-/// The `MobileSellerResource` projection: `id` and `name`, nothing else.
+/// The `MobileSellerResource` projection: public identity plus server-derived
+/// verification status, with no private contact details.
 Map<String, dynamic> sellerJson({
   Object? id = 3,
   String name = 'Rizal Farms',
-}) => <String, dynamic>{'id': id, 'name': name};
+  bool isVerified = true,
+}) => <String, dynamic>{'id': id, 'name': name, 'is_verified': isVerified};
 
 /// The `data` payload of `GET /api/listings`.
 ///

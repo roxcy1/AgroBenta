@@ -68,7 +68,7 @@ class MarketplaceSellerService
             'name' => (string) $seller->name,
             'avatar_url' => $seller->avatar_url,
             'bio' => $seller->bio,
-            'is_verified' => $seller->isApprovedSeller(),
+            'is_verified' => $seller->isVerifiedSeller(),
             'public_location' => $this->publicLocation($seller->location),
             'member_since' => $seller->created_at?->toISOString(),
             'active_listings_count' => $activeListings,

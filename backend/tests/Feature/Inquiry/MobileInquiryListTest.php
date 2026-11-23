@@ -129,6 +129,7 @@ class MobileInquiryListTest extends TestCase
         $this->assertSame('cattle Angus', $items[0]['listing']['title']);
         $this->assertSame('50000.00', (string) $items[0]['listing']['asking_price']);
         $this->assertSame($this->seller->name, $items[0]['counterpart']['name']);
+        $this->assertTrue($items[0]['counterpart']['is_verified']);
         $this->assertSame('pending', $items[0]['latest_offer']['status']);
         $this->assertSame('48000.00', $items[0]['latest_offer']['proposed_amount']);
     }
@@ -144,6 +145,7 @@ class MobileInquiryListTest extends TestCase
         $this->assertCount(1, $items);
         $this->assertSame('seller', $items[0]['role']);
         $this->assertSame($this->buyer->name, $items[0]['counterpart']['name']);
+        $this->assertFalse($items[0]['counterpart']['is_verified']);
     }
 
     #[Test]

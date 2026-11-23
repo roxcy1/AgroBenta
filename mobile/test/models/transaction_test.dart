@@ -46,9 +46,40 @@ void main() {
       expect(transaction.counterparty.id, 7);
       expect(transaction.counterparty.name, 'Ana Reyes');
       expect(transaction.counterparty.email, 'ana@example.test');
+      expect(transaction.counterparty.isVerified, isFalse);
       expect(transaction.createdAt, isNotNull);
       expect(transaction.updatedAt, isNotNull);
     });
+
+    test(
+      'counterparty verification is parsed and absent values stay false',
+      () {
+        final Transaction verifiedSeller = Transaction.fromJson(
+          transactionJson(
+            counterparty: transactionCounterpartyJson(isVerified: true),
+          ),
+        );
+        final Map<String, dynamic> missing = transactionJson(
+          counterparty: <String, dynamic>{
+            'id': 3,
+            'name': 'Rizal Farms',
+            'email': 'rizal@example.test',
+          },
+        );
+        final Map<String, dynamic> nullFlag = transactionJson(
+          counterparty: <String, dynamic>{
+            'id': 3,
+            'name': 'Rizal Farms',
+            'email': 'rizal@example.test',
+            'is_verified': null,
+          },
+        );
+
+        expect(verifiedSeller.counterparty.isVerified, isTrue);
+        expect(Transaction.fromJson(missing).counterparty.isVerified, isFalse);
+        expect(Transaction.fromJson(nullFlag).counterparty.isVerified, isFalse);
+      },
+    );
 
     test('the amount is never a number the client could compute with', () {
       final Transaction transaction = Transaction.fromJson(

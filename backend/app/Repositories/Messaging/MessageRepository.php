@@ -54,7 +54,10 @@ class MessageRepository
                 $listingId !== null,
                 fn ($q) => $q->where('listing_id', $listingId),
             )
-            ->with(['sender:id,name,avatar_url', 'receiver:id,name,avatar_url'])
+            ->with([
+                'sender:id,name,avatar_url,seller_capability,deleted_at',
+                'receiver:id,name,avatar_url,seller_capability,deleted_at',
+            ])
             ->orderByDesc('created_at')
             ->paginate($perPage);
     }
@@ -190,8 +193,8 @@ class MessageRepository
                 $q->where('sender_id', $userId)->orWhere('receiver_id', $userId);
             })
             ->with([
-                'sender:id,name,avatar_url',
-                'receiver:id,name,avatar_url',
+                'sender:id,name,avatar_url,seller_capability,deleted_at',
+                'receiver:id,name,avatar_url,seller_capability,deleted_at',
                 'listing:id,livestock_type,breed,seller_id',
             ])
             ->orderByDesc('created_at')
@@ -260,7 +263,7 @@ class MessageRepository
         // gets no row.
         $counterparts = User::query()
             ->whereIn('id', $missing)
-            ->get(['id', 'name', 'avatar_url'])
+            ->get(['id', 'name', 'avatar_url', 'seller_capability', 'deleted_at'])
             ->keyBy('id');
 
         return collect($missing)
