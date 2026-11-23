@@ -7,9 +7,11 @@ use App\Models\Inquiry;
 use App\Models\Message;
 use App\Models\User;
 use App\Notifications\NewInquiry;
+use App\Repositories\Marketplace\MarketplaceListingRepository;
 use App\Repositories\Messaging\MessageRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The business logic for messaging.
@@ -43,6 +45,7 @@ class MessagingService
 {
     public function __construct(
         private readonly MessageRepository $messages,
+        private readonly MarketplaceListingRepository $listings,
     ) {
         //
     }
@@ -171,6 +174,18 @@ class MessagingService
         ?int $listingId = null,
         ?bool $notify = null,
     ): Message {
+        if ($listingId !== null &&
+            $this->listings->findVisibleListing($listingId, (int) $sender->getKey()) === null &&
+            ! $this->messages->hasHistoricalListingRelationship(
+                (int) $sender->getKey(),
+                (int) $receiver->getKey(),
+                $listingId,
+            )) {
+            throw ValidationException::withMessages([
+                'listing_id' => 'This listing is not available for this conversation.',
+            ]);
+        }
+
         $isFirstInThread = $this->messages
             ->threadBetween($sender->id, $receiver->id, $listingId, 1)
             ->total() === 0;

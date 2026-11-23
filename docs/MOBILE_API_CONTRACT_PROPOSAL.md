@@ -1218,7 +1218,7 @@ conversation list at all.
 | **Authentication** | Required |
 | **Ability** | `mobile` |
 | **Request fields** | `user` (int, the counterpart)<br>`listing_id` (int, optional filter)<br>`page`, `per_page` |
-| **Validation** | `user` `required`,`integer`,`exists:users,id`<br>`listing_id` `sometimes`,`integer`,`exists:listings,id` |
+| **Validation** | `user` `required`,`integer`,`exists:users,id`<br>`listing_id` `sometimes`,`nullable`,`integer`; results remain scoped to the participant pair and the id is not globally existence-checked |
 | **Response** | `200`, §3.2. `data.messages` = message objects, oldest first |
 | **Errors** | `401`, `403`, `404` |
 | **Authorization** | Any authenticated user |
@@ -1238,15 +1238,29 @@ self-conversation. D-18.
 | **Authentication** | Required |
 | **Ability** | `mobile` |
 | **Request fields** | `receiver_id` (int, required)<br>`body` (string, required)<br>`listing_id` (int, optional) |
-| **Validation** | `receiver_id` `required`,`integer`,`exists:users,id`, **`not_in:` the sender's own id**<br>`body` `required`,`string`,`max:5000`<br>`listing_id` `sometimes`,`integer`,`exists:listings,id` |
+| **Validation** | `sender_id` and `read_at` must be absent (422 when present)<br>`receiver_id` `required`,`integer`,`exists:users,id`, **`not_in:` the sender's own id**<br>`body` `required`,`string`,`min:1`,`max:2000`<br>`listing_id` `sometimes`,`nullable`,`integer`; the server verifies sender visibility before writing |
 | **Response** | `201`, §3.1, the created message |
-| **Errors** | `401`, `403`, `404` receiver not found, `409` self-message, `422` |
+| **Errors** | `401`, `403`, `422` validation or inaccessible listing context, `429` message throttle |
 | **Authorization** | Any authenticated user — subject to D-17 |
 | **Ownership** | **`sender_id = $me->id`, server-set.** `sender_id` is `#[Fillable]` and must be stripped from the request. A client-supplied `sender_id` would allow impersonation — F-10. `read_at` is likewise server-controlled. |
 
-**Open (D-19):** whether an `id_document`-free open message graph permits spam
-or abuse, and whether any rate limit or block mechanism is required. None
-exists.
+**Current implementation hardening (approved M11b):** the authenticated
+sender is always derived from the token; `sender_id` and `read_at` are rejected
+when present, including null/empty values. A named route limiter allows 30
+messages per minute per authenticated user; exceeding it returns `429`. A
+listing context is accepted when it is currently marketplace-visible, owned by
+the sender, or is sold/inactive and has an established message/inquiry/
+transaction relationship with this exact sender-recipient pair for that same
+listing. Sold/inactive listing history remains readable to the pair. This does
+not define blocking or other broader abuse
+controls; those remain under D-19.
+
+**Aggregate thread contract:** the Laravel routes are
+`GET /api/conversations/{userId}/messages` and
+`POST /api/conversations/{userId}/read`. Omitting `listing_id` returns or marks
+the whole pair thread, including unlisted messages; an explicit id narrows the
+pair-scoped operation. These reads do not reveal whether an unrelated listing
+id exists.
 
 ---
 
@@ -1576,7 +1590,7 @@ serialise `total_amount` as a string.
 | **D-23** | **Direct access to a `sold` listing.** Not in the marketplace list ([D-02] rule 9), but still viewable by URL? | `GET /listings/{listing}` |
 | **D-13** | **May a buyer see the price-suggestion range** on a listing? | §5.5, §8.2 |
 | **D-18** | **Self-conversations** — forbid or allow? | `GET /messages/conversations/{user}` |
-| **D-19** | **Messaging abuse controls** — rate limits, blocking, reporting? None exist. | `POST /messages` |
+| **D-19** | **Messaging abuse controls** — rate limits, blocking, reporting? | The message rate limit is approved and implemented at 30 requests per minute per authenticated user (M11b); blocking and other abuse controls remain open. |
 | **D-21** | **Does an email change require re-verification?** `MustVerifyEmail` is not even enabled (F-04). | `PATCH /profile` |
 | **D-01** | **Does registration return a token**, or require a login round-trip? | `POST /auth/register` |
 | **D-22** | **Is registration open to the public**, or invite-only? *(renamed from the old colliding D-02b)* | `POST /auth/register` |
@@ -1586,7 +1600,7 @@ serialise `total_amount` as a string.
 | **D-07** | **Should an already-approved seller be blocked from submitting** a new verification? | `POST /seller-verification` |
 | **D-08** | **Should a seller see full verification history**, or only the latest? | `GET /seller-verification/me` |
 | **D-20** | **Is `GET /profile` wanted**, given it duplicates `GET /auth/me`? | `GET /profile` |
-| **D-09** | **Rate limits** for register, price-suggestion, messages. | §3.5 |
+| **D-09** | **Rate limits** for register, price-suggestion, messages. | Messaging approved at 30 requests per minute per authenticated user (M11b); other D-09 surfaces remain independently scoped. |
 
 **D-06 is closed.** The resubmission guard — submission blocked while the latest
 record is `submitted`/`pending_review`, permitted only after `rejected` — follows

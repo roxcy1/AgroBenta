@@ -24,7 +24,10 @@ class IndexMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'listing_id' => ['sometimes', 'nullable', 'integer', 'exists:listings,id'],
+            // The repository filters messages within the authorized pair.
+            // Do not globally validate existence: that would reveal hidden
+            // listing ids even when the pair has no messages for them.
+            'listing_id' => ['sometimes', 'nullable', 'integer'],
             'per_page' => ['sometimes', 'integer', 'between:1,50'],
             'page' => ['sometimes', 'integer', 'min:1'],
         ];
