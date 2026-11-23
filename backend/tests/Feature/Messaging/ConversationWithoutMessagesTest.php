@@ -346,4 +346,124 @@ class ConversationWithoutMessagesTest extends TestCase
         $this->assertSame('When can I pick it up?', $buyerView[0]['last_message']);
         $this->assertTrue($buyerView[0]['has_transaction']);
     }
+
+    #[Test]
+    public function an_unlisted_message_is_included_in_the_aggregate_pair_thread(): void
+    {
+        $firstListing = $this->createListing($this->seller);
+        $secondListing = $this->createListing($this->seller, [
+            'livestock_type' => 'goat',
+            'breed' => 'Boer',
+        ]);
+
+        $first = Message::create([
+            'sender_id' => $this->buyer->id,
+            'receiver_id' => $this->seller->id,
+            'listing_id' => $firstListing->id,
+            'body' => 'About the cattle',
+        ]);
+        $second = Message::create([
+            'sender_id' => $this->seller->id,
+            'receiver_id' => $this->buyer->id,
+            'listing_id' => $secondListing->id,
+            'body' => 'About the goats',
+        ]);
+        $unlisted = Message::create([
+            'sender_id' => $this->buyer->id,
+            'receiver_id' => $this->seller->id,
+            'listing_id' => null,
+            'body' => 'A general follow-up',
+        ]);
+
+        $token = 'Bearer '.$this->mobileToken($this->buyer);
+        $pairThread = $this->withHeader('Authorization', $token)
+            ->getJson("/api/conversations/{$this->seller->id}/messages")
+            ->assertOk()
+            ->json('data.messages');
+
+        $this->assertEqualsCanonicalizing(
+            [$first->id, $second->id, $unlisted->id],
+            array_column($pairThread, 'id'),
+        );
+
+        $listingThread = $this->withHeader('Authorization', $token)
+            ->getJson("/api/conversations/{$this->seller->id}/messages?listing_id={$firstListing->id}")
+            ->assertOk()
+            ->json('data.messages');
+        $this->assertSame([$first->id], array_column($listingThread, 'id'));
+
+        // A nonexistent listing id is just an empty pair-scoped filter; it is
+        // not a global listing-existence oracle.
+        $this->withHeader('Authorization', $token)
+            ->getJson("/api/conversations/{$this->seller->id}/messages?listing_id=999999")
+            ->assertOk()
+            ->assertJsonPath('data.messages', []);
+    }
+
+    #[Test]
+    public function read_receipts_are_pair_wide_or_listing_scoped_as_requested(): void
+    {
+        $firstListing = $this->createListing($this->seller);
+        $secondListing = $this->createListing($this->seller, [
+            'livestock_type' => 'goat',
+            'breed' => 'Boer',
+        ]);
+        $first = Message::create([
+            'sender_id' => $this->seller->id,
+            'receiver_id' => $this->buyer->id,
+            'listing_id' => $firstListing->id,
+            'body' => 'About the cattle',
+        ]);
+        $second = Message::create([
+            'sender_id' => $this->seller->id,
+            'receiver_id' => $this->buyer->id,
+            'listing_id' => $secondListing->id,
+            'body' => 'About the goats',
+        ]);
+        $unlisted = Message::create([
+            'sender_id' => $this->seller->id,
+            'receiver_id' => $this->buyer->id,
+            'listing_id' => null,
+            'body' => 'A general follow-up',
+        ]);
+        $otherPair = Message::create([
+            'sender_id' => $this->stranger->id,
+            'receiver_id' => $this->buyer->id,
+            'listing_id' => $firstListing->id,
+            'body' => 'A different conversation',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson("/api/conversations/{$this->seller->id}/read", [])
+            ->assertOk()
+            ->assertJsonPath('data.updated', 3);
+
+        $this->assertNotNull($first->fresh()->read_at);
+        $this->assertNotNull($second->fresh()->read_at);
+        $this->assertNotNull($unlisted->fresh()->read_at);
+        $this->assertNull($otherPair->fresh()->read_at);
+
+        $firstSpecific = Message::create([
+            'sender_id' => $this->seller->id,
+            'receiver_id' => $this->buyer->id,
+            'listing_id' => $firstListing->id,
+            'body' => 'One more about the cattle',
+        ]);
+        $secondSpecific = Message::create([
+            'sender_id' => $this->seller->id,
+            'receiver_id' => $this->buyer->id,
+            'listing_id' => $secondListing->id,
+            'body' => 'One more about the goats',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->mobileToken($this->buyer))
+            ->postJson("/api/conversations/{$this->seller->id}/read", [
+                'listing_id' => $firstListing->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.updated', 1);
+
+        $this->assertNotNull($firstSpecific->fresh()->read_at);
+        $this->assertNull($secondSpecific->fresh()->read_at);
+    }
 }

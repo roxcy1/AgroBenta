@@ -61,9 +61,9 @@ class Message extends Model
     }
 
     /**
-     * Restrict to a specific listing, when the client wants a listing-scoped
-     * thread. `listing_id` is nullable on purpose — a general "hello" between
-     * two users with no listing behind it is a valid first message.
+     * Restrict to a specific listing value. Passing null to this scope means
+     * "messages with no listing"; pair-wide API threads instead omit this scope
+     * entirely when `listing_id` is not supplied.
      *
      * @param  Builder<Message>  $query
      * @return Builder<Message>

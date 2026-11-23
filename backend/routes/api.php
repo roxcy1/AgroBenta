@@ -317,7 +317,8 @@ Route::middleware('auth:sanctum', 'ability:mobile')->group(function (): void {
 
     Route::get('/conversations/{userId}/messages', [MessageController::class, 'index'])
         ->whereNumber('userId');
-    Route::post('/messages', [MessageController::class, 'store']);
+    Route::post('/messages', [MessageController::class, 'store'])
+        ->middleware('throttle:messages');
     Route::patch('/messages/{id}/read', [MessageController::class, 'markRead'])
         ->whereNumber('id');
 });

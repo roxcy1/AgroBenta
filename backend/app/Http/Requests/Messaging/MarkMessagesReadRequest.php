@@ -25,7 +25,10 @@ class MarkMessagesReadRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'listing_id' => ['sometimes', 'nullable', 'integer', 'exists:listings,id'],
+            // The update is scoped to the caller/counterpart pair; a missing or
+            // unrelated listing simply affects zero messages, without revealing
+            // whether a hidden listing id exists.
+            'listing_id' => ['sometimes', 'nullable', 'integer'],
         ];
     }
 }
