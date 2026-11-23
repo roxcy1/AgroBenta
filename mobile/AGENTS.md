@@ -834,7 +834,22 @@ exposes the caller's own conversations and messages behind the same
 | `POST /api/messages` | Sends one message. The sender is the authenticated user; `sender_id` is never sent. |
 | `PATCH /api/messages/{id}/read` | Marks one message read. |
 
-`ConversationResource` carries `counterpart{id,name,avatar_url}`, `listing_id`,
+`POST /api/messages` is limited to **30 requests per minute per authenticated
+user** and answers `429` when the limit is exceeded. Its accepted body is
+`receiver_id`, optional `listing_id`, and `body`; `sender_id` and `read_at` are
+prohibited even when explicitly null or empty. A listing context must be visible
+to the sender under Marketplace rules, owned by the sender, or a sold/inactive
+listing linked by an existing message, inquiry or transaction between the exact
+sender-recipient pair for that same listing. That history exception keeps
+transaction/historical chats usable without authorizing a guessed id or a
+relationship to another listing. Pair-wide thread reads and read
+receipts remain available for history regardless of current listing visibility.
+Omitting `listing_id` means the aggregate pair thread, including messages whose
+listing id is null; supplying it narrows the thread or read receipt to that
+listing. Listing-filtered reads are pair-scoped and do not globally test listing
+existence.
+
+`ConversationResource` carries `counterpart{id,name,avatar_url,is_verified}`, `listing_id`,
 `listing_title`, `listing_price`, `last_message`, `last_message_at`,
 `unread_count`, `has_inquiry`, `has_transaction`, `roles`, `listing_count`,
 `latest_offer` and `eligible_inquiry`; `MessageResource` carries the message

@@ -60,6 +60,54 @@ class MessageRepository
     }
 
     /**
+     * Whether these two participants have an established relationship with one
+     * exact listing, allowing a historical sold/inactive listing context to
+     * remain usable without authorizing a guessed listing id.
+     */
+    public function hasHistoricalListingRelationship(
+        int $userIdA,
+        int $userIdB,
+        int $listingId,
+    ): bool {
+        $isSoldOrInactive = Listing::query()
+            ->whereKey($listingId)
+            ->whereIn('status', [ListingStatus::Sold, ListingStatus::Inactive])
+            ->exists();
+
+        if (! $isSoldOrInactive) {
+            return false;
+        }
+
+        $hasMessages = Message::query()
+            ->betweenUsers($userIdA, $userIdB)
+            ->where('listing_id', $listingId)
+            ->exists();
+
+        if ($hasMessages) {
+            return true;
+        }
+
+        $isPair = static function (Builder $query) use ($userIdA, $userIdB): void {
+            $query->where(function (Builder $pair) use ($userIdA, $userIdB): void {
+                $pair->where('buyer_id', $userIdA)
+                    ->where('seller_id', $userIdB);
+            })->orWhere(function (Builder $pair) use ($userIdA, $userIdB): void {
+                $pair->where('buyer_id', $userIdB)
+                    ->where('seller_id', $userIdA);
+            });
+        };
+
+        return Inquiry::query()
+            ->where('listing_id', $listingId)
+            ->where($isPair)
+            ->exists()
+            || Transaction::query()
+                ->where('listing_id', $listingId)
+                ->where($isPair)
+                ->exists();
+    }
+
+    /**
      * The inquiries exchanged between the caller and one counterpart.
      *
      * Oldest first, with the listing projection the chat card needs (title,
@@ -705,8 +753,7 @@ class MessageRepository
             'listing_available_quantity' => $inquiry->listing?->quantity === null
                 ? null
                 : (int) $inquiry->listing->quantity,
-            'listing_inventory_reconciliation_required' =>
-                (bool) $inquiry->listing?->inventory_reconciliation_required,
+            'listing_inventory_reconciliation_required' => (bool) $inquiry->listing?->inventory_reconciliation_required,
             'requested_quantity' => (int) $inquiry->requested_quantity,
             'listing_photo_url' => is_array($photos) && $photos !== []
                 ? (string) reset($photos)

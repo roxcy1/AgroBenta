@@ -42,6 +42,12 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
+        RateLimiter::for('messages', function (Request $request): Limit {
+            return Limit::perMinute(30)->by(
+                'message-user:'.($request->user()?->getAuthIdentifier() ?: $request->ip()),
+            );
+        });
+
         // Replaces Laravel's default email, which links to a `password.reset`
         // web route this API does not have and would fail when sent.
         ResetPassword::toMailUsing(function ($notifiable, string $code): MailMessage {
