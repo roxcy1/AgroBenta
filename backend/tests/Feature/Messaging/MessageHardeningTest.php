@@ -216,6 +216,94 @@ class MessageHardeningTest extends TestCase
     }
 
     #[Test]
+    public function a_buyer_can_reply_after_a_pending_transaction_reserves_all_active_listing_stock(): void
+    {
+        Event::fake([MessageSent::class]);
+        Notification::fake();
+
+        $listing = $this->createListing($this->seller, [
+            'quantity' => 1,
+            'total_quantity' => 1,
+        ]);
+
+        $transaction = $this->asUser($this->buyer)
+            ->postJson('/api/transactions', [
+                'listing_id' => $listing->id,
+                'quantity' => 1,
+            ])
+            ->assertCreated()
+            ->json('data');
+
+        $this->assertDatabaseHas('transactions', [
+            'id' => $transaction['id'],
+            'buyer_id' => $this->buyer->id,
+            'seller_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+            'status' => TransactionStatus::Pending->value,
+            'inventory_reserved' => true,
+        ]);
+        $this->assertSame(0, $listing->refresh()->quantity);
+        $this->assertSame(ListingStatus::Active, $listing->status);
+
+        $message = $this->sendMessage($this->buyer, $this->seller, [
+            'listing_id' => $listing->id,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.sender_id', $this->buyer->id)
+            ->assertJsonPath('data.receiver_id', $this->seller->id)
+            ->assertJsonPath('data.listing_id', $listing->id)
+            ->json('data');
+
+        $this->assertDatabaseHas('messages', [
+            'id' => $message['id'],
+            'sender_id' => $this->buyer->id,
+            'receiver_id' => $this->seller->id,
+            'listing_id' => $listing->id,
+        ]);
+    }
+
+    #[Test]
+    public function active_unavailable_listings_require_an_exact_inquiry_or_transaction_relationship(): void
+    {
+        $unreconciledWithInquiry = $this->createListing($this->seller, [
+            'quantity' => 0,
+            'inventory_reconciliation_required' => true,
+        ]);
+        $this->createInquiry($this->buyer, $this->seller, $unreconciledWithInquiry);
+
+        $this->sendMessage($this->buyer, $this->seller, [
+            'listing_id' => $unreconciledWithInquiry->id,
+        ])->assertCreated();
+
+        $activeWithTransaction = $this->createListing($this->seller, [
+            'quantity' => 0,
+        ]);
+        $this->createTransaction($this->buyer, $this->seller, $activeWithTransaction);
+
+        $this->sendMessage($this->buyer, $this->seller, [
+            'listing_id' => $activeWithTransaction->id,
+        ])->assertCreated();
+
+        $activeWithOtherPairTransaction = $this->createListing($this->seller, [
+            'quantity' => 0,
+        ]);
+        $this->createTransaction($this->otherBuyer, $this->seller, $activeWithOtherPairTransaction);
+
+        $this->sendMessage($this->buyer, $this->seller, [
+            'listing_id' => $activeWithOtherPairTransaction->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors('listing_id');
+
+        $activeWithDifferentListingRelationship = $this->createListing($this->seller, [
+            'quantity' => 0,
+        ]);
+        $this->createTransaction($this->buyer, $this->seller, $activeWithTransaction);
+
+        $this->sendMessage($this->buyer, $this->seller, [
+            'listing_id' => $activeWithDifferentListingRelationship->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors('listing_id');
+    }
+
+    #[Test]
     public function hidden_listing_contexts_are_refused_without_persisting_or_disclosing_them(): void
     {
         Event::fake([MessageSent::class]);
@@ -309,12 +397,15 @@ class MessageHardeningTest extends TestCase
         $pending = $this->createListing($this->seller, [
             'status' => ListingStatus::Pending,
         ]);
-        $draftOwnedByAnotherUser = $this->createListing($this->otherBuyer, [
+        $draftOwnedByAnotherUser = $this->createListing($this->seller, [
             'status' => ListingStatus::Draft,
         ]);
         $unavailableActive = $this->createListing($this->seller, [
             'quantity' => 0,
         ]);
+
+        $this->createTransaction($this->buyer, $this->seller, $pending);
+        $this->createInquiry($this->buyer, $this->seller, $draftOwnedByAnotherUser);
 
         foreach ([$pending, $draftOwnedByAnotherUser, $unavailableActive] as $listing) {
             Message::create([

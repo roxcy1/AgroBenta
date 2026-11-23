@@ -61,30 +61,37 @@ class MessageRepository
 
     /**
      * Whether these two participants have an established relationship with one
-     * exact listing, allowing a historical sold/inactive listing context to
-     * remain usable without authorizing a guessed listing id.
+     * exact listing, allowing a hidden listing context without authorizing a
+     * guessed listing id.
      */
     public function hasHistoricalListingRelationship(
         int $userIdA,
         int $userIdB,
         int $listingId,
     ): bool {
-        $isSoldOrInactive = Listing::query()
+        $listing = Listing::query()
             ->whereKey($listingId)
-            ->whereIn('status', [ListingStatus::Sold, ListingStatus::Inactive])
-            ->exists();
+            ->first(['id', 'status']);
 
-        if (! $isSoldOrInactive) {
+        if ($listing === null || ! in_array($listing->status, [
+            ListingStatus::Active,
+            ListingStatus::Sold,
+            ListingStatus::Inactive,
+        ], true)) {
             return false;
         }
 
-        $hasMessages = Message::query()
-            ->betweenUsers($userIdA, $userIdB)
-            ->where('listing_id', $listingId)
-            ->exists();
+        // A historical message can preserve sold/inactive conversation
+        // context, but cannot independently authorize a hidden active listing.
+        if ($listing->status !== ListingStatus::Active) {
+            $hasMessages = Message::query()
+                ->betweenUsers($userIdA, $userIdB)
+                ->where('listing_id', $listingId)
+                ->exists();
 
-        if ($hasMessages) {
-            return true;
+            if ($hasMessages) {
+                return true;
+            }
         }
 
         $isPair = static function (Builder $query) use ($userIdA, $userIdB): void {
