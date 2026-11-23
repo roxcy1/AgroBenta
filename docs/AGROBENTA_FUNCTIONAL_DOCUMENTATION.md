@@ -387,6 +387,10 @@ existing record; it does **not** add a fifth state.
   are rejected, using the existing listing moderation transitions (§4.4).
   `draft`, `sold` and already-`inactive` listings are unchanged. Reservations and
   transaction history are never cancelled or deleted.
+* The seller's **pending** transactions remain but can no longer be fulfilled,
+  because fulfillment updates require seller capability. Either party may cancel
+  them, which releases the reservation; until then the reserved livestock stays
+  held.
 * Verification documents and the record history are preserved. The applicant may
   submit a new verification under the ordinary resubmission rule (§3.2), and its
   outcome is reviewed afresh.
@@ -1158,7 +1162,7 @@ inventory is never inferred from ambiguous unreserved transaction rows.
 
 | ID | Decision | Resolution |
 |---|---|---|
-| **DEC-13** | Revoking an approved seller verification | Administrators may revoke the latest `approved` verification with a required note. It becomes `rejected`, `seller_capability` returns to `buyer`, and the seller's `active` listings are deactivated and `pending` listings rejected. Draft, sold and already-inactive listings, reservations and transaction history are preserved. Documents and record history remain, and the applicant may resubmit. No fifth verification state or listing status is added. (§3.1, §3.6, §4.4) |
+| **DEC-13** | Revoking an approved seller verification | Administrators may revoke the latest `approved` verification with a required note. It becomes `rejected`, `seller_capability` returns to `buyer`, and the seller's `active` listings are deactivated and `pending` listings rejected. Draft, sold and already-inactive listings, reservations and transaction history are preserved. The seller's pending transactions remain but can no longer be fulfilled; either party may cancel them, which releases the reservation. Documents and record history remain, and the applicant may resubmit. No fifth verification state or listing status is added. (§3.1, §3.6, §4.4) |
 
 ---
 
@@ -1203,5 +1207,5 @@ Related: the manuscript (PDF, kept outside the repository),
 | 2026-11-17 | Implemented a buyer-visible public seller profile reached from the Listing Details seller card (two tabs: Profile and Listings). The manuscript does not define this screen or its disclosure set; recorded as open item **OQ-18** (§13.3) for confirmation. The profile reuses the marketplace listing visibility, discloses only barangay-level location and never private contact or verification documents. |
 | 2026-11-17 | **[DEC-12]** Recorded Ma'am Rox's approved seller deactivation/reactivation, administrator-only restoration of admin-deactivated listings, terminal sold status, and transaction-history deletion safeguards (§4.4, §13.2, §13.10). No deletion-request workflow, archive status or database migration is introduced. |
 | 2026-11-20 | Implemented Profile → Notification Settings (MS-P Figure 20) as per-category phone-push switches saved on the server. The manuscript does not define the screen's contents; recorded as open item **OQ-19** (§13.3) for confirmation. Every notification is still stored and shown in the app. |
-| 2026-11-21 | **[DEC-13]** Approved revoking an approved seller verification with a required note (§3.1, §3.6, §4.4, §13.11). Revocation returns the seller to a buyer and withdraws active and pending listings while preserving drafts, sold/inactive listings, documents, reservations and transaction history. The record becomes `rejected`, so the existing resubmission rule applies; no new verification or listing state is introduced. |
+| 2026-11-21 | **[DEC-13]** Approved revoking an approved seller verification with a required note (§3.1, §3.6, §4.4, §13.11). Revocation returns the seller to a buyer and withdraws active and pending listings while preserving drafts, sold/inactive listings, documents, reservations and transaction history. Pending transactions can no longer be fulfilled and may only be cancelled. The record becomes `rejected`, so the existing resubmission rule applies; no new verification or listing state is introduced. |
 | Earlier | Planning transcription with decision round D-02, D-03, D-15 and SEC. |

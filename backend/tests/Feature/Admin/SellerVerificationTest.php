@@ -1047,6 +1047,57 @@ class SellerVerificationTest extends TestCase
         $this->assertContains($pending->id, $activity->metadata['context']['rejected_listing_ids']);
     }
 
+    public function test_a_revoked_sellers_pending_transaction_can_only_be_cancelled(): void
+    {
+        $seller = User::factory()->seller()->create(['role' => UserRole::User]);
+        $verification = $this->verificationFor($seller, [
+            'status' => SellerVerificationStatus::Approved,
+            'submitted_at' => now()->subDays(2),
+            'reviewed_at' => now()->subDay(),
+        ]);
+        $listing = $this->listingFor($seller, ListingStatus::Active);
+        $buyer = User::factory()->create([
+            'role' => UserRole::User,
+            'seller_capability' => SellerCapability::Buyer,
+        ]);
+        $transaction = Transaction::create([
+            'buyer_id' => $buyer->id,
+            'seller_id' => $seller->id,
+            'listing_id' => $listing->id,
+            'quantity' => 1,
+            'total_amount' => 50000.00,
+            'status' => TransactionStatus::Pending,
+            'inventory_reserved' => true,
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->adminToken()}")
+            ->postJson("/api/admin/seller-verifications/{$verification->id}/revoke", [
+                'admin_note' => 'Fraudulent documents were discovered after approval.',
+            ])
+            ->assertOk();
+
+        $sellerToken = $seller->createToken('mobile', ['mobile'])->plainTextToken;
+
+        // Fulfillment needs seller capability, which the revocation removed.
+        $this->withHeader('Authorization', "Bearer {$sellerToken}")
+            ->postJson("/api/transactions/{$transaction->id}/preparing")
+            ->assertForbidden();
+        $this->assertDatabaseHas('transactions', [
+            'id' => $transaction->id,
+            'status' => TransactionStatus::Pending->value,
+        ]);
+
+        // Either party may still cancel, which releases the reservation.
+        $this->withHeader('Authorization', "Bearer {$sellerToken}")
+            ->postJson("/api/transactions/{$transaction->id}/cancel")
+            ->assertOk();
+        $this->assertDatabaseHas('transactions', [
+            'id' => $transaction->id,
+            'status' => TransactionStatus::Cancelled->value,
+            'inventory_reserved' => false,
+        ]);
+    }
+
     public function test_revocation_notifies_the_applicant(): void
     {
         Notification::fake();

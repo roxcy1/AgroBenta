@@ -150,7 +150,7 @@ const ACTION_CONFIGS: Record<VerificationAction, VerificationActionConfig> = {
     variant: 'reject',
     confirmTitle: 'Revoke Seller Verification',
     confirmMessage:
-      'This will revoke the approved verification, return the seller to a buyer, and withdraw every active and pending listing. Existing transactions and their reservations are left untouched.',
+      'This will revoke the approved verification, return the seller to a buyer, and withdraw every active and pending listing. Pending transactions can no longer be fulfilled by this seller and can only be cancelled; their reserved livestock stays held until then.',
     confirmLabel: 'Revoke',
     noteRequired: true,
   },
