@@ -45,7 +45,7 @@ describe('Sidebar navigation', () => {
       ['Seller Verification', '/seller-verification'],
       ['Transactions', '/transactions'],
       ['Activities', '/activities'],
-      ['Reports', '/reports'],
+      ['Reports & Analytics', '/reports'],
       ['Settings', '/settings'],
     ];
 

@@ -183,10 +183,10 @@ export default function HomePage() {
             <div className="home-hero-art">
               <img
                 className="home-hero-logo"
-                src="/images/agrobenta-logo.png"
+                src="/images/AgroBentaLogo-on-dark.png"
                 alt="AgroBenta logo"
-                width={1536}
-                height={1024}
+                width={1200}
+                height={675}
               />
               <p className="home-hero-tagline">Buy. Sell. Grow. Together.</p>
             </div>

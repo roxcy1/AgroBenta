@@ -12,10 +12,14 @@
   border-bottom: 0;
 }
 
+/* The light-on-dark version of the mobile logo ("Agro" and the animals in
+   light green), on its own transparent background. */
 .sidebar .sidebar-logo-image {
-  width: 100%;
-  max-width: 190px;
-  max-height: 78px;
+  width: auto;
+  height: 84px;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: transparent;
   object-fit: contain;
 }
 

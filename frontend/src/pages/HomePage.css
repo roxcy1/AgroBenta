@@ -179,16 +179,12 @@
   text-align: center;
 }
 
-/* The logo file has a black backdrop; `screen` drops it on the dark hero, the
-   same treatment the login page uses. */
+/* The light-on-dark version of the mobile logo ("Agro" and the animals in
+   light green), on its own transparent background over the dark hero. */
 .home-hero-logo {
   width: min(100%, 440px);
   height: auto;
-  mix-blend-mode: screen;
-  /* The file's glow is cut off at its top edge; fade the edges so no hard
-     rectangle shows against the hero. */
-  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 78%, transparent 100%);
-  mask-image: radial-gradient(ellipse closest-side, #000 78%, transparent 100%);
+  background: transparent;
 }
 
 .home-hero-tagline {
