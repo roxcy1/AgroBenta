@@ -30,7 +30,7 @@ describe('LoginPage', () => {
 
     expect(screen.getByRole('main').className).toContain('lg:grid-cols-2');
     const logo = screen.getByRole('img', { name: 'AgroBenta' });
-    expect(logo.getAttribute('src')).toBe('/images/agrobenta-logo.png');
+    expect(logo.getAttribute('src')).toBe('/images/AgroBentaLogo.png');
     expect(screen.getByTestId('login-hero-background').getAttribute('style'))
       .toContain('/images/login-background.webp');
     expect(screen.getByText('Buy. Sell. Grow. Together.')).not.toBeNull();

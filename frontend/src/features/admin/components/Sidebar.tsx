@@ -29,7 +29,7 @@ const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: Luc
       { to: '/seller-verification', label: 'Seller Verification', icon: BadgeCheck },
       { to: '/transactions', label: 'Transactions', icon: ReceiptText },
       { to: '/activities', label: 'Activities', icon: Activity },
-      { to: '/reports', label: 'Reports', icon: ChartNoAxesCombined },
+      { to: '/reports', label: 'Reports & Analytics', icon: ChartNoAxesCombined },
     ],
   },
   {
@@ -52,7 +52,7 @@ export function Sidebar() {
       <div className="sidebar-logo">
         <img
           className="sidebar-logo-image"
-          src="/images/agrobenta-sidebar-logo.png.png"
+          src="/images/AgroBentaLogo.png"
           alt="AgroBenta Livestock Marketplace"
         />
       </div>

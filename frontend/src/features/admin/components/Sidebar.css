@@ -12,10 +12,16 @@
   border-bottom: 0;
 }
 
+/* The mobile logo has dark lettering on a transparent background, so it sits on
+   a white rounded tile (the same treatment as the browser tab icon). */
 .sidebar .sidebar-logo-image {
-  width: 100%;
-  max-width: 190px;
-  max-height: 78px;
+  width: auto;
+  height: 84px;
+  max-width: 100%;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-radius: 10px;
   object-fit: contain;
 }
 

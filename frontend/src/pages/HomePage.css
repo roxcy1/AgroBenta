@@ -179,16 +179,16 @@
   text-align: center;
 }
 
-/* The logo file has a black backdrop; `screen` drops it on the dark hero, the
-   same treatment the login page uses. */
+/* The mobile logo has dark lettering on a transparent background, so it sits on
+   a white rounded tile against the dark hero, as it does on the login page. */
 .home-hero-logo {
   width: min(100%, 440px);
   height: auto;
-  mix-blend-mode: screen;
-  /* The file's glow is cut off at its top edge; fade the edges so no hard
-     rectangle shows against the hero. */
-  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 78%, transparent 100%);
-  mask-image: radial-gradient(ellipse closest-side, #000 78%, transparent 100%);
+  box-sizing: border-box;
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 16px 28px rgba(4, 35, 22, 0.35);
 }
 
 .home-hero-tagline {

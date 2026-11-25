@@ -67,9 +67,9 @@ export default function LoginPage() {
 
         <div className="relative z-10 mx-auto! flex w-full max-w-2xl flex-col items-center text-center">
           <img
-            src="/images/agrobenta-logo.png"
+            src="/images/AgroBentaLogo.png"
             alt="AgroBenta"
-            className="h-auto w-[min(23rem,80vw)] object-contain drop-shadow-[0_16px_28px_rgba(4,35,22,0.35)] mix-blend-screen"
+            className="h-auto w-[min(23rem,80vw)] rounded-3xl bg-white object-contain p-5! shadow-[0_16px_28px_rgba(4,35,22,0.35)]"
           />
 
           <p className="mt-5! text-xl font-semibold tracking-wide text-white sm:mt-6! sm:text-2xl">
