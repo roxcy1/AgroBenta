@@ -155,8 +155,12 @@ const List<_HelpArticle> _helpArticles = <_HelpArticle>[
     category: 'Safety & Security',
     question: 'What should I do if something seems suspicious?',
     answer:
-        'A dedicated suspicious-activity report action and direct support '
-        'contact are not currently configured in the app.',
+        'For a seller, open Seller Profile and choose Report Seller. For a '
+        'person in Messages or a transaction, open the conversation or '
+        'transaction details and choose Report User. Select a reason, describe '
+        'the concern, and optionally attach one screenshot. An administrator '
+        'reviews reports; submitting one does not cancel a transaction or '
+        'guarantee a particular outcome.',
   ),
 ];
 
@@ -317,27 +321,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                       ],
-                    const SizedBox(height: AppSpacing.sm),
-                    Card(
-                      color: AppColors.primarySurface,
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              'Contact Support',
-                              style: theme.textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: AppSpacing.xxs),
-                            Text(
-                              'Direct support contact is not configured yet.',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),

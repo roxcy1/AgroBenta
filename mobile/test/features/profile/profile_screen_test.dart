@@ -275,7 +275,7 @@ void main() {
   });
 
   testWidgets(
-    'Terms and Policies opens unavailable-content screen and returns to Profile',
+    'Terms and Policies opens the legal menu and returns to Profile',
     (WidgetTester tester) async {
       await pumpProfile(
         tester,
@@ -287,13 +287,12 @@ void main() {
       await tapAction(tester, 'Terms and Policies');
 
       expect(find.byType(TermsAndPoliciesScreen), findsOneWidget);
-      expect(find.text('Terms & Policies'), findsOneWidget);
+      expect(find.text('Terms and Policies'), findsOneWidget);
       expect(find.text('Terms and Conditions'), findsOneWidget);
       expect(find.text('Privacy Policy'), findsOneWidget);
-      expect(
-        find.textContaining('Approved legal content is not available yet.'),
-        findsOneWidget,
-      );
+      expect(find.text('Draft for review'), findsNothing);
+      expect(find.text('Buyer Policy'), findsOneWidget);
+      expect(find.text('AI Price Suggestion Disclaimer'), findsOneWidget);
 
       await tester.pageBack();
       await settleAuth(tester, frames: 12);
@@ -304,28 +303,24 @@ void main() {
     },
   );
 
-  testWidgets(
-    'rapid Terms and Policies taps push only one availability screen',
-    (WidgetTester tester) async {
-      await pumpProfile(
-        tester,
-        handler: (_) async =>
-            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
-      );
+  testWidgets('rapid Terms and Policies taps push only one legal menu screen', (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      handler: (_) async =>
+          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+    );
 
-      final Finder termsRow = find.widgetWithText(
-        ListTile,
-        'Terms and Policies',
-      );
-      final VoidCallback? onTap = tester.widget<ListTile>(termsRow).onTap;
-      expect(onTap, isNotNull);
-      onTap!();
-      onTap();
-      await settleAuth(tester, frames: 12);
+    final Finder termsRow = find.widgetWithText(ListTile, 'Terms and Policies');
+    final VoidCallback? onTap = tester.widget<ListTile>(termsRow).onTap;
+    expect(onTap, isNotNull);
+    onTap!();
+    onTap();
+    await settleAuth(tester, frames: 12);
 
-      expect(find.byType(TermsAndPoliciesScreen), findsOneWidget);
-    },
-  );
+    expect(find.byType(TermsAndPoliciesScreen), findsOneWidget);
+  });
 
   testWidgets('rapid Address taps open only one address editor', (
     WidgetTester tester,

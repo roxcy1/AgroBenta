@@ -4,6 +4,7 @@ import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_controller.dart';
 import 'package:agrobenta_mobile/features/auth/state/auth_scope.dart';
 import 'package:agrobenta_mobile/features/auth/view/register_screen.dart';
+import 'package:agrobenta_mobile/features/terms_and_policies/view/legal_document_screen.dart';
 import 'package:agrobenta_mobile/widgets/temporary_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,6 +109,58 @@ void main() {
     expect(find.text('Already have an account?'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Log In'), findsOneWidget);
   });
+
+  testWidgets(
+    'registration legal links open documents and preserve form state',
+    (WidgetTester tester) async {
+      await pumpRegister(
+        tester,
+        handler: (_) async => fail('no request expected'),
+      );
+      await fillFields(tester);
+
+      final Finder termsLink = find.byKey(registerTermsLinkKey);
+      await tester.ensureVisible(termsLink);
+      await tester.tap(termsLink);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LegalDocumentScreen), findsOneWidget);
+      expect(find.text('Terms and Conditions'), findsNWidgets(2));
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RegisterScreen), findsOneWidget);
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(0))
+            .controller!
+            .text,
+        'Ana Reyes',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(1))
+            .controller!
+            .text,
+        'ana@example.test',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(2))
+            .controller!
+            .text,
+        'correct horse',
+      );
+
+      final Finder privacyLink = find.byKey(registerPrivacyLinkKey);
+      await tester.ensureVisible(privacyLink);
+      await tester.tap(privacyLink);
+      await tester.pumpAndSettle();
+      expect(find.text('Privacy Policy'), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Google is the only social sign-up option', (
     WidgetTester tester,

@@ -96,11 +96,15 @@ loading state. - Support screen readers and keyboard navigation.
 -   Render **Terms** and **Privacy Policy** as green, emphasized links.
 -   Account creation must not proceed unless consent is checked if this
     is required by the existing registration requirements.
--   Only make links navigable if real destinations or approved pages
-    exist. Do not invent URLs.
+-   Terms and Privacy links open the corresponding bundled legal-document
+    drafts. Do not invent external URLs.
 -   Keep the label tappable to toggle the checkbox while allowing the
     links to open independently.
 -   Ensure clear selected state and accessible semantics.
+-   Opening a policy must preserve the in-progress registration form.
+-   The checkbox remains a client-side gate. The current registration API has
+    no consent field and stores no legal-acceptance record; do not imply that
+    server-side acceptance tracking exists.
 
 ## 4. Primary Action
 
