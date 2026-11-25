@@ -32,6 +32,7 @@ void main() {
   Future<_Result> open(
     WidgetTester tester, {
     ListingFilters initial = ListingFilters.none,
+    Size surfaceSize = const Size(800, 2400),
   }) async {
     final _Result result = _Result();
     final LivestockTypeRepository catalogRepository = LivestockTypeRepository(
@@ -84,7 +85,7 @@ void main() {
     // The default 800x600 surface is shorter than the form, and the lazy list
     // only builds what is on screen. A tall portrait surface makes the whole
     // form real.
-    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.physicalSize = surfaceSize;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
@@ -124,9 +125,19 @@ void main() {
     testWidgets('shows the header, sections and actions', (tester) async {
       await open(tester);
 
-      expect(find.text('Filter Livestock'), findsOneWidget);
+      // A child page with the standard back button, not a modal dialog: the
+      // page covers the shell, and its page-route barrier has no colour, so it
+      // cannot darken anything.
+      expect(find.widgetWithText(AppBar, 'Filters'), findsOneWidget);
+      expect(find.byType(BackButton), findsOneWidget);
+      expect(find.byType(Dialog), findsNothing);
+      final ModalBarrier barrier = tester.widget<ModalBarrier>(
+        find.byType(ModalBarrier),
+      );
+      expect(barrier.color, isNull);
+      expect(barrier.dismissible, isFalse);
       expect(find.text('Reset'), findsOneWidget);
-      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Cancel'), findsNothing);
       expect(find.text('Apply Filters'), findsOneWidget);
 
       for (final String section in <String>[
@@ -169,6 +180,46 @@ void main() {
         expect(find.text(animal), findsOneWidget, reason: animal);
       }
     });
+
+    testWidgets(
+      'keeps both actions reachable on a narrow screen with the keyboard open',
+      (tester) async {
+        final FakeViewPadding originalInsets = tester.view.viewInsets;
+        addTearDown(() => tester.view.viewInsets = originalInsets);
+
+        final _Result result = await open(
+          tester,
+          surfaceSize: const Size(320, 640),
+        );
+
+        final Finder minPrice = find.widgetWithText(TextField, 'Minimum price');
+        await tester.scrollUntilVisible(
+          minPrice,
+          150,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.enterText(minPrice, '1000');
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'narrow page layout');
+
+        // Raise the keyboard while the field is focused.
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Reset'), findsOneWidget);
+        expect(find.text('Apply Filters'), findsOneWidget);
+        expect(
+          tester.getCenter(find.text('Apply Filters')).dy,
+          lessThan(640 - 280),
+          reason: 'the pinned action bar must sit above the keyboard',
+        );
+
+        await tester.tap(find.text('Apply Filters'));
+        await tester.pumpAndSettle();
+        expect(result.value, const ListingFilters(minPrice: '1000'));
+      },
+    );
   });
 
   group('apply', () {
@@ -422,7 +473,7 @@ void main() {
     });
   });
 
-  group('reset, cancel and initial values', () {
+  group('reset, back and initial values', () {
     testWidgets('reset clears the form without applying or closing', (
       tester,
     ) async {
@@ -438,7 +489,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(result.returned, isFalse, reason: 'reset must not submit');
-      expect(find.text('Filter Livestock'), findsOneWidget);
+      expect(find.widgetWithText(AppBar, 'Filters'), findsOneWidget);
       expect(
         tester
             .widget<TextField>(find.widgetWithText(TextField, 'Minimum price'))
@@ -452,14 +503,14 @@ void main() {
       expect(result.value, ListingFilters.none);
     });
 
-    testWidgets('cancel discards edits and resolves to null', (tester) async {
+    testWidgets('back discards edits and resolves to null', (tester) async {
       final _Result result = await open(tester);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('animal-type-cattle')),
       );
       await tester.pump();
-      await tester.tap(find.text('Cancel'));
+      await tester.pageBack();
       await tester.pumpAndSettle();
 
       expect(result.returned, isTrue);

@@ -309,7 +309,7 @@ Examples:
 
 ```text
 ← Browse Livestock
-← Filter Livestock
+← Filters
 ← Livestock Details
 ← Seller Verification
 ← Create Listing
@@ -492,11 +492,13 @@ When searching, preserve the user's existing marketplace context.
 
 # 16. Filters
 
-The approved filter is a **dark modal dialog** — the one dark surface in the
-app — opened from the marketplace filter button and the Home search bar.
+The approved filter is a **full-screen child page** in the same light Buyer UI
+as the rest of the app, opened from the marketplace filter button and the Home
+search bar. It is pushed over the Buyer shell, so the bottom navigation is
+hidden while it is open; Back returns to the screen that opened it.
 
 ```text
-[ X ]        Filter Livestock        [ Reset ]
+←   Filters
 
 Animal Type  [paw]
 Select one or more animal types.
@@ -521,7 +523,7 @@ Age (months)  [cake]
 Weight (kg)  [scale]
 [ Min ] [ Max ]
 
-[ Cancel ]          [ Apply Filters ]
+[ Reset ]          [ Apply Filters ]
 ```
 
 Animal Type and Breed are multi-select. The Breed list is the union of the
@@ -535,11 +537,14 @@ unit the seller stored. Price is in pesos.
 
 - Filters must have clear labels.
 - Selected values should remain visible.
-- Reset must restore default values.
-- Apply Filters should be the primary action.
+- Reset must restore default values without closing the page.
+- Apply Filters should be the primary action; it returns the selection to the
+  screen that opened the page.
+- Back discards unapplied edits.
 - Avoid excessive filter controls on the initial browse screen.
 - An inverted range is explained inline and is not applied.
-- The dialog is dark; every other screen stays light.
+- The page uses the app's standard light surfaces, typography, fields and
+  buttons. It is not a separate dark theme.
 
 ---
 
@@ -1265,7 +1270,7 @@ Allowed:
 - Button feedback
 - Loading transitions
 - Expand/collapse
-- Filter panel transitions
+- Filter page transitions
 
 Avoid:
 
@@ -1319,7 +1324,7 @@ The approved prototype contains the following mobile screens:
 | 5 | Profile |
 | 6 | Browse Livestock |
 | 7 | Search Livestock |
-| 8 | Filter Livestock |
+| 8 | Filters |
 | 9 | Livestock Details |
 | 10 | Seller Information |
 | 11 | Verification Status |
