@@ -332,6 +332,37 @@ void main() {
     });
   });
 
+  group('filters', () {
+    testWidgets('the Filters page applies the selection from Home', (
+      WidgetTester tester,
+    ) async {
+      final List<RecordedRequest> recorded = <RecordedRequest>[];
+      await pumpSignedIn(tester, recorded: recorded);
+
+      await tester.tap(find.byIcon(Icons.tune));
+      await settleAuth(tester);
+
+      expect(find.widgetWithText(AppBar, 'Filters'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('animal-type-cattle')),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Apply Filters'));
+      await settleAuth(tester, frames: 12);
+
+      expect(
+        recorded.where(
+          (RecordedRequest request) =>
+              request.apiPath == '/listings' &&
+              request.query['livestock_type'] == 'cattle',
+        ),
+        isNotEmpty,
+        reason: 'the Home filter enters the same shared marketplace state',
+      );
+    });
+  });
+
   group('popular livestock', () {
     testWidgets('renders completed-sale rankings and opens Browse filtered', (
       WidgetTester tester,

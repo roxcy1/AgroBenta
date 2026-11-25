@@ -634,7 +634,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.tune));
       await settleMarketplace(tester);
 
-      expect(find.text('Filter Livestock'), findsOneWidget);
+      expect(find.widgetWithText(AppBar, 'Filters'), findsOneWidget);
 
       await tester.enterText(
         find.widgetWithText(TextField, 'Minimum price'),

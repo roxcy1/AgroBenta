@@ -4,27 +4,33 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../models/livestock_type.dart';
+import '../../../widgets/field_label.dart';
 import '../../livestock_types/state/livestock_types_controller.dart';
 import '../../livestock_types/state/livestock_types_scope.dart';
 import '../../livestock_types/state/livestock_types_state.dart';
 import '../state/listing_filters.dart';
 
-/// Opens the Filter Livestock dialog and resolves to the applied filters, or
-/// `null` when the buyer cancelled or backed out.
+/// Opens the Filters page and resolves to the applied filters, or `null` when
+/// the buyer left without applying.
+///
+/// A full-screen child route, the navigation model `mobile/DESIGN.md` §8/§10
+/// uses for Filters, Details and other child screens. It is pushed over the
+/// Buyer shell, so the bottom navigation is hidden while it is open, and
+/// popping it returns to whichever screen opened it — Marketplace or Home.
 ///
 /// Returning `null` rather than the unchanged filters is what lets the caller
-/// treat "cancelled" as "make no request at all" — re-querying the server for a
-/// filter form the user abandoned would be exactly the redundant call
+/// treat "backed out" as "make no request at all" — re-querying the server for
+/// a filter form the user abandoned would be exactly the redundant call
 /// `mobile/AGENTS.md` warns about.
 Future<ListingFilters?> showMarketplaceFilterScreen({
   required BuildContext context,
   required ListingFilters filters,
 }) {
-  return showDialog<ListingFilters>(
-    context: context,
-    barrierColor: Colors.black,
-    builder: (BuildContext context) =>
-        MarketplaceFilterDialog(initial: filters),
+  return Navigator.of(context).push<ListingFilters>(
+    MaterialPageRoute<ListingFilters>(
+      builder: (BuildContext context) =>
+          MarketplaceFilterScreen(initial: filters),
+    ),
   );
 }
 
@@ -39,32 +45,29 @@ class _AnimalType {
       _AnimalType(label: type.label, value: type.value);
 }
 
-/// The Filter Livestock dialog, over the existing marketplace filter state.
+/// The Filters page, over the existing marketplace filter state.
 ///
 /// Presentation only — it edits a copy of the form locally and hands the
 /// finished [ListingFilters] back to the caller, which applies them through
 /// `MarketplaceController`. It makes no request of its own.
 ///
-/// The dialog is the one dark surface in the app.
-/// Its colours live in [AppColors] beside the light palette rather
-/// than in a second `ThemeData`; see the note there. Whether that dark surface
-/// is an approved exception to the app's light-only rule is an open question on
-/// PR #84.
-class MarketplaceFilterDialog extends StatefulWidget {
-  const MarketplaceFilterDialog({required this.initial, super.key});
+/// Reset clears the draft without leaving the page. Apply pops with the
+/// selection. Back pops with `null`, discarding the draft.
+class MarketplaceFilterScreen extends StatefulWidget {
+  const MarketplaceFilterScreen({required this.initial, super.key});
 
   /// The filters currently applied, used to pre-fill the form.
   ///
   /// Reopening preserves what is applied, per the design; Reset clears the
-  /// form without applying, and Cancel discards everything.
+  /// form without applying, and Back discards everything.
   final ListingFilters initial;
 
   @override
-  State<MarketplaceFilterDialog> createState() =>
-      _MarketplaceFilterDialogState();
+  State<MarketplaceFilterScreen> createState() =>
+      _MarketplaceFilterScreenState();
 }
 
-class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
+class _MarketplaceFilterScreenState extends State<MarketplaceFilterScreen> {
   late final LivestockTypesController _catalog;
   late List<String> _livestockTypes;
   late List<String> _breeds;
@@ -82,7 +85,8 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
   bool _showAgeError = false;
   bool _showWeightError = false;
 
-  /// Guards against a second Apply while the first is still resolving.
+  /// Guards against a second Apply while the first is already popping the
+  /// page. Without it, a double tap could pop the route underneath too.
   bool _submitting = false;
 
   @override
@@ -154,8 +158,8 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
   /// Clears the form to its empty defaults **without** submitting it.
   ///
   /// The design's Reset is a form action, not an apply: the buyer may clear the
-  /// fields, change their mind and Cancel. Clearing the applied filters is done
-  /// by Reset followed by Apply.
+  /// fields, change their mind and go Back. Clearing the applied filters is
+  /// done by Reset followed by Apply.
   void _reset() {
     setState(() {
       _livestockTypes = <String>[];
@@ -172,9 +176,6 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
       _showWeightError = false;
     });
   }
-
-  /// Discards the form and returns to the caller.
-  void _cancel() => Navigator.of(context).pop();
 
   bool _isAnimalSelected(String value) => _livestockTypes.contains(value);
 
@@ -213,11 +214,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
 
     final List<String>? result = await showModalBottomSheet<List<String>>(
       context: context,
-      backgroundColor: AppColors.filterDarkSurface,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
       builder: (BuildContext context) => StatefulBuilder(
         builder:
             (
@@ -236,9 +233,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
                     ),
                     child: Text(
                       'Select breeds',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.filterDarkText,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
                   Flexible(
@@ -257,14 +252,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
                                 }
                               });
                             },
-                            title: Text(
-                              breed,
-                              style: const TextStyle(
-                                color: AppColors.filterDarkText,
-                              ),
-                            ),
-                            activeColor: AppColors.filterDarkAccent,
-                            checkColor: Colors.black,
+                            title: Text(breed),
                           ),
                       ],
                     ),
@@ -275,10 +263,6 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
                       width: double.infinity,
                       child: FilledButton(
                         onPressed: () => Navigator.of(context).pop(selected),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.filterDarkAccent,
-                          foregroundColor: Colors.white,
-                        ),
                         child: const Text('Done'),
                       ),
                     ),
@@ -296,66 +280,15 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppColors.filterDarkSurface,
-      insetPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.xl,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 480,
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
+    return Scaffold(
+      appBar: AppBar(title: const Text('Filters')),
+      body: SafeArea(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _buildHeader(),
-            Flexible(child: _buildBody()),
-            _buildBottomBar(),
+            Expanded(child: _buildBody()),
+            _buildActionBar(),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return SizedBox(
-      height: 56,
-      child: Stack(
-        alignment: Alignment.center,
-        children: <Widget>[
-          Positioned(
-            left: 0,
-            child: IconButton(
-              onPressed: _cancel,
-              icon: const Icon(Icons.close, size: 20),
-              color: AppColors.filterDarkText,
-              tooltip: 'Close',
-            ),
-          ),
-          Text(
-            'Filter Livestock',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.filterDarkText,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Positioned(
-            right: 0,
-            child: TextButton(
-              onPressed: _reset,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.filterDarkAccent,
-              ),
-              child: const Text('Reset'),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -367,7 +300,12 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
         final LivestockTypesState catalogState = _catalog.state;
 
         return ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenGutter,
+            AppSpacing.md,
+            AppSpacing.screenGutter,
+            AppSpacing.md,
+          ),
           children: <Widget>[
             _FilterSection(
               icon: Icons.pets,
@@ -375,20 +313,20 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
               helper: 'Select one or more animal types.',
               child: _buildAnimalTypes(catalogState),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             _FilterSection(
               icon: Icons.style_outlined,
               title: 'Breed',
               helper: 'Choose breed(s) for the selected animal types.',
               child: _buildBreedSelector(),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             _FilterSection(
               icon: Icons.sell_outlined,
               title: 'Price Range',
               child: _buildPriceFields(),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             _FilterSection(
               icon: Icons.tune,
               title: 'Additional Filters',
@@ -400,44 +338,36 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
     );
   }
 
-  Widget _buildBottomBar() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.sm,
-          AppSpacing.md,
-          AppSpacing.sm,
-        ),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _cancel,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(AppSizes.controlHeight),
-                  foregroundColor: AppColors.filterDarkText,
-                  side: const BorderSide(color: AppColors.filterDarkBorder),
-                ),
-                child: const Text('Cancel'),
-              ),
+  /// The pinned bottom action area: Reset clears the draft, Apply returns the
+  /// selection. Back is the app bar's own button, so it is not repeated here.
+  Widget _buildActionBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenGutter,
+        AppSpacing.sm,
+        AppSpacing.screenGutter,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _reset,
+              child: const Text('Reset'),
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: _apply,
-                icon: const Icon(Icons.filter_alt_outlined, size: 18),
-                label: const Text('Apply Filters'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(AppSizes.controlHeight),
-                  backgroundColor: AppColors.filterDarkAccent,
-                  foregroundColor: Colors.white,
-                ),
-              ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: FilledButton(
+              onPressed: _apply,
+              child: const Text('Apply Filters'),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -449,22 +379,14 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
         children: <Widget>[
           Text(
             catalogState.errorMessage ?? 'Could not load livestock types.',
-            style: const TextStyle(color: AppColors.filterDarkTextSecondary),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          TextButton(
-            onPressed: _catalog.retry,
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.filterDarkAccent,
-            ),
-            child: const Text('Retry'),
-          ),
+          TextButton(onPressed: _catalog.retry, child: const Text('Retry')),
         ],
       );
     }
     if (!catalogState.isReady) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.filterDarkAccent),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     final List<_AnimalType> animals = catalogState.types
@@ -483,7 +405,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
           runSpacing: spacing,
           children: <Widget>[
             for (final _AnimalType animal in animals)
-              _DarkAnimalTile(
+              _AnimalTile(
                 key: ValueKey<String>('animal-type-${animal.value}'),
                 animal: animal,
                 width: tileWidth,
@@ -505,48 +427,52 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        InkWell(
-          onTap: enabled ? _openBreedPicker : null,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: Container(
-            height: AppSizes.controlHeight,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.filterDarkField,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: Border.all(color: AppColors.filterDarkFieldBorder),
-            ),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _breeds.isEmpty
-                          ? AppColors.filterDarkTextSecondary
-                          : AppColors.filterDarkText,
+        Semantics(
+          button: true,
+          enabled: enabled,
+          label: 'Breed',
+          child: InkWell(
+            onTap: enabled ? _openBreedPicker : null,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Container(
+              height: AppSizes.controlHeight,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: enabled ? AppColors.surface : AppColors.background,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color: enabled ? AppColors.fieldBorder : AppColors.border,
+                ),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: _breeds.isEmpty
+                            ? AppColors.textHint
+                            : AppColors.text,
+                      ),
                     ),
                   ),
-                ),
-                const Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 20,
-                  color: AppColors.filterDarkTextSecondary,
-                ),
-              ],
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    size: 20,
+                    color: AppColors.textHint,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
         if (!enabled) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
-          const Text(
+          Text(
             'Choose at least one animal type to see breeds.',
-            style: TextStyle(
-              color: AppColors.filterDarkTextSecondary,
-              fontSize: 12,
-            ),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ],
@@ -554,6 +480,8 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
   }
 
   Widget _buildPriceFields() {
+    final ThemeData theme = Theme.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -561,7 +489,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Expanded(
-              child: _DarkTextField(
+              child: _FilterTextField(
                 controller: _minPrice,
                 label: 'Minimum price',
                 hint: '0',
@@ -572,7 +500,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: _DarkTextField(
+              child: _FilterTextField(
                 controller: _maxPrice,
                 label: 'Maximum price',
                 hint: 'No limit',
@@ -585,9 +513,9 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
         ),
         if (_showPriceError) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
-          const Text(
+          Text(
             'The minimum price is higher than the maximum price.',
-            style: TextStyle(color: AppColors.filterDarkAccent, fontSize: 12),
+            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.error),
           ),
         ],
       ],
@@ -595,6 +523,8 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
   }
 
   Widget _buildAdditionalFilters() {
+    final ThemeData theme = Theme.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -609,7 +539,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Expanded(
-              child: _DarkTextField(
+              child: _FilterTextField(
                 controller: _minAge,
                 label: 'Min',
                 onChanged: (String _) => setState(() => _showAgeError = false),
@@ -617,7 +547,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: _DarkTextField(
+              child: _FilterTextField(
                 controller: _maxAge,
                 label: 'Max',
                 onChanged: (String _) => setState(() => _showAgeError = false),
@@ -627,9 +557,9 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
         ),
         if (_showAgeError) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
-          const Text(
+          Text(
             'The minimum age is higher than the maximum age.',
-            style: TextStyle(color: AppColors.filterDarkAccent, fontSize: 12),
+            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.error),
           ),
         ],
         const SizedBox(height: AppSpacing.md),
@@ -638,7 +568,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Expanded(
-              child: _DarkTextField(
+              child: _FilterTextField(
                 controller: _minWeight,
                 label: 'Min',
                 onChanged: (String _) =>
@@ -647,7 +577,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: _DarkTextField(
+              child: _FilterTextField(
                 controller: _maxWeight,
                 label: 'Max',
                 onChanged: (String _) =>
@@ -658,9 +588,9 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
         ),
         if (_showWeightError) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
-          const Text(
+          Text(
             'The minimum weight is higher than the maximum weight.',
-            style: TextStyle(color: AppColors.filterDarkAccent, fontSize: 12),
+            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.error),
           ),
         ],
       ],
@@ -668,7 +598,7 @@ class _MarketplaceFilterDialogState extends State<MarketplaceFilterDialog> {
   }
 }
 
-/// A titled dark panel holding one group of controls.
+/// A titled section card holding one group of controls.
 class _FilterSection extends StatelessWidget {
   const _FilterSection({
     required this.icon,
@@ -684,49 +614,38 @@ class _FilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.filterDarkCard,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.filterDarkBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.xxs),
-                decoration: BoxDecoration(
-                  color: AppColors.filterDarkAccent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
+    final ThemeData theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.xxs),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySurface,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: Icon(icon, size: 18, color: AppColors.primary),
                 ),
-                child: Icon(icon, size: 18, color: AppColors.filterDarkAccent),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.filterDarkText,
-                  fontWeight: FontWeight.w700,
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(title, style: theme.textTheme.titleMedium),
                 ),
-              ),
-            ],
-          ),
-          if (helper != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              helper!,
-              style: const TextStyle(
-                color: AppColors.filterDarkTextSecondary,
-                fontSize: 12,
-              ),
+              ],
             ),
+            if (helper != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.xs),
+              Text(helper!, style: theme.textTheme.bodySmall),
+            ],
+            const SizedBox(height: AppSpacing.sm),
+            child,
           ],
-          const SizedBox(height: AppSpacing.sm),
-          child,
-        ],
+        ),
       ),
     );
   }
@@ -746,27 +665,22 @@ class _SubLabel extends StatelessWidget {
       child: Row(
         children: <Widget>[
           if (icon != null) ...<Widget>[
-            Icon(icon, size: 16, color: AppColors.filterDarkAccent),
+            Icon(icon, size: 16, color: AppColors.primary),
             const SizedBox(width: AppSpacing.xs),
           ],
-          Text(
-            text,
-            style: const TextStyle(
-              color: AppColors.filterDarkText,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text(text, style: Theme.of(context).textTheme.titleSmall),
         ],
       ),
     );
   }
 }
 
-/// One Animal Type tile: plain text on a dark rounded button.
+/// One Animal Type tile: a selectable button in the same light chip language
+/// as the Browse category chips.
 ///
 /// The whole tile is the tap target, well past the 48dp minimum.
-class _DarkAnimalTile extends StatelessWidget {
-  const _DarkAnimalTile({
+class _AnimalTile extends StatelessWidget {
+  const _AnimalTile({
     required this.animal,
     required this.width,
     required this.selected,
@@ -786,9 +700,7 @@ class _DarkAnimalTile extends StatelessWidget {
       selected: selected,
       label: animal.label,
       child: Material(
-        color: selected
-            ? AppColors.filterDarkAccent.withValues(alpha: 0.18)
-            : AppColors.filterDarkTile,
+        color: selected ? AppColors.primary : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -799,10 +711,7 @@ class _DarkAnimalTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
-                color: selected
-                    ? AppColors.filterDarkAccent
-                    : AppColors.filterDarkBorder,
-                width: selected ? 2 : 1,
+                color: selected ? AppColors.primary : AppColors.border,
               ),
             ),
             alignment: Alignment.center,
@@ -810,9 +719,7 @@ class _DarkAnimalTile extends StatelessWidget {
               animal.label,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: selected
-                    ? AppColors.filterDarkAccent
-                    : AppColors.filterDarkText,
+                color: selected ? Colors.white : AppColors.text,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
               maxLines: 1,
@@ -834,53 +741,55 @@ class _SegmentedControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
     return Container(
+      padding: const EdgeInsets.all(AppSpacing.xxs),
       decoration: BoxDecoration(
-        color: AppColors.filterDarkCard,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.filterDarkBorder),
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      child: Row(
-        children: <Widget>[
-          _segment('Any', ''),
-          _segment('Male', 'male'),
-          _segment('Female', 'female'),
-        ],
-      ),
-    );
-  }
-
-  Widget _segment(String label, String segmentValue) {
-    final bool selected = value == segmentValue;
-
-    return Expanded(
-      child: InkWell(
-        onTap: () => onChanged(segmentValue),
-        child: Container(
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? AppColors.filterDarkTile : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: SegmentedButton<String>(
+        showSelectedIcon: false,
+        style: ButtonStyle(
+          visualDensity: VisualDensity.standard,
+          backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+            (Set<WidgetState> states) => states.contains(WidgetState.selected)
+                ? AppColors.surface
+                : Colors.transparent,
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected
-                  ? AppColors.filterDarkText
-                  : AppColors.filterDarkTextSecondary,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            ),
+          foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+            (Set<WidgetState> states) => states.contains(WidgetState.selected)
+                ? AppColors.primary
+                : AppColors.textSecondary,
+          ),
+          side: const WidgetStatePropertyAll<BorderSide>(
+            BorderSide(color: Colors.transparent),
+          ),
+          shape: WidgetStatePropertyAll<OutlinedBorder>(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          ),
+          textStyle: WidgetStatePropertyAll<TextStyle?>(
+            theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
+        segments: const <ButtonSegment<String>>[
+          ButtonSegment<String>(value: '', label: Text('Any')),
+          ButtonSegment<String>(value: 'male', label: Text('Male')),
+          ButtonSegment<String>(value: 'female', label: Text('Female')),
+        ],
+        selected: <String>{value},
+        onSelectionChanged: (Set<String> selection) =>
+            onChanged(selection.first),
       ),
     );
   }
 }
 
-/// A text field on the dark dialog surface.
-class _DarkTextField extends StatelessWidget {
-  const _DarkTextField({
+/// A numeric range field on the light page, using the app's standard labelled
+/// field treatment.
+class _FilterTextField extends StatelessWidget {
+  const _FilterTextField({
     required this.controller,
     required this.label,
     this.hint,
@@ -902,35 +811,11 @@ class _DarkTextField extends StatelessWidget {
       inputFormatters: <TextInputFormatter>[
         FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
       ],
-      style: const TextStyle(color: AppColors.filterDarkText),
       onChanged: onChanged,
       decoration: InputDecoration(
-        labelText: label,
+        label: FieldLabel(label),
         hintText: hint,
         prefixText: prefixText,
-        labelStyle: const TextStyle(
-          color: AppColors.filterDarkTextSecondary,
-          fontSize: 12,
-        ),
-        hintStyle: const TextStyle(
-          color: AppColors.filterDarkTextSecondary,
-          fontSize: 14,
-        ),
-        prefixStyle: const TextStyle(color: AppColors.filterDarkText),
-        filled: true,
-        fillColor: AppColors.filterDarkField,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.sm,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.filterDarkFieldBorder),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.filterDarkAccent),
-        ),
       ),
     );
   }
