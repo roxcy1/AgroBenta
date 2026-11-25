@@ -52,7 +52,7 @@ export function Sidebar() {
       <div className="sidebar-logo">
         <img
           className="sidebar-logo-image"
-          src="/images/AgroBentaLogo.png"
+          src="/images/AgroBentaLogo-on-dark.png"
           alt="AgroBenta Livestock Marketplace"
         />
       </div>

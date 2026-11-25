@@ -183,7 +183,7 @@ export default function HomePage() {
             <div className="home-hero-art">
               <img
                 className="home-hero-logo"
-                src="/images/AgroBentaLogo.png"
+                src="/images/AgroBentaLogo-on-dark.png"
                 alt="AgroBenta logo"
                 width={1200}
                 height={675}

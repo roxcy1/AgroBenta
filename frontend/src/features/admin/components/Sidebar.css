@@ -12,16 +12,14 @@
   border-bottom: 0;
 }
 
-/* The mobile logo, shown on its own transparent background. A thin white
-   outline keeps its dark-green lettering and emblem readable on the dark
-   green sidebar. */
+/* The light-on-dark version of the mobile logo ("Agro" and the animals in
+   light green), on its own transparent background. */
 .sidebar .sidebar-logo-image {
   width: auto;
   height: 84px;
   max-width: 100%;
   box-sizing: border-box;
   background: transparent;
-  filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 1px #ffffff);
   object-fit: contain;
 }
 

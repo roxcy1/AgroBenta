@@ -179,13 +179,12 @@
   text-align: center;
 }
 
-/* The mobile logo, shown on its own transparent background. A thin white
-   outline keeps its dark-green lettering and emblem readable on the dark hero. */
+/* The light-on-dark version of the mobile logo ("Agro" and the animals in
+   light green), on its own transparent background over the dark hero. */
 .home-hero-logo {
   width: min(100%, 440px);
   height: auto;
   background: transparent;
-  filter: drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 0 1.5px #ffffff);
 }
 
 .home-hero-tagline {
