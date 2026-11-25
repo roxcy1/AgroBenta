@@ -4,12 +4,22 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../widgets/field_label.dart';
+import '../../terms_and_policies/content/legal_documents.dart';
+import '../../terms_and_policies/model/legal_document.dart';
+import '../../terms_and_policies/view/legal_document_screen.dart';
 import '../state/auth_scope.dart';
 import '../state/auth_state.dart';
 import '../widgets/auth_error_banner.dart';
 import '../widgets/auth_scenic_header.dart';
 import '../widgets/google_sign_in_button.dart';
 import 'auth_validators.dart';
+
+const ValueKey<String> registerTermsLinkKey = ValueKey<String>(
+  'register-terms-link',
+);
+const ValueKey<String> registerPrivacyLinkKey = ValueKey<String>(
+  'register-privacy-link',
+);
 
 /// `POST /auth/register`.
 ///
@@ -94,6 +104,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _password.dispose();
     _confirmPassword.dispose();
     super.dispose();
+  }
+
+  void _openTerms() => _openLegalDocument(LegalDocuments.termsAndConditions);
+
+  void _openPrivacyPolicy() => _openLegalDocument(LegalDocuments.privacyPolicy);
+
+  void _openLegalDocument(LegalDocument document) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            LegalDocumentScreen(document: document),
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -367,6 +390,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final TextStyle? linkStyle = theme.textTheme.bodyMedium?.copyWith(
       color: AppColors.primary,
       fontWeight: FontWeight.w700,
+      decoration: TextDecoration.underline,
+    );
+    final ButtonStyle linkButtonStyle = TextButton.styleFrom(
+      foregroundColor: AppColors.primary,
+      minimumSize: const Size(48, 48),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.padded,
+      textStyle: linkStyle,
     );
 
     return Row(
@@ -382,19 +413,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
             onTap: busy ? null : () => _setConsent(!_agreedToTerms),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: Text.rich(
-                TextSpan(
-                  style: theme.textTheme.bodyMedium,
-                  children: <InlineSpan>[
-                    const TextSpan(text: 'I agree to the '),
-                    // Rendered as links visually, but deliberately not
-                    // navigable: no approved Terms or Privacy destination
-                    // exists, and the design forbids inventing URLs.
-                    TextSpan(text: 'Terms', style: linkStyle),
-                    const TextSpan(text: ' and '),
-                    TextSpan(text: 'Privacy Policy', style: linkStyle),
-                  ],
-                ),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                runSpacing: AppSpacing.xxs,
+                children: <Widget>[
+                  Text('I agree to the ', style: theme.textTheme.bodyMedium),
+                  Semantics(
+                    button: true,
+                    label: 'Terms and Conditions',
+                    child: TextButton(
+                      key: registerTermsLinkKey,
+                      onPressed: busy ? null : _openTerms,
+                      style: linkButtonStyle,
+                      child: Text('Terms', style: linkStyle),
+                    ),
+                  ),
+                  Text(' and ', style: theme.textTheme.bodyMedium),
+                  Semantics(
+                    button: true,
+                    label: 'Privacy Policy',
+                    child: TextButton(
+                      key: registerPrivacyLinkKey,
+                      onPressed: busy ? null : _openPrivacyPolicy,
+                      style: linkButtonStyle,
+                      child: Text('Privacy Policy', style: linkStyle),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

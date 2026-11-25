@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('shows the bundled help center categories and contact status', (
+  testWidgets('shows bundled help topics without a Contact Support option', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: HelpCenterScreen()));
@@ -20,9 +20,10 @@ void main() {
     expect(find.text('Selling Livestock'), findsWidgets);
     expect(find.text('Transactions'), findsWidgets);
     expect(find.text('Safety & Security'), findsWidgets);
+    expect(find.text('Contact Support'), findsNothing);
     expect(
       find.text('Direct support contact is not configured yet.'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('How do I browse livestock?'), findsOneWidget);
   });
@@ -74,4 +75,38 @@ void main() {
     expect(find.text('No help topics found'), findsOneWidget);
     expect(find.text('Try a different search or category.'), findsOneWidget);
   });
+
+  testWidgets(
+    'suspicious activity FAQ points to available report entry points',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: HelpCenterScreen()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Safety & Security'));
+      await tester.pumpAndSettle();
+
+      final Finder question = find.text(
+        'What should I do if something seems suspicious?',
+      );
+      await tester.scrollUntilVisible(
+        question,
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(question);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('choose Report Seller'), findsOneWidget);
+      expect(find.textContaining('choose Report User'), findsOneWidget);
+      expect(
+        find.textContaining('An administrator reviews reports'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('report action and direct support contact are not'),
+        findsNothing,
+      );
+    },
+  );
 }

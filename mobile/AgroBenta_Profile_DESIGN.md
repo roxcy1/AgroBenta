@@ -138,14 +138,18 @@ Rules:
   behavior the mobile app actually implements. FAQ facts must be sourced from
   the approved functional documentation/manuscript and checked against the
   current mobile workflows; omit or flag facts whose source is unresolved.
-- Show **“Direct support contact is not configured yet.”** until an approved
-  contact method exists. Do not invent contact details or add a fake support
+- Do not show a Contact Support option until an approved contact method and
+  destination exist. Do not invent contact details or add a fake support
   request form.
-- Terms and Policies opens the availability screen. Terms and Conditions and
-  Privacy Policy remain unavailable until approved final text is provided;
-  Community Guidelines appear only if approved content exists. Do not invent
-  legal provisions, effective dates, version numbers, or URLs. Register links
-  remain non-navigable until approved destinations exist.
+- Terms and Policies opens a bundled menu of eight system-specific legal
+  document drafts. Each item opens the shared offline reader. The screens do not
+  show a Draft for Review banner; the internal `LegalMetadata.isDraft` status
+  remains true. Do not imply legal approval, invent effective dates, or publish
+  unconfirmed operator or privacy contacts.
+- Registration Terms and Privacy links open their corresponding bundled draft
+  documents and return to the existing form without clearing entered values.
+  The checkbox remains client-side only; the backend does not record an
+  acceptance event.
 - Log Out must use the existing authentication controller/service and logout
   flow. After logout, follow the existing authentication gate.
 - Never expose tokens or sensitive data in UI/logs.
@@ -227,10 +231,11 @@ Use this exact visible order: 1. **Home** 2. **Browse** 3. **Messages**
 5.  Seller verification uses the existing server-controlled flow.
 6.  Address appears once in Account Settings and uses the existing profile API
     and Trinidad location selector. Help and Support opens the offline Help
-    Center; direct support remains clearly marked as not configured. Notification
-    settings remain unavailable unless supported destinations exist. Terms and
-    Policies opens its availability screen without presenting unapproved legal
-    text as official.
+    Center; no Contact Support action is shown until a real destination is
+    approved. Account Settings includes Notification Settings and opens its
+    existing screen. Terms and Policies opens the eight bundled documents and
+    reusable reader without a visible Draft for Review banner; internal legal
+    review metadata remains pending.
 7.  Email remains read-only and no profile-image upload is invented.
 8.  Bottom navigation order is Home, Browse, Messages, Transactions,
     Profile.
