@@ -69,7 +69,7 @@ export default function LoginPage() {
           <img
             src="/images/AgroBentaLogo.png"
             alt="AgroBenta"
-            className="h-auto w-[min(23rem,80vw)] rounded-3xl bg-white object-contain p-5! shadow-[0_16px_28px_rgba(4,35,22,0.35)]"
+            className="h-auto w-[min(23rem,80vw)] object-contain [filter:drop-shadow(0_0_1.5px_#ffffff)_drop-shadow(0_0_1.5px_#ffffff)]"
           />
 
           <p className="mt-5! text-xl font-semibold tracking-wide text-white sm:mt-6! sm:text-2xl">

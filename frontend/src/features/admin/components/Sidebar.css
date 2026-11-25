@@ -12,16 +12,16 @@
   border-bottom: 0;
 }
 
-/* The mobile logo has dark lettering on a transparent background, so it sits on
-   a white rounded tile (the same treatment as the browser tab icon). */
+/* The mobile logo, shown on its own transparent background. A thin white
+   outline keeps its dark-green lettering and emblem readable on the dark
+   green sidebar. */
 .sidebar .sidebar-logo-image {
   width: auto;
   height: 84px;
   max-width: 100%;
-  padding: 6px 10px;
   box-sizing: border-box;
-  background: #ffffff;
-  border-radius: 10px;
+  background: transparent;
+  filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 1px #ffffff);
   object-fit: contain;
 }
 
