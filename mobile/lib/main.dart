@@ -219,6 +219,9 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
       // A 403 may mean seller rights were removed after sign-in, so the account
       // is re-read from the server; the controller then drops Seller Mode.
       onForbidden: () => _accountModeController.recheckSellerCapability(),
+      // A 401 clears the exact request token in ApiClient and ends the in-memory
+      // session so AuthGate can remove protected routes and show sign-in.
+      onUnauthorized: _handleUnauthorized,
     );
     _authService = AuthService(_apiClient);
     _authRepository = AuthRepository(_authService, _tokenStore);
@@ -361,6 +364,10 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
     );
 
     _authController.addListener(_handleAuthSessionChanged);
+  }
+
+  void _handleUnauthorized() {
+    _authController.handleSessionExpired();
   }
 
   void _handlePushOpened() {

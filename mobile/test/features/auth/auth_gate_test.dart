@@ -5,6 +5,7 @@ import 'package:agrobenta_mobile/features/auth/view/register_screen.dart';
 import 'package:agrobenta_mobile/features/auth/view/sign_in_screen.dart';
 import 'package:agrobenta_mobile/features/home/view/buyer_home_screen.dart';
 import 'package:agrobenta_mobile/features/profile/view/profile_screen.dart';
+import 'package:agrobenta_mobile/features/profile/view/edit_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -108,6 +109,51 @@ void main() {
       expect(tokenStore.token, isNull);
     });
   });
+
+  testWidgets(
+    'a 401 from profile save clears the session and returns to sign-in',
+    (WidgetTester tester) async {
+      tokenStore.token = 'stored-token';
+      await AuthTestHarness.pump(
+        tester,
+        tokenStore: tokenStore,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+        profileHandler: (RecordedRequest request) async {
+          if (request.method == 'PUT' && request.apiPath == '/profile') {
+            return http.Response(jsonEncode('Unauthenticated.'), 401);
+          }
+          return http.Response(
+            jsonEncode(successEnvelope(data: userJson())),
+            200,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        },
+      );
+
+      await tester.tap(find.byTooltip('Profile'));
+      await settleAuth(tester);
+      expect(find.byType(ProfileScreen), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+      await settleAuth(tester);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full name'),
+        'Updated Name',
+      );
+      final Finder save = find.widgetWithText(FilledButton, 'Save changes');
+      await tester.ensureVisible(save);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(save);
+      await settleAuth(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SignInScreen), findsOneWidget);
+      expect(find.byType(EditProfileScreen), findsNothing);
+      expect(find.text('Profile updated.'), findsNothing);
+      expect(tokenStore.token, isNull);
+    },
+  );
 
   group('sign in', () {
     testWidgets('signs in and shows the Buyer home screen', (

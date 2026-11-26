@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
@@ -684,41 +685,443 @@ void main() {
     expect(find.text('Browse and purchase livestock.'), findsOneWidget);
   });
 
-  testWidgets('Edit and Personal Information open details before the form', (
-    WidgetTester tester,
-  ) async {
-    await pumpProfile(
-      tester,
-      handler: (_) async =>
-          http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
-    );
+  testWidgets(
+    'Profile Edit opens the form directly and Personal Information stays separate',
+    (WidgetTester tester) async {
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+      );
 
-    await tester.tap(find.widgetWithText(TextButton, 'Edit'));
-    await settleAuth(tester, frames: 12);
-    expect(find.byType(PersonalInformationScreen), findsOneWidget);
-    expect(find.byType(EditProfileScreen), findsNothing);
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+      await settleAuth(tester, frames: 12);
+      expect(find.byType(EditProfileScreen), findsOneWidget);
+      expect(find.byType(PersonalInformationScreen), findsNothing);
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Full name'),
+            )
+            .controller!
+            .text,
+        'Ana Reyes',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Email address'),
+            )
+            .controller!
+            .text,
+        'ana@example.test',
+      );
 
-    await tester.tap(find.widgetWithText(TextButton, 'Edit'));
-    await settleAuth(tester, frames: 12);
-    expect(find.byType(EditProfileScreen), findsOneWidget);
-    expect(find.byType(TrinidadLocationSelector), findsNothing);
+      await tester.tap(find.byType(CloseButton));
+      await settleAuth(tester, frames: 12);
+      expect(find.byType(EditProfileScreen), findsNothing);
 
-    Navigator.of(tester.element(find.byType(EditProfileScreen))).pop();
-    await settleAuth(tester, frames: 12);
-    expect(find.byType(PersonalInformationScreen), findsOneWidget);
+      await tapAction(tester, 'Personal Information');
+      expect(find.byType(PersonalInformationScreen), findsOneWidget);
+      expect(find.byType(EditProfileScreen), findsNothing);
 
-    Navigator.of(tester.element(find.byType(PersonalInformationScreen))).pop();
-    await settleAuth(tester, frames: 12);
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+      await settleAuth(tester, frames: 12);
+      expect(find.byType(EditProfileScreen), findsOneWidget);
+      expect(find.byType(TrinidadLocationSelector), findsNothing);
+    },
+  );
 
-    await tapAction(tester, 'Personal Information');
-    expect(find.byType(PersonalInformationScreen), findsOneWidget);
-    expect(find.byType(EditProfileScreen), findsNothing);
+  testWidgets(
+    'a successful direct profile edit returns with updated shared profile values',
+    (WidgetTester tester) async {
+      final List<RecordedRequest> profileRequests = <RecordedRequest>[];
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+        profileHandler: (RecordedRequest request) async {
+          profileRequests.add(request);
+          if (request.method == 'PUT' && request.apiPath == '/profile') {
+            return http.Response(
+              jsonEncode(
+                successEnvelope(
+                  data: userJson(name: request.body['name'] as String),
+                ),
+              ),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }
 
-    await tester.tap(find.widgetWithText(TextButton, 'Edit'));
-    await settleAuth(tester, frames: 12);
-    expect(find.byType(EditProfileScreen), findsOneWidget);
-    expect(find.byType(TrinidadLocationSelector), findsNothing);
-  });
+          return http.Response(
+            jsonEncode(successEnvelope(data: userJson())),
+            200,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        },
+      );
+
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+      await settleAuth(tester, frames: 12);
+      expect(find.byType(EditProfileScreen), findsOneWidget);
+      expect(find.byType(PersonalInformationScreen), findsNothing);
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full name'),
+        'Updated Name',
+      );
+      final Finder save = find.widgetWithText(FilledButton, 'Save changes');
+      await tester.scrollUntilVisible(
+        save,
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await settleAuth(tester, frames: 12);
+
+      expect(
+        profileRequests.where(
+          (RecordedRequest request) =>
+              request.method == 'PUT' && request.apiPath == '/profile',
+        ),
+        hasLength(1),
+      );
+      expect(
+        profileRequests.where(
+          (RecordedRequest request) =>
+              request.method == 'GET' && request.apiPath == '/profile',
+        ),
+        hasLength(1),
+        reason:
+            'saving uses the returned user instead of refetching the profile',
+      );
+      expect(find.byType(EditProfileScreen), findsNothing);
+      expect(find.byType(PersonalInformationScreen), findsNothing);
+      expect(find.byType(ProfileScreen), findsOneWidget);
+      expect(find.text('Updated Name'), findsOneWidget);
+      expect(find.text('Ana Reyes'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'validation and server save failures preserve form values and can be retried',
+    (WidgetTester tester) async {
+      final List<RecordedRequest> profileRequests = <RecordedRequest>[];
+      int updateCount = 0;
+
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+        profileHandler: (RecordedRequest request) async {
+          profileRequests.add(request);
+          if (request.method == 'PUT' && request.apiPath == '/profile') {
+            updateCount++;
+            if (updateCount == 1) {
+              return http.Response(
+                jsonEncode(
+                  validationErrorBody(
+                    errors: <String, Object>{
+                      'name': <String>['This name is already in use.'],
+                    },
+                  ),
+                ),
+                422,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+            if (updateCount == 2) {
+              return http.Response(
+                jsonEncode(<String, dynamic>{
+                  'success': false,
+                  'message': 'The profile service is temporarily unavailable.',
+                }),
+                500,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+
+            return http.Response(
+              jsonEncode(
+                successEnvelope(
+                  data: userJson(name: request.body['name'] as String),
+                ),
+              ),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }
+
+          return http.Response(
+            jsonEncode(successEnvelope(data: userJson())),
+            200,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        },
+      );
+
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+      await settleAuth(tester, frames: 12);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full name'),
+        'Updated Name',
+      );
+
+      final Finder save = find.widgetWithText(FilledButton, 'Save changes');
+      await tester.scrollUntilVisible(
+        save,
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await settleAuth(tester, frames: 12);
+
+      expect(find.byType(EditProfileScreen), findsOneWidget);
+      expect(find.byType(PersonalInformationScreen), findsNothing);
+      expect(find.text('This name is already in use.'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Full name'),
+            )
+            .controller!
+            .text,
+        'Updated Name',
+      );
+      expect(
+        tester.widget<FilledButton>(save).onPressed,
+        isNotNull,
+        reason: 'a validation failure must allow retry',
+      );
+      expect(find.text('Profile updated.'), findsNothing);
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full name'),
+        'Corrected Name',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('This name is already in use.'), findsNothing);
+
+      await tester.scrollUntilVisible(
+        save,
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await settleAuth(tester, frames: 12);
+
+      expect(find.byType(EditProfileScreen), findsOneWidget);
+      expect(find.text('Something went wrong on the server.'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Full name'),
+            )
+            .controller!
+            .text,
+        'Corrected Name',
+      );
+      expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+      expect(find.text('Profile updated.'), findsNothing);
+
+      await tester.scrollUntilVisible(
+        save,
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await settleAuth(tester, frames: 12);
+
+      expect(find.byType(EditProfileScreen), findsNothing);
+      expect(find.byType(ProfileScreen), findsOneWidget);
+      expect(find.text('Corrected Name'), findsOneWidget);
+      expect(
+        profileRequests.where(
+          (RecordedRequest request) =>
+              request.method == 'PUT' && request.apiPath == '/profile',
+        ),
+        hasLength(3),
+      );
+      expect(
+        profileRequests.where(
+          (RecordedRequest request) =>
+              request.method == 'GET' && request.apiPath == '/profile',
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  testWidgets(
+    'a network failure keeps the edited profile open and retry succeeds',
+    (WidgetTester tester) async {
+      final List<RecordedRequest> profileRequests = <RecordedRequest>[];
+      int updateCount = 0;
+
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+        profileHandler: (RecordedRequest request) async {
+          profileRequests.add(request);
+          if (request.method == 'PUT' && request.apiPath == '/profile') {
+            updateCount++;
+            if (updateCount == 1) {
+              throw http.ClientException('Connection unavailable.');
+            }
+
+            return http.Response(
+              jsonEncode(
+                successEnvelope(
+                  data: userJson(name: request.body['name'] as String),
+                ),
+              ),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }
+
+          return http.Response(
+            jsonEncode(successEnvelope(data: userJson())),
+            200,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        },
+      );
+
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+      await settleAuth(tester, frames: 12);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full name'),
+        'Network Retry Name',
+      );
+
+      final Finder save = find.widgetWithText(FilledButton, 'Save changes');
+      await tester.scrollUntilVisible(
+        save,
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await settleAuth(tester, frames: 12);
+
+      expect(find.byType(EditProfileScreen), findsOneWidget);
+      expect(
+        find.textContaining('Could not reach the server.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Full name'),
+            )
+            .controller!
+            .text,
+        'Network Retry Name',
+      );
+      expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+
+      await tester.scrollUntilVisible(
+        save,
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await settleAuth(tester, frames: 12);
+
+      expect(find.byType(EditProfileScreen), findsNothing);
+      expect(find.text('Network Retry Name'), findsOneWidget);
+      expect(
+        profileRequests.where(
+          (RecordedRequest request) =>
+              request.method == 'PUT' && request.apiPath == '/profile',
+        ),
+        hasLength(2),
+      );
+    },
+  );
+
+  testWidgets(
+    'duplicate Save taps send one profile update and return after success',
+    (WidgetTester tester) async {
+      final Completer<http.Response> updateResponse =
+          Completer<http.Response>();
+      final List<RecordedRequest> profileRequests = <RecordedRequest>[];
+
+      await pumpProfile(
+        tester,
+        handler: (_) async =>
+            http.Response(jsonEncode(successEnvelope(data: userJson())), 200),
+        profileHandler: (RecordedRequest request) async {
+          profileRequests.add(request);
+          if (request.method == 'PUT' && request.apiPath == '/profile') {
+            return updateResponse.future;
+          }
+
+          return http.Response(
+            jsonEncode(successEnvelope(data: userJson())),
+            200,
+            headers: <String, String>{'content-type': 'application/json'},
+          );
+        },
+      );
+
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+      await settleAuth(tester, frames: 12);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full name'),
+        'Single Update Name',
+      );
+
+      final Finder save = find.widgetWithText(FilledButton, 'Save changes');
+      await tester.scrollUntilVisible(
+        save,
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      final VoidCallback? submit = tester.widget<FilledButton>(save).onPressed;
+      expect(submit, isNotNull);
+      submit!();
+      submit();
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        profileRequests.where(
+          (RecordedRequest request) =>
+              request.method == 'PUT' && request.apiPath == '/profile',
+        ),
+        hasLength(1),
+      );
+      expect(find.byType(EditProfileScreen), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton).last).onPressed,
+        isNull,
+      );
+
+      updateResponse.complete(
+        http.Response(
+          jsonEncode(
+            successEnvelope(data: userJson(name: 'Single Update Name')),
+          ),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        ),
+      );
+      await settleAuth(tester, frames: 12);
+
+      expect(find.byType(EditProfileScreen), findsNothing);
+      expect(find.text('Single Update Name'), findsOneWidget);
+    },
+  );
 
   testWidgets('Change Password opens the existing password form', (
     WidgetTester tester,

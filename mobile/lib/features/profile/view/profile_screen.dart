@@ -27,6 +27,7 @@ import '../state/profile_controller.dart';
 import '../state/profile_scope.dart';
 import '../state/profile_state.dart';
 import 'change_password_screen.dart';
+import 'edit_profile_screen.dart';
 import 'personal_information_screen.dart';
 
 /// Identifies the tappable Address row in Account Settings.
@@ -40,10 +41,11 @@ const ValueKey<String> profileAddressTileKey = ValueKey<String>(
 /// The caller's own profile.
 ///
 /// Reached from the signed-in shell's bottom navigation in both Buyer Mode and
-/// Seller Mode. Name and email are read-only until the user taps "Personal
-/// Information", which pushes the existing edit form. Address is displayed and
-/// edited in its own section. "Change password" is offered separately because
-/// the password is not part of the profile resource. Sign out lives under
+/// Seller Mode. The profile summary's Edit action opens the existing edit form
+/// directly; Personal Information remains a separate read-only screen. Address
+/// is displayed and edited in its own section. "Change password" is offered
+/// separately because the password is not part of the profile resource. Sign
+/// out lives under
 /// "Other".
 ///
 /// Reads the profile controller once in `initState` and rebuilds from
@@ -89,9 +91,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _openEdit() async {
-    // Personal Information is a review, not a form. The read-only screen owns
-    // the Edit action, which is the only place that opens EditProfileScreen.
+  Future<void> _openEditProfile() async {
+    await _openOnce<bool>(
+      'edit-profile',
+      () => Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (BuildContext context) => const EditProfileScreen(),
+          fullscreenDialog: true,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openPersonalInformation() async {
     await _openOnce<void>(
       'personal-info',
       () => Navigator.of(context).push<void>(
@@ -198,7 +210,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             _ => _ProfileBody(
               user: state.user!,
-              onEdit: _openEdit,
+              onEditProfile: _openEditProfile,
+              onPersonalInformation: _openPersonalInformation,
               onEditAddress: () => _openAddressEditor(state.user!),
               onChangePassword: _openChangePassword,
               onNotificationSettings: _openNotificationSettings,
@@ -215,7 +228,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _ProfileBody extends StatelessWidget {
   const _ProfileBody({
     required this.user,
-    required this.onEdit,
+    required this.onEditProfile,
+    required this.onPersonalInformation,
     required this.onEditAddress,
     required this.onChangePassword,
     required this.onNotificationSettings,
@@ -224,7 +238,8 @@ class _ProfileBody extends StatelessWidget {
   });
 
   final User user;
-  final VoidCallback onEdit;
+  final VoidCallback onEditProfile;
+  final VoidCallback onPersonalInformation;
   final VoidCallback onEditAddress;
   final VoidCallback onChangePassword;
   final VoidCallback onNotificationSettings;
@@ -268,7 +283,7 @@ class _ProfileBody extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  _ProfileSummaryCard(user: user, onEdit: onEdit),
+                  _ProfileSummaryCard(user: user, onEdit: onEditProfile),
                   const SizedBox(height: AppSpacing.md),
                   const _AccountModeCard(),
                   const SizedBox(height: AppSpacing.md),
@@ -282,7 +297,7 @@ class _ProfileBody extends StatelessWidget {
                     const SizedBox(height: AppSpacing.xs),
                   _AccountSettingsSection(
                     location: user.location,
-                    onEdit: onEdit,
+                    onPersonalInformation: onPersonalInformation,
                     onEditAddress: onEditAddress,
                     onChangePassword: onChangePassword,
                     onNotificationSettings: onNotificationSettings,
@@ -820,14 +835,14 @@ class _BecomeSellerCardState extends State<_BecomeSellerCard> {
 class _AccountSettingsSection extends StatelessWidget {
   const _AccountSettingsSection({
     required this.location,
-    required this.onEdit,
+    required this.onPersonalInformation,
     required this.onEditAddress,
     required this.onChangePassword,
     required this.onNotificationSettings,
   });
 
   final String? location;
-  final VoidCallback onEdit;
+  final VoidCallback onPersonalInformation;
   final VoidCallback onEditAddress;
   final VoidCallback onChangePassword;
   final VoidCallback onNotificationSettings;
@@ -847,7 +862,7 @@ class _AccountSettingsSection extends StatelessWidget {
                 icon: Icons.person_outline,
                 title: 'Personal Information',
                 subtitle: 'View and update your personal details',
-                onTap: onEdit,
+                onTap: onPersonalInformation,
               ),
               const Divider(height: 1),
               _AddressSettingsTile(location: location, onTap: onEditAddress),

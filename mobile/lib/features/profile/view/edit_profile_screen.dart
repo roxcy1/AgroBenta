@@ -107,6 +107,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
   }
 
+  /// A corrected value invalidates server errors from the previous attempt.
+  ///
+  /// Clearing the controller's errors also lets `FormState.validate()` apply
+  /// the regular client-side rules again, so a 422 does not permanently block
+  /// a retry with corrected input.
+  void _clearServerErrorsWhenEdited() {
+    final ProfileState state = _controller.state;
+    if (state.errorMessage == null && state.fieldErrors.isEmpty) {
+      return;
+    }
+
+    _controller.clearError();
+  }
+
   /// Opens the image-source picker: gallery or camera.
   Future<void> _pickAvatarSource() async {
     if (_uploadingAvatar) {
@@ -343,6 +357,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 textInputAction: TextInputAction.next,
                                 maxLength: 120,
                                 enabled: !isBusy,
+                                onChanged: (_) =>
+                                    _clearServerErrorsWhenEdited(),
                                 decoration: const InputDecoration(
                                   label: FieldLabel('Full name'),
                                   helperText: 'Required.',
@@ -362,6 +378,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 textInputAction: TextInputAction.next,
                                 maxLength: 191,
                                 enabled: !isBusy,
+                                onChanged: (_) =>
+                                    _clearServerErrorsWhenEdited(),
                                 decoration: const InputDecoration(
                                   label: FieldLabel('Email address'),
                                   helperText: 'Required.',
@@ -381,6 +399,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 textInputAction: TextInputAction.next,
                                 maxLength: 32,
                                 enabled: !isBusy,
+                                onChanged: (_) =>
+                                    _clearServerErrorsWhenEdited(),
                                 decoration: const InputDecoration(
                                   label: FieldLabel('Phone number'),
                                   helperText: 'Optional.',
@@ -398,6 +418,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 maxLines: 6,
                                 maxLength: 1000,
                                 enabled: !isBusy,
+                                onChanged: (_) =>
+                                    _clearServerErrorsWhenEdited(),
                                 decoration: const InputDecoration(
                                   label: FieldLabel('Bio'),
                                   alignLabelWithHint: true,

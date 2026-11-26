@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:agrobenta_mobile/core/network/api_client.dart';
+import 'package:agrobenta_mobile/core/theme/app_colors.dart';
 import 'package:agrobenta_mobile/core/theme/app_theme.dart';
 import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_controller.dart';
 import 'package:agrobenta_mobile/features/livestock_types/state/livestock_types_scope.dart';
@@ -139,6 +140,15 @@ void main() {
       expect(find.text('Reset'), findsOneWidget);
       expect(find.text('Cancel'), findsNothing);
       expect(find.text('Apply Filters'), findsOneWidget);
+
+      final BuildContext screenContext = tester.element(
+        find.byType(MarketplaceFilterScreen),
+      );
+      final ThemeData theme = Theme.of(screenContext);
+      expect(theme.scaffoldBackgroundColor, AppColors.background);
+      expect(theme.colorScheme.surface, AppColors.surface);
+      expect(theme.textTheme.bodyMedium?.color, AppColors.text);
+      expect(theme.appBarTheme.backgroundColor, AppColors.surface);
 
       for (final String section in <String>[
         'Animal Type',

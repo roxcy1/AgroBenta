@@ -207,6 +207,21 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  /// Ends the in-memory session after [ApiClient] clears its rejected token.
+  ///
+  /// The API client calls this only when the request's token is still current
+  /// and has been removed. Invalidating outstanding session work prevents a
+  /// late response from restoring an expired account over the signed-out
+  /// state; [AuthGate] then returns the app to sign-in and removes protected
+  /// pushed routes.
+  void handleSessionExpired() {
+    if (_state.status == AuthStatus.signedOut) {
+      return;
+    }
+    _sessionGeneration++;
+    _set(const AuthState(status: AuthStatus.signedOut));
+  }
+
   /// Revokes the session and returns to the sign-in form.
   ///
   /// Returns `true` once the device is signed out. A failure that leaves the

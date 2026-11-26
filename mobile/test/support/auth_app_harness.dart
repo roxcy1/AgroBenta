@@ -86,6 +86,7 @@ class AuthTestHarness {
     WidgetTester tester, {
     required FakeTokenStore tokenStore,
     required Future<http.Response> Function(RecordedRequest request) handler,
+    Future<http.Response> Function(RecordedRequest request)? profileHandler,
   }) async {
     final List<RecordedRequest> recorded = <RecordedRequest>[];
     final AuthController controller = AuthController(
@@ -164,13 +165,17 @@ class AuthTestHarness {
       ProfileService(
         ApiClient(
           tokenStorage: tokenStore,
-          httpClient: MockClient(
-            (_) async => http.Response(
+          onUnauthorized: controller.handleSessionExpired,
+          httpClient: MockClient((http.Request request) async {
+            if (profileHandler != null) {
+              return profileHandler(RecordedRequest(request));
+            }
+            return http.Response(
               jsonEncode(successEnvelope(data: userJson())),
               200,
               headers: <String, String>{'content-type': 'application/json'},
-            ),
-          ),
+            );
+          }),
         ),
       ),
     );
