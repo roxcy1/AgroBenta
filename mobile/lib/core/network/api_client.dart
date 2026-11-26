@@ -40,6 +40,7 @@ class ApiClient {
     http.Client? httpClient,
     Duration? timeout,
     this.onForbidden,
+    this.onUnauthorized,
   }) : _httpClient = httpClient ?? http.Client(),
        _ownsHttpClient = httpClient == null,
        _timeout = timeout ?? ApiConstants.defaultTimeout;
@@ -56,6 +57,13 @@ class ApiClient {
   /// uses this to re-read the account from the server; the request itself still
   /// fails with [ApiErrorKind.forbidden].
   final void Function()? onForbidden;
+
+  /// Called when a `401` invalidates the exact token used by the request.
+  ///
+  /// The callback runs only after [TokenStore.clearIfCurrent] confirms that
+  /// this request's credential was cleared. A delayed response from a previous
+  /// session therefore cannot sign out a newer session.
+  final void Function()? onUnauthorized;
 
   /// The API root this client is pointed at. Exposed for diagnostics and
   /// tests; never used to construct URLs outside [AppConfig].
@@ -533,7 +541,10 @@ class ApiClient {
     // an old account must not erase a token written after that request started.
     if (response.statusCode == 401) {
       if (requestToken != null) {
-        await _tokenStorage.clearIfCurrent(requestToken);
+        final bool cleared = await _tokenStorage.clearIfCurrent(requestToken);
+        if (cleared) {
+          onUnauthorized?.call();
+        }
       }
       return ApiException(
         kind: ApiErrorKind.unauthorized,

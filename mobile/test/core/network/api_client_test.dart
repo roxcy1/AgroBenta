@@ -41,10 +41,12 @@ void main() {
   });
 
   ApiClient buildClient(
-    Future<http.Response> Function(http.Request request) handler,
-  ) {
+    Future<http.Response> Function(http.Request request) handler, {
+    void Function()? onUnauthorized,
+  }) {
     return ApiClient(
       tokenStorage: tokenStore,
+      onUnauthorized: onUnauthorized,
       httpClient: MockClient((http.Request request) async {
         captured.add(request);
         return handler(request);
@@ -266,8 +268,12 @@ void main() {
       'a delayed old-session 401 cannot clear the replacement token',
       () async {
         tokenStore.token = 'user-a-token';
+        int unauthorizedCallbacks = 0;
         final Completer<http.Response> response = Completer<http.Response>();
-        final ApiClient client = buildClient((_) => response.future);
+        final ApiClient client = buildClient(
+          (_) => response.future,
+          onUnauthorized: () => unauthorizedCallbacks++,
+        );
 
         final Future<Object?> pending = client.get<Object?>(
           '/profile',
@@ -281,6 +287,11 @@ void main() {
 
         await expectLater(pending, throwsA(isA<ApiException>()));
         expect(tokenStore.token, 'user-b-token');
+        expect(
+          unauthorizedCallbacks,
+          0,
+          reason: 'an old response must not end a replacement session',
+        );
       },
     );
 

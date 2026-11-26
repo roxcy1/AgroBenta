@@ -669,11 +669,12 @@ by category, not by place). Adding a control means adding it to `ListingFilters`
 to `MarketplaceService.browse`'s allow-list and to the dialog together; a key
 the service does not name has no path to the request.
 
-The **Filter Livestock** dialog (`marketplace_filter_screen.dart`) is the one
-dark surface in the app, with its own palette in `AppColors`; every other screen
-stays light. See `mobile/DESIGN.md` §16. Reset clears the form without
-applying; Apply prunes incompatible breeds, refuses an inverted range and pops
-the selection back to the caller, which applies it through the controller.
+The **Filter Livestock** screen (`marketplace_filter_screen.dart`) uses the
+standard light Buyer theme; it is not a separate dark surface. Follow
+`mobile/DESIGN.md` §16 and the shared `AppTheme`/`AppColors` palette. Reset
+clears the form without applying; Apply prunes incompatible breeds, refuses an
+inverted range and pops the selection back to the caller, which applies it
+through the controller.
 
 
 **Resolved for the public seller profile (clickable seller card).** The seller
