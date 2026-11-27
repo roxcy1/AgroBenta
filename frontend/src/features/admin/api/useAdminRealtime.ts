@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { connectAdminRealtime } from '../../../lib/realtime';
-import { invalidateForActivity } from './adminRealtimeInvalidation';
+import { invalidateForActivity, invalidateForUserReport } from './adminRealtimeInvalidation';
 
-export { invalidateForActivity } from './adminRealtimeInvalidation';
+export { invalidateForActivity, invalidateForUserReport } from './adminRealtimeInvalidation';
 
 /**
  * Subscribe the Admin Web to real-time activity. Mounted once by the admin
@@ -24,6 +24,9 @@ export function useAdminRealtime(): void {
       },
       () => {
         void queryClient.invalidateQueries({ queryKey: ['admin', 'listings'] });
+      },
+      () => {
+        invalidateForUserReport(queryClient);
       },
     );
   }, [queryClient]);

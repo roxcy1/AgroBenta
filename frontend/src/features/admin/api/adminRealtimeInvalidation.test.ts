@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { QueryClient } from '@tanstack/react-query';
 import type { ActivityEvent } from '../../../lib/realtime';
-import { invalidateForActivity } from './adminRealtimeInvalidation';
+import { invalidateForActivity, invalidateForUserReport } from './adminRealtimeInvalidation';
 
 function makeClient() {
   const invalidateQueries = vi.fn();
@@ -76,6 +76,66 @@ describe('invalidateForActivity', () => {
     expect(keys(invalidateQueries)).toContainEqual(['admin', 'settings']);
   });
 
+  it.each(['admin_user_updated', 'admin_user_deleted', 'admin_user_reactivated'])(
+    'refreshes the Users list for %s',
+    (action) => {
+      const { client, invalidateQueries } = makeClient();
+
+      invalidateForActivity(client, event(action));
+
+      const called = keys(invalidateQueries);
+      expect(called).toContainEqual(['admin', 'users']);
+      expect(called).toContainEqual(['admin', 'reports']);
+      expect(called).not.toContainEqual(['admin', 'user-reports']);
+    },
+  );
+
+  it.each(['user_report_dismissed', 'user_report_actioned'])(
+    'refreshes the report queue and Users for %s',
+    (action) => {
+      const { client, invalidateQueries } = makeClient();
+
+      invalidateForActivity(client, event(action));
+
+      const called = keys(invalidateQueries);
+      expect(called).toContainEqual(['admin', 'user-reports']);
+      expect(called).toContainEqual(['admin', 'users']);
+    },
+  );
+
+  it.each(['listing_approved', 'offer_accepted', 'transaction_completed', 'seller_verification_approved'])(
+    'refreshes the Reports analytics for %s',
+    (action) => {
+      const { client, invalidateQueries } = makeClient();
+
+      invalidateForActivity(client, event(action));
+
+      expect(keys(invalidateQueries)).toContainEqual(['admin', 'reports']);
+    },
+  );
+
+  it.each(['user_logged_in', 'admin_logged_in'])(
+    'a login (%s) refreshes only the feed and dashboard, never users or reports',
+    (action) => {
+      const { client, invalidateQueries } = makeClient();
+
+      invalidateForActivity(client, event(action));
+
+      expect(keys(invalidateQueries)).toEqual([
+        ['admin', 'activities'],
+        ['admin', 'dashboard'],
+      ]);
+    },
+  );
+
+  it('never invalidates every admin query for one action', () => {
+    const { client, invalidateQueries } = makeClient();
+
+    invalidateForActivity(client, event('transaction_completed'));
+
+    expect(keys(invalidateQueries)).not.toContainEqual(['admin']);
+  });
+
   it('does not refresh a domain list for an unrelated action', () => {
     const { client, invalidateQueries } = makeClient();
 
@@ -85,5 +145,18 @@ describe('invalidateForActivity', () => {
     expect(called).not.toContainEqual(['admin', 'listings']);
     expect(called).not.toContainEqual(['admin', 'transactions']);
     expect(called).not.toContainEqual(['admin', 'settings']);
+  });
+});
+
+describe('invalidateForUserReport', () => {
+  it('refreshes the pending-report queue and the Users report counts only', () => {
+    const { client, invalidateQueries } = makeClient();
+
+    invalidateForUserReport(client);
+
+    expect(keys(invalidateQueries)).toEqual([
+      ['admin', 'user-reports'],
+      ['admin', 'users'],
+    ]);
   });
 });

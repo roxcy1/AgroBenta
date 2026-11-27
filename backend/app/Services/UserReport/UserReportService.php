@@ -3,6 +3,7 @@
 namespace App\Services\UserReport;
 
 use App\Enums\UserReportStatus;
+use App\Events\UserReportSubmitted;
 use App\Models\User;
 use App\Models\UserReport;
 use App\Repositories\UserReport\UserReportRepository;
@@ -54,7 +55,7 @@ class UserReportService
             $path = $evidence === null ? null : $this->evidence->store($evidence);
 
             try {
-                return $this->reports->create([
+                $report = $this->reports->create([
                     'reporter_id' => (int) $reporter->getKey(),
                     'reported_user_id' => (int) $target->getKey(),
                     'reason' => $attributes['reason'],
@@ -67,6 +68,12 @@ class UserReportService
 
                 throw $exception;
             }
+
+            // Tell connected administrators a report is waiting (queued and
+            // dispatched after commit, so a rollback broadcasts nothing).
+            UserReportSubmitted::dispatch((int) $report->getKey());
+
+            return $report;
         });
     }
 }

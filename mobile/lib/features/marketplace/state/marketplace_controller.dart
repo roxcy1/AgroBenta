@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/listing.dart';
 import '../../../models/livestock_type.dart';
 import '../../../models/marketplace_page.dart';
@@ -147,9 +148,27 @@ class MarketplaceController extends ChangeNotifier {
 
   void _handleRealtimeEvent(RealtimeEvent event) {
     if (event.name == 'listing.inventory.updated' && !_disposed) {
-      refresh();
+      _backgroundRefresh.request();
     }
   }
+
+  /// Re-syncs after a reconnect or resume, keeping the listings on screen. A
+  /// marketplace that was never loaded is left alone (it loads when shown).
+  void refreshInBackground() {
+    if (_state.status == MarketplaceStatus.initial) {
+      return;
+    }
+    _backgroundRefresh.request();
+  }
+
+  /// Event-driven refreshes. [refresh] keeps the listings on screen; this
+  /// makes sure an inventory change arriving during a load is answered.
+  late final RefreshCoalescer _backgroundRefresh = RefreshCoalescer(
+    refresh,
+    isBusy: () =>
+        _state.status == MarketplaceStatus.loading ||
+        _state.status == MarketplaceStatus.refreshing,
+  );
 
   /// Records new search text and schedules a debounced request.
   ///
@@ -432,6 +451,8 @@ class MarketplaceController extends ChangeNotifier {
                 errorMessage: message,
               ),
       );
+    } finally {
+      _backgroundRefresh.settled();
     }
   }
 
@@ -446,6 +467,7 @@ class MarketplaceController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _backgroundRefresh.dispose();
     _searchDebounce?.cancel();
     _searchDebounce = null;
     unawaited(_realtimeSubscription?.cancel());

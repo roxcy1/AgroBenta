@@ -168,8 +168,12 @@ services:
     restart: unless-stopped
 
   # ── Redis queue worker ──────────────────────────────────────────────────
-  # Drains the Redis queue for queued jobs (including future broadcast jobs).
-  # QUEUE_CONNECTION=redis; see config/queue.php.
+  # Drains the Redis queue for queued jobs (including broadcast jobs).
+  # QUEUE_CONNECTION=redis; see config/queue.php. --sleep=0 is paired with the
+  # redis connection's block_for: an idle worker waits on a blocking Redis pop
+  # (woken the moment a job is pushed) instead of sleeping between polls, which
+  # added up to 3 s to every real-time event. Never use --sleep=0 without
+  # block_for, or the idle worker spins.
   queue:
     build:
       context: ./docker/php
@@ -179,7 +183,7 @@ services:
       - ./backend:/var/www/html
       - backend_vendor:/var/www/html/vendor
     entrypoint: []
-    command: php artisan queue:work redis --sleep=3 --tries=3 --timeout=60
+    command: php artisan queue:work redis --sleep=0 --tries=3 --timeout=60
     depends_on:
       - php
       - redis

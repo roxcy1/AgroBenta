@@ -149,7 +149,8 @@ class AgroBentaApp extends StatefulWidget {
   State<AgroBentaApp> createState() => _AgroBentaAppState();
 }
 
-class _AgroBentaAppState extends State<AgroBentaApp> {
+class _AgroBentaAppState extends State<AgroBentaApp>
+    with WidgetsBindingObserver {
   late final TokenStore _tokenStore;
   late final ApiClient _apiClient;
   late final AuthService _authService;
@@ -211,6 +212,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     _tokenStore = widget.tokenStore ?? TokenStorage();
     _apiClient = ApiClient(
@@ -443,8 +445,36 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
 
     _notificationsController.refreshUnreadCount();
     _conversationsController.refresh();
-    _sellerVerificationController.load();
-    _sellerListingController.refresh();
+    // Background paths: keep what is on screen and do not drop the request
+    // when a load is already in flight. Lists that were never opened are left
+    // alone; they load fresh when first shown.
+    _notificationsController.refreshInBackground();
+    _marketplaceController.refreshInBackground();
+    _sellerVerificationController.refreshInBackground();
+    _sellerListingController.refreshInBackground();
+  }
+
+  /// Set when the app actually went to the background (`paused`/`hidden`),
+  /// not for a transient `inactive` such as a permission dialog.
+  bool _wasBackgrounded = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        _wasBackgrounded = true;
+      case AppLifecycleState.resumed:
+        if (_wasBackgrounded) {
+          _wasBackgrounded = false;
+          // The socket may have been dropped or held back while backgrounded:
+          // confirm it is live (which re-fetches missed updates) or reconnect.
+          _realtimeController.resume();
+        }
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   void _createSessionControllers({bool replaceExisting = false}) {
@@ -497,6 +527,7 @@ class _AgroBentaAppState extends State<AgroBentaApp> {
   void dispose() {
     // The controllers own no transport of their own, and the client they were
     // built on is closed here — the one place that created it.
+    WidgetsBinding.instance.removeObserver(this);
     _authController.removeListener(_handleAuthSessionChanged);
     _accountModeController.dispose();
     _authController.dispose();

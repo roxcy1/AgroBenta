@@ -105,3 +105,31 @@ docker compose -f compose.yaml -f compose.prod.yaml logs -f php queue caddy
 
 The mobile app must be built against `https://<domain>/api` and
 `wss://<domain>` (port 443).
+
+## Real-time (Reverb)
+
+- Laravel publishes to Reverb over the internal network, so `backend/.env`
+  keeps `REVERB_HOST=reverb`, `REVERB_PORT=8080`, `REVERB_SCHEME=http` in
+  production too. Clients use `wss://<domain>`: Caddy terminates TLS and
+  proxies `/app/*` to Reverb and `/broadcasting/*` (channel authorization) to
+  Laravel. The Admin Web gets this from `deploy.sh`; the APK needs
+  `REVERB_WS_URL` and `REVERB_APP_KEY` (`mobile/README.md`).
+- The queue worker runs `--sleep=0` with the redis connection's `block_for`
+  (1 s): events are picked up immediately and the worker still stops cleanly.
+  Keep the two together; `--sleep=0` without `block_for` spins.
+- `deploy.sh` restarts `queue` and `reverb`. After a backend code change
+  without a full deploy, run `artisan queue:restart` (the worker keeps old
+  code in memory) and `artisan optimize` (config cache).
+- After a deploy, check that events flow:
+
+  ```sh
+  $C logs --tail=50 queue        # broadcast jobs RUNNING → DONE, no FAIL
+  $C exec -u www-data php php artisan queue:failed
+  ```
+
+  In the Admin Web console, `[realtime] subscribed to private-admin` must
+  appear; `subscription failed: AuthError (HTTP 4xx)` means authorization or
+  CORS is wrong. The app logs `Realtime: subscribed to private-user.<id>.`.
+- A broadcast dispatched while Reverb is down fails after three immediate
+  retries and lands in `queue:failed`; clients recover the data with their
+  reconnect re-fetch, so these failed jobs need no replay.

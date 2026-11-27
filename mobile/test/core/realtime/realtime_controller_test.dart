@@ -36,12 +36,54 @@ class _FakeRealtimeClient implements RealtimeClient {
     disconnectCalls++;
   }
 
+  int checkConnectionCalls = 0;
+
+  @override
+  void checkConnection() {
+    checkConnectionCalls++;
+  }
+
   void emit(RealtimeEvent event) => _events.add(event);
 
   void setConnected(bool value) => _connected.add(value);
 }
 
 void main() {
+  group('RealtimeController.resume', () {
+    test('does nothing while signed out', () {
+      final _FakeRealtimeClient client = _FakeRealtimeClient();
+      final RealtimeController controller = RealtimeController(client);
+
+      controller.resume();
+
+      expect(client.checkConnectionCalls, 0);
+      controller.dispose();
+    });
+
+    test('checks the connection for a signed-in user', () async {
+      final _FakeRealtimeClient client = _FakeRealtimeClient();
+      final RealtimeController controller = RealtimeController(client);
+      await controller.start(5);
+
+      controller.resume();
+
+      expect(client.checkConnectionCalls, 1);
+      controller.dispose();
+    });
+
+    test('does nothing after sign-out', () async {
+      final _FakeRealtimeClient client = _FakeRealtimeClient();
+      final RealtimeController controller = RealtimeController(client);
+      await controller.start(5);
+      controller.stop();
+
+      controller.resume();
+
+      expect(client.checkConnectionCalls, 0);
+      controller.dispose();
+    });
+  });
+
   group('RealtimeController', () {
     test('start connects for the given user', () async {
       final _FakeRealtimeClient client = _FakeRealtimeClient();

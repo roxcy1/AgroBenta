@@ -69,7 +69,16 @@ return [
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
             'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
-            'block_for' => null,
+            // An idle worker waits on a blocking pop for up to this many
+            // seconds and wakes as soon as a job is pushed, so broadcasts are
+            // picked up immediately instead of on the next poll (the worker in
+            // compose.yaml runs with --sleep=0 for that reason). The wait is
+            // not interrupted by SIGTERM, so it also bounds how long a stopping
+            // worker takes to exit: keep it short (1 s fits inside
+            // `docker compose stop`'s grace period). At least 1: 0 would block
+            // indefinitely. Must stay below retry_after and the Redis read
+            // timeout (60 s).
+            'block_for' => max(1, (int) env('REDIS_QUEUE_BLOCK_FOR', 1)),
             'after_commit' => false,
         ],
 

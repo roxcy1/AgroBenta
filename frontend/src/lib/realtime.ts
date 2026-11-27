@@ -32,6 +32,27 @@ export interface ListingInventoryEvent {
   listing_id: number;
 }
 
+/** The payload of the backend's `user-report.submitted` event (id only). */
+export interface UserReportEvent {
+  report_id: number;
+}
+
+const LOGGED_SOCKET_STATES = new Set(['connected', 'unavailable', 'failed', 'disconnected']);
+
+/**
+ * A loggable description of a failed channel subscription (pusher-js passes
+ * `{ type, error, status }`). Only the type and HTTP status are kept: the
+ * error text can echo the server response, and the token is never included.
+ */
+export function describeSubscriptionError(error: unknown): string {
+  if (error === null || typeof error !== 'object') {
+    return 'unknown error';
+  }
+  const { type, status } = error as { type?: unknown; status?: unknown };
+  const label = typeof type === 'string' ? type : 'error';
+  return typeof status === 'number' ? `${label} (HTTP ${status})` : label;
+}
+
 /**
  * Connect the Admin Web's WebSocket client and subscribe to the shared admin
  * channel. Returns a cleanup function.
@@ -45,6 +66,7 @@ export function connectAdminRealtime(
   onActivity: (event: ActivityEvent) => void,
   onReconnected?: () => void,
   onListingInventoryUpdated?: (event: ListingInventoryEvent) => void,
+  onUserReportSubmitted?: (event: UserReportEvent) => void,
 ): () => void {
   const token = localStorage.getItem('admin_token');
   if (!token) {
@@ -69,22 +91,51 @@ export function connectAdminRealtime(
     },
   });
 
-  // Echo re-subscribes the channel on its own, but the react-query caches do not
-  // know about the socket. Fire on every (re)connection so the admin layout can
-  // re-fetch anything missed while the socket was down.
+  // Socket state is logged separately from the channel subscription: an open
+  // socket whose channel authorization was refused delivers nothing.
   const connection = (
     echo.connector as unknown as {
-      pusher?: { connection?: { bind: (event: string, cb: () => void) => void } };
+      pusher?: {
+        connection?: { bind: (event: string, cb: (data?: unknown) => void) => void };
+      };
     }
   ).pusher?.connection;
-  connection?.bind('connected', () => onReconnected?.());
+  connection?.bind('state_change', (change) => {
+    const current = (change as { current?: unknown } | undefined)?.current;
+    if (typeof current === 'string' && LOGGED_SOCKET_STATES.has(current)) {
+      console.info(`[realtime] socket ${current}`);
+    }
+  });
+
+  let subscribedBefore = false;
 
   echo
     .private('admin')
+    // Echo re-subscribes the channel on its own after a reconnect, but the
+    // react-query caches do not know about the socket. Fire on every confirmed
+    // *re*-subscription — not on the bare socket connection — so the re-fetch
+    // happens once events are actually live again. The first subscription is
+    // skipped: the pages on screen have just loaded, so a refetch would only
+    // repeat every request.
+    .subscribed(() => {
+      console.info('[realtime] subscribed to private-admin');
+      if (subscribedBefore) {
+        onReconnected?.();
+      }
+      subscribedBefore = true;
+    })
+    .error((error: unknown) => {
+      console.warn(
+        `[realtime] private-admin subscription failed: ${describeSubscriptionError(error)}`,
+      );
+    })
     .listen('.activity.recorded', (event: ActivityEvent) => onActivity(event))
     .listen(
       '.listing.inventory.updated',
       (event: ListingInventoryEvent) => onListingInventoryUpdated?.(event),
+    )
+    .listen('.user-report.submitted', (event: UserReportEvent) =>
+      onUserReportSubmitted?.(event),
     );
 
   return () => {

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/transaction.dart';
 import '../../../repositories/transaction_repository.dart';
 import 'transaction_detail_state.dart';
@@ -46,6 +47,17 @@ class TransactionDetailController extends ChangeNotifier {
   bool _cancelling = false;
   bool _actionInFlight = false;
 
+  /// Bumped by every load and action, so a slower background refresh can
+  /// never overwrite the result of a newer request.
+  int _generation = 0;
+
+  /// Background refreshes requested by real-time events and reconnects. They
+  /// wait for any load, cancel or fulfillment action in flight.
+  late final RefreshCoalescer _backgroundRefresh = RefreshCoalescer(
+    _refreshInBackground,
+    isBusy: () => _inFlight || _cancelling || _actionInFlight,
+  );
+
   /// Fetches the transaction from `GET /transactions/{id}`.
   Future<void> load() async {
     if (_inFlight) {
@@ -54,10 +66,27 @@ class TransactionDetailController extends ChangeNotifier {
 
     _inFlight = true;
     _set(const TransactionDetailState(status: TransactionDetailStatus.loading));
+    try {
+      await _fetch(silent: false);
+    } finally {
+      _inFlight = false;
+      _backgroundRefresh.settled();
+    }
+  }
 
+  /// Re-reads the transaction while keeping it on screen. A failure leaves the
+  /// loaded record untouched; a `404` means it is no longer visible to the
+  /// caller, which is shown exactly as [load] shows it.
+  Future<void> _refreshInBackground() => _fetch(silent: true);
+
+  /// The one read behind [load] and [_refreshInBackground]. A [silent] read
+  /// keeps the loaded record on a recoverable failure.
+  Future<void> _fetch({required bool silent}) async {
+    final int generation = ++_generation;
+    bool stale() => _disposed || generation != _generation;
     try {
       final Transaction transaction = await _repository.detail(transactionId);
-      if (_disposed) {
+      if (stale()) {
         return;
       }
       _set(
@@ -67,7 +96,7 @@ class TransactionDetailController extends ChangeNotifier {
         ),
       );
     } on ApiException catch (error) {
-      if (_disposed) {
+      if (stale()) {
         return;
       }
       if (error.kind == ApiErrorKind.notFound) {
@@ -76,26 +105,23 @@ class TransactionDetailController extends ChangeNotifier {
             status: TransactionDetailStatus.unavailable,
           ),
         );
-        return;
+      } else if (!silent) {
+        _set(
+          TransactionDetailState(
+            status: TransactionDetailStatus.failed,
+            errorMessage: error.message,
+          ),
+        );
       }
-      _set(
-        TransactionDetailState(
-          status: TransactionDetailStatus.failed,
-          errorMessage: error.message,
-        ),
-      );
     } on Object {
-      if (_disposed) {
-        return;
+      if (!stale() && !silent) {
+        _set(
+          const TransactionDetailState(
+            status: TransactionDetailStatus.failed,
+            errorMessage: 'Something went wrong. Please try again.',
+          ),
+        );
       }
-      _set(
-        const TransactionDetailState(
-          status: TransactionDetailStatus.failed,
-          errorMessage: 'Something went wrong. Please try again.',
-        ),
-      );
-    } finally {
-      _inFlight = false;
     }
   }
 
@@ -112,6 +138,7 @@ class TransactionDetailController extends ChangeNotifier {
     }
 
     _cancelling = true;
+    _generation++;
     _set(
       TransactionDetailState(
         status: TransactionDetailStatus.cancelling,
@@ -163,6 +190,7 @@ class TransactionDetailController extends ChangeNotifier {
       return false;
     } finally {
       _cancelling = false;
+      _backgroundRefresh.settled();
     }
   }
 
@@ -182,6 +210,7 @@ class TransactionDetailController extends ChangeNotifier {
     }
 
     _actionInFlight = true;
+    _generation++;
     _set(
       TransactionDetailState(
         status: TransactionDetailStatus.updating,
@@ -247,6 +276,7 @@ class TransactionDetailController extends ChangeNotifier {
       return false;
     } finally {
       _actionInFlight = false;
+      _backgroundRefresh.settled();
     }
   }
 
@@ -309,19 +339,20 @@ class TransactionDetailController extends ChangeNotifier {
       return;
     }
     if (event.data['transaction_id'] == transactionId) {
-      unawaited(load());
+      _backgroundRefresh.request();
     }
   }
 
   /// A reconnect may have missed a change to this transaction.
   void _onConnectionChanged(bool connected) {
     if (connected) {
-      unawaited(load());
+      _backgroundRefresh.request();
     }
   }
 
   @override
   void dispose() {
+    _backgroundRefresh.dispose();
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _connectionSubscription?.cancel();

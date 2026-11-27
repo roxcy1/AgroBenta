@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/message.dart';
 import '../../../repositories/messaging_repository.dart';
 import 'messaging_state.dart';
@@ -36,12 +37,26 @@ class ChatController extends ChangeNotifier {
     this.messageListingId,
     this.realtimeEvents,
     this.connection,
+    this.isVisible,
   }) {
     _realtimeSubscription = realtimeEvents?.listen(_onRealtimeEvent);
     _connectionSubscription = connection?.listen(_onConnectionChanged);
   }
 
   final MessagingRepository _repository;
+
+  /// Whether the thread is actually on screen (its route is the top route and
+  /// the app is in the foreground). When it is, messages that arrive in the
+  /// background refresh are marked read, because the user is looking at them.
+  /// `null` means the thread is always treated as visible.
+  final bool Function()? isVisible;
+
+  /// Background refreshes requested by real-time events and reconnects. They
+  /// keep the thread on screen and never overlap [load].
+  late final RefreshCoalescer _backgroundRefresh = RefreshCoalescer(
+    _refreshInBackground,
+    isBusy: () => _loading,
+  );
 
   /// The session's decoded events. When supplied, a message from the
   /// counterpart refreshes this open thread without a manual pull.
@@ -86,57 +101,94 @@ class ChatController extends ChangeNotifier {
       return;
     }
     _loading = true;
-
-    final int generation = ++_generation;
     _set(_state.copyWith(status: ChatStatus.loading, clearError: true));
-
     try {
-      final List<Message> messages = await _repository.thread(
-        counterpartId: counterpartId,
-        listingId: listingId,
-      );
-      if (_disposed || generation != _generation) {
-        return;
-      }
-      _set(_state.copyWith(status: ChatStatus.ready, messages: messages));
-    } on ApiException catch (error) {
-      if (_disposed || generation != _generation) {
-        return;
-      }
-      _set(
-        _state.copyWith(status: ChatStatus.failed, errorMessage: error.message),
-      );
-    } on Object {
-      if (_disposed || generation != _generation) {
-        return;
-      }
-      _set(
-        _state.copyWith(
-          status: ChatStatus.failed,
-          errorMessage: 'Something went wrong. Please try again.',
-        ),
-      );
+      await _fetch(silent: false);
     } finally {
       _loading = false;
+      _backgroundRefresh.settled();
     }
   }
 
   /// Refreshes the thread — used after marking read.
   Future<void> refresh() => load();
 
+  /// Re-fetches the thread without the full-screen loading state.
+  ///
+  /// The messages on screen stay put until the response replaces them, and a
+  /// failure leaves them untouched (the next event or reconnect retries).
+  /// Newly received messages are marked read while the thread is visible.
+  Future<void> _refreshInBackground() => _fetch(silent: true);
+
+  /// The one read behind [load] and [_refreshInBackground].
+  ///
+  /// Optimistic bubbles whose send is still in flight are kept on top, so a
+  /// response landing mid-send cannot make the user's text vanish. A [silent]
+  /// read leaves the thread untouched on failure.
+  Future<void> _fetch({required bool silent}) async {
+    final int generation = ++_generation;
+    bool stale() => _disposed || generation != _generation;
+    try {
+      final List<Message> messages = await _repository.thread(
+        counterpartId: counterpartId,
+        listingId: listingId,
+      );
+      if (stale()) {
+        return;
+      }
+      final List<Message> pendingSends = _state.messages
+          .where((Message m) => m.id < 0)
+          .toList(growable: false);
+      _set(
+        _state.copyWith(
+          status: _state.isSending ? ChatStatus.sending : ChatStatus.ready,
+          messages: <Message>[...pendingSends, ...messages],
+          clearError: true,
+        ),
+      );
+      // On open the screen marks the thread read itself; this covers messages
+      // that arrive while it stays open.
+      if (silent &&
+          messages.any(_isUnreadIncoming) &&
+          (isVisible?.call() ?? true)) {
+        await markRead();
+      }
+    } on ApiException catch (error) {
+      if (!stale() && !silent) {
+        _set(
+          _state.copyWith(
+            status: ChatStatus.failed,
+            errorMessage: error.message,
+          ),
+        );
+      }
+    } on Object {
+      if (!stale() && !silent) {
+        _set(
+          _state.copyWith(
+            status: ChatStatus.failed,
+            errorMessage: 'Something went wrong. Please try again.',
+          ),
+        );
+      }
+    }
+  }
+
+  bool _isUnreadIncoming(Message m) => m.receiverId == currentUserId && !m.read;
+
   /// A new message from the counterpart refreshes the open thread. Scoped to
   /// the counterpart so an unrelated conversation's event does not re-fetch it.
   void _onRealtimeEvent(RealtimeEvent event) {
     if (event.name == 'message.sent' &&
         event.data['sender_id'] == counterpartId) {
-      refresh();
+      _backgroundRefresh.request();
     }
   }
 
   /// A reconnect may have missed messages while the socket was down.
   void _onConnectionChanged(bool connected) {
     if (connected) {
-      refresh();
+      _backgroundRefresh.request();
     }
   }
 
@@ -188,9 +240,13 @@ class ChatController extends ChangeNotifier {
       _set(
         _state.copyWith(
           status: ChatStatus.ready,
+          // A background refresh may already have fetched the sent message,
+          // so drop it by id as well as the placeholder: never shown twice.
           messages: <Message>[
             sent,
-            ..._state.messages.where((Message m) => m.id != placeholderId),
+            ..._state.messages.where(
+              (Message m) => m.id != placeholderId && m.id != sent.id,
+            ),
           ],
         ),
       );
@@ -280,6 +336,7 @@ class ChatController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _backgroundRefresh.dispose();
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _connectionSubscription?.cancel();

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/app_notification.dart';
 import '../../../repositories/notification_repository.dart';
 import '../../../services/notification_service.dart';
@@ -118,6 +119,67 @@ class NotificationsController extends ChangeNotifier {
           errorMessage: 'Something went wrong. Please try again.',
         ),
       );
+    } finally {
+      _listRefresh.settled();
+    }
+  }
+
+  /// Re-syncs the list after a reconnect or resume, keeping it on screen.
+  /// A list that was never loaded is left alone (it loads when first shown).
+  void refreshInBackground() {
+    if (_state.status == NotificationsStatus.initial) {
+      return;
+    }
+    _listRefresh.request();
+  }
+
+  /// Background list refreshes requested by `notification.created` events.
+  late final RefreshCoalescer _listRefresh = RefreshCoalescer(
+    _refreshListInBackground,
+    isBusy: () => _state.status == NotificationsStatus.loading,
+  );
+
+  /// Re-reads page 1 without clearing the list or showing the loading state.
+  ///
+  /// With only page 1 loaded the response replaces it. With more pages loaded
+  /// the new page 1 is merged in front of what is on screen (by id), so the
+  /// user keeps their scroll depth instead of being reset to page 1. A failure
+  /// keeps the list as it was. Nothing on screen yet means an ordinary load.
+  Future<void> _refreshListInBackground() async {
+    if (_state.status != NotificationsStatus.ready &&
+        _state.status != NotificationsStatus.loadingMore) {
+      return load();
+    }
+
+    final int generation = ++_generation;
+    try {
+      final NotificationPage page = await _repository.list(
+        type: _state.activeFilter,
+        page: 1,
+      );
+      if (_disposed || generation != _generation) {
+        return;
+      }
+      final Set<String> fetched = <String>{
+        for (final AppNotification n in page.notifications) n.id,
+      };
+      _set(
+        _state.copyWith(
+          notifications: _state.currentPage <= 1
+              ? page.notifications
+              : <AppNotification>[
+                  ...page.notifications,
+                  ..._state.notifications.where(
+                    (AppNotification n) => !fetched.contains(n.id),
+                  ),
+                ],
+          unreadCount: page.unreadCount,
+          lastPage: page.lastPage,
+          total: page.total,
+        ),
+      );
+    } on Object {
+      // Silent: keep the list on screen.
     }
   }
 
@@ -146,12 +208,19 @@ class NotificationsController extends ChangeNotifier {
       if (_disposed) {
         return;
       }
+      // A background refresh may have merged newer items in front, shifting
+      // older ones onto this page; never show one notification twice.
+      final Set<String> shown = <String>{
+        for (final AppNotification n in _state.notifications) n.id,
+      };
       _set(
         _state.copyWith(
           status: NotificationsStatus.ready,
           notifications: <AppNotification>[
             ..._state.notifications,
-            ...page.notifications,
+            ...page.notifications.where(
+              (AppNotification n) => !shown.contains(n.id),
+            ),
           ],
           unreadCount: page.unreadCount,
           currentPage: page.currentPage,
@@ -283,12 +352,13 @@ class NotificationsController extends ChangeNotifier {
   void _onRealtimeEvent(RealtimeEvent event) {
     unawaited(refreshUnreadCount());
     if (event.name == 'notification.created') {
-      unawaited(refresh());
+      _listRefresh.request();
     }
   }
 
   @override
   void dispose() {
+    _listRefresh.dispose();
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _disposed = true;

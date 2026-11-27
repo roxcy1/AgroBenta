@@ -12,6 +12,7 @@ use App\Events\OfferCreated;
 use App\Events\OfferUpdated;
 use App\Events\TransactionCreated;
 use App\Events\TransactionUpdated;
+use App\Events\UserReportSubmitted;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -45,6 +46,7 @@ class BroadcastContractTest extends TestCase
             'ListingInventoryUpdated' => [ListingInventoryUpdated::class],
             'NotificationCreated' => [NotificationCreated::class],
             'ActivityRecorded' => [ActivityRecorded::class],
+            'UserReportSubmitted' => [UserReportSubmitted::class],
         ];
     }
 

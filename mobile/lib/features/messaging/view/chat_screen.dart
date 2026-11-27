@@ -104,6 +104,7 @@ class _ChatScreenState extends State<ChatScreen> {
       messageListingId: widget.messageListingId,
       realtimeEvents: realtime?.events,
       connection: realtime?.connected,
+      isVisible: _isThreadVisible,
     );
     _controller.load();
     // Mark read on open — the user is looking at the thread, so unread
@@ -119,6 +120,26 @@ class _ChatScreenState extends State<ChatScreen> {
       connection: realtime?.connected,
     );
     _offers.load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+  }
+
+  /// The route hosting this thread, read once per dependency change so the
+  /// visibility check below does not look up the tree outside `build`.
+  ModalRoute<Object?>? _route;
+
+  /// The thread counts as visible only while its route is on top (no offer
+  /// form or other screen pushed over it) and the app is in the foreground.
+  bool _isThreadVisible() {
+    final AppLifecycleState? lifecycle =
+        WidgetsBinding.instance.lifecycleState;
+    return mounted &&
+        (_route?.isCurrent ?? true) &&
+        (lifecycle == null || lifecycle == AppLifecycleState.resumed);
   }
 
   @override
