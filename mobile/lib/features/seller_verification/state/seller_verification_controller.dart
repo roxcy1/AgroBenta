@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/seller_verification.dart';
 import '../../../repositories/seller_verification_repository.dart';
 import 'seller_verification_state.dart';
@@ -97,61 +98,83 @@ class SellerVerificationController extends ChangeNotifier {
       return;
     }
     _loading = true;
-
-    final int generation = ++_generation;
     _set(
       _state.copyWith(
         status: SellerVerificationUiStatus.loading,
         clearError: true,
       ),
     );
+    try {
+      await _fetch(silent: false);
+    } finally {
+      _loading = false;
+      _backgroundRefresh.settled();
+    }
+  }
 
+  /// Background refreshes requested by a verification decision or a
+  /// reconnect. They wait for a read or a submission in flight, so a
+  /// submission's own result is never overwritten mid-flight.
+  late final RefreshCoalescer _backgroundRefresh = RefreshCoalescer(
+    _refreshInBackground,
+    isBusy: () => _loading || _state.isBusy,
+  );
+
+  /// Re-reads the caller's verification without the loading state.
+  ///
+  /// Used for an approval/rejection notification and after a reconnect. The
+  /// status on screen changes only when the server's record does; a failure
+  /// keeps it as it was (the next event or reconnect retries).
+  void refreshInBackground() => _backgroundRefresh.request();
+
+  Future<void> _refreshInBackground() => _fetch(silent: true);
+
+  /// The one read behind [load] and [_refreshInBackground]. A [silent] read
+  /// keeps the current status on failure.
+  Future<void> _fetch({required bool silent}) async {
+    final int generation = ++_generation;
+    bool stale() => _disposed || generation != _generation;
     try {
       final SellerVerification? verification = await _repository.current();
-
-      if (_disposed || generation != _generation) {
+      if (stale()) {
         return;
       }
-
       if (verification == null) {
         _set(
           _state.copyWith(
             status: SellerVerificationUiStatus.notSubmitted,
             clearVerification: true,
+            clearError: true,
           ),
         );
         return;
       }
-
       _set(
         _state.copyWith(
           status: _statusFor(verification),
           verification: verification,
+          clearError: true,
         ),
       );
       _maybeRefreshCapability(verification);
     } on ApiException catch (error) {
-      if (_disposed || generation != _generation) {
-        return;
+      if (!stale() && !silent) {
+        _set(
+          _state.copyWith(
+            status: SellerVerificationUiStatus.failed,
+            errorMessage: error.message,
+          ),
+        );
       }
-      _set(
-        _state.copyWith(
-          status: SellerVerificationUiStatus.failed,
-          errorMessage: error.message,
-        ),
-      );
     } on Object {
-      if (_disposed || generation != _generation) {
-        return;
+      if (!stale() && !silent) {
+        _set(
+          _state.copyWith(
+            status: SellerVerificationUiStatus.failed,
+            errorMessage: 'Something went wrong. Please try again.',
+          ),
+        );
       }
-      _set(
-        _state.copyWith(
-          status: SellerVerificationUiStatus.failed,
-          errorMessage: 'Something went wrong. Please try again.',
-        ),
-      );
-    } finally {
-      _loading = false;
     }
   }
 
@@ -279,6 +302,8 @@ class SellerVerificationController extends ChangeNotifier {
         ),
       );
       return false;
+    } finally {
+      _backgroundRefresh.settled();
     }
   }
 
@@ -374,12 +399,13 @@ class SellerVerificationController extends ChangeNotifier {
   void _onRealtimeEvent(RealtimeEvent event) {
     if (event.name == 'notification.created' &&
         event.data['type'] == 'seller_verification') {
-      unawaited(load());
+      refreshInBackground();
     }
   }
 
   @override
   void dispose() {
+    _backgroundRefresh.dispose();
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _disposed = true;

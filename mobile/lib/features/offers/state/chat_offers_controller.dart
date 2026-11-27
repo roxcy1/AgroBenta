@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/offer.dart';
 import '../../../repositories/offer_repository.dart';
 import 'offer_state.dart';
@@ -61,40 +62,62 @@ class ChatOffersController extends ChangeNotifier {
       return;
     }
     _loading = true;
-
-    final int generation = ++_generation;
     _set(_state.copyWith(status: ChatOffersStatus.loading, clearError: true));
+    try {
+      await _fetch(silent: false);
+    } finally {
+      _loading = false;
+      _backgroundRefresh.settled();
+    }
+  }
 
+  /// Background refreshes requested by real-time events and reconnects.
+  late final RefreshCoalescer _backgroundRefresh = RefreshCoalescer(
+    _refreshInBackground,
+    isBusy: () => _loading,
+  );
+
+  /// Re-fetches the offers without the panel's loading state; a failure keeps
+  /// the offers on screen (the next event or reconnect retries).
+  Future<void> _refreshInBackground() => _fetch(silent: true);
+
+  /// The one read behind [load] and [_refreshInBackground]. A [silent] read
+  /// leaves the state untouched on failure.
+  Future<void> _fetch({required bool silent}) async {
+    final int generation = ++_generation;
+    bool stale() => _disposed || generation != _generation;
     try {
       final List<Offer> offers = await _repository.list(
         counterpartId: counterpartId,
       );
-      if (_disposed || generation != _generation) {
+      if (stale()) {
         return;
       }
-      _set(_state.copyWith(status: ChatOffersStatus.ready, offers: offers));
+      _set(
+        _state.copyWith(
+          status: ChatOffersStatus.ready,
+          offers: offers,
+          clearError: true,
+        ),
+      );
     } on ApiException catch (error) {
-      if (_disposed || generation != _generation) {
-        return;
+      if (!stale() && !silent) {
+        _set(
+          _state.copyWith(
+            status: ChatOffersStatus.failed,
+            errorMessage: error.message,
+          ),
+        );
       }
-      _set(
-        _state.copyWith(
-          status: ChatOffersStatus.failed,
-          errorMessage: error.message,
-        ),
-      );
     } on Object {
-      if (_disposed || generation != _generation) {
-        return;
+      if (!stale() && !silent) {
+        _set(
+          _state.copyWith(
+            status: ChatOffersStatus.failed,
+            errorMessage: 'Something went wrong. Please try again.',
+          ),
+        );
       }
-      _set(
-        _state.copyWith(
-          status: ChatOffersStatus.failed,
-          errorMessage: 'Something went wrong. Please try again.',
-        ),
-      );
-    } finally {
-      _loading = false;
     }
   }
 
@@ -205,14 +228,14 @@ class ChatOffersController extends ChangeNotifier {
     final Object? buyerId = event.data['buyer_id'];
     final Object? sellerId = event.data['seller_id'];
     if (buyerId == counterpartId || sellerId == counterpartId) {
-      load();
+      _backgroundRefresh.request();
     }
   }
 
   /// A reconnect may have missed offers while the socket was down.
   void _onConnectionChanged(bool connected) {
     if (connected) {
-      load();
+      _backgroundRefresh.request();
     }
   }
 
@@ -245,6 +268,7 @@ class ChatOffersController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _backgroundRefresh.dispose();
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _connectionSubscription?.cancel();

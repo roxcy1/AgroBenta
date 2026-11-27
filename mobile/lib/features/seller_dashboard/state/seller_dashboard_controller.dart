@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/seller_dashboard.dart';
 import '../../../repositories/seller_dashboard_repository.dart';
 import 'seller_dashboard_state.dart';
@@ -126,8 +127,21 @@ class SellerDashboardController extends ChangeNotifier {
                 errorMessage: message,
               ),
       );
+    } finally {
+      _backgroundRefresh.settled();
     }
   }
+
+  bool get _isLoading =>
+      _state.status == SellerDashboardStatus.loading ||
+      _state.status == SellerDashboardStatus.refreshing;
+
+  /// Event-driven refreshes. [refresh] keeps the dashboard on screen; this
+  /// makes sure an event arriving during a load is answered afterwards.
+  late final RefreshCoalescer _backgroundRefresh = RefreshCoalescer(
+    refresh,
+    isBusy: () => _isLoading,
+  );
 
   void _set(SellerDashboardState next) {
     if (_disposed) {
@@ -147,19 +161,20 @@ class SellerDashboardController extends ChangeNotifier {
         event.name == 'transaction.created' ||
         event.name == 'transaction.updated' ||
         listingDecision) {
-      unawaited(refresh());
+      _backgroundRefresh.request();
     }
   }
 
   /// A reconnect may have missed an event that changed a count.
   void _onConnectionChanged(bool connected) {
     if (connected) {
-      unawaited(refresh());
+      _backgroundRefresh.request();
     }
   }
 
   @override
   void dispose() {
+    _backgroundRefresh.dispose();
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _connectionSubscription?.cancel();

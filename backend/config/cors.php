@@ -23,15 +23,21 @@ return [
     | Native Flutter builds (Android, iOS) are not browsers and are not subject
     | to the same-origin policy, so they need no entry.
     |
+    | `broadcasting/auth` is the Reverb private-channel authorization endpoint.
+    | Both browser clients call it cross-origin with the same bearer token; it
+    | is still guarded by `auth:sanctum` and the callbacks in routes/channels.php.
+    | Without it the browser blocks the preflight and no private channel can be
+    | subscribed, so no real-time event reaches a web client.
+    |
     */
 
-    'paths' => ['api/*', 'storage/*'],
+    'paths' => ['api/*', 'storage/*', 'broadcasting/auth'],
 
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
         'http://localhost:5174',
-       'http://localhost:8080',
+        'http://localhost:8080',
     ],
 
     'allowed_origins_patterns' => [

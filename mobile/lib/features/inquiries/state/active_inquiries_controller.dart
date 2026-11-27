@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/inquiry_list_item.dart';
 import '../../../repositories/inquiry_repository.dart';
 
@@ -79,6 +80,15 @@ class ActiveInquiriesController extends ChangeNotifier {
   bool _disposed = false;
   bool _loading = false;
 
+  /// Incremented per read; a response from a superseded read is discarded.
+  int _generation = 0;
+
+  /// Background refreshes requested by real-time events and reconnects.
+  late final RefreshCoalescer _backgroundRefresh = RefreshCoalescer(
+    _refreshInBackground,
+    isBusy: () => _loading,
+  );
+
   Future<void> load() async {
     if (_loading) {
       return;
@@ -87,41 +97,59 @@ class ActiveInquiriesController extends ChangeNotifier {
     _set(
       _state.copyWith(status: ActiveInquiriesStatus.loading, clearError: true),
     );
-
     try {
-      final List<InquiryListItem> items = await _repository.listActive(
-        role: role,
-      );
-      if (_disposed) {
-        return;
-      }
-      _set(_state.copyWith(status: ActiveInquiriesStatus.ready, items: items));
-    } on ApiException catch (error) {
-      if (_disposed) {
-        return;
-      }
-      _set(
-        _state.copyWith(
-          status: ActiveInquiriesStatus.failed,
-          errorMessage: error.message,
-        ),
-      );
-    } on Object {
-      if (_disposed) {
-        return;
-      }
-      _set(
-        _state.copyWith(
-          status: ActiveInquiriesStatus.failed,
-          errorMessage: 'Something went wrong. Please try again.',
-        ),
-      );
+      await _fetch(silent: false);
     } finally {
       _loading = false;
+      _backgroundRefresh.settled();
     }
   }
 
   Future<void> refresh() => load();
+
+  /// Re-reads the list without the loading state; a failure keeps the rows on
+  /// screen (the next event or reconnect retries).
+  Future<void> _refreshInBackground() => _fetch(silent: true);
+
+  /// The one read behind [load] and [_refreshInBackground]. A [silent] read
+  /// leaves the state untouched on failure.
+  Future<void> _fetch({required bool silent}) async {
+    final int generation = ++_generation;
+    bool stale() => _disposed || generation != _generation;
+    try {
+      final List<InquiryListItem> items = await _repository.listActive(
+        role: role,
+      );
+      if (stale()) {
+        return;
+      }
+      _set(
+        _state.copyWith(
+          status: ActiveInquiriesStatus.ready,
+          items: items,
+          clearError: true,
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!stale() && !silent) {
+        _set(
+          _state.copyWith(
+            status: ActiveInquiriesStatus.failed,
+            errorMessage: error.message,
+          ),
+        );
+      }
+    } on Object {
+      if (!stale() && !silent) {
+        _set(
+          _state.copyWith(
+            status: ActiveInquiriesStatus.failed,
+            errorMessage: 'Something went wrong. Please try again.',
+          ),
+        );
+      }
+    }
+  }
 
   void _set(ActiveInquiriesState next) {
     if (_disposed) {
@@ -136,19 +164,20 @@ class ActiveInquiriesController extends ChangeNotifier {
     if (event.name == 'inquiry.created' ||
         event.name == 'offer.created' ||
         event.name == 'offer.updated') {
-      unawaited(refresh());
+      _backgroundRefresh.request();
     }
   }
 
   /// A reconnect may have missed inquiries while the socket was down.
   void _onConnectionChanged(bool connected) {
     if (connected) {
-      unawaited(refresh());
+      _backgroundRefresh.request();
     }
   }
 
   @override
   void dispose() {
+    _backgroundRefresh.dispose();
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _connectionSubscription?.cancel();

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/realtime_event.dart';
+import '../../../core/realtime/refresh_coalescer.dart';
 import '../../../models/ai_price_estimate.dart';
 import '../../../models/listing.dart';
 import '../../../models/marketplace_page.dart';
@@ -1044,7 +1045,29 @@ class SellerListingController extends ChangeNotifier {
                 errorMessage: 'Something went wrong. Please try again.',
               ),
       );
+    } finally {
+      _backgroundRefresh.settled();
     }
+  }
+
+  /// Event-driven refreshes. [refresh] keeps the listings on screen; this
+  /// makes sure a decision arriving during a load is answered afterwards.
+  late final RefreshCoalescer _backgroundRefresh = RefreshCoalescer(
+    refresh,
+    isBusy: () =>
+        _state.status == SellerListingStatus.loading ||
+        _state.status == SellerListingStatus.refreshing,
+  );
+
+  /// Refreshes after a listing decision or a reconnect without dropping a
+  /// request that arrives while a load is in flight. Listings that were never
+  /// loaded are left alone: they load when My Listings is opened, and a buyer
+  /// (who has no seller listings) never spends a request on them.
+  void refreshInBackground() {
+    if (_state.status == SellerListingStatus.initial) {
+      return;
+    }
+    _backgroundRefresh.request();
   }
 
   /// Swaps one listing in place, keeping the list's order and length.
@@ -1188,12 +1211,13 @@ class SellerListingController extends ChangeNotifier {
   void _onRealtimeEvent(RealtimeEvent event) {
     if (event.name == 'notification.created' &&
         event.data['type'] == 'listing') {
-      unawaited(refresh());
+      refreshInBackground();
     }
   }
 
   @override
   void dispose() {
+    _backgroundRefresh.dispose();
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _disposed = true;

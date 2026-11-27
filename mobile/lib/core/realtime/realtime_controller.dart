@@ -21,8 +21,9 @@ class RealtimeController extends ChangeNotifier {
   /// listens to this and re-fetches the affected data over REST.
   Stream<RealtimeEvent> get events => _client.events;
 
-  /// Connection changes. The app refreshes on `true` to recover events missed
-  /// while the socket was down.
+  /// Live-channel changes: `true` once the user's private channel is
+  /// (re)subscribed, `false` when the socket drops. The app refreshes on
+  /// `true` to recover events missed while the socket was down.
   Stream<bool> get connected => _client.connected;
 
   /// Connect (or do nothing when already connected for [userId]).
@@ -38,6 +39,15 @@ class RealtimeController extends ChangeNotifier {
       // Best-effort: the underlying client keeps retrying on its own, and the
       // app is fully usable over REST without a live socket.
     }
+  }
+
+  /// The app returned to the foreground: confirm the connection is live (and
+  /// re-fetch what may have been missed) or reconnect. No-op when signed out.
+  void resume() {
+    if (_userId == null) {
+      return;
+    }
+    _client.checkConnection();
   }
 
   /// Disconnect and forget the current user.
